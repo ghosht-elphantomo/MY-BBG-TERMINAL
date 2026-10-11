@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_terminal import US  # noqa: E402  (univers US déjà suivi)
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
-SEC_UA = os.environ.get("SEC_UA") or "FQT-Terminal research ghosht-elphantomo@users.noreply.github.com"
+SEC_UA = os.environ.get("SEC_UA") or "Mozilla/5.0 (compatible; FQT-Terminal/1.0; personal market research)"
 RESEARCH_UA = "FQT-Terminal research ghosht-elphantomo@users.noreply.github.com"  # certains sites (FRED, MarketScreener) refusent les UA de navigateur depuis le cloud
 NQ_H = {"Origin": "https://www.nasdaq.com", "Referer": "https://www.nasdaq.com/", "Accept": "application/json, text/plain, */*"}
 TODAY = dt.date.today()
@@ -137,6 +137,35 @@ def get(url, headers=None, tries=3, timeout=60, pause=2.0, ua=None):
             err = e
             time.sleep(pause * (1 + 2 * k))
     raise err
+
+
+def curl(url, timeout=40, ua=None):
+    """Téléchargement par curl (certains sites filtrent l'empreinte TLS de Python)."""
+    import subprocess
+    r = subprocess.run(["curl", "-sSL", "--compressed", "-m", str(timeout), "-A", ua or RESEARCH_UA, "-w", "\n%{http_code}", url], capture_output=True, timeout=timeout + 10)
+    body, _, code = r.stdout.rpartition(b"\n")
+    if code.strip() != b"200":
+        raise urllib.error.HTTPError(url, int(code.strip() or 0), "curl", None, None)
+    return body
+
+
+_WB_LAST = [0.0]
+
+
+def get_wb(url):
+    """web.archive.org : une requête toutes les 5 s, pause longue si le site demande de ralentir (429)."""
+    for k in range(3):
+        wait = 5 - (time.time() - _WB_LAST[0])
+        if wait > 0:
+            time.sleep(wait)
+        _WB_LAST[0] = time.time()
+        try:
+            return get(url, tries=1, timeout=60, ua=RESEARCH_UA)
+        except urllib.error.HTTPError as e:
+            if e.code != 429:
+                raise
+            time.sleep(40 * (k + 1))
+    raise urllib.error.HTTPError(url, 429, "Too Many Requests", None, None)
 
 
 def save(path, obj):
@@ -709,13 +738,13 @@ def run_sikah(out):
         note("sikah", False, f"fundamentals: {e}")
         return
     todo = [(t, v.get("source_url")) for t, v in fund.items() if t != "_meta" and v.get("source_url") and t not in db["t"] and db["miss"].get(t, 0) < 3]
-    t_end = time.time() + 600
+    t_end = time.time() + 900
     for t, url in todo:
         if time.time() > t_end:
             break
         base = url.split("://", 1)[1].replace("www.", "")
         try:
-            rows = json.loads(get("http://web.archive.org/cdx/search/cdx?url=" + urllib.parse.quote(base) + "&output=json&fl=timestamp,original,statuscode&filter=statuscode:200&collapse=timestamp:6&limit=60", tries=2, timeout=60) or b"[]")
+            rows = json.loads(get_wb("http://web.archive.org/cdx/search/cdx?url=" + urllib.parse.quote(base) + "&output=json&fl=timestamp,original,statuscode&filter=statuscode:200&collapse=timestamp:6&limit=60") or b"[]")
         except Exception as e:  # noqa: BLE001
             note("sikah", False, f"{t} cdx: {e}")
             db["miss"][t] = db["miss"].get(t, 0) + 1
@@ -730,14 +759,13 @@ def run_sikah(out):
                 continue
             seen_y.add(ts[:4])
             try:
-                h_ = get(f"http://web.archive.org/web/{ts}id_/{orig}", tries=2, timeout=60).decode("utf8", "replace")
+                h_ = get_wb(f"http://web.archive.org/web/{ts}id_/{orig}").decode("utf8", "replace")
                 tb = sika_table(h_)
                 for y, rec in tb.items():
                     if y not in got:
                         got[y] = dict(rec, src=ts[:8])
             except Exception as e:  # noqa: BLE001
                 note("sikah", False, f"{t} {ts}: {e}")
-            time.sleep(2.5)
         if got:
             db["t"][t] = {str(y): r for y, r in sorted(got.items())}
             note("sikah")
@@ -745,7 +773,6 @@ def run_sikah(out):
             db["miss"][t] = db["miss"].get(t, 0) + 1
             note("sikah", False, f"{t}: aucune capture exploitable")
         save(path, db)
-        time.sleep(2)
     save(path, db)
 
 
@@ -831,7 +858,7 @@ def fin_record(found, div_):
     return rec
 
 
-def run_pdffin(out, budget=720):
+def run_pdffin(out, budget=600):
     path = os.path.join(out, "pdf_fin.json")
     db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"t": {}, "docs": {}}
     try:
@@ -1083,7 +1110,7 @@ def run_probe(out):
     }
     for k, url in pages.items():
         try:
-            b = get(url, tries=2, timeout=40, headers={"Accept": "text/html,application/xhtml+xml"}, ua=RESEARCH_UA if "marketscreener" in url else None)
+            b = curl(url) if "marketscreener" in url else get(url, tries=2, timeout=40, headers={"Accept": "text/html,application/xhtml+xml"})
             open(os.path.join(dd, k + ".html"), "wb").write(b[:1_500_000])
             note("probe")
         except Exception as e:  # noqa: BLE001

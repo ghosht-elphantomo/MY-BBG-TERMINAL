@@ -32,7 +32,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 80
+    timeout-minutes: 95
     steps:
       - uses: actions/checkout@v4
 
@@ -90,7 +90,7 @@ jobs:
       - name: Comptes BRVM sur 10 exercices (archives SikaFinance, états financiers publiés)
         if: steps.mode.outputs.mode == 'eod'
         continue-on-error: true
-        run: timeout 1500 python3 scripts/fetch_extra.py --out /tmp/raw --only sikah,pdffin
+        run: timeout 1600 python3 scripts/fetch_extra.py --out /tmp/raw --only sikah,pdffin
 
       - name: Comptes SEC et consensus des analystes (EOD)
         if: steps.mode.outputs.mode == 'eod'
@@ -102,7 +102,7 @@ jobs:
       - name: Historiques Nasdaq (EOD, incrémental)
         if: steps.mode.outputs.mode == 'eod'
         continue-on-error: true
-        run: timeout 1500 python3 scripts/fetch_extra.py --out /tmp/raw --only nasdaq
+        run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only nasdaq
 
       - name: Recalculer toute la base
         run: |
