@@ -213,7 +213,7 @@ async function initSync() {
   if (!/^trig_/.test(TRIGGER_ID) || !window.claude || !window.claude.use) return; let mcp = null; try { mcp = await window.claude.use('mcp'); } catch (e) { } if (!mcp) return;
   const b = $('syncBtn'); b.hidden = false;
   b.addEventListener('click', async () => { b.disabled = true; b.textContent = '…';
-    try { await mcp.callTool('Claude Code Remote', 'fire_trigger', { trigger_id: TRIGGER_ID }, { cache: false }); toast('Synchronisation lancée : le dernier relevé GitHub (15 min) arrive dans 2 à 4 minutes, sans recharger la page.', 9000); b.textContent = 'OK'; }
+    try { await mcp.callTool('Claude Code Remote', 'fire_trigger', { trigger_id: TRIGGER_ID }, { cache: false }); toast('Synchronisation lancée : le dernier relevé arrive dans 2 à 4 minutes, sans recharger la page.', 9000); b.textContent = 'OK'; }
     catch (e) { const c = e && e.code; b.textContent = 'SYNC'; toast(c === 'rate_limited' ? 'Trop de demandes rapprochées : réessaie dans quelques minutes.' : c === 'not_granted' || c === 'consent_required' ? 'Autorisation refusée : ouvre le menu Autorisations de la page.' : 'La synchro n’a pas pu être lancée (' + (c || 'erreur') + '). La mise à jour planifiée tourne quand même.', 9000); }
     finally { setTimeout(() => { b.disabled = false; b.textContent = 'SYNC'; }, 60000); } });
 }
