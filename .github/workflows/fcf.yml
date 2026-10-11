@@ -1,0 +1,37 @@
+name: Flux de trésorerie BRVM
+
+# Lit le tableau des flux de trésorerie des états financiers publiés sur brvm.org (SYSCOHADA)
+# et met à jour seed/fcf_brvm.json, repris par la construction du soir. Une fois par semaine ou à la main.
+on:
+  schedule:
+    - cron: "23 5 * * 0"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fcf
+  cancel-in-progress: false
+
+jobs:
+  fcf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer pdftotext
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils >/dev/null
+      - name: Miroir public (liste des états financiers)
+        run: git clone -q --depth 1 https://github.com/harzat/brvm-data-public.git /tmp/src
+      - name: Extraire les flux de trésorerie
+        run: python3 scripts/fcf_extract.py --src /tmp/src --out seed/fcf_brvm.json --since 2016
+      - name: Enregistrer
+        run: |
+          git config user.name "fqt-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add seed/fcf_brvm.json
+          git diff --cached --quiet && exit 0
+          git commit -qm "Flux de trésorerie BRVM (états financiers)"
+          git pull -q --rebase origin main
+          git push -q origin HEAD:main
