@@ -854,6 +854,134 @@ def run_probe(out):
         time.sleep(1)
 
 
+# ---------------------------------------------------------------- veille : publications BRVM et dépôts SEC (chaque passage)
+def norm_name(x):
+    import unicodedata
+    x = unicodedata.normalize("NFKD", x or "").encode("ascii", "ignore").decode().lower()
+    x = re.sub(r"\b(sa|s\.a\.|ci|cote d.?ivoire|cote divoire|senegal|burkina( faso)?|benin|mali|niger|togo|bf|sn|bn|ml|ng|tg|groupe|group|holding|societe|ste)\b", " ", x)
+    return re.sub(r"[^a-z0-9]+", " ", x).strip()
+
+
+def run_watch(raw, site_data):
+    """Nouvelles publications des sociétés cotées (brvm.org) et nouveaux 10-K/10-Q (SEC) : actualités + données à jour."""
+    path = os.path.join(site_data, "reports.json")
+    st = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"issuers": {}, "docs": {}, "its": 0}
+    summ = json.load(open(os.path.join(site_data, "summary.json"), encoding="utf8")) if os.path.exists(os.path.join(site_data, "summary.json")) else {"secs": []}
+    brvm = [x for x in summ.get("secs", []) if x.get("mkt") == "BRVM" and x.get("cls") == "Equity"]
+    if not st["issuers"] or time.time() - st.get("its", 0) > 86400:
+        iss = {}
+        for pg in range(0, 4):
+            try:
+                html = get("https://www.brvm.org/fr/rapports-societes-cotees" + (f"?page={pg}" if pg else ""), tries=2, timeout=30).decode("utf8", "replace")
+            except Exception as e:  # noqa: BLE001
+                note("watch-brvm", False, f"liste p{pg}: {e}")
+                break
+            found = re.findall(r'href="(?:https://www\.brvm\.org)?/fr/rapports-societe-cotes/([a-z0-9\-]+)"[^>]*>([^<]+)</a>', html)
+            if not found:
+                break
+            for slug, name in found:
+                iss[slug] = {"n": re.sub(r"\s+", " ", name).strip()}
+        if iss:
+            for slug, x in iss.items():  # rapprochement nom -> ticker
+                a = set(norm_name(x["n"] + " " + slug.replace("-", " ")).split())
+                best = None
+                for s in brvm:
+                    b = set(norm_name((s.get("n") or "") + " " + (s.get("short") or "")).split())
+                    sc = len(a & b) / max(1, len(a | b))
+                    if sc > (best[0] if best else 0.34):
+                        best = (sc, s["id"])
+                x["t"] = best[1] if best else None
+            st["issuers"], st["its"] = iss, int(time.time())
+    fresh = []
+
+    def one(slug):
+        try:
+            html = get(f"https://www.brvm.org/fr/rapports-societe-cotes/{slug}", tries=2, timeout=30).decode("utf8", "replace")
+        except Exception as e:  # noqa: BLE001
+            return slug, None, str(e)
+        rows = []
+        for m in re.finditer(r"<tr[^>]*>(.*?)</tr>", html, re.S):
+            cell = m.group(1)
+            u = re.search(r'href="([^"]+\.pdf)"', cell)
+            if not u:
+                continue
+            title = re.sub(r"<[^>]+>", " ", cell)
+            title = re.sub(r"\s+", " ", title).replace("Télécharger", "").strip()
+            url = u.group(1) if u.group(1).startswith("http") else "https://www.brvm.org" + u.group(1)
+            dm = re.search(r"/(20\d{6})", url)
+            rows.append({"d": dm.group(1) if dm else None, "ti": title[:200], "u": url})
+        return slug, rows, None
+    with ThreadPoolExecutor(8) as ex:
+        for slug, rows, err in ex.map(one, list(st["issuers"])):
+            if rows is None:
+                note("watch-brvm", False, f"{slug}: {err}")
+                continue
+            note("watch-brvm")
+            old = {r["u"] for r in st["docs"].get(slug, [])}
+            if st["docs"].get(slug) is not None:
+                fresh += [dict(r, slug=slug) for r in rows if r["u"] not in old]
+            st["docs"][slug] = rows[:40]
+    st["ts"] = int(time.time())
+    # dépôts SEC récents (10-K, 10-Q, 20-F, 6-K) des sociétés suivies
+    sec_new = []
+    facts_p = os.path.join(raw, "secfacts.json")
+    co = (json.load(open(facts_p, encoding="utf8")).get("co") or {}) if os.path.exists(facts_p) else {}
+    cik2t = {int(v["cik"]): t for t, v in co.items() if v.get("cik")}
+    seen = set(st.get("sec_seen", []))
+    h = {"User-Agent": SEC_UA, "Accept-Encoding": "gzip"}
+    for form in ("10-Q", "10-K", "20-F", "6-K", "8-K"):
+        try:
+            x = get(f"https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type={form}&company=&dateb=&owner=include&start=0&count=100&output=atom", headers=h, tries=2, timeout=30).decode("utf8", "replace")
+        except Exception as e:  # noqa: BLE001
+            note("watch-sec", False, f"{form}: {e}")
+            continue
+        note("watch-sec")
+        for ent in re.findall(r"<entry>(.*?)</entry>", x, re.S):
+            t_ = re.search(r"<title>([^<]+)</title>", ent)
+            l_ = re.search(r'<link[^>]+href="([^"]+)"', ent)
+            c_ = re.search(r"\((\d{10})\)", t_.group(1) if t_ else "")
+            if not (t_ and c_):
+                continue
+            cik = int(c_.group(1))
+            key = (l_.group(1) if l_ else t_.group(1))
+            if cik in cik2t and key not in seen:
+                seen.add(key)
+                sec_new.append({"t": cik2t[cik], "form": form, "ti": t_.group(1), "u": l_.group(1) if l_ else ""})
+    st["sec_seen"] = sorted(seen)[-500:]
+    save(path, st)
+    # actualités : publications officielles
+    np_ = os.path.join(site_data, "news.json")
+    news = json.load(open(np_, encoding="utf8")) if os.path.exists(np_) else {"items": [], "feeds": {}}
+    now = int(time.time())
+    for r in fresh:
+        tk = st["issuers"].get(r["slug"], {}).get("t")
+        news["items"].insert(0, {"t": now, "ti": r["ti"], "u": r["u"], "s": "brvm.org", "c": "BRVM", "f": "brvm-rapports", "x": f"Nouvelle publication officielle{(' · ' + tk) if tk else ''}"})
+    for r in sec_new:
+        news["items"].insert(0, {"t": now, "ti": f"Dépôt SEC {r['form']} : {r['ti']}", "u": r["u"], "s": "SEC EDGAR", "c": "Tech US", "f": "sec", "x": r["t"]})
+    if fresh or sec_new:
+        news["feeds"]["brvm-rapports"], news["feeds"]["sec"] = "brvm.org", "SEC EDGAR"
+        save(np_, news)
+    # comptes SEC rafraîchis tout de suite pour les sociétés qui viennent de déposer
+    dirty = sorted({r["t"] for r in sec_new if r["form"] in ("10-Q", "10-K", "20-F", "6-K")})
+    if dirty and co:
+        h2 = {"User-Agent": SEC_UA, "Accept-Encoding": "gzip", "Accept": "application/json"}
+        allf = json.load(open(facts_p, encoding="utf8"))
+        for t in dirty:
+            try:
+                cik = allf["co"][t]["cik"]
+                j = json.loads(get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{int(cik):010d}.json", headers=h2, timeout=90))
+                r = sec_company(cik, t, j)
+                if r:
+                    allf["co"][t] = r
+                    note("watch-sec-refresh")
+            except Exception as e:  # noqa: BLE001
+                note("watch-sec-refresh", False, f"{t}: {e}")
+            time.sleep(0.3)
+        save(facts_p, allf)
+        open(os.path.join(raw, ".dirty"), "w").write(" ".join(dirty))
+    log(f"veille : {len(fresh)} publications BRVM, {len(sec_new)} dépôts SEC, comptes rafraîchis : {dirty}")
+
+
 # ---------------------------------------------------------------- actualités (RSS)
 NEWS = [  # id, libellé, url, catégorie
     ("gn-brvm", "Google Actualités", "https://news.google.com/rss/search?q=BRVM&hl=fr&gl=FR&ceid=FR:fr", "BRVM"),
@@ -962,6 +1090,7 @@ def main():
     ap.add_argument("--out", required=True, help="dossier brut (branche quant-raw), lu et réécrit sur place")
     ap.add_argument("--only", default="nasdaq,fred,cboe,cnn,crypto,wb,sec,analyst,boc,probe")
     ap.add_argument("--news", default=None, help="fichier news.json à mettre à jour (mode séance)")
+    ap.add_argument("--site", default=None, help="dossier data/ du site (veille : reports.json, news.json)")
     ap.add_argument("--sec-max-age-days", type=float, default=6)
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -970,7 +1099,7 @@ def main():
     steps = [("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
-             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out))]
+             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("watch", lambda: run_watch(a.out, a.site))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

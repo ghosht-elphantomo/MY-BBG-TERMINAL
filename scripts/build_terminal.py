@@ -206,7 +206,15 @@ def main():
     ap.add_argument("--cache", default=None)
     ap.add_argument("--extra", default=None, help="dossier brut écrit par fetch_extra.py (branche quant-raw)")
     ap.add_argument("--fcf", default=None, help="history/fcf.json : flux de trésorerie BRVM lus dans les états financiers")
+    ap.add_argument("--quotes", default=None, help="quotes.json du relevé (cours du jour appliqués à toutes les séries)")
+    ap.add_argument("--live", action="store_true", help="passage de séance : séries existantes non réécrites, tous les calculs refaits")
     a = ap.parse_args()
+    QUOTES = {}
+    if a.quotes and os.path.exists(a.quotes):
+        try:
+            QUOTES = (json.load(open(a.quotes, encoding="utf8")) or {}).get("q") or {}
+        except Exception:  # noqa: BLE001
+            QUOTES = {}
     out, sdir = a.out, os.path.join(a.out, "s")
     os.makedirs(sdir, exist_ok=True)
     secs, files = [], {}
@@ -215,6 +223,31 @@ def main():
         sid = meta["id"]
         if replace and sid in files:
             secs[:] = [x for x in secs if x["id"] != sid]
+        qt = QUOTES.get(sid) if freq == "D" and meta.get("mkt") != "BRVM" else None
+        if qt and qt.get("last") and qt.get("d") and d:
+            # cours du jour (Nasdaq, Coinbase) : nouvelle séance ajoutée ou dernière séance mise à jour
+            k = di(qt["d"])
+            d, c = list(d), list(c)
+            o, h, l = (list(o), list(h), list(l)) if o else (None, None, None)
+            v = list(v) if v else v
+            px_ = qt["last"]
+            if k > d[-1]:
+                d.append(k)
+                c.append(px_)
+                if o:
+                    o.append(qt.get("o") or c[-2]); h.append(max(qt.get("h") or px_, px_)); l.append(min(qt.get("l") or px_, px_))
+                if v is not None:
+                    v.append(int(qt.get("vol") or 0))
+                if div is not None:
+                    div = list(div) + [0]
+                if val is not None:
+                    val = list(val) + [0]
+            elif k == d[-1]:
+                c[-1] = px_
+                if o:
+                    h[-1], l[-1] = max(h[-1], px_), min(l[-1], px_)
+                if v is not None and qt.get("vol"):
+                    v[-1] = int(qt["vol"])
         body = {"id": sid, "f": freq, "d": d, "c": [rnd(x, nd) for x in c]}
         if o:
             body.update(o=[rnd(x, nd) for x in o], h=[rnd(x, nd) for x in h], l=[rnd(x, nd) for x in l])
@@ -440,7 +473,10 @@ def main():
 
     # write ------------------------------------------------------------------
     for sid, body in files.items():
-        with open(os.path.join(sdir, sid.replace(".", "_") + ".json"), "w", encoding="utf8") as fh:
+        p_ = os.path.join(sdir, sid.replace(".", "_") + ".json")
+        if a.live and os.path.exists(p_):
+            continue  # séance : la page applique elle-même les cours du jour (quotes.json) aux séries
+        with open(p_, "w", encoding="utf8") as fh:
             json.dump(body, fh, separators=(",", ":"))
     asof = max(s["dt"] for s in secs if s["mkt"] in ("US", "BRVM"))
     summ = {"asof": asof, "built": int(time.time()), "secs": secs, "sectors": sorted({s["grp"] for s in secs if s["mkt"] == "BRVM" and s["cls"] == "Equity"}),

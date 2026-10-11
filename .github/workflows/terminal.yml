@@ -1,20 +1,20 @@
 name: Terminal
 
-# Terminal FQT : relève QQQ (Yahoo/Nasdaq), la séance BRVM (brvm.org) et les actualités toutes les 15 min,
-# reconstruit toute la base chaque soir (BRVM depuis 2006, US, macro, FRED, Nasdaq, SEC, CBOE, CNN, Banque mondiale)
-# et publie le site complet (index.html + data/) sur la branche site, réécrite à chaque passage.
-# Les données brutes (séries Nasdaq, comptes SEC, bulletins BRVM...) vivent sur la branche raw.
-# Heures UTC, lun-ven : BRVM 09:00-15:30, Nasdaq 13:30-20:00.
+# Terminal FQT, actualisé toutes les 15 minutes, jour et nuit :
+#   - séance BRVM (brvm.org), cours US (Nasdaq) et crypto (Coinbase), QQQ 5 min, actualités (flux RSS),
+#     nouvelles publications des sociétés cotées (brvm.org) et nouveaux dépôts SEC (comptes rafraîchis aussitôt) ;
+#   - tous les calculs refaits avec ces cours (ratios, Fear & Greed, cartes, corrélations, alertes...).
+# Chaque soir (22:35 UTC) : base complète (BRVM depuis 2006, Nasdaq, FRED, CBOE, CNN, SEC, Banque mondiale, bulletins BRVM).
+# Le site complet (index.html + data/) est écrit sur la branche `site`, que Vercel déploie à chaque écriture.
+# Les données brutes (historiques Nasdaq, comptes SEC, bulletins...) vivent sur la branche `raw`.
 on:
   schedule:
-    - cron: "*/15 9-20 * * 1-5"    # toutes les 15 min : séance BRVM (09:00-15:30 UTC) et séance US (13:30-20:00 UTC)
-    - cron: "5 0-8,21-23 * * 1-5"  # hors séance : toutes les heures (actualités, crypto, cours après clôture)
-    - cron: "5 * * * 0,6"          # week-end : toutes les heures (actualités, crypto)
+    - cron: "*/15 * * * *"         # toutes les 15 minutes
     - cron: "35 22 * * 1-5"        # EOD : base complète
   workflow_dispatch:
     inputs:
       mode:
-        description: "live (cours) ou eod (base complète)"
+        description: "live (relevé de 15 min) ou eod (base complète)"
         type: choice
         options: [eod, live]
         default: eod
@@ -43,14 +43,14 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then MODE="${{ inputs.mode }}"; fi
           if [ "${{ github.event.schedule }}" = "35 22 * * 1-5" ]; then MODE=eod; fi
           if [ "${{ github.event_name }}" = "push" ]; then
-            # code des pages seulement : republier la page ; scripts de collecte modifiés : base complète
+            # pages seulement : relevé normal ; scripts de collecte modifiés : base complète
             git fetch -q --depth 1 origin "${{ github.event.before }}" 2>/dev/null || true
             if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null | grep -qE '^(scripts/|\.github/)'; then MODE=eod; fi
           fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "Mode : $MODE"
 
-      - name: Restaurer le site précédent (branche site)
+      - name: Restaurer le site et les données brutes
         run: |
           mkdir -p /tmp/site /tmp/state /tmp/raw
           cp seed/brvm.json /tmp/state/brvm.json
@@ -59,24 +59,33 @@ jobs:
             if [ -f /tmp/site/data/session.json ]; then cp /tmp/site/data/session.json /tmp/state/brvm.json; fi
           fi
           mkdir -p /tmp/site/data
-
-      - name: Restaurer les données brutes (branche raw, EOD)
-        if: steps.mode.outputs.mode == 'eod'
-        run: |
           if git fetch -q --depth 1 origin raw; then git archive FETCH_HEAD | tar -x -C /tmp/raw || true; fi
-          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils >/dev/null || true
+          rm -f /tmp/raw/.dirty
 
-      - name: Relever les cours (QQQ + séance BRVM)
+      - name: Cache des sources (miroirs CSV)
+        uses: actions/cache@v4
+        with:
+          path: /tmp/bcache
+          key: bcache-${{ github.run_id }}
+          restore-keys: bcache-
+
+      - name: Relever les cours (BRVM, QQQ, US, crypto)
         run: python3 scripts/scrape.py --mode "${{ steps.mode.outputs.mode }}" --state /tmp/state --out /tmp/site
 
-      - name: Actualités (flux RSS)
+      - name: Actualités, publications BRVM et dépôts SEC
         continue-on-error: true
-        run: timeout 120 python3 scripts/fetch_extra.py --out /tmp/newsraw --only "" --news /tmp/site/data/news.json
+        env:
+          SEC_UA: ${{ secrets.SEC_UA }}
+        run: timeout 300 python3 scripts/fetch_extra.py --out /tmp/raw --only watch --site /tmp/site/data --news /tmp/site/data/news.json
+
+      - name: Outils PDF (EOD)
+        if: steps.mode.outputs.mode == 'eod'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils >/dev/null || true
 
       - name: Sources complémentaires (FRED, CBOE, CNN, crypto, Banque mondiale, bulletins BRVM)
         if: steps.mode.outputs.mode == 'eod'
         continue-on-error: true
-        run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,boc,probe
+        run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,probe,boc
 
       - name: Comptes SEC et consensus des analystes (EOD)
         if: steps.mode.outputs.mode == 'eod'
@@ -90,19 +99,20 @@ jobs:
         continue-on-error: true
         run: timeout 1500 python3 scripts/fetch_extra.py --out /tmp/raw --only nasdaq
 
-      - name: Reconstruire la base complète (EOD ou base absente)
+      - name: Recalculer toute la base
         run: |
-          if [ "${{ steps.mode.outputs.mode }}" = "eod" ] || [ ! -f /tmp/site/data/summary.json ]; then
-            git clone -q --depth 1 https://github.com/harzat/brvm-data-public.git /tmp/brvmsrc
-            python3 scripts/build_terminal.py --brvm-src /tmp/brvmsrc --out /tmp/site/data --session /tmp/state/brvm.json --extra /tmp/raw --fcf seed/fcf_brvm.json
-          fi
+          git clone -q --depth 1 https://github.com/harzat/brvm-data-public.git /tmp/brvmsrc
+          LIVE=""; if [ "${{ steps.mode.outputs.mode }}" != "eod" ] && [ -f /tmp/site/data/summary.json ]; then LIVE="--live"; fi
+          python3 scripts/build_terminal.py --brvm-src /tmp/brvmsrc --out /tmp/site/data --session /tmp/state/brvm.json \
+            --extra /tmp/raw --fcf seed/fcf_brvm.json --quotes /tmp/site/data/quotes.json --cache /tmp/bcache $LIVE
 
-      - name: Publier les données brutes (branche raw, EOD)
-        if: steps.mode.outputs.mode == 'eod'
+      - name: "Publier les données brutes (branche raw, soir ou comptes SEC rafraîchis)"
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd /tmp/raw
+          if [ "${{ steps.mode.outputs.mode }}" != "eod" ] && [ ! -f .dirty ]; then echo "Rien à publier"; exit 0; fi
+          rm -f .dirty
           printf '{"git":{"deploymentEnabled":false}}\n' > vercel.json
           rm -rf .git
           git init -q -b raw
@@ -126,7 +136,7 @@ jobs:
           git init -q -b site
           git config user.name "fqt-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # séance : nouveau commit au-dessus du précédent (seuls les fichiers modifiés sont envoyés) ; soir : historique remis à zéro
+          # relevé de 15 min : nouveau commit au-dessus du précédent (seuls les fichiers modifiés partent) ; soir : historique remis à zéro
           ONTOP=0
           if [ "$MODE" != "eod" ] && git fetch -q --depth 1 "$URL" site; then git reset -q FETCH_HEAD && ONTOP=1; fi
           git add -A
