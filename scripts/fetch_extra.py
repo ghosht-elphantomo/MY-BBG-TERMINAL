@@ -23,6 +23,7 @@ from build_terminal import US  # noqa: E402  (univers US déjà suivi)
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
 SEC_UA = os.environ.get("SEC_UA") or "FQT-Terminal research ghosht-elphantomo@users.noreply.github.com"
+RESEARCH_UA = "FQT-Terminal research ghosht-elphantomo@users.noreply.github.com"  # certains sites (FRED, MarketScreener) refusent les UA de navigateur depuis le cloud
 NQ_H = {"Origin": "https://www.nasdaq.com", "Referer": "https://www.nasdaq.com/", "Accept": "application/json, text/plain, */*"}
 TODAY = dt.date.today()
 REPORT = {}
@@ -116,11 +117,11 @@ def note(src, ok=True, err=None):
             r["errors"].append(str(err)[:200])
 
 
-def get(url, headers=None, tries=3, timeout=60, pause=2.0):
+def get(url, headers=None, tries=3, timeout=60, pause=2.0, ua=None):
     err = None
     for k in range(tries):
         try:
-            h = {"User-Agent": UA, "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9", "Accept-Encoding": "gzip"}
+            h = {"User-Agent": ua or UA, "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9", "Accept-Encoding": "gzip"}
             h.update(headers or {})
             with urllib.request.urlopen(urllib.request.Request(url, headers=h), timeout=timeout) as r:
                 b = r.read()
@@ -301,7 +302,7 @@ def run_fred(out):
             note("fred", False, f"{sid}: source injoignable, abandon")
             return
         try:
-            b = get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}", timeout=25, tries=2)
+            b = get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}", timeout=25, tries=2, ua=RESEARCH_UA)
             fails[0] = 0
             txt = b.decode("utf8", "replace")
             if "," not in txt.splitlines()[0]:
@@ -628,6 +629,14 @@ def run_sec(out, prev, max_age_days):
         return
     res = {"ts": int(time.time()), "co": {}, "missing": []}
 
+    names = {s: n for s, n, _, _ in US}
+    nm_ = os.path.join(out, "nasdaq_meta.json")
+    if os.path.exists(nm_):
+        for k, v in (json.load(open(nm_, encoding="utf8")).get("screener") or {}).items():
+            names.setdefault(k, v.get("n") or "")
+    stop = {"inc", "corp", "corporation", "holdings", "holding", "group", "the", "company", "co", "ltd", "plc", "sa", "nv", "class", "common", "stock", "technologies", "technology", "and"}
+    tok = lambda x: {w for w in re.sub(r"[^a-z0-9 ]", " ", (x or "").lower()).split() if len(w) > 2 and w not in stop}  # noqa: E731
+
     def one(t):
         cik = cikmap.get(t) or cikmap.get(t.replace(".", "-"))
         if not cik:
@@ -635,6 +644,8 @@ def run_sec(out, prev, max_age_days):
         try:
             j = json.loads(get(f"https://data.sec.gov/api/xbrl/companyfacts/CIK{int(cik):010d}.json", headers=h, timeout=90))
             time.sleep(0.25)
+            if names.get(t) and not (tok(names[t]) & tok(j.get("entityName"))):
+                return t, None, f"CIK {cik} = {j.get('entityName')} (ne correspond pas à {names[t]})"
             return t, sec_company(cik, t, j), None
         except Exception as e:  # noqa: BLE001
             return t, None, str(e)
@@ -649,6 +660,93 @@ def run_sec(out, prev, max_age_days):
                 if cache and t in cache.get("co", {}):
                     res["co"][t] = cache["co"][t]
     save(os.path.join(out, "secfacts.json"), res)
+
+
+# ---------------------------------------------------------------- SikaFinance archivé (web.archive.org) : exercices plus anciens
+def sika_table(html_):
+    """Tableau « chiffres clés » d'une page société SikaFinance : {année: {ca, rn, bnpa, per, div}} (millions FCFA, FCFA/action)."""
+    import html as H
+    t = re.sub(r"<script.*?</script>|<style.*?</style>", " ", html_, flags=re.S)
+    cells = [re.sub(r"\s+", " ", H.unescape(re.sub(r"<[^>]+>", " ", c))).strip() for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", t, re.S)]
+    out = {}
+    for i, c in enumerate(cells):
+        if re.fullmatch(r"20\d\d", c) and i + 4 < len(cells) and all(re.fullmatch(r"20\d\d", cells[i + k]) for k in range(1, 3)):
+            yrs = []
+            j = i
+            while j < len(cells) and re.fullmatch(r"20\d\d", cells[j]):
+                yrs.append(int(cells[j]))
+                j += 1
+            keys = {"chiffre d'affaires": "ca", "chiffre d’affaires": "ca", "résultat net": "rn", "bnpa": "bnpa", "per": "per", "dividende": "div", "produit net bancaire": "ca"}
+            while j < len(cells):
+                lab = cells[j].lower()
+                k = keys.get(lab)
+                if k is None and lab.startswith("croissance"):
+                    j += 1 + len(yrs) - 1
+                    continue
+                if k is None:
+                    if re.fullmatch(r"20\d\d", cells[j]):
+                        break
+                    j += 1
+                    continue
+                vals = cells[j + 1:j + 1 + len(yrs)]
+                for y, v in zip(yrs, vals):
+                    x = v.replace(" ", "").replace("\xa0", "").replace(" ", "").replace(",", ".")
+                    try:
+                        out.setdefault(y, {})[k] = float(x)
+                    except ValueError:
+                        pass
+                j += 1 + len(yrs)
+            break
+    return out
+
+
+def run_sikah(out):
+    path = os.path.join(out, "sika_hist.json")
+    db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"t": {}, "miss": {}}
+    try:
+        fund = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/fundamentals.json", timeout=60))
+    except Exception as e:  # noqa: BLE001
+        note("sikah", False, f"fundamentals: {e}")
+        return
+    todo = [(t, v.get("source_url")) for t, v in fund.items() if t != "_meta" and v.get("source_url") and t not in db["t"] and db["miss"].get(t, 0) < 3]
+    t_end = time.time() + 600
+    for t, url in todo:
+        if time.time() > t_end:
+            break
+        base = url.split("://", 1)[1].replace("www.", "")
+        try:
+            rows = json.loads(get("http://web.archive.org/cdx/search/cdx?url=" + urllib.parse.quote(base) + "&output=json&fl=timestamp,original,statuscode&filter=statuscode:200&collapse=timestamp:6&limit=60", tries=2, timeout=60) or b"[]")
+        except Exception as e:  # noqa: BLE001
+            note("sikah", False, f"{t} cdx: {e}")
+            db["miss"][t] = db["miss"].get(t, 0) + 1
+            time.sleep(3)
+            continue
+        snaps = sorted([r for r in rows[1:] if r and r[0] < "2025"], key=lambda r: r[0])
+        got = {}
+        # la plus ancienne capture donne les exercices les plus anciens ; une capture par année au plus
+        seen_y = set()
+        for ts, orig, _ in snaps:
+            if ts[:4] in seen_y or len(seen_y) >= 3:
+                continue
+            seen_y.add(ts[:4])
+            try:
+                h_ = get(f"http://web.archive.org/web/{ts}id_/{orig}", tries=2, timeout=60).decode("utf8", "replace")
+                tb = sika_table(h_)
+                for y, rec in tb.items():
+                    if y not in got:
+                        got[y] = dict(rec, src=ts[:8])
+            except Exception as e:  # noqa: BLE001
+                note("sikah", False, f"{t} {ts}: {e}")
+            time.sleep(2.5)
+        if got:
+            db["t"][t] = {str(y): r for y, r in sorted(got.items())}
+            note("sikah")
+        else:
+            db["miss"][t] = db["miss"].get(t, 0) + 1
+            note("sikah", False, f"{t}: aucune capture exploitable")
+        save(path, db)
+        time.sleep(2)
+    save(path, db)
 
 
 # ---------------------------------------------------------------- consensus des analystes (Nasdaq)
@@ -844,11 +942,21 @@ def run_probe(out):
     }
     for k, url in pages.items():
         try:
-            b = get(url, tries=2, timeout=40, headers={"Accept": "text/html,application/xhtml+xml"})
+            b = get(url, tries=2, timeout=40, headers={"Accept": "text/html,application/xhtml+xml"}, ua=RESEARCH_UA if "marketscreener" in url else None)
             open(os.path.join(dd, k + ".html"), "wb").write(b[:1_500_000])
             note("probe")
         except Exception as e:  # noqa: BLE001
             note("probe", False, f"{k}: {e}")
+    sec_t = {}
+    for ua in (SEC_UA, "FQT Terminal research contact@fqt-terminal.app", "Mozilla/5.0 (compatible; research-bot)", UA):
+        try:
+            b = get("https://data.sec.gov/api/xbrl/companyconcept/CIK0000320193/us-gaap/Revenues.json", headers={"Accept-Encoding": "gzip"}, tries=1, timeout=20, ua=ua)
+            sec_t[ua] = f"ok {len(b)}"
+        except urllib.error.HTTPError as e:
+            sec_t[ua] = f"{e.code} {e.read()[:300]!r}"
+        except Exception as e:  # noqa: BLE001
+            sec_t[ua] = str(e)
+    save(os.path.join(dd, "sec_ua_test.json"), sec_t)
     cdx = {}
     for t in ("SNTS", "SGBC", "ORAC", "SIBC"):
         for pat in (f"sikafinance.com/marches/societe/{t}*", f"sikafinance.com/marches/cotation_{t}*", f"pro.sikafinance.com/finance/{t}*"):
@@ -1137,7 +1245,7 @@ def main():
     steps = [("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
-             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("watch", lambda: run_watch(a.out, a.site))]
+             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("watch", lambda: run_watch(a.out, a.site))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")
