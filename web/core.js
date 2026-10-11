@@ -2,11 +2,63 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const Q = { base: 'data/', sum: null, by: {}, ser: {}, M: {}, json: {}, live: null, quotes: null };
-const ST = { fn: 'MON', sec: 'QQQ', gp: { range: '1A', type: 'candle', ov: { sma50: true, sma200: true }, st: { vol: true }, log: false, cmp: [] }, corr: { u: 'MIX', win: 104, pair: null },
+const ST = { fn: 'MON', sec: 'QQQ', gp: { range: '1A', type: 'candle', ov: { sma50: true, sma200: true }, st: { vol: true }, log: false, cmp: [] }, corr: { u: 'BRVMW', win: 104, pair: null },
   brvm: { sort: { k: 'mcap', dir: -1 }, sector: 'ALL' }, dvd: { sort: { k: 'yld', dir: -1 } }, ev: { cat: '', tk: '', q: '', page: 0 }, bt: null, qlab: {} };
-const FNS = [['MON', 'Marchés'], ['BRVM', 'BRVM'], ['GP', 'Graphique'], ['DES', 'Fiche'], ['BTST', 'Backtest'], ['QLAB', 'Quant Lab'], ['CORR', 'Corrélations'],
-  ['SEAS', 'Saisonnalité'], ['MACRO', 'Macro & Or'], ['FX', 'Franc CFA'], ['DVD', 'Dividendes'], ['EVTS', 'Avis BRVM'], ['HELP', 'Aide']];
-const SECFN = new Set(['GP', 'DES', 'BTST', 'QLAB', 'SEAS']);
+/* Registre des fonctions : code -> [libellé, portée (sec = titre, mkt = marché), groupe, description] */
+const FN = {
+  MON: ['Marchés', 'mkt', 'Marchés', 'Tous les titres, règle SMA 200, séance BRVM, carte des capitalisations'],
+  BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, 17 indices, largeur du marché, secteurs'],
+  IMAP: ['Carte de chaleur', 'mkt', 'Marchés', 'BRVM, Nasdaq-100 et ETF : surface = capitalisation, couleur = performance, par secteur'],
+  US: ['Nasdaq-100 & ETF', 'mkt', 'Marchés', 'Nasdaq-100, ETF secteurs, facteurs, pays, obligations, matières, crypto'],
+  TOP: ['Actualités', 'mkt', 'Marchés', 'Fil d’actualités BRVM, UEMOA, marchés mondiaux, banques centrales'],
+  FG: ['Fear & Greed', 'mkt', 'Sentiment', 'Indice peur/avidité US (CNN + réplique) et BRVM (calculé)'],
+  ECO: ['Macro US', 'mkt', 'Macro', 'FRED : courbe des taux, crédit, liquidité, emploi, inflation, récession'],
+  UEMOA: ['UEMOA', 'mkt', 'Macro', 'Les 8 économies de l’Union : croissance, inflation, dette, BRVM par pays'],
+  MACRO: ['Macro & Or', 'mkt', 'Macro', 'Or depuis 1833, krachs, CAPE, inflation, pétrole, VIX'],
+  FX: ['Franc CFA', 'mkt', 'Macro', 'USD/XOF, EUR/USD, effet de change, simulateur'],
+  CORR: ['Corrélations', 'mkt', 'Quant', 'Matrice BRVM × monde, paire au choix, ACP'],
+  RRG: ['Rotation (RRG)', 'mkt', 'Quant', 'Graphe de rotation relative : secteurs, facteurs, pays, BRVM'],
+  PER: ['Valorisation BRVM', 'mkt', 'Fondamentaux', 'PER du marché (BRVM officiel), PER prévisionnel des sources, historique'],
+  EQS: ['Screener', 'mkt', 'Fondamentaux', 'Filtrer US et BRVM par ratios : FCF, croissance, qualité, valorisation'],
+  LIQ: ['Liquidité BRVM', 'mkt', 'Marchés', 'Montants échangés, jours cotés, Amihud, délai pour constituer une position'],
+  ALRT: ['Alertes', 'mkt', 'Fondamentaux', 'Marges, FCF, dette, révisions, seuils de valorisation, résultats à venir'],
+  DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique'],
+  EVTS: ['Avis BRVM', 'mkt', 'Marchés', 'Avis officiels depuis 2000'],
+  HELP: ['Aide', 'mkt', 'Aide', 'Fonctions, sources, raccourcis'],
+  MENU: ['Menu du titre', 'sec', 'Titre', 'Toutes les fonctions disponibles pour ce titre'],
+  DES: ['Fiche', 'sec', 'Description', 'Profil, comptes sur 10 exercices, dividendes, avis officiels'],
+  CN: ['Actualités du titre', 'sec', 'Description', 'Articles qui citent la société et avis officiels'],
+  GP: ['Graphique', 'sec', 'Cours', 'Bougies, moyennes, Bollinger, RSI, MACD, comparaison'],
+  HP: ['Historique des cours', 'sec', 'Cours', 'Cours quotidiens, hebdomadaires, mensuels avec variations et volumes'],
+  COMP: ['Comparaison', 'sec', 'Cours', 'Performance contre d’autres titres et un indice, dividendes réinvestis'],
+  SEAS: ['Saisonnalité', 'sec', 'Cours', 'Rendements années × mois, jour de semaine, Sell in May'],
+  FA: ['Analyse financière', 'sec', 'Fondamentaux', 'Revenus, EBITDA, résultat, BPA, marges, flux, FCF, croissance, dette, ROE, ROIC'],
+  RV: ['Valorisation relative', 'sec', 'Fondamentaux', 'PER, VE/EBITDA, VE/CA, P/B, rendement FCF contre pairs et historique'],
+  WACC: ['Création de valeur', 'sec', 'Fondamentaux', 'Coût du capital, ROIC, écart ROIC − WACC'],
+  DVD: ['Dividendes du titre', 'sec', 'Fondamentaux', 'Historique, rendement, croissance, taux de distribution, couverture par le FCF'],
+  DDM: ['Valeur par les dividendes', 'sec', 'Fondamentaux', 'Gordon-Shapiro, croissance implicite, sensibilité'],
+  EE: ['Estimations', 'sec', 'Analystes', 'Consensus du BPA, révisions, croissance attendue'],
+  SURP: ['Surprises', 'sec', 'Analystes', 'BPA publié contre consensus, réaction du cours'],
+  BETA: ['Risque & bêta', 'sec', 'Risque', 'Bêta sur plusieurs fenêtres, volatilité, corrélation, drawdown, pairs'],
+  QLAB: ['Quant Lab', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne'],
+  BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns'],
+};
+const MKT_KEYS = ['MON', 'BRVM', 'IMAP', 'US', 'TOP', 'FG', 'ECO', 'UEMOA', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'EVTS', 'HELP'];
+const SEC_TABS = ['DES', 'GP', 'HP', 'FA', 'RV', 'WACC', 'DVD', 'DDM', 'EE', 'SURP', 'COMP', 'BETA', 'QLAB', 'BTST', 'SEAS', 'CN'];
+const MENU_GROUPS = [['Description', ['DES', 'CN']], ['Cours', ['GP', 'HP', 'COMP', 'SEAS']], ['Fondamentaux', ['FA', 'RV', 'WACC', 'DVD', 'DDM']],
+  ['Analystes', ['EE', 'SURP']], ['Risque & quant', ['BETA', 'QLAB', 'BTST']]];
+const FNS = Object.entries(FN).map(([k, v]) => [k, v[0]]);
+const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
+/* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
+function avail(code, s) {
+  if (!s) return 'aucun titre';
+  const eq = s.cls === 'Equity' && s.typ !== 'ETF', brvm = s.mkt === 'BRVM';
+  if (['FA', 'RV', 'WACC'].includes(code)) return eq ? (brvm || s.fa ? null : 'comptes SEC non disponibles pour ce titre') : 'réservé aux actions';
+  if (['EE', 'SURP'].includes(code)) return brvm ? 'aucun consensus d’analystes public pour la BRVM' : s.mkt === 'US' && eq ? (s.ee === false ? 'pas de consensus publié pour ce titre' : null) : 'réservé aux actions US';
+  if (code === 'DVD' || code === 'DDM') return s.cls === 'Equity' || s.typ === 'ETF' ? null : 'pas de dividende';
+  if (code === 'BTST' || code === 'QLAB') return s.f === 'D' ? null : 'série mensuelle';
+  return null;
+}
 
 const TRIGGER_ID = '__TRIGGER_ID__';
 
@@ -55,42 +107,72 @@ function searchSecs(qs) {
 }
 function parseCmd(txt) {
   const toks = txt.trim().toUpperCase().replace(/<GO>|\bGO\b|EQUITY|INDEX|CURNCY|COMDTY/g, ' ').split(/\s+/).filter(Boolean);
-  let fn = null, s = null; for (const t of toks) { if (!fn && FNS.some(f => f[0] === t)) { fn = t; continue; } if (t === 'AIDE') { fn = 'HELP'; continue; } if (!s) { const m = Q.by[t] || searchSecs(t)[0]; if (m) s = m.id; } }
+  let fn = null, s = null; for (const t of toks) { if (!fn && FN[t]) { fn = t; continue; } if (t === 'AIDE') { fn = 'HELP'; continue; } if (!s) { const m = Q.by[t] || searchSecs(t)[0]; if (m) s = m.id; } }
   if (!s && toks.length > 1 && !fn) { const m = searchSecs(toks.join(' '))[0]; if (m) s = m.id; }
   return { fn, s };
 }
-function runCmd(txt) { const { fn, s } = parseCmd(txt); if (!fn && !s) { toast('Commande inconnue. Exemples : SNTS GP · QQQ BTST · MACRO · EVTS'); return; }
-  go(fn || (SECFN.has(ST.fn) ? ST.fn : 'GP'), s || ST.sec); }
+function runCmd(txt) {
+  const t = txt.trim(); if (ST.fn === 'MENU' && /^\d{1,2}$/.test(t)) { const it = menuItems(sec(ST.sec))[+t - 1]; if (it) { go(it, ST.sec); return; } }
+  const { fn, s } = parseCmd(txt); if (!fn && !s) { toast('Commande inconnue. Exemples : SNTS (menu du titre) · SNTS FA · QQQ BTST · FG · TOP'); return; }
+  if (fn && FN[fn][1] === 'mkt') { go(fn, s); return; }
+  go(fn || 'MENU', s || ST.sec);
+}
+function menuItems(s) { return MENU_GROUPS.flatMap(g => g[1]); }
+/* Saisie façon Bloomberg : « SNTS » propose les titres ; « SNTS » + espace (ou Tab) propose les fonctions du titre. */
+function exactSec(t) { const u = (t || '').toUpperCase(); return Q.by[u] || Q.sum.secs.find(s => s.tk.toUpperCase().split(' ')[0] === u) || null; }
 function initCmd() {
   const inp = $('cmd'), ac = $('ac'); let sel = 0, items = [];
-  const show = () => { const v = inp.value; const parts = v.trim().split(/\s+/); const last = parts[parts.length - 1] || '';
-    const fns = FNS.filter(f => last && (f[0].startsWith(last.toUpperCase()) || f[1].toUpperCase().startsWith(last.toUpperCase()))).map(f => ({ k: 'fn', id: f[0], a: f[0], b: f[1], c: 'FONCTION' }));
-    const ss = searchSecs(last).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: s.tk, b: s.n, c: s.cls === 'Equity' ? (s.mkt === 'BRVM' ? 'BRVM' : s.typ) : s.cls }));
-    items = fns.concat(ss).slice(0, 14); sel = 0;
-    ac.hidden = !items.length; ac.innerHTML = items.map((it, i) => `<div class="${i === sel ? 'on' : ''}" data-i="${i}"><b>${esc(it.a)}</b><span>${esc(it.b)}</span><span>${it.c}</span></div>`).join(''); };
-  const pick = i => { const it = items[i]; if (!it) return; ac.hidden = true; inp.value = ''; if (it.k === 'fn') go(it.id, ST.sec); else go(SECFN.has(ST.fn) ? ST.fn : 'GP', it.id); inp.blur(); };
-  inp.addEventListener('input', show);
-  inp.addEventListener('keydown', e => { if (ac.hidden) return; if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length; [...ac.children].forEach((c, i) => c.classList.toggle('on', i === sel)); }
-    if (e.key === 'Tab') { e.preventDefault(); pick(sel); } if (e.key === 'Escape') { ac.hidden = true; } });
+  const show = () => {
+    const v = inp.value, toks = v.trim().split(/\s+/).filter(Boolean), sp = /\s$/.test(v); const S = toks.length ? exactSec(toks[0]) : null;
+    if (S && (toks.length > 1 || sp)) {
+      const part = (toks.length > 1 ? toks[toks.length - 1] : '').toUpperCase();
+      items = menuItems(S).concat(['CORR']).filter(c => !part || c.startsWith(part) || FN[c][0].toUpperCase().includes(part))
+        .map(c => { const why = avail(c, S); return { k: 'sfn', id: c, sec: S.id, a: `${S.id} ${c}`, b: FN[c][0] + ' — ' + FN[c][3], c: why ? 'n.d.' : FN[c][2], off: !!why }; });
+    } else {
+      const last = toks[toks.length - 1] || '', L = last.toUpperCase();
+      const fns = Object.keys(FN).filter(k => k !== 'MENU' && L && (k.startsWith(L) || FN[k][0].toUpperCase().startsWith(L)))
+        .map(k => ({ k: 'fn', id: k, a: k, b: FN[k][0] + ' — ' + FN[k][3], c: FN[k][1] === 'sec' ? 'TITRE' : 'FONCTION' }));
+      const ss = searchSecs(last).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: s.tk, b: s.n, c: s.cls === 'Equity' ? (s.mkt === 'BRVM' ? 'BRVM' : s.typ) : s.cls }));
+      items = (ss.length && ss[0].id.toUpperCase() === L ? ss.concat(fns) : fns.concat(ss)).slice(0, 16);
+    }
+    sel = Math.max(0, items.findIndex(it => !it.off)); ac.hidden = !items.length;
+    ac.innerHTML = items.map((it, i) => `<div class="${i === sel ? 'on' : ''}${it.off ? ' off' : ''}" data-i="${i}"><b>${esc(it.a)}</b><span>${esc(it.b)}</span><span>${it.c}</span></div>`).join('') +
+      (items.length && items[0].k !== 'sfn' && items.some(it => it.k === 'sec') ? '<p class="hint">Entrée : menu du titre · Tab : ses fonctions</p>' : '');
+  };
+  const pick = (i, tab) => { const it = items[i]; if (!it) return;
+    if (it.k === 'sec' && tab) { inp.value = it.id + ' '; show(); return; }
+    ac.hidden = true; inp.value = ''; inp.blur();
+    if (it.k === 'sfn') go(it.id, it.sec); else if (it.k === 'fn') go(it.id, ST.sec); else go('MENU', it.id); };
+  inp.addEventListener('input', show); inp.addEventListener('focus', () => { if (inp.value) show(); });
+  inp.addEventListener('keydown', e => { if (ac.hidden) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length; [...ac.querySelectorAll('div')].forEach((c, i) => c.classList.toggle('on', i === sel)); c0(); }
+    if (e.key === 'Tab') { e.preventDefault(); pick(sel, true); } if (e.key === 'Escape') { ac.hidden = true; } });
+  const c0 = () => { const d = ac.querySelector('div.on'); if (d) d.scrollIntoView({ block: 'nearest' }); };
   ac.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); if (d) { e.preventDefault(); pick(+d.dataset.i); } });
-  $('cmdForm').addEventListener('submit', e => { e.preventDefault(); if (!ac.hidden && items.length && inp.value.trim().split(/\s+/).length === 1 && !FNS.some(f => f[0] === inp.value.trim().toUpperCase())) { pick(sel); return; } const v = inp.value; ac.hidden = true; inp.value = ''; inp.blur(); runCmd(v); });
+  $('cmdForm').addEventListener('submit', e => { e.preventDefault(); const v = inp.value.trim();
+    if (!ac.hidden && items.length && !/^\d{1,2}$/.test(v)) { const exactFn = v.toUpperCase().split(/\s+/); const typedFn = exactFn.length === 1 && FN[exactFn[0]];
+      if (!typedFn || items[sel].a === exactFn[0]) { pick(sel); return; } }
+    ac.hidden = true; inp.value = ''; inp.blur(); runCmd(v); });
   inp.addEventListener('blur', () => setTimeout(() => { ac.hidden = true; }, 150));
   document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') go('MON'); });
 }
 
 /* ---------- router ---------- */
 let renderSeq = 0;
-function go(fn, s) { if (fn) ST.fn = fn; if (s && Q.by[s]) ST.sec = s; try { history.replaceState(null, '', '#' + ST.fn + (SECFN.has(ST.fn) ? '~' + ST.sec : '')); } catch (e) { } render(); window.scrollTo(0, 0); }
-function fromHash() { const h = decodeURIComponent(location.hash.slice(1)); if (!h) return; const [f, s] = h.split('~'); if (FNS.some(x => x[0] === f)) ST.fn = f; if (s && Q.by[s]) ST.sec = s; }
+function go(fn, s) { if (fn && FN[fn]) ST.fn = fn; if (s && Q.by[s]) ST.sec = s; try { history.replaceState(null, '', '#' + ST.fn + (SECFN.has(ST.fn) ? '~' + ST.sec : '')); } catch (e) { } render(); window.scrollTo(0, 0); }
+function fromHash() { const h = decodeURIComponent(location.hash.slice(1)); if (!h) return; const [f, s] = h.split('~'); if (FN[f]) ST.fn = f; if (s && Q.by[s]) ST.sec = s; }
 async function render() {
   const seq = ++renderSeq; untip(); renderKeys(); renderSecbar(); renderStatus();
   const m = $('main'); m.innerHTML = '<div class="empty">Chargement…</div>';
+  const why = SECFN.has(ST.fn) && ST.fn !== 'MENU' ? avail(ST.fn, sec(ST.sec)) : null;
+  if (why) { m.innerHTML = `<div class="pn"><div class="pt">${sec(ST.sec).tk} · ${FN[ST.fn][0]}<span class="code">${ST.fn}</span></div><div class="pb"><div class="empty">Non disponible pour ce titre : ${esc(why)}.<br><br><button class="tb" data-fn="MENU">Voir les fonctions disponibles</button></div></div></div>`; return; }
+  if (!PAGES[ST.fn]) { m.innerHTML = '<div class="empty">Fonction en préparation.</div>'; return; }
   try { await PAGES[ST.fn](m, () => seq === renderSeq); }
   catch (e) { console.error(e); if (seq === renderSeq) m.innerHTML = `<div class="empty">Impossible d'afficher cette fonction : ${esc(e.message)}</div>`; }
 }
-function renderKeys() { $('fkeys').innerHTML = FNS.map((f, i) => `<button class="fk ${ST.fn === f[0] ? 'on' : ''}" data-fn="${f[0]}"><em>${i + 1})</em><b>${f[0]}</b>${f[1]}</button>`).join(''); }
+function renderKeys() { $('fkeys').innerHTML = MKT_KEYS.map((k, i) => `<button class="fk ${ST.fn === k ? 'on' : ''}" data-fn="${k}" title="${esc(FN[k][3])}"><em>${i + 1})</em><b>${k}</b>${FN[k][0]}</button>`).join(''); }
 function renderSecbar() {
-  const b = $('secbar'); if (!SECFN.has(ST.fn)) { b.hidden = true; return; } b.hidden = false; const s = sec(ST.sec);
+  const b = $('secbar'); if (!SECFN.has(ST.fn)) { b.hidden = true; $('stabs').hidden = true; return; } b.hidden = false; const s = sec(ST.sec);
   b.innerHTML = `<span class="tk">${s.tk}<small>${s.cls === 'Equity' ? 'Equity' : s.cls}</small></span><span class="nm">${esc(s.n)}</span>
     <span class="px">${px(s, s.last)}</span><span class="kv">${s.ccy}</span><span>${sgn(s.last - s.prev, pxd(s), '', 1)} ${pc(s.pct)}</span>
     <span class="kv">Date<b>${fd(s.dt)}${s.live ? ' · séance' : ''}</b></span>
@@ -98,11 +180,13 @@ function renderSecbar() {
     <span class="kv">52 sem.<b>${px(s, s.lo52)} – ${px(s, s.hi52)}</b></span><span class="kv">YTD<b>${pc(s.ytd, 1)}</b></span><span class="kv">1 an<b>${pc(s.r1y, 1)}</b></span>
     ${s.mcap ? `<span class="kv">Capi<b>${big(s.mcap)} XOF</b></span>` : ''}${s.per ? `<span class="kv">PER<b>${num(s.per, 1)}</b></span>` : ''}${s.yld ? `<span class="kv">Rdt<b>${num(s.yld * 100, 2)}%</b></span>` : ''}
     <span class="kv">${s.grp ? esc(s.grp) : ''}${s.cty ? ' · ' + esc(Q.sum.cty[s.cty] || s.cty) : ''}</span>`;
+  const t = $('stabs'); t.hidden = false;
+  t.innerHTML = `<button class="st ${ST.fn === 'MENU' ? 'on' : ''}" data-fn="MENU">MENU</button>` + SEC_TABS.map(k => { const why = avail(k, s); return `<button class="st ${ST.fn === k ? 'on' : ''}${why ? ' off' : ''}" data-fn="${k}" title="${esc(FN[k][0] + (why ? ' — ' + why : ''))}">${k}<small>${FN[k][0]}</small></button>`; }).join('');
 }
 function renderStatus() {
   const L = Q.live && Q.live.qqq, ss = Q.sum.session;
   $('status').innerHTML = `<span>Données au <b>${fd(Q.sum.asof)}</b> · ${Q.sum.secs.length} titres · séance BRVM <b>${ss ? fds(ss.asof) : '—'}</b>${L ? ` · QQQ <b>${num(L.price, 2)}</b> (${L.state === 'REGULAR' ? 'séance' : L.state === 'CLOSED' ? 'clôturé' : L.state}, ${new Date(L.time * 1000).toISOString().slice(11, 16)} UTC)` : ''}</span>
-    <span>Tapez un ticker ou une fonction puis <b>Entrée</b> · double-clic sur un graphique : vue initiale · molette : zoom</span>
+    <span>Ticker + <b>Entrée</b> : menu du titre · ticker + <b>espace</b> : ses fonctions · graphiques : trackpad / molette, double-clic = vue initiale</span>
     <span>Sources : Yahoo Finance · brvm.org · BRVMetrics · datasets.io — outil d'analyse, pas un conseil en investissement</span>`;
 }
 function clocks() { const z = [['ABJ', 'Africa/Abidjan'], ['PAR', 'Europe/Paris'], ['NY', 'America/New_York'], ['TPE', 'Asia/Taipei']];
@@ -140,8 +224,8 @@ async function boot() {
   try { Q.live = await getJSON('live.json'); } catch (e) { } try { Q.quotes = await getJSON('quotes.json'); applyQuotes(); } catch (e) { }
   fromHash(); initCmd(); clocks(); feedState();
   document.addEventListener('click', e => { const f = e.target.closest('[data-fn]'); if (f) { go(f.dataset.fn, f.dataset.s); return; }
-    const s = e.target.closest('[data-sec]'); if (s && !e.target.closest('a')) { const id = s.dataset.sec; go(s.dataset.to || (SECFN.has(ST.fn) ? ST.fn : 'GP'), id); } });
+    const s = e.target.closest('[data-sec]'); if (s && !e.target.closest('a')) { const id = s.dataset.sec; go(s.dataset.to || (SECFN.has(ST.fn) && ST.fn !== 'MENU' && !avail(ST.fn, sec(id)) ? ST.fn : 'MENU'), id); } });
   render(); initFeed(); initSync();
 }
-function renderKeysSkeleton() { $('fkeys').innerHTML = FNS.map((f, i) => `<button class="fk" data-fn="${f[0]}"><em>${i + 1})</em><b>${f[0]}</b>${f[1]}</button>`).join(''); }
+function renderKeysSkeleton() { $('fkeys').innerHTML = MKT_KEYS.map((k, i) => `<button class="fk" data-fn="${k}"><em>${i + 1})</em><b>${k}</b>${FN[k][0]}</button>`).join(''); }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

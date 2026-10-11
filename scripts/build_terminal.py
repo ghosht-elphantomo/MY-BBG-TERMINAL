@@ -131,9 +131,9 @@ def series_from_csv(text, date_col, val_col, filt=None):
 
 
 # ------------------------------------------------------------------ metrics
-def stats_block(d, c, freq="D", h=None, l=None, v=None, val=None):
+def stats_block(d, c, freq="D", h=None, l=None, v=None, val=None, ann=None):
     n = len(c)
-    per_year = 252 if freq == "D" else 12
+    per_year = ann or (252 if freq == "D" else 12)
     last, prev = c[-1], c[-2] if n > 1 else c[-1]
 
     def back(k):
@@ -142,7 +142,7 @@ def stats_block(d, c, freq="D", h=None, l=None, v=None, val=None):
     def ret(k):
         b = back(k)
         return (last / b - 1) if b else None
-    wk, mo, q, yr, y3 = (5, 21, 63, 252, 756) if freq == "D" else (None, 1, 3, 12, 36)
+    wk, mo, q, yr, y3 = ((7, 30, 91, 365, 1095) if ann == 365 else (5, 21, 63, 252, 756)) if freq == "D" else (None, 1, 3, 12, 36)
     ly = d[-1] // 10000 - 1
     base = None
     for i in range(n - 1, -1, -1):
@@ -211,8 +211,10 @@ def main():
     os.makedirs(sdir, exist_ok=True)
     secs, files = [], {}
 
-    def add(meta, d, c, o=None, h=None, l=None, v=None, val=None, div=None, freq="D", nd=2):
+    def add(meta, d, c, o=None, h=None, l=None, v=None, val=None, div=None, freq="D", nd=2, ann=None, replace=False):
         sid = meta["id"]
+        if replace and sid in files:
+            secs[:] = [x for x in secs if x["id"] != sid]
         body = {"id": sid, "f": freq, "d": d, "c": [rnd(x, nd) for x in c]}
         if o:
             body.update(o=[rnd(x, nd) for x in o], h=[rnd(x, nd) for x in h], l=[rnd(x, nd) for x in l])
@@ -223,7 +225,7 @@ def main():
         if div and any(div):
             body["div"] = [rnd(x, 4) for x in div]
         files[sid] = body
-        st = stats_block(d, c, freq, h, l, v, val)
+        st = stats_block(d, c, freq, h, l, v, val, ann)
         secs.append({**meta, "f": freq, **st})
 
     # US & Taiwan -----------------------------------------------------------
@@ -316,7 +318,7 @@ def main():
         add({"id": sid, "tk": tk, "n": name, "cls": cls, "typ": cls, "mkt": "MACRO", "grp": grp, "ccy": ccy}, [x[0] for x in s], [x[1] for x in s], freq=freq, nd=nd)
         return s
     macro("XAU", "XAU Curncy", "Or (USD/once, mensuel)", "Métaux", "gold-prices/main/data/monthly.csv", "Date", "Price", "M")
-    macro("SPX", "SPX Index", "S&P 500 (mensuel)", "Actions", "s-and-p-500/main/data/data.csv", "Date", "SP500", "M", cls="Index")
+    macro("SPXM", "SPX Index (mensuel)", "S&P 500 depuis 1871 (mensuel)", "Actions", "s-and-p-500/main/data/data.csv", "Date", "SP500", "M", cls="Index")
     macro("CAPE", "CAPE Index", "S&P 500 PER de Shiller (CAPE)", "Valorisation", "s-and-p-500/main/data/data.csv", "Date", "PE10", "M", cls="Index")
     macro("CPI", "CPI INDX", "Indice des prix US (CPI-U)", "Inflation", "cpi-us/main/data/cpiai.csv", "Date", "Index", "M", cls="Index")
     macro("US10Y", "USGG10YR Index", "Taux US 10 ans (%)", "Taux", "bond-yields-us-10y/main/data/monthly.csv", "Date", "Rate", "M", cls="Rate", ccy="%")
@@ -336,6 +338,18 @@ def main():
             [x[0] for x in twd], [x[1] for x in twd], nd=4)
     except Exception as e:  # noqa: BLE001
         log("skip FX", e)
+
+    # Sources complémentaires : ETF, indices US, Nasdaq-100, CBOE, crypto ----------
+    import build_extra
+    xinfo = build_extra.ingest(a.extra, add, set(files), log)
+    for s in secs:  # métadonnées Nasdaq des titres US déjà suivis
+        if s["mkt"] == "US" and s["id"] in xinfo["ndx"]:
+            s["ndx"] = True
+        sc = xinfo["screener"].get(s["id"]) if s["mkt"] == "US" else None
+        if sc:
+            s["mcap"] = s.get("mcap") or sc.get("mcap")
+            s["sector"] = build_extra.SECT_FR.get(sc.get("sector"), sc.get("sector"))
+            s["ind"] = sc.get("ind")
 
     # Betas / correlations on weekly returns (2 years) ----------------------
     wk = {sid: weekly(b["d"], b["c"]) for sid, b in files.items() if b["f"] == "D"}
@@ -420,6 +434,9 @@ def main():
     emeta = [{"d": x.get("published_at") or x.get("event_at"), "e": x.get("event_at"), "t": x.get("ticker"), "c": x.get("category_label"),
               "ti": x.get("title"), "u": x.get("document_url")} for x in ev if (x.get("published_at") or x.get("event_at"))]
     emeta.sort(key=lambda x: x["d"] or "", reverse=True)
+
+    # Calculs dérivés (macro, sentiment, liquidité, comptes, consensus, valorisation BRVM, UEMOA) ----
+    build_extra.derive(a.extra, out, files, secs, fund, a.fcf, dmeta, xinfo["ndx"], log)
 
     # write ------------------------------------------------------------------
     for sid, body in files.items():

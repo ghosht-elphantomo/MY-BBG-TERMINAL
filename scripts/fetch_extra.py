@@ -984,7 +984,7 @@ def main():
             note(name, False, f"étape interrompue : {e}")
         log(f"{name}: {time.time() - t:.0f} s", json.dumps({k: (v['ok'], v['err']) for k, v in REPORT.items()}))
     REPORT["_"] = {"ts": int(time.time()), "secs": round(time.time() - t0)}
-    rp = os.path.join(a.out, "report_news.json" if only == {"news"} else "report.json")
+    rp = os.path.join(a.out, "report_" + "-".join(sorted(only)) + ".json")
     save(rp, REPORT)
     log(f"terminé en {time.time() - t0:.0f} s")
 

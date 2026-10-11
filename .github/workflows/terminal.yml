@@ -31,7 +31,7 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 50
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@v4
 
@@ -67,12 +67,22 @@ jobs:
         continue-on-error: true
         run: timeout 120 python3 scripts/fetch_extra.py --out /tmp/newsraw --only "" --news /tmp/site/data/news.json
 
-      - name: Sources complémentaires (EOD)
+      - name: Sources complémentaires (FRED, CBOE, CNN, crypto, Banque mondiale, bulletins BRVM)
+        if: steps.mode.outputs.mode == 'eod'
+        continue-on-error: true
+        run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,boc,probe
+
+      - name: Comptes SEC et consensus des analystes (EOD)
         if: steps.mode.outputs.mode == 'eod'
         continue-on-error: true
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
-        run: timeout 1800 python3 scripts/fetch_extra.py --out /tmp/raw
+        run: timeout 1200 python3 scripts/fetch_extra.py --out /tmp/raw --only sec,analyst
+
+      - name: Historiques Nasdaq (EOD, incrémental)
+        if: steps.mode.outputs.mode == 'eod'
+        continue-on-error: true
+        run: timeout 1500 python3 scripts/fetch_extra.py --out /tmp/raw --only nasdaq
 
       - name: Reconstruire la base complète (EOD ou base absente)
         run: |

@@ -88,6 +88,7 @@ class TSChart {
       for (const s of ss) { if (s.noScale || s.type === 'marks') continue; const arrs = s.type === 'candle' ? [s.h, s.l] : s.type === 'band' ? [s.y1, s.y2] : [s.y];
         for (const a of arrs) for (let i = i0; i <= i1; i++) { const v = a[i]; if (v == null || !isFinite(v) || (p.log && v <= 0)) continue; if (v < lo) lo = v; if (v > hi) hi = v; } }
       for (const r of (p.refs || [])) if (r.scale) { lo = Math.min(lo, r.v); hi = Math.max(hi, r.v); }
+      if (!p.log && ss.some(s => s.type === 'bar' && !s.noScale) && isFinite(lo)) { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
       if (p.min != null) lo = Math.min(lo, p.min); if (p.max != null) hi = Math.max(hi, p.max); if (p.fixed) { lo = p.fixed[0]; hi = p.fixed[1]; }
       if (!isFinite(lo)) { lo = 0; hi = 1; } if (lo === hi) { lo -= Math.abs(lo) * .05 || 1; hi += Math.abs(hi) * .05 || 1; }
       const lg = p.log && lo > 0; const pad = lg ? 0 : (hi - lo) * .06; if (!p.fixed) { lo -= p.zero && lo >= 0 ? 0 : pad; hi += pad; }
@@ -127,11 +128,12 @@ class TSChart {
         x.strokeStyle = col; x.lineWidth = 1; x.beginPath(); x.moveTo(Math.round(px) + .5, Y(hh)); x.lineTo(Math.round(px) + .5, Y(ll)); x.stroke();
         if (bw > 3) { const y1 = Y(o), y2 = Y(c); x.fillStyle = up ? '#000' : col; x.fillRect(px - cw / 2, Math.min(y1, y2), cw, Math.max(1, Math.abs(y2 - y1))); if (up) { x.strokeRect(Math.round(px - cw / 2) + .5, Math.round(Math.min(y1, y2)) + .5, Math.round(cw) - 1, Math.max(1, Math.round(Math.abs(y2 - y1)))); } } }
       return; }
-    if (t === 'bar') { const cw = Math.max(1, bw * .8), base = s.base != null ? Y(s.base) : bot;
+    if (t === 'bar') { const cw = Math.max(1, bw * .8), base = s.base != null ? Y(s.base) : lo < 0 ? Math.min(bot, Y(0)) : bot;
       for (let i = i0; i <= i1; i++) { const v = s.y[i]; if (v == null || !isFinite(v)) continue; x.fillStyle = s.colors ? s.colors[i] : s.colorFn ? s.colorFn(v, i) : (s.color || CL.dim); const yy = Y(v); x.fillRect(X(i) - cw / 2, Math.min(yy, base), cw, Math.max(1, Math.abs(base - yy))); }
       return; }
     if (t === 'band') { x.beginPath(); let st = false; for (let i = i0; i <= i1; i++) { const v = s.y1[i]; if (v == null || !isFinite(v)) continue; st ? x.lineTo(X(i), Y(v)) : (x.moveTo(X(i), Y(v)), st = true); }
       for (let i = i1; i >= i0; i--) { const v = s.y2[i]; if (v == null || !isFinite(v)) continue; x.lineTo(X(i), Y(v)); } x.closePath(); x.fillStyle = s.fill || rgba(CL.cyan, .08); x.fill(); return; }
+    if (t === 'dots') { x.fillStyle = s.color || CL.amber; for (let i = i0; i <= i1; i++) { const v = s.y[i]; if (v == null || !isFinite(v)) continue; x.beginPath(); x.arc(X(i), Y(v), s.r || 2.6, 0, 7); x.fill(); } return; }
     if (t === 'marks') { for (const m of s.m) { if (m.i < i0 || m.i > i1) continue; const px = X(m.i), py = Y(m.v); x.fillStyle = m.up ? CL.up : CL.dn; x.beginPath();
       if (m.up) { x.moveTo(px, py + 4); x.lineTo(px - 5, py + 12); x.lineTo(px + 5, py + 12); } else { x.moveTo(px, py - 4); x.lineTo(px - 5, py - 12); x.lineTo(px + 5, py - 12); } x.fill(); } return; }
     x.strokeStyle = s.color || CL.white; x.lineWidth = s.w || 1.3; x.setLineDash(s.dash || []); x.beginPath(); let st = false, first = null, last = null;
@@ -198,3 +200,33 @@ function heatBg(v, scale) { if (v == null || !isFinite(v)) return 'transparent';
 function tip(e, html) { const t = document.getElementById('tip'); t.innerHTML = html; t.hidden = false; const r = t.getBoundingClientRect(); t.style.left = Math.min(window.innerWidth - r.width - 8, e.clientX + 14) + 'px'; t.style.top = Math.max(4, e.clientY - r.height - 10) + 'px'; }
 function untip() { const t = document.getElementById('tip'); if (t) t.hidden = true; }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+/* Nuage étiqueté : points {x, y, id, label, color, r, hi, trail:[[x,y]...]} ; survol = info-bulle, clic = ouvre le titre. */
+function scatterL(host, o) {
+  const { x, w, h } = setupCanvas(host); const P = o.pts.filter(p => isFinite(p.x) && isFinite(p.y));
+  if (!P.length) { host.insertAdjacentHTML('beforeend', '<div class="empty" style="position:absolute;inset:0">Pas assez de données.</div>'); return; }
+  const padL = 50, padB = 22, padT = 10, padR = 14; const all = P.flatMap(p => [[p.x, p.y]].concat(p.trail || [])).filter(q => isFinite(q[0]) && isFinite(q[1]));
+  let xl = Math.min(...all.map(q => q[0])), xh = Math.max(...all.map(q => q[0])), yl = Math.min(...all.map(q => q[1])), yh = Math.max(...all.map(q => q[1]));
+  if (o.cx != null) { xl = Math.min(xl, o.cx); xh = Math.max(xh, o.cx); } if (o.cy != null) { yl = Math.min(yl, o.cy); yh = Math.max(yh, o.cy); }
+  if (o.sym) { const dx = Math.max(Math.abs(xh - o.cx), Math.abs(xl - o.cx)), dy = Math.max(Math.abs(yh - o.cy), Math.abs(yl - o.cy)); xl = o.cx - dx; xh = o.cx + dx; yl = o.cy - dy; yh = o.cy + dy; }
+  const px = (xh - xl) * .06 || 1, py = (yh - yl) * .06 || 1; xl -= px; xh += px; yl -= py; yh += py;
+  const W = w - padL - padR, H = h - padT - padB, X = v => padL + (v - xl) / (xh - xl) * W, Y = v => padT + (yh - v) / (yh - yl) * H; const fx = o.fx || fmtAxis, fy = o.fy || fmtAxis;
+  if (o.quad) { const cx = X(o.cx), cy = Y(o.cy); const q = o.quad; x.fillStyle = q[0]; x.fillRect(cx, padT, padL + W - cx, cy - padT); x.fillStyle = q[1]; x.fillRect(padL, padT, cx - padL, cy - padT); x.fillStyle = q[2]; x.fillRect(padL, cy, cx - padL, padT + H - cy); x.fillStyle = q[3]; x.fillRect(cx, cy, padL + W - cx, padT + H - cy);
+    if (o.qlab) { x.font = '600 11px "Roboto Condensed", sans-serif'; x.fillStyle = rgba(CL.white, .35); x.textBaseline = 'top'; x.textAlign = 'right'; x.fillText(o.qlab[0], padL + W - 6, padT + 4); x.textAlign = 'left'; x.fillText(o.qlab[1], padL + 6, padT + 4); x.textBaseline = 'bottom'; x.fillText(o.qlab[2], padL + 6, padT + H - 4); x.textAlign = 'right'; x.fillText(o.qlab[3], padL + W - 6, padT + H - 4); } }
+  x.font = FNUM; x.textAlign = 'right'; x.textBaseline = 'middle';
+  for (const t of niceTicks(yl, yh, Math.max(2, Math.min(6, Math.floor(H / 40))))) { const yy = Math.round(Y(t)) + .5; x.strokeStyle = rgba(CL.dim2, .3); x.beginPath(); x.moveTo(padL, yy); x.lineTo(w - padR, yy); x.stroke(); x.fillStyle = CL.dim; x.fillText(fy(t), padL - 4, yy); }
+  x.textAlign = 'center'; x.textBaseline = 'alphabetic'; for (const t of niceTicks(xl, xh, Math.max(2, Math.min(7, Math.floor(W / 70))))) { const xx = Math.round(X(t)) + .5; x.strokeStyle = rgba(CL.dim2, .3); x.beginPath(); x.moveTo(xx, padT); x.lineTo(xx, padT + H); x.stroke(); x.fillStyle = CL.dim; x.fillText(fx(t), xx, h - 5); }
+  if (o.cx != null) { x.strokeStyle = CL.dim; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(X(o.cx) + .5, padT); x.lineTo(X(o.cx) + .5, padT + H); x.stroke(); x.setLineDash([]); }
+  if (o.cy != null) { x.strokeStyle = CL.dim; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(padL, Y(o.cy) + .5); x.lineTo(padL + W, Y(o.cy) + .5); x.stroke(); x.setLineDash([]); }
+  if (o.line) { const [a, b] = o.line; x.strokeStyle = o.lineColor || CL.amber; x.lineWidth = 1.2; x.setLineDash([5, 4]); x.beginPath(); x.moveTo(X(xl), Y(a + b * xl)); x.lineTo(X(xh), Y(a + b * xh)); x.stroke(); x.setLineDash([]); x.lineWidth = 1; }
+  for (const p of P) if (p.trail && p.trail.length) { const tr = p.trail.concat([[p.x, p.y]]); for (let i = 1; i < tr.length; i++) { x.strokeStyle = rgba(p.color || CL.cyan, .15 + .7 * i / tr.length); x.lineWidth = 1.5; x.beginPath(); x.moveTo(X(tr[i - 1][0]), Y(tr[i - 1][1])); x.lineTo(X(tr[i][0]), Y(tr[i][1])); x.stroke(); }
+    for (let i = 0; i < tr.length - 1; i++) { x.fillStyle = rgba(p.color || CL.cyan, .3 + .5 * i / tr.length); x.beginPath(); x.arc(X(tr[i][0]), Y(tr[i][1]), 1.8, 0, 7); x.fill(); } x.lineWidth = 1; }
+  const many = P.length > (o.maxLabels || 30);
+  for (const p of P.slice().sort((a, b) => (a.hi ? 1 : 0) - (b.hi ? 1 : 0))) { const r = p.r || (p.hi ? 5 : 3.5); x.fillStyle = p.color || rgba(CL.cyan, .8); x.beginPath(); x.arc(X(p.x), Y(p.y), r, 0, 7); x.fill();
+    if (p.hi) { x.strokeStyle = CL.yel; x.lineWidth = 2; x.beginPath(); x.arc(X(p.x), Y(p.y), r + 3, 0, 7); x.stroke(); x.lineWidth = 1; }
+    if (p.label && (!many || p.hi || o.labels)) { x.font = p.hi ? '600 11px "Roboto Condensed", sans-serif' : '500 10px "Roboto Condensed", sans-serif'; x.fillStyle = p.hi ? CL.yel : CL.txt; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText(p.label, X(p.x) + r + 3, Y(p.y)); } }
+  if (o.xlab) { x.fillStyle = CL.amber; x.font = FUI; x.textAlign = 'right'; x.textBaseline = 'bottom'; x.fillText(o.xlab, w - padR, padT + H - 3); } if (o.ylab) { x.fillStyle = CL.amber; x.font = FUI; x.textAlign = 'left'; x.textBaseline = 'top'; x.fillText(o.ylab, padL + 4, padT + 2); }
+  const near = e => { const r = host.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top; let b = null, bd = 144; for (const p of P) { const d = (X(p.x) - mx) ** 2 + (Y(p.y) - my) ** 2; if (d < bd) { bd = d; b = p; } } return b; };
+  host.onmousemove = e => { const p = near(e); host.style.cursor = p && p.id ? 'pointer' : ''; if (p) tip(e, o.tipf ? o.tipf(p) : `<b>${esc(p.label || p.id)}</b> · ${fx(p.x)} · ${fy(p.y)}`); else untip(); };
+  host.onmouseleave = untip; host.onclick = e => { const p = near(e); if (p && p.id && Q.by[p.id]) { untip(); go(o.to || (SECFN.has(ST.fn) ? ST.fn : 'MENU'), p.id); } };
+}

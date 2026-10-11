@@ -170,7 +170,7 @@ PAGES.DES = async (m, alive) => {
     ${topDD.map(e => `<tr><td class="l">${fd(S.x[e.p])}</td><td class="l">${fd(S.x[e.t])}</td><td>${pc(e.depth, 1)}</td><td>${e.t - e.p} ${unit}</td><td class="l">${e.r ? fd(S.x[e.r]) : '<span class="am">en cours</span>'}</td><td>${(e.r || n - 1) - e.p} ${unit}</td></tr>`).join('')}</tbody></table>`, { np: true, lect: 'Baisses du sommet au creux, classées par profondeur. La durée totale va du sommet au retour à ce niveau.' });
   const retChart = pn('Rendement par année', 'DES', cvb('desYr', 190));
   if (s.mkt === 'BRVM' && s.cls === 'Equity') {
-    const [F, DV, EV] = await Promise.all([getJSON('fundamentals.json'), getJSON('dividends.json'), getJSON('events.json')]); if (!alive()) return;
+    const [F, DV, EV, FA_] = await Promise.all([getJSON('fundamentals.json'), getJSON('dividends.json'), getJSON('events.json'), faJSON(s.id).catch(() => null)]); if (!alive()) return;
     const f = F[s.id] || { series: {} }, se = f.series || {}, years = [...new Set(Object.values(se).flatMap(o => Object.keys(o)))].sort();
     const LBL = [['ca', 'Chiffre d’affaires / PNB (M)', 0], ['croissance_ca', 'Croissance CA %', 1], ['resultat_net', 'Résultat net (M)', 0], ['croissance_resultat_net', 'Croissance RN %', 1], ['bnpa', 'BNPA (XOF)', 2], ['dividende', 'Dividende net (XOF)', 2],
       ['per', 'PER', 1], ['roe', 'ROE %', 1], ['roa', 'ROA %', 2], ['marge_nette', 'Marge nette %', 1], ['marge_exploitation', 'Marge d’exploitation %', 1], ['capitaux_propres', 'Capitaux propres (M)', 0], ['total_bilan', 'Total bilan (M)', 0],
@@ -186,7 +186,7 @@ PAGES.DES = async (m, alive) => {
         <div class="kv2"><span>Cours</span><b>${px(s, s.last)} XOF</b><span>BNPA ${f.ex || ''}</span><b>${num(s.bnpa, 2)}</b><span>PER</span><b>${num(s.per, 1)}</b><span>Actif net / titre</span><b>${num(bvps, 0)}</b><span>Cours / actif net</span><b>${bvps ? num(s.last / bvps, 2) : '—'}</b>
           <span>Dernier dividende net</span><b>${num(s.dps, 2)}${s.dps_ex ? ' (ex. ' + s.dps_ex + ')' : ''}</b><span>Rendement</span><b>${s.yld ? num(s.yld * 100, 2) + '%' : '—'}</b><span>Payout</span><b>${s.dps && s.bnpa ? num(s.dps / s.bnpa * 100, 0) + '%' : '—'}</b><span>Paiement</span><b>${fds(s.dps_pay)}</b></div></div>`,
         { lect: '<b>PER</b> = cours ÷ BNPA du dernier exercice publié. <b>Cours / actif net</b> = capitalisation ÷ capitaux propres. Fondamentaux : SikaFinance (via BRVMetrics), en millions de XOF.' })}
-      ${pn('Comptes · ' + years.length + ' exercices', 'FA', `<div class="tw"><table class="t"><thead><tr><th class="l">Rubrique</th>${years.map(y => `<th>${y}</th>`).join('')}</tr></thead><tbody>
+      ${FA_ ? pn('Comptes · 10 exercices', 'FA', accountsTable(FA_, 10), { np: true, lect: faSrcNote(FA_) + ' Détail, graphiques et taux de croissance : <b>FA</b>.' }) : pn('Comptes · ' + years.length + ' exercices', 'FA', `<div class="tw"><table class="t"><thead><tr><th class="l">Rubrique</th>${years.map(y => `<th>${y}</th>`).join('')}</tr></thead><tbody>
         ${LBL.filter(([k]) => se[k] && Object.keys(se[k]).length).map(([k, l, d]) => `<tr><td class="l am">${l}</td>${years.map(y => { const v = se[k][y]; return `<td class="${/croissance/.test(k) ? cls(v) : 'wh'}">${v == null ? '—' : num(v, d)}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`, { np: true })}
     </div>
     <div class="grid c4">${pn('Chiffre d’affaires (M XOF)', 'FA', cvb('fa1', 150))}${pn('Résultat net (M XOF)', 'FA', cvb('fa2', 150))}${pn('BNPA (XOF)', 'FA', cvb('fa3', 150))}${pn('Dividende net (XOF)', 'FA', cvb('fa4', 150))}</div>
@@ -198,9 +198,11 @@ PAGES.DES = async (m, alive) => {
     const bc = (id, k, d) => { const o = se[k] || {}; const ys = Object.keys(o).sort(); if (!ys.length) { $(id).innerHTML = '<div class="empty">—</div>'; return; } barChart($(id), { labels: ys, values: ys.map(y => o[y]), fmt: v => num(v, d), labelsOnBars: true, pos: k === 'dividende' ? CL.amber : CL.up }); };
     bc('fa1', 'ca', 0); bc('fa2', 'resultat_net', 0); bc('fa3', 'bnpa', 0); bc('fa4', 'dividende', 0);
   } else {
+    const FAu = s.fa ? await faJSON(s.id).catch(() => null) : null; if (!alive()) return;
+    const accU = FAu ? pn('Comptes · 10 exercices', 'FA', accountsTable(FAu, 10), { np: true, lect: faSrcNote(FAu) + ' Détail, graphiques et taux de croissance : <b>FA</b>.' }) : '';
     m.innerHTML = `<div class="grid c2">${pn('Profil · ' + esc(s.n), 'DES', `<div class="kv2"><span>Ticker</span><b>${s.tk}</b><span>Nom</span><b style="font-family:var(--ui)">${esc(s.n)}</b><span>Classe</span><b style="font-family:var(--ui)">${s.cls} · ${esc(s.grp || '')}</b><span>Devise / unité</span><b>${s.ccy}</b><span>Fréquence</span><b style="font-family:var(--ui)">${S.f === 'D' ? 'quotidienne' : 'mensuelle'}</b><span>Historique</span><b>${fd(S.x[0])} → ${fd(S.x[n - 1])}</b><span>Observations</span><b>${num(n, 0)}</b>
         <span>Plus haut historique</span><b>${px(s, s.ath)}</b><span>Écart au plus haut</span><b>${pc(s.dd, 1)}</b>${s.beta != null ? `<span>Bêta vs ${s.bench} (hebdo, 2 ans)</span><b>${num(s.beta, 2)}</b>` : ''}</div>`)}
-      <div class="grid" style="align-content:start">${retChart}${ddPanel}</div></div>${perfPanel}`;
+      <div class="grid" style="align-content:start">${retChart}${ddPanel}</div></div>${accU}${perfPanel}`;
   }
   const yr = yearRows.slice().reverse(); barChart($('desYr'), { labels: yr.map(r => String(r.y).slice(2)), values: yr.map(r => r.ret * 100), fmt: v => num(v, 0) + '%', extra: i => 'max DD ' + num(yr[i].mdd * 100, 1) + '%' });
 };

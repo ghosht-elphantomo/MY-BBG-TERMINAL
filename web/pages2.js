@@ -243,7 +243,7 @@ PAGES.SEAS = async (m, alive) => {
 
 /* ------------------------------------------------------------------ MACRO */
 PAGES.MACRO = async (m, alive) => {
-  const [XAU, SPX, CPI, CAPE, TEN, BR, WT, NG, VIX] = await Promise.all(['XAU', 'SPX', 'CPI', 'CAPE', 'US10Y', 'BRENT', 'WTI', 'NATGAS', 'VIX'].map(id => series(id).catch(() => null))); if (!alive()) return;
+  const [XAU, SPX, CPI, CAPE, TEN, BR, WT, NG, VIX] = await Promise.all(['XAU', 'SPXM', 'CPI', 'CAPE', 'US10Y', 'BRENT', 'WTI', 'NATGAS', 'VIX'].map(id => series(id).catch(() => null))); if (!alive()) return;
   const mm = S => new Map(S.x.map((d, i) => [Math.floor(d / 100), S.c[i]]));
   const gM = mm(XAU), sM = mm(SPX), cM = mm(CPI); const cpiLast = CPI.c[CPI.c.length - 1];
   // crises: S&P monthly drawdowns >= 20%
@@ -320,7 +320,7 @@ PAGES.FX = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ DVD */
-PAGES.DVD = async (m, alive) => {
+PAGES.DIVC = async (m, alive) => {
   const DV = await getJSON('dividends.json'); if (!alive()) return; const today = i2s(Q.sum.asof), st = ST.dvd;
   const up = DV.filter(x => (x.pay && x.pay >= today) || (x.det && x.det >= today)).sort((a, b) => (a.det || a.pay).localeCompare(b.det || b.pay));
   const br = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity' && s.dps).map(s => ({ ...s, payout: s.bnpa ? s.dps / s.bnpa : null }));
@@ -329,11 +329,11 @@ PAGES.DVD = async (m, alive) => {
   const exs = Object.keys(byEx).sort().slice(-15);
   const cols = [['id', 'Titre', 1], ['short', 'Société', 1], ['last', 'Cours'], ['dps', 'Div. net'], ['dps_ex', 'Exercice'], ['yld', 'Rendement'], ['payout', 'Payout'], ['per', 'PER'], ['dps_pay', 'Paiement']];
   m.innerHTML = `<div class="grid c2">
-    ${pn('Prochains détachements et paiements', 'DVD', `<div class="tw" style="max-height:300px"><table class="t"><thead><tr><th class="l">Titre</th><th class="l">Société</th><th>Exercice</th><th>Net / titre</th><th class="l">Détachement</th><th class="l">Paiement</th><th>Rdt au cours</th></tr></thead><tbody>
+    ${pn('Prochains détachements et paiements', 'DIVC', `<div class="tw" style="max-height:300px"><table class="t"><thead><tr><th class="l">Titre</th><th class="l">Société</th><th>Exercice</th><th>Net / titre</th><th class="l">Détachement</th><th class="l">Paiement</th><th>Rdt au cours</th></tr></thead><tbody>
       ${up.map(x => { const s = sec(x.t); return `<tr data-sec="${x.t}" data-to="DES"><td class="l tk">${x.t}</td><td class="l nm">${esc(s ? s.short || s.n : '')}</td><td>${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}</td><td class="l">${fds(x.det)}</td><td class="l">${fds(x.pay)}</td><td>${s ? num(x.dps / s.last * 100, 2) + '%' : '—'}</td></tr>`; }).join('') || '<tr><td class="l dm" colspan="7">Aucun paiement annoncé après le ' + fds(today) + '</td></tr>'}</tbody></table></div>`, { np: true, lect: 'Pour toucher le dividende, il faut détenir le titre la veille de la date de détachement.' })}
-    ${pn('Dividendes distribués par exercice (Md XOF)', 'DVD', cvb('dvY', 230), { lect: 'Somme, pour les sociétés cotées, du dividende net par titre × nombre de titres actuel. Approximation : le nombre de titres a pu changer (augmentations de capital, fractionnements).' })}
+    ${pn('Dividendes distribués par exercice (Md XOF)', 'DIVC', cvb('dvY', 230), { lect: 'Somme, pour les sociétés cotées, du dividende net par titre × nombre de titres actuel. Approximation : le nombre de titres a pu changer (augmentations de capital, fractionnements).' })}
   </div>
-  ${pn('Classement par rendement', 'DVD', `<div class="tw" style="max-height:55vh"><table class="t" id="dvT"><thead><tr>${thSort(cols, st.sort)}</tr></thead><tbody>${rk.map(s => `<tr data-sec="${s.id}" data-to="DES"><td class="l tk">${s.id}</td><td class="l nm">${esc(s.short || s.n)}</td><td class="wh">${px(s, s.last)}</td><td>${num(s.dps, 2)}</td><td>${s.dps_ex || '—'}</td><td class="${s.yld > .07 ? 'up' : ''}">${num(s.yld * 100, 2)}%</td><td>${s.payout ? num(s.payout * 100, 0) + '%' : '—'}</td><td>${num(s.per, 1)}</td><td>${fds(s.dps_pay)}</td></tr>`).join('')}</tbody></table></div>`, { np: true, lect: 'Rendement = dernier dividende net ÷ cours actuel. Un payout supérieur à 100 % signifie que la société distribue plus que son bénéfice du dernier exercice (puisé dans les réserves) : à surveiller.' })}
+  ${pn('Classement par rendement', 'DIVC', `<div class="tw" style="max-height:55vh"><table class="t" id="dvT"><thead><tr>${thSort(cols, st.sort)}</tr></thead><tbody>${rk.map(s => `<tr data-sec="${s.id}" data-to="DES"><td class="l tk">${s.id}</td><td class="l nm">${esc(s.short || s.n)}</td><td class="wh">${px(s, s.last)}</td><td>${num(s.dps, 2)}</td><td>${s.dps_ex || '—'}</td><td class="${s.yld > .07 ? 'up' : ''}">${num(s.yld * 100, 2)}%</td><td>${s.payout ? num(s.payout * 100, 0) + '%' : '—'}</td><td>${num(s.per, 1)}</td><td>${fds(s.dps_pay)}</td></tr>`).join('')}</tbody></table></div>`, { np: true, lect: 'Rendement = dernier dividende net ÷ cours actuel. Un payout supérieur à 100 % signifie que la société distribue plus que son bénéfice du dernier exercice (puisé dans les réserves) : à surveiller.' })}
   ${pn('Historique complet · ' + DV.length + ' dividendes', 'DVD', `<div class="tw" style="max-height:50vh"><table class="t"><thead><tr><th class="l">Titre</th><th>Exercice</th><th>Net / titre</th><th class="l">Annonce</th><th class="l">Détachement</th><th class="l">Paiement</th><th class="l">Source</th></tr></thead><tbody>
     ${DV.slice().sort((a, b) => (b.pay || b.det || '').localeCompare(a.pay || a.det || '')).map(x => `<tr data-sec="${x.t}" data-to="DES"><td class="l tk">${x.t}</td><td>${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}</td><td class="l">${fds(x.ann)}</td><td class="l">${fds(x.det)}</td><td class="l">${fds(x.pay)}</td><td class="l dm">${esc(x.src || '')}</td></tr>`).join('')}</tbody></table></div>`, { np: true })}`;
   m.querySelectorAll('#dvT th[data-k]').forEach(th => th.onclick = () => { const k = th.dataset.k; st.sort = { k, dir: st.sort.k === k ? -st.sort.dir : -1 }; render(); });

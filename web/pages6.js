@@ -1,0 +1,55 @@
+/* ================= FQT — consensus des analystes : EE, SURP ================= */
+
+const MO_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/* Date d'une chaîne Nasdaq : « 11/19/2026 », « Nov 19, 2026 » ou « 2026-11-19 » -> AAAAMMJJ */
+function parseNqDate(t) { if (!t) return null; t = String(t); let m = t.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (m) return +m[3] * 10000 + +m[1] * 100 + +m[2];
+  m = t.match(/([A-Z][a-z]{2})[a-z]* (\d{1,2}),? (\d{4})/); if (m && MO_EN.includes(m[1])) return +m[3] * 10000 + (MO_EN.indexOf(m[1]) + 1) * 100 + +m[2]; m = t.match(/(\d{4})-(\d{2})-(\d{2})/); return m ? +m[1] * 10000 + +m[2] * 100 + +m[3] : null; }
+const nqNum = v => { if (v == null || v === '' || v === 'N/A' || v === '--') return null; const x = parseFloat(String(v).replace(/[$,%\s]/g, '')); return isFinite(x) ? x : null; };
+const fyLab = t => { const m = String(t || '').match(/([A-Z][a-z]{2}) (\d{4})/); return m ? `${['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'][MO_EN.indexOf(m[1])]} ${m[2]}` : esc(t || '—'); };
+
+PAGES.EE = async (m, alive) => {
+  const s = sec(ST.sec); const [E, F] = await Promise.all([getJSON('ee.json').catch(() => ({})), faJSON(s.id).catch(() => null)]); if (!alive()) return;
+  const e = E[s.id]; if (!e || (!e.yr.length && !e.qr.length && !Object.keys(e.sum || {}).length)) { m.innerHTML = pn(s.tk + ' · estimations', 'EE', '<div class="empty">Aucun consensus publié pour ce titre dans la source (Nasdaq / Zacks).</div>'); return; }
+  const S = e.sum || {}, price = s.last, tp = e.tp || {}, tpv = nqNum(tp.priceTarget), ed = parseNqDate(e.ed);
+  const epsT = nqNum(S.EarningsPerShare), fpe = nqNum(S.ForwardPE1Yr), pe = nqNum(S.PERatio);
+  const Y = F && F.Y ? F.Y : null; const lastEps = Y ? Y.eps.filter(v => v != null).slice(-1)[0] : null;
+  const yr = e.yr.map((r, i) => ({ f: r.fiscalEnd, c: nqNum(r.consensusEPSForecast), h: nqNum(r.highEPSForecast), l: nqNum(r.lowEPSForecast), n: nqNum(r.noOfEstimates), up: nqNum(r.up), dn: nqNum(r.down) }));
+  yr.forEach((r, i) => { const base = i ? yr[i - 1].c : lastEps; r.g = base && r.c ? r.c / base - 1 : null; r.pe = r.c > 0 ? price / r.c : null; });
+  const qr = e.qr.map(r => ({ f: r.fiscalEnd, c: nqNum(r.consensusEPSForecast), h: nqNum(r.highEPSForecast), l: nqNum(r.lowEPSForecast), n: nqNum(r.noOfEstimates), up: nqNum(r.up), dn: nqNum(r.down) }));
+  const tot = (tp.buy || 0) + (tp.hold || 0) + (tp.sell || 0);
+  const kv = [['Cours', px(s, price) + ' $'], ['PER 12 mois (publié)', pe ? num(pe, 1) + ' x' : '—'], ['PER prévisionnel 1 an (consensus)', fpe ? num(fpe, 1) + ' x' : '—'], ['BPA 12 mois publié', epsT != null ? num(epsT, 2) + ' $' : '—'],
+    ['Objectif de cours moyen', tpv ? `${num(tpv, 2)} $ (${sgn(tpv / price - 1, 1)})` : '—'], ['Fourchette des objectifs', tp.lowPriceTarget ? `${num(nqNum(tp.lowPriceTarget), 0)} – ${num(nqNum(tp.highPriceTarget), 0)} $` : '—'],
+    ['Recommandations', tot ? `<span class="up">${tp.buy} achat</span> · ${tp.hold} conserver · <span class="dn">${tp.sell} vente</span>` : '—'], ['Prochaine publication', ed ? fd(ed) : (e.ed ? esc(String(e.ed).slice(0, 60)) : '—')]];
+  const row = r => `<tr><td class="l am">${fyLab(r.f)}</td><td class="yl">${num(r.c, 2)}</td><td>${num(r.l, 2)} – ${num(r.h, 2)}</td><td>${r.n ?? '—'}</td><td class="up">${r.up ?? '—'}</td><td class="dn">${r.dn ?? '—'}</td>${'g' in r ? `<td>${sgn(r.g, 1)}</td><td>${r.pe ? num(r.pe, 1) + ' x' : '—'}</td>` : ''}</tr>`;
+  m.innerHTML = `<div class="grid side">${pn(`${s.tk} · consensus annuel du BPA`, 'EE', `<table class="t"><thead><tr><th class="l">Exercice clos</th><th>Consensus BPA ($)</th><th>Plus bas – plus haut</th><th>Analystes</th><th>Révisions ↑</th><th>Révisions ↓</th><th>Croissance attendue</th><th>PER implicite</th></tr></thead><tbody>${yr.map(row).join('') || '<tr><td colspan="8" class="l dm">—</td></tr>'}</tbody></table>
+      <h4 class="sub">Trimestres à venir</h4><table class="t"><thead><tr><th class="l">Trimestre clos</th><th>Consensus BPA ($)</th><th>Plus bas – plus haut</th><th>Analystes</th><th>Révisions ↑</th><th>Révisions ↓</th></tr></thead><tbody>${qr.map(row).join('') || '<tr><td colspan="6" class="l dm">—</td></tr>'}</tbody></table>`,
+      { lect: `<b>Estimations d’analystes</b> (consensus Zacks, via Nasdaq), relevées le ${e.ts ? fds(e.ts) : '—'}${e.stale ? ' — <span class="dn">relevé du jour en échec, dernier relevé conservé</span>' : ''}. Croissance attendue : exercice 1 contre dernier BPA publié à la SEC (${lastEps != null ? num(lastEps, 2) + ' $' : 'n.d.'}), exercice 2 contre exercice 1. Révisions : nombre d’analystes ayant relevé / abaissé leur estimation récemment. Aucune prévision de chiffre d’affaires n’est disponible gratuitement.` })}
+    ${pn('Synthèse', 'EE', `<div class="kv2">${kv.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div>${tot ? `<div class="recb"><i style="width:${tp.buy / tot * 100}%;background:var(--up)"></i><i style="width:${tp.hold / tot * 100}%;background:#777"></i><i style="width:${tp.sell / tot * 100}%;background:var(--dn)"></i></div>` : ''}`)}</div>
+    <div class="grid c2">${pn('BPA publié et attendu', 'EE', cvb('eeB', 240), { lect: 'Barres pleines : BPA dilué publié (SEC). Barres claires : consensus des analystes (estimation, non publiée).' })}${pn('Évolution du consensus (instantanés quotidiens)', 'EE', cvb('eeR', 240), { lect: '<span id="eeRl"></span>' })}</div>`;
+  const pubY = Y ? Y.y.map((d, i) => [Math.floor(d / 10000), Y.eps[i]]).filter(x => x[1] != null).slice(-8) : [];
+  const fut = yr.map(r => { const mm = String(r.f || '').match(/(\d{4})/); return mm ? [+mm[1], r.c] : null; }).filter(Boolean).filter(x => !pubY.some(p => p[0] === x[0]));
+  const lab = pubY.map(x => String(x[0])).concat(fut.map(x => x[0] + 'e')), val = pubY.map(x => x[1]).concat(fut.map(x => x[1]));
+  if (lab.length) barChart($('eeB'), { labels: lab, values: val, fmt: v => num(v, 2), labelsOnBars: true, colors: lab.map(l => /e$/.test(l) ? rgba(CL.amber, .45) : CL.cyan) });
+  const sn = e.snap || []; if (sn.length > 1) { const xs = sn.map(r => s2i(r[0])), y1 = sn.map(r => r[1] ? r[1][1] : null), y2 = sn.map(r => r[2] ? r[2][1] : null);
+    new TSChart($('eeR'), { panes: [{ h: 1 }], minBars: 2 }).set({ x: xs, series: [{ y: y1, color: CL.amber, label: 'Exercice 1', fmt: v => num(v, 3) + ' $' }, { y: y2, color: CL.cyan, label: 'Exercice 2', fmt: v => num(v, 3) + ' $' }] }, [0, xs.length - 1]);
+    const a = y1.filter(v => v != null); $('eeRl').innerHTML = `Consensus de l’exercice 1 relevé chaque soir depuis le ${fds(sn[0][0])} : ${a.length > 1 ? `${sgn(a[a.length - 1] / a[0] - 1, 1)} sur la période` : 'historique en constitution'}. L’historique s’allonge à chaque collecte.`; }
+  else { $('eeR').innerHTML = '<div class="empty">Historique des révisions en constitution : un instantané du consensus est enregistré chaque soir.</div>'; }
+};
+
+PAGES.SURP = async (m, alive) => {
+  const s = sec(ST.sec); const [E, S] = await Promise.all([getJSON('ee.json').catch(() => ({})), series(s.id)]); if (!alive()) return;
+  const bmId = Q.by.SPY ? 'SPY' : 'QQQ'; const B = await series(bmId).catch(() => null); if (!alive()) return;
+  const e = E[s.id]; const rows = (e && e.sur || []).map(r => ({ ...r, d8: parseNqDate(r.d) })).filter(r => r.eps != null).sort((a, b) => (b.d8 || 0) - (a.d8 || 0));
+  if (!rows.length) { m.innerHTML = pn(s.tk + ' · surprises', 'SURP', '<div class="empty">Aucune publication avec consensus disponible pour ce titre.</div>'); return; }
+  const react = (X, d, k) => { if (!X || !d) return null; const i = X.x.findIndex(x => x >= d); if (i < 1 || i + k >= X.x.length) return null; return X.c[i + k] / X.c[i - 1] - 1; };
+  rows.forEach(r => { r.r1 = react(S, r.d8, 1); r.r5 = react(S, r.d8, 5); r.r20 = react(S, r.d8, 20); const b1 = react(B, r.d8, 1); r.ab1 = r.r1 != null && b1 != null ? r.r1 - b1 : null; r.sp = r.pct != null ? r.pct / 100 : (r.cons ? (r.eps - r.cons) / Math.abs(r.cons) : null); });
+  const pos = rows.filter(r => r.sp > 0), neg = rows.filter(r => r.sp < 0), avg = a => a.length ? U.mean(a) : null;
+  m.innerHTML = `<div class="grid side">${pn(`${s.tk} · BPA publié contre consensus`, 'SURP', `<table class="t"><thead><tr><th class="l">Trimestre clos</th><th class="l">Publication</th><th>BPA publié</th><th>Consensus avant publication</th><th>Surprise</th><th>Réaction J+1</th><th>J+5</th><th>J+20</th><th>J+1 contre ${bmId}</th></tr></thead><tbody>
+      ${rows.map(r => `<tr><td class="l am">${fyLab(r.q)}</td><td class="l">${r.d8 ? fd(r.d8) : esc(r.d || '—')}</td><td class="wh">${num(r.eps, 2)}</td><td>${num(r.cons, 2)}</td><td>${sgn(r.sp, 1)}</td><td>${pc(r.r1, 1)}</td><td>${pc(r.r5, 1)}</td><td>${pc(r.r20, 1)}</td><td>${sgn(r.ab1, 1)}</td></tr>`).join('')}</tbody></table>`,
+      { lect: `Source : Nasdaq (consensus Zacks avant publication). Réaction J+k = clôture k séances après la publication ÷ clôture de la veille − 1 (couvre les publications avant ouverture et après clôture). Nasdaq ne fournit que les 4 derniers trimestres : l’historique ${rows.length > 4 ? 's’allonge depuis la mise en service' : 'grandit à chaque nouvelle publication'}.` })}
+    ${pn('Synthèse', 'SURP', `<div class="kv2">${[['Publications suivies', rows.length], ['Surprises positives', `${pos.length} / ${rows.length}`], ['Surprise moyenne', P1(avg(rows.map(r => r.sp).filter(v => v != null)), 1)], ['Réaction J+1 après surprise positive', P1(avg(pos.map(r => r.r1).filter(v => v != null)), 1)],
+      ['Réaction J+1 après surprise négative', P1(avg(neg.map(r => r.r1).filter(v => v != null)), 1)], ['Réaction absolue moyenne J+1', P1(avg(rows.map(r => r.r1 != null ? Math.abs(r.r1) : null).filter(v => v != null)), 1)]].map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div>`, { lect: 'Une surprise positive suivie d’une baisse du cours signale des attentes plus élevées que le consensus publié (le « chuchotement » du marché).' })}</div>
+    <div class="grid c2">${pn('Surprise (%)', 'SURP', cvb('suA', 220))}${pn('Réaction du cours J+1 (%)', 'SURP', cvb('suB', 220))}</div>`;
+  const rr = rows.slice().reverse(); const lab = rr.map(r => fyLab(r.q).replace(/^\S+ /, m0 => m0.slice(0, 4) + ' '));
+  barChart($('suA'), { labels: lab, values: rr.map(r => r.sp * 100), fmt: v => num(v, 1) + '%', labelsOnBars: true }); barChart($('suB'), { labels: lab, values: rr.map(r => r.r1 != null ? r.r1 * 100 : NaN), fmt: v => num(v, 1) + '%', labelsOnBars: true });
+};

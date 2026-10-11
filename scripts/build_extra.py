@@ -1,0 +1,1077 @@
+#!/usr/bin/env python3
+"""Sources complémentaires (dossier brut écrit par fetch_extra.py) et calculs dérivés du terminal FQT.
+
+ingest(...)   ajoute les titres : ETF, indices US, Nasdaq-100, volatilité CBOE, crypto
+derive(...)   écrit eco.json (FRED), fg.json (Fear & Greed US et BRVM), liq.json (liquidité BRVM),
+              fa/<ID>.json + fa_index.json (comptes et ratios US/BRVM), ee.json (consensus), per.json
+              (valorisation du marché BRVM), uemoa.json (Banque mondiale)
+Bibliothèque standard uniquement. Toute source absente est simplement ignorée (la page l'indique).
+"""
+import bisect, collections, csv, datetime as dt, io, json, math, os, statistics
+
+def clean_name(n):
+    import re as _re
+    n = _re.sub(r"\s*\((DE|The)\)", "", n or "")
+    for pat in (r"\s+(Class [A-C] )?(Common|Ordinary) (Stock|Shares)( \(.*\))?$", r"\s+American Depositary Shares.*$", r"\s+New York Registry Shares$", r"\s+Depositary Shares.*$", r"\s+Subordinate Voting Shares$", r"\s+Common Units$"):
+        n = _re.sub(pat, "", n)
+    return n.strip().rstrip(",")
+
+
+SECT_FR = {"Technology": "Technologie", "Telecommunications": "Télécoms", "Health Care": "Santé", "Consumer Discretionary": "Conso. discrétionnaire",
+           "Consumer Staples": "Conso. de base", "Industrials": "Industrie", "Energy": "Énergie", "Utilities": "Services publics", "Finance": "Finance",
+           "Real Estate": "Immobilier", "Basic Materials": "Matériaux", "Miscellaneous": "Divers"}
+TAX_BRVM = {"CI": .25, "SN": .30, "BF": .275, "BJ": .30, "ML": .30, "NE": .30, "TG": .27}  # impôt sur les sociétés (taux légal)
+
+
+def jload(path, default=None):
+    try:
+        with open(path, encoding="utf8") as f:
+            return json.load(f)
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def jsave(path, obj):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf8") as f:
+        json.dump(obj, f, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+
+
+def r_(v, nd=4):
+    return None if v is None or (isinstance(v, float) and not math.isfinite(v)) else round(v, nd)
+
+
+def i2d(i):
+    return dt.date(i // 10000, i // 100 % 100, i % 100)
+
+
+def d2i(d):
+    return d.year * 10000 + d.month * 100 + d.day
+
+
+def addays(i, n):
+    return d2i(i2d(i) + dt.timedelta(days=n))
+
+
+def phi(z):
+    return 0.5 * (1 + math.erf(z / math.sqrt(2)))
+
+
+# ------------------------------------------------------------------ titres
+def ingest(extra, add, have, log):
+    """Ajoute ETF, indices, Nasdaq-100, CBOE et crypto. Renvoie les métadonnées utiles aux calculs."""
+    info = {"ndx": set(), "screener": {}, "ndx_mcap": {}}
+    if not extra or not os.path.isdir(extra):
+        return info
+    meta = jload(os.path.join(extra, "nasdaq_meta.json"), {}) or {}
+    scr = meta.get("screener", {}) or {}
+    info["screener"] = scr
+    for x in meta.get("ndx", []):
+        info["ndx"].add(x["s"])
+        info["ndx_mcap"][x["s"]] = x.get("mcap")
+
+    def body(sub, sid):
+        b = jload(os.path.join(extra, sub, sid + ".json"))
+        return b if b and len(b.get("d", [])) > 30 else None
+    n0 = [0]
+    add0 = add
+
+    def add(*a, **k):  # noqa: F811
+        n0[0] += 1
+        return add0(*a, **k)
+    for e in meta.get("etf", []):
+        b = body("nasdaq", e["id"])
+        if not b or e["id"] in have:
+            continue
+        add({"id": e["id"], "tk": f"{e['id']} US", "n": e["n"], "cls": "Equity", "typ": "ETF", "mkt": "US", "grp": e.get("g") or "ETF", "ccy": "USD", "bench": "SPY"},
+            b["d"], b["c"], b["o"], b["h"], b["l"], b["v"])
+    for e in meta.get("idx", []):
+        b = body("nasdaq", e["id"])
+        if not b or e["id"] in have:
+            continue
+        add({"id": e["id"], "tk": f"{e['id']} Index", "n": e["n"], "cls": "Index", "typ": "Index", "mkt": "US", "grp": "Indices US", "ccy": "pts", "bench": "SPX"},
+            b["d"], b["c"], b["o"], b["h"], b["l"])
+    for s in sorted(info["ndx"]):
+        if s in have:
+            continue
+        b = body("nasdaq", s)
+        if not b:
+            continue
+        sc = scr.get(s, {})
+        add({"id": s, "tk": f"{s} US", "n": clean_name(sc.get("n")) or s, "cls": "Equity", "typ": "Equity", "mkt": "US", "grp": SECT_FR.get(sc.get("sector"), sc.get("sector") or "Nasdaq-100"),
+             "ind": sc.get("ind"), "ccy": "USD", "bench": "QQQ"}, b["d"], b["c"], b["o"], b["h"], b["l"], b["v"])
+    names = {"VIX": "Volatilité implicite S&P 500 (VIX)", "VIX9D": "VIX 9 jours", "VIX3M": "VIX 3 mois", "VVIX": "Volatilité du VIX (VVIX)", "SKEW": "Indice SKEW (risque extrême)"}
+    for s, n in names.items():
+        p = os.path.join(extra, "cboe", s + ".csv")
+        if not os.path.exists(p):
+            continue
+        rows = {}
+        for r in csv.DictReader(open(p, encoding="utf8")):
+            try:
+                m, d, y = (r.get("DATE") or r.get("Date")).split("/")
+                k = int(y) * 10000 + int(m) * 100 + int(d)
+                c = float(r.get("CLOSE") or r.get("Close") or r.get(s))
+                o = float(r.get("OPEN") or c)
+                h = float(r.get("HIGH") or c)
+                lo = float(r.get("LOW") or c)
+            except Exception:  # noqa: BLE001
+                continue
+            if c > 0:
+                rows[k] = (k, o, max(h, c, o), min(lo, c, o), c)
+        rr = [rows[k] for k in sorted(rows)]
+        if len(rr) < 100:
+            continue
+        if s in have:  # VIX des datasets remplacé par la source officielle CBOE
+            have.discard(s)
+        add({"id": s, "tk": f"{s} Index", "n": n, "cls": "Index", "typ": "Index", "mkt": "MACRO", "grp": "Volatilité", "ccy": "pts", "src": "CBOE"},
+            [x[0] for x in rr], [x[4] for x in rr], [x[1] for x in rr], [x[2] for x in rr], [x[3] for x in rr], replace=True)
+    for sid, n in (("BTC", "Bitcoin"), ("ETH", "Ether"), ("SOL", "Solana")):
+        b = body("crypto", sid)
+        if not b:
+            continue
+        add({"id": sid, "tk": f"XBT{sid}" if sid == "BTC" else f"{sid}USD Curncy", "n": n + " (USD, Coinbase)", "cls": "Crypto", "typ": "Crypto", "mkt": "CRYPTO", "grp": "Crypto",
+             "ccy": "USD", "bench": "BTC"}, b["d"], b["c"], b["o"], b["h"], b["l"], b["v"], ann=365)
+    log(f"sources complémentaires : {n0[0]} titres ajoutés")
+    return info
+
+
+# ------------------------------------------------------------------ outils séries
+def ffill(dates, vals, grid):
+    """Valeur connue à chaque date de la grille (dernière observation antérieure ou égale)."""
+    out, j, last = [], 0, None
+    for g in grid:
+        while j < len(dates) and dates[j] <= g:
+            last = vals[j]
+            j += 1
+        out.append(last)
+    return out
+
+
+def sma_list(x, n):
+    out, s, q = [], 0.0, collections.deque()
+    for v in x:
+        if v is None:
+            out.append(None)
+            continue
+        q.append(v)
+        s += v
+        if len(q) > n:
+            s -= q.popleft()
+        out.append(s / n if len(q) == n else None)
+    return out
+
+
+def ema_list(x, n):
+    a, out, e = 2 / (n + 1), [], None
+    for v in x:
+        if v is None:
+            out.append(e)
+            continue
+        e = v if e is None else e + a * (v - e)
+        out.append(e)
+    return out
+
+
+def roll_ext(x, n, fn):
+    """Maximum (fn=max) ou minimum glissant sur n valeurs, en O(len)."""
+    out, q = [], collections.deque()
+    better = (lambda a, b: a >= b) if fn is max else (lambda a, b: a <= b)
+    for i, v in enumerate(x):
+        while q and better(v, x[q[-1]]):
+            q.pop()
+        q.append(i)
+        if q[0] <= i - n:
+            q.popleft()
+        out.append(x[q[0]] if i >= n - 1 else None)
+    return out
+
+
+def zscore_scores(x, n=252, invert=False, minp=120):
+    """Score 0-100 : position de la valeur dans sa propre distribution sur n séances (z-score -> loi normale)."""
+    out, q, s, ss = [], collections.deque(), 0.0, 0.0
+    for v in x:
+        if v is None or not math.isfinite(v):
+            out.append(None)
+            continue
+        q.append(v)
+        s += v
+        ss += v * v
+        if len(q) > n:
+            o = q.popleft()
+            s -= o
+            ss -= o * o
+        k = len(q)
+        if k < minp:
+            out.append(None)
+            continue
+        mu = s / k
+        var = max(ss / k - mu * mu, 1e-18)
+        z = (v - mu) / math.sqrt(var)
+        z = max(-3.5, min(3.5, z))
+        out.append(100 * phi(-z if invert else z))
+    return out
+
+
+def rsi_last(c, n=14):
+    out, ag, al = [None] * len(c), None, None
+    for i in range(1, len(c)):
+        ch = c[i] - c[i - 1]
+        g, l_ = max(ch, 0), max(-ch, 0)
+        if i <= n:
+            ag = (ag or 0) + g / n
+            al = (al or 0) + l_ / n
+            if i == n:
+                out[i] = 100 if al == 0 else 100 - 100 / (1 + ag / al)
+            continue
+        ag = (ag * (n - 1) + g) / n
+        al = (al * (n - 1) + l_) / n
+        out[i] = 100 if al == 0 else 100 - 100 / (1 + ag / al)
+    return out
+
+
+def ret_n(c, n):
+    return [None if i < n or not c[i - n] else c[i] / c[i - n] - 1 for i in range(len(c))]
+
+
+def universe_stats(files, ids, grid, want_flux=False):
+    """Largeur d'un univers de titres sur la grille de dates : plus hauts/bas 52 sem., part au-dessus de la MM50,
+    volume des hausses moins des baisses, RSI > 70 / < 30, flux de capitaux."""
+    n = len(grid)
+    pos = {g: i for i, g in enumerate(grid)}
+    nh, nl, elig, a50, n50, up_v, dn_v, rs_hi, rs_lo, nrs, fl_up, fl_dn, fl_tot = ([0.0] * n for _ in range(13))
+    for sid in ids:
+        b = files.get(sid)
+        if not b or len(b["c"]) < 60:
+            continue
+        d, c = b["d"], b["c"]
+        v = b.get("v") or [0] * len(c)
+        val = b.get("val")
+        mx, mn, s50, rs = roll_ext(c, 252, max), roll_ext(c, 252, min), sma_list(c, 50), rsi_last(c)
+        for i in range(1, len(c)):
+            k = pos.get(d[i])
+            if k is None:
+                continue
+            if mx[i] is not None:
+                elig[k] += 1
+                if c[i] >= mx[i] and c[i] > c[i - 1]:
+                    nh[k] += 1
+                elif c[i] <= mn[i] and c[i] < c[i - 1]:
+                    nl[k] += 1
+            if s50[i] is not None:
+                n50[k] += 1
+                a50[k] += c[i] > s50[i]
+            if rs[i] is not None:
+                nrs[k] += 1
+                rs_hi[k] += rs[i] > 70
+                rs_lo[k] += rs[i] < 30
+            vol = (v[i] or 0) * c[i] if not val else (val[i] or 0)
+            if c[i] > c[i - 1]:
+                up_v[k] += vol
+            elif c[i] < c[i - 1]:
+                dn_v[k] += vol
+            fl_tot[k] += vol
+    return {"nh": nh, "nl": nl, "elig": elig, "a50": [a50[i] / n50[i] if n50[i] >= 8 else None for i in range(n)],
+            "nhl": [(nh[i] - nl[i]) / elig[i] if elig[i] >= 8 else None for i in range(n)],
+            "uv": up_v, "dv": dn_v, "tot": fl_tot, "rsi": [(rs_hi[i] - rs_lo[i]) / nrs[i] if nrs[i] >= 8 else None for i in range(n)]}
+
+
+def compose(comps, grid, need=4):
+    out = []
+    for i in range(len(grid)):
+        v = [c["s"][i] for c in comps.values() if c["s"][i] is not None]
+        out.append(sum(v) / len(v) if len(v) >= need else None)
+    return out
+
+
+def label(s):
+    return None if s is None else "peur extrême" if s < 25 else "peur" if s < 45 else "neutre" if s <= 55 else "avidité" if s <= 75 else "avidité extrême"
+
+
+# ------------------------------------------------------------------ FRED
+def fred_load(extra):
+    meta = jload(os.path.join(extra, "fred_meta.json"), []) or []
+    out = {}
+    for m in meta:
+        p = os.path.join(extra, "fred", m["id"] + ".csv")
+        if not os.path.exists(p):
+            continue
+        d, v = [], []
+        rows = list(csv.reader(open(p, encoding="utf8")))
+        for r in rows[1:]:
+            if len(r) < 2 or r[1].strip() in ("", "."):
+                continue
+            try:
+                v.append(float(r[1]))
+                d.append(int(r[0][:10].replace("-", "")))
+            except ValueError:
+                continue
+        if len(d) > 5:
+            out[m["id"]] = (m, d, v)
+    return out
+
+
+def freq_of(d):
+    if len(d) < 3:
+        return "M"
+    gaps = sorted((i2d(d[i]) - i2d(d[i - 1])).days for i in range(max(1, len(d) - 60), len(d)))
+    g = gaps[len(gaps) // 2]
+    return "D" if g <= 3 else "W" if g <= 8 else "M" if g <= 40 else "Q"
+
+
+def to_weekly(d, v):
+    out = {}
+    for a, b in zip(d, v):
+        t = i2d(a)
+        fri = t + dt.timedelta(days=(4 - t.weekday()) % 7)
+        out[d2i(fri)] = b
+    k = sorted(out)
+    return k, [out[x] for x in k]
+
+
+def eco(extra, out, log):
+    F = fred_load(extra)
+    if not F:
+        return None
+    res = {"meta": [], "s": {}}
+    for sid, (m, d, v) in F.items():
+        f = freq_of(d)
+        dd, vv = (to_weekly(d, v) if f == "D" else (d, v))
+        last, dl = v[-1], d[-1]
+        y1 = None
+        for i in range(len(d) - 1, -1, -1):
+            if d[i] <= addays(dl, -365):
+                y1 = v[i]
+                break
+        res["meta"].append({"id": sid, "n": m["n"], "g": m["g"], "u": m["u"], "f": f, "last": r_(last, 4), "dl": dl, "prev": r_(v[-2], 4) if len(v) > 1 else None, "y1": r_(y1, 4),
+                            "first": d[0]})
+        res["s"][sid] = [dd, [r_(x, 4) for x in vv]]
+    # récessions NBER
+    if "USREC" in F:
+        _, d, v = F["USREC"]
+        rec, st = [], None
+        for a, b in zip(d, v):
+            if b >= 1 and st is None:
+                st = a
+            elif b < 1 and st is not None:
+                rec.append([st, a])
+                st = None
+        if st:
+            rec.append([st, d[-1]])
+        res["rec"] = rec
+    # liquidité nette de la Fed = bilan - compte du Trésor - prises en pension inversées (Md$)
+    if all(k in F for k in ("WALCL", "WTREGEN", "RRPONTSYD")):
+        w = F["WALCL"]
+        g = w[1]
+        tg = ffill(F["WTREGEN"][1], F["WTREGEN"][2], g)
+        rp = ffill(F["RRPONTSYD"][1], F["RRPONTSYD"][2], g)
+        res["s"]["NETLIQ"] = [g, [r_(w[2][i] / 1000 - (tg[i] or 0) - (rp[i] or 0), 1) if tg[i] is not None else None for i in range(len(g))]]
+        res["meta"].append({"id": "NETLIQ", "n": "Liquidité nette de la Fed (bilan − TGA − RRP)", "g": "Liquidité", "u": "Md$", "f": "W", "last": res["s"]["NETLIQ"][1][-1], "dl": g[-1]})
+    if "BAMLH0A0HYM2" in F and "BAMLC0A0CM" in F:
+        a, b = F["BAMLH0A0HYM2"], F["BAMLC0A0CM"]
+        g = a[1]
+        ib = ffill(b[1], b[2], g)
+        dd, vv = to_weekly(g, [a[2][i] - ib[i] if ib[i] is not None else None for i in range(len(g))])
+        res["s"]["HYIG"] = [dd, [r_(x, 3) for x in vv]]
+        res["meta"].append({"id": "HYIG", "n": "Écart haut rendement − catégorie investissement", "g": "Crédit", "u": "%", "f": "W", "last": res["s"]["HYIG"][1][-1], "dl": dd[-1]})
+    # courbe des taux
+    ten = [("DGS1MO", "1M", 1 / 12), ("DGS3MO", "3M", .25), ("DGS6MO", "6M", .5), ("DGS1", "1A", 1), ("DGS2", "2A", 2), ("DGS3", "3A", 3), ("DGS5", "5A", 5),
+           ("DGS7", "7A", 7), ("DGS10", "10A", 10), ("DGS20", "20A", 20), ("DGS30", "30A", 30)]
+    ten = [t for t in ten if t[0] in F]
+    if "DGS10" in F and len(ten) >= 6:
+        base = [x for x in F["DGS10"][1] if x >= 19900101]
+        cols = {t[0]: ffill(F[t[0]][1], F[t[0]][2], base) for t in ten}
+        daily = [i for i, x in enumerate(base) if x >= addays(base[-1], -365 * 3)]
+        months = []
+        for i, x in enumerate(base):
+            if i + 1 == len(base) or base[i + 1] // 100 != x // 100:
+                months.append(i)
+        res["curve"] = {"ten": [t[1] for t in ten], "mat": [t[2] for t in ten],
+                        "d": [base[i] for i in daily], "v": [[r_(cols[t[0]][i], 3) for t in ten] for i in daily],
+                        "md": [base[i] for i in months], "mv": [[r_(cols[t[0]][i], 3) for t in ten] for i in months]}
+    jsave(os.path.join(out, "eco.json"), res)
+    log(f"eco.json : {len(res['s'])} séries FRED")
+    return F
+
+
+# ------------------------------------------------------------------ Fear & Greed
+def fg(extra, out, files, ndx, us_ids, brvm_ids, dmeta, shares, F, log):
+    res = {}
+    # ---- États-Unis (méthode CNN : 7 indicateurs, chacun situé dans sa distribution sur un an)
+    base_id = "SPX" if "SPX" in files else "SPY" if "SPY" in files else None
+    cnn = jload(os.path.join(extra, "cnn_fg.json")) if extra else None
+    if base_id:
+        B = files[base_id]
+        grid = [d for d in B["d"] if d >= 20140101]
+        k0 = B["d"].index(grid[0])
+        c = B["c"][k0:]
+        sma125 = sma_list(B["c"], 125)[k0:]
+        comps = {}
+        comps["mom"] = {"n": f"Momentum : {base_id} contre sa moyenne 125 séances", "src": "Nasdaq", "raw": [c[i] / sma125[i] - 1 if sma125[i] else None for i in range(len(grid))]}
+        uni = sorted((set(ndx) | set(us_ids)) & set(files))
+        U = universe_stats(files, uni, grid)
+        comps["str"] = {"n": f"Force : plus hauts − plus bas 52 sem. ({len(uni)} actions)", "src": "Nasdaq / Yahoo", "raw": U["nhl"]}
+        r = [(U["uv"][i] - U["dv"][i]) / (U["uv"][i] + U["dv"][i]) if U["uv"][i] + U["dv"][i] > 0 else None for i in range(len(grid))]
+        osc = [a - b if a is not None and b is not None else None for a, b in zip(ema_list(r, 19), ema_list(r, 39))]
+        summ, acc = [], 0.0
+        for v in osc:
+            acc += v or 0
+            summ.append(acc if v is not None else None)
+        comps["brd"] = {"n": "Largeur : volume McClellan (hausses − baisses, cumulé)", "src": "Nasdaq / Yahoo", "raw": summ}
+        vix = files.get("VIX")
+        if vix:
+            vs = sma_list(vix["c"], 50)
+            vv = [vix["c"][i] / vs[i] - 1 if vs[i] else None for i in range(len(vix["c"]))]
+            comps["vix"] = {"n": "Volatilité : VIX contre sa moyenne 50 séances", "src": "CBOE", "inv": True, "raw": ffill(vix["d"], vv, grid)}
+        bond = files.get("TLT") or files.get("IEF")
+        if bond:
+            sr = ret_n(c, 20)
+            br = ffill(bond["d"], ret_n(bond["c"], 20), grid)
+            comps["sh"] = {"n": "Valeur refuge : actions − obligations du Trésor sur 20 séances", "src": "Nasdaq", "raw": [a - b if a is not None and b is not None else None for a, b in zip(sr, br)]}
+        jb = None
+        if F and "BAMLH0A0HYM2" in F and "BAMLC0A0CM" in F:
+            a, b = F["BAMLH0A0HYM2"], F["BAMLC0A0CM"]
+            ib = ffill(b[1], b[2], a[1])
+            sp = [x - y if y is not None else None for x, y in zip(a[2], ib)]
+            jb = ffill(a[1], sp, grid)
+            if sum(1 for x in jb if x is not None) < len(grid) * .6:
+                jb = None
+        if jb:
+            comps["jb"] = {"n": "Obligations à haut rendement : écart HY − IG", "src": "FRED (ICE BofA)", "inv": True, "raw": jb}
+        elif files.get("HYG") and files.get("IEF"):
+            hr = ffill(files["HYG"]["d"], ret_n(files["HYG"]["c"], 20), grid)
+            ir = ffill(files["IEF"]["d"], ret_n(files["IEF"]["c"], 20), grid)
+            comps["jb"] = {"n": "Obligations à haut rendement : HYG − IEF sur 20 séances", "src": "Nasdaq", "raw": [a - b if a is not None and b is not None else None for a, b in zip(hr, ir)]}
+        if cnn and cnn.get("put_call_options", {}).get("data"):
+            pts = sorted((d2i(dt.datetime.utcfromtimestamp(p["x"] / 1000).date()), p["y"]) for p in cnn["put_call_options"]["data"] if p.get("y") is not None)
+            if len(pts) > 150:
+                comps["pc"] = {"n": "Options : ratio put/call (moyenne 5 jours)", "src": "CNN (CBOE)", "inv": True, "raw": ffill([p[0] for p in pts], [p[1] for p in pts], grid)}
+                first = pts[0][0]
+                comps["pc"]["raw"] = [v if g >= first else None for v, g in zip(comps["pc"]["raw"], grid)]
+        for k, cdef in comps.items():
+            cdef["s"] = zscore_scores(cdef["raw"], 252, cdef.get("inv", False))
+        score = compose(comps, grid, 4)
+        us = {"d": grid, "score": [r_(x, 1) for x in score], "comp": {}}
+        for k, cdef in comps.items():
+            us["comp"][k] = {"n": cdef["n"], "src": cdef["src"], "inv": cdef.get("inv", False), "raw": [r_(x, 5) for x in cdef["raw"]], "s": [r_(x, 1) for x in cdef["s"]]}
+        if cnn and cnn.get("fear_and_greed_historical", {}).get("data"):
+            pts = sorted((d2i(dt.datetime.utcfromtimestamp(p["x"] / 1000).date()), p["y"]) for p in cnn["fear_and_greed_historical"]["data"] if p.get("y") is not None)
+            us["cnn"] = {"d": [p[0] for p in pts], "v": [r_(p[1], 1) for p in pts]}
+            fgn = cnn.get("fear_and_greed", {})
+            us["cnn_now"] = {k: fgn.get(k) for k in ("score", "rating", "timestamp", "previous_close", "previous_1_week", "previous_1_month", "previous_1_year")}
+            cc = {}
+            for k in ("market_momentum_sp500", "stock_price_strength", "stock_price_breadth", "put_call_options", "market_volatility_vix", "junk_bond_demand", "safe_haven_demand"):
+                x = cnn.get(k) or {}
+                cc[k] = {"score": x.get("score"), "rating": x.get("rating")}
+            us["cnn_comp"] = cc
+            m = dict(zip(us["cnn"]["d"], us["cnn"]["v"]))
+            pairs = [(m[g], s) for g, s in zip(grid, score) if g in m and s is not None]
+            if len(pairs) > 60:
+                xa, ya = [p[0] for p in pairs], [p[1] for p in pairs]
+                us["vs_cnn"] = {"n": len(pairs), "corr": r_(statistics.correlation(xa, ya), 3), "mad": r_(sum(abs(a - b) for a, b in pairs) / len(pairs), 1)}
+        res["us"] = us
+    # ---- BRVM (méthode identique, indicateurs adaptés à un marché frontière peu liquide)
+    if "BRVMC" in files:
+        B = files["BRVMC"]
+        grid = [d for d in B["d"] if d >= 20090101]
+        k0 = B["d"].index(grid[0])
+        c = B["c"][k0:]
+        sma125 = sma_list(B["c"], 125)[k0:]
+        comps = {"mom": {"n": "Momentum : BRVM Composite contre sa moyenne 125 séances", "src": "BRVM", "raw": [c[i] / sma125[i] - 1 if sma125[i] else None for i in range(len(grid))]}}
+        U = universe_stats(files, brvm_ids, grid)
+        comps["str"] = {"n": f"Force : plus hauts − plus bas 52 sem. ({len(brvm_ids)} actions)", "src": "BRVM", "raw": U["nhl"]}
+        comps["brd"] = {"n": "Largeur : part des actions au-dessus de leur moyenne 50 séances", "src": "BRVM", "raw": U["a50"]}
+        fl = []
+        for i in range(len(grid)):
+            a, b = max(0, i - 19), i + 1
+            up, dn, tot = sum(U["uv"][a:b]), sum(U["dv"][a:b]), sum(U["tot"][a:b])
+            fl.append((up - dn) / tot if tot > 0 and i >= 19 else None)
+        comps["flux"] = {"n": "Flux : montants échangés en hausse − en baisse sur 20 séances", "src": "BRVM", "raw": fl}
+        lr = [math.log(B["c"][i] / B["c"][i - 1]) if i and B["c"][i - 1] > 0 else 0 for i in range(len(B["c"]))]
+        v20 = [statistics.pstdev(lr[i - 19:i + 1]) if i >= 19 else None for i in range(len(lr))]
+        v250 = sma_list(v20, 250)
+        vr = [v20[i] / v250[i] - 1 if v20[i] and v250[i] else None for i in range(len(lr))][k0:]
+        comps["vol"] = {"n": "Volatilité : 20 séances contre sa moyenne 250 séances", "src": "BRVM", "inv": True, "raw": vr}
+        comps["rsi"] = {"n": "Surachat : part RSI > 70 − part RSI < 30", "src": "BRVM", "raw": U["rsi"]}
+        # rendement du dividende du marché (12 mois glissants, pondéré par les capitalisations)
+        ev = collections.defaultdict(list)
+        for x in dmeta:
+            dd_ = x.get("det") or x.get("pay")
+            if x.get("t") and x.get("dps") and dd_:
+                try:
+                    ev[x["t"]].append((int(dd_[:10].replace("-", "")), float(x["dps"])))
+                except ValueError:
+                    pass
+        if ev:
+            num_ = [0.0] * len(grid)
+            den = [0.0] * len(grid)
+            for sid in brvm_ids:
+                b = files.get(sid)
+                sh = shares.get(sid)
+                if not b or not sh:
+                    continue
+                px = ffill(b["d"], b["c"], grid)
+                evs = sorted(ev.get(sid, []))
+                for i, g in enumerate(grid):
+                    if px[i] is None:
+                        continue
+                    lo = addays(g, -365)
+                    dsum = sum(v for d_, v in evs if lo < d_ <= g)
+                    num_[i] += sh * dsum
+                    den[i] += sh * px[i]
+            first = min((d_ for v in ev.values() for d_, _ in v), default=99999999)
+            yl = [num_[i] / den[i] if den[i] > 0 and grid[i] >= addays(first, 365) else None for i in range(len(grid))]
+            comps["yld"] = {"n": "Valorisation : rendement du dividende du marché (12 mois)", "src": "BRVM (dividendes)", "inv": True, "raw": yl}
+        for k, cdef in comps.items():
+            cdef["s"] = zscore_scores(cdef["raw"], 250, cdef.get("inv", False))
+        score = compose(comps, grid, 4)
+        res["brvm"] = {"d": grid, "score": [r_(x, 1) for x in score],
+                       "comp": {k: {"n": cd["n"], "src": cd["src"], "inv": cd.get("inv", False), "raw": [r_(x, 5) for x in cd["raw"]], "s": [r_(x, 1) for x in cd["s"]]} for k, cd in comps.items()}}
+    if res:
+        jsave(os.path.join(out, "fg.json"), res)
+        log("fg.json : " + ", ".join(f"{k} {v['score'][-1]}" for k, v in res.items()))
+
+
+# ------------------------------------------------------------------ liquidité BRVM
+def liq(out, files, secs_by, brvm_ids, log):
+    rows = []
+    for sid in brvm_ids:
+        b = files.get(sid)
+        s = secs_by.get(sid)
+        if not b or not s:
+            continue
+        c, v = b["c"], b.get("v") or [0] * len(b["c"])
+        val = b.get("val") or [x * y for x, y in zip(v, c)]
+        n = min(252, len(c) - 1)
+        if n < 40:
+            continue
+        cc, vv, vl = c[-n - 1:], v[-n - 1:], val[-n - 1:]
+        traded = [i for i in range(1, n + 1) if (vv[i] or 0) > 0]
+        rets = [cc[i] / cc[i - 1] - 1 for i in range(1, n + 1) if cc[i - 1] > 0]
+        zero = sum(1 for x in rets if x == 0) / len(rets)
+        vals = sorted(vl[i] or 0 for i in range(1, n + 1))
+        med = vals[len(vals) // 2]
+        am = [abs(cc[i] / cc[i - 1] - 1) / vl[i] for i in traded if vl[i] and vl[i] > 0 and cc[i - 1] > 0]
+        dp = [cc[i] - cc[i - 1] for i in range(1, n + 1)]
+        cov = sum((dp[i] - statistics.fmean(dp)) * (dp[i - 1] - statistics.fmean(dp)) for i in range(1, len(dp))) / (len(dp) - 1) if len(dp) > 10 else 0
+        roll = 2 * math.sqrt(-cov) / statistics.fmean(cc) if cov < 0 else None
+        tot = sum(vl[1:])
+        mcap = s.get("mcap")
+        adv3 = sum(val[-63:]) / 63
+        rows.append({"id": sid, "adv3": r_(adv3, 0), "adv1y": r_(tot / n, 0), "med": r_(med, 0), "traded": r_(len(traded) / n, 3), "zero": r_(zero, 3),
+                     "amihud": r_(statistics.fmean(am) * 1e8, 4) if am else None, "turn": r_(tot / mcap, 4) if mcap else None,
+                     "fturn": r_(tot / (mcap * s["float"] / 100), 4) if mcap and s.get("float") else None, "roll": r_(roll, 4),
+                     "cap20": r_(0.2 * med * 20, 0), "d10": r_(10e6 / (0.2 * med), 1) if med > 0 else None, "d50": r_(50e6 / (0.2 * med), 1) if med > 0 else None,
+                     "d100": r_(100e6 / (0.2 * med), 1) if med > 0 else None, "d500": r_(500e6 / (0.2 * med), 1) if med > 0 else None})
+    # montants échangés sur tout le marché, par mois
+    mon = collections.defaultdict(float)
+    days = collections.defaultdict(set)
+    for sid in brvm_ids:
+        b = files.get(sid)
+        if not b:
+            continue
+        val = b.get("val") or []
+        for d_, x in zip(b["d"], val):
+            if d_ >= 20080101 and x:
+                mon[d_ // 100] += x
+                days[d_ // 100].add(d_)
+    ks = sorted(mon)
+    jsave(os.path.join(out, "liq.json"), {"rows": rows, "m": ks, "val": [r_(mon[k], 0) for k in ks], "nd": [len(days[k]) for k in ks]})
+    log(f"liq.json : {len(rows)} titres")
+
+
+# ------------------------------------------------------------------ comptes et ratios
+def div0(a, b):
+    return a / b if a is not None and b not in (None, 0) else None
+
+
+def cagr(a, b, years):
+    if a is None or b is None or a <= 0 or b <= 0 or years <= 0:
+        return None
+    return (b / a) ** (1 / years) - 1
+
+
+def grow(a, b):
+    return b / a - 1 if a not in (None, 0) and b is not None and a > 0 else None
+
+
+def weekly_px(b, since):
+    out = {}
+    for d_, c in zip(b["d"], b["c"]):
+        if d_ < since:
+            continue
+        t = i2d(d_)
+        fri = t + dt.timedelta(days=(4 - t.weekday()) % 7)
+        out[d2i(fri)] = c
+    k = sorted(out)
+    return k, [out[x] for x in k]
+
+
+def us_company(co, b, s, fx):
+    """Ratios d'une société US à partir des faits XBRL (TTM trimestriels + exercices annuels)."""
+    q = [int(x.replace("-", "")) for x in co["q"]]
+    T, Bs = co.get("ttm", {}), co.get("bs", {})
+    n = len(q)
+    if n == 0:
+        return None
+    g = lambda blk, k, i: (blk.get(k) or [None] * n)[i] if 0 <= i < n else None  # noqa: E731
+    shd = co.get("shd") or [None] * n
+
+    def gp(i):
+        v = g(T, "gp", i)
+        if v is None and g(T, "rev", i) is not None and g(T, "cogs", i) is not None:
+            v = g(T, "rev", i) - g(T, "cogs", i)
+        return v
+
+    def debt(i):
+        ltd = g(Bs, "ltd", i)
+        cp, stb = g(Bs, "cp", i) or 0, g(Bs, "stb", i) or 0
+        if ltd is not None:
+            return ltd + cp + stb
+        a, c_ = g(Bs, "ltdnc", i), g(Bs, "dcur", i)
+        if a is None and c_ is None and not cp and not stb:
+            return None
+        return (a or 0) + (c_ or 0) + cp + stb
+
+    def cash(i):
+        a, b_ = g(Bs, "cash", i), g(Bs, "sti", i)
+        return None if a is None and b_ is None else (a or 0) + (b_ or 0)
+
+    def sh(i):
+        for j in range(i, max(-1, i - 3), -1):
+            if j >= 0 and shd[j]:
+                return shd[j]
+        return co["sho"][1] if co.get("sho") else None
+    L = n - 1
+    while L > 0 and g(T, "rev", L) is None and g(T, "ni", L) is None:
+        L -= 1
+    P = L - 4 if L >= 4 else None
+    k_fx = fx.get(co.get("ccy") or "USD")
+    price = b["c"][-1] if b else None
+    shares = sh(L)
+    mcap = price * shares / k_fx if price and shares and k_fx and not co.get("annual_only") else (price * shares if price and shares and co.get("ccy") == "USD" else None)
+
+    def m(i):  # mesures TTM au trimestre i
+        if i is None or i < 0:
+            return {}
+        rev, ni, ocf, cap = g(T, "rev", i), g(T, "ni", i), g(T, "ocf", i), g(T, "capex", i)
+        opi, da = g(T, "opi", i), g(T, "da", i)
+        fcf = ocf - (cap or 0) if ocf is not None else None
+        ebitda = opi + da if opi is not None and da is not None else None
+        pti, tax = g(T, "pti", i), g(T, "tax", i)
+        t = div0(tax, pti)
+        t = min(.35, max(0, t)) if t is not None and pti and pti > 0 else .21
+        eq, assets, dbt, csh = g(Bs, "eq", i), g(Bs, "assets", i), debt(i), cash(i)
+        ic = (dbt or 0) + eq - (csh or 0) if eq is not None else None
+        return {"rev": rev, "gp": gp(i), "opi": opi, "ebitda": ebitda, "ni": ni, "ocf": ocf, "capex": cap, "fcf": fcf, "sbc": g(T, "sbc", i), "rnd": g(T, "rnd", i),
+                "div": g(T, "div", i), "buy": g(T, "buy", i), "int": g(T, "int", i), "tax_rate": t, "nopat": opi * (1 - t) if opi is not None else None,
+                "eq": eq, "assets": assets, "debt": dbt, "cash": csh, "nd": (dbt or 0) - (csh or 0) if dbt is not None or csh is not None else None, "ic": ic,
+                "ca": g(Bs, "ca", i), "cl": g(Bs, "cl", i), "liab": g(Bs, "liab", i), "re": g(Bs, "re", i), "ltd": g(Bs, "ltd", i) or g(Bs, "ltdnc", i), "sh": sh(i),
+                "eps": div0(ni, sh(i))}
+    now, ago = m(L), m(P)
+    avg = lambda k: (now.get(k) + ago[k]) / 2 if now.get(k) is not None and ago.get(k) is not None else now.get(k)  # noqa: E731
+    rev, ni, fcf, ocf = now.get("rev"), now.get("ni"), now.get("fcf"), now.get("ocf")
+    ev = mcap + (now.get("debt") or 0) - (now.get("cash") or 0) if mcap else None
+    r = {"src": "SEC EDGAR (XBRL)", "ccy": co.get("ccy"), "annual_only": co.get("annual_only"), "asof_q": q[L], "mcap": mcap, "ev": ev, "price": price,
+         "pe": div0(mcap, ni) if ni and ni > 0 else None, "ps": div0(mcap, rev), "pb": div0(mcap, now.get("eq")) if (now.get("eq") or 0) > 0 else None,
+         "ev_ebitda": div0(ev, now.get("ebitda")) if (now.get("ebitda") or 0) > 0 else None, "ev_sales": div0(ev, rev), "ev_ebit": div0(ev, now.get("opi")) if (now.get("opi") or 0) > 0 else None,
+         "fcfy": div0(fcf, mcap), "fcfy_sbc": div0(fcf - (now.get("sbc") or 0), mcap) if fcf is not None else None, "ey": div0(now.get("opi"), ev),
+         "dy": div0(now.get("div"), mcap), "by": div0(now.get("buy"), mcap), "shy": div0((now.get("div") or 0) + (now.get("buy") or 0), mcap),
+         "gm": div0(now.get("gp"), rev), "om": div0(now.get("opi"), rev), "nm": div0(ni, rev), "fcfm": div0(fcf, rev), "ebitdam": div0(now.get("ebitda"), rev),
+         "capex_s": div0(now.get("capex"), rev), "sbc_s": div0(now.get("sbc"), rev), "rnd_s": div0(now.get("rnd"), rev),
+         "roe": div0(ni, avg("eq")) if (avg("eq") or 0) > 0 else None, "roa": div0(ni, avg("assets")), "roic": div0(now.get("nopat"), avg("ic")) if (avg("ic") or 0) > 0 else None,
+         "conv": div0(fcf, ni) if ni and ni > 0 else None, "tax": now.get("tax_rate"),
+         "rev_g": grow(ago.get("rev"), rev), "ni_g": grow(ago.get("ni"), ni), "fcf_g": grow(ago.get("fcf"), fcf), "eps_g": grow(ago.get("eps"), now.get("eps")),
+         "ocf_g": grow(ago.get("ocf"), ocf), "sh_chg": grow(ago.get("sh"), now.get("sh")),
+         "nd": now.get("nd"), "nd_ebitda": div0(now.get("nd"), now.get("ebitda")) if (now.get("ebitda") or 0) > 0 else None, "de": div0(now.get("debt"), now.get("eq")) if (now.get("eq") or 0) > 0 else None,
+         "cur": div0(now.get("ca"), now.get("cl")), "icov": div0(now.get("opi"), now.get("int")) if (now.get("int") or 0) > 0 else None,
+         "payout": div0(now.get("div"), ni) if ni and ni > 0 else None, "fpay": div0(now.get("div"), fcf) if fcf and fcf > 0 else None,
+         "accr": div0((ni or 0) - (ocf or 0), avg("assets")) if ni is not None and ocf is not None else None,
+         "gpa": div0(now.get("gp"), avg("assets")), "om_chg": None, "nd_chg": grow(ago.get("nd"), now.get("nd")) if (ago.get("nd") or 0) > 0 else None}
+    if r["om"] is not None and ago.get("rev") and ago.get("opi") is not None:
+        r["om_chg"] = r["om"] - ago["opi"] / ago["rev"]
+    if r["rev_g"] is not None and r["fcfm"] is not None:
+        r["r40"] = r["rev_g"] + r["fcfm"]
+    # Piotroski (TTM contre TTM un an plus tôt)
+    if ago:
+        crit = []
+        roa1, roa0 = div0(ni, now.get("assets")), div0(ago.get("ni"), ago.get("assets"))
+        crit.append(roa1 > 0 if roa1 is not None else None)
+        crit.append(ocf > 0 if ocf is not None else None)
+        crit.append(roa1 > roa0 if roa1 is not None and roa0 is not None else None)
+        crit.append(ocf > ni if ocf is not None and ni is not None else None)
+        l1, l0 = div0(now.get("ltd"), now.get("assets")), div0(ago.get("ltd"), ago.get("assets"))
+        crit.append(l1 <= l0 if l1 is not None and l0 is not None else None)
+        c1, c0 = div0(now.get("ca"), now.get("cl")), div0(ago.get("ca"), ago.get("cl"))
+        crit.append(c1 > c0 if c1 is not None and c0 is not None else None)
+        crit.append(now["sh"] <= ago["sh"] * 1.005 if now.get("sh") and ago.get("sh") else None)
+        g1, g0 = div0(now.get("gp"), rev), div0(ago.get("gp"), ago.get("rev"))
+        crit.append(g1 > g0 if g1 is not None and g0 is not None else None)
+        t1, t0 = div0(rev, now.get("assets")), div0(ago.get("rev"), ago.get("assets"))
+        crit.append(t1 > t0 if t1 is not None and t0 is not None else None)
+        known = [x for x in crit if x is not None]
+        r["fscore"], r["fscore_n"], r["fcrit"] = sum(known), len(known), [None if x is None else int(x) for x in crit]
+    ta, liab = now.get("assets"), now.get("liab") or ((now.get("assets") or 0) - (now.get("eq") or 0) if now.get("assets") else None)
+    if ta and now.get("ca") is not None and now.get("cl") is not None and now.get("re") is not None and now.get("opi") is not None and rev and mcap and liab:
+        r["altz"] = 1.2 * (now["ca"] - now["cl"]) / ta + 1.4 * now["re"] / ta + 3.3 * now["opi"] / ta + 0.6 * mcap / liab + 1.0 * rev / ta
+    # séries trimestrielles (TTM)
+    H = {"q": q}
+    for k in ("rev", "gp", "opi", "ebitda", "ni", "ocf", "capex", "fcf", "sbc", "div", "buy", "eq", "debt", "cash", "nd", "eps", "sh", "ic", "nopat", "assets"):
+        H[k] = []
+    for i in range(n):
+        mi = m(i)
+        for k in list(H):
+            if k != "q":
+                H[k].append(mi.get(k))
+    H["roe"] = [div0(H["ni"][i], H["eq"][i]) if (H["eq"][i] or 0) > 0 else None for i in range(n)]
+    H["roic"] = [div0(H["nopat"][i], H["ic"][i]) if (H["ic"][i] or 0) > 0 else None for i in range(n)]
+    # exercices annuels
+    A, Ab = co.get("a", {}), co.get("abs", {})
+    ya = [int(x.replace("-", "")) for x in co.get("y", [])]
+    na = len(ya)
+    ga = lambda blk, k, i: (blk.get(k) or [None] * na)[i]  # noqa: E731
+    Y = {"y": ya}
+    for k in ("rev", "gp", "opi", "ni", "ocf", "capex", "sbc", "div", "buy", "da", "int", "rnd"):
+        Y[k] = [ga(A, k, i) for i in range(na)]
+    Y["gp"] = [Y["gp"][i] if Y["gp"][i] is not None else (Y["rev"][i] - ga(A, "cogs", i) if Y["rev"][i] is not None and ga(A, "cogs", i) is not None else None) for i in range(na)]
+    Y["ebitda"] = [Y["opi"][i] + Y["da"][i] if Y["opi"][i] is not None and Y["da"][i] is not None else None for i in range(na)]
+    Y["fcf"] = [Y["ocf"][i] - (Y["capex"][i] or 0) if Y["ocf"][i] is not None else None for i in range(na)]
+    shm = {q[i]: shd[i] for i in range(n) if shd[i]}
+    Y["sh"] = [shm.get(ya[i]) or next((shm[k] for k in sorted(shm, reverse=True) if abs((i2d(k) - i2d(ya[i])).days) < 20), None) for i in range(na)]
+    Y["eps"] = [div0(Y["ni"][i], Y["sh"][i]) for i in range(na)]
+    for k in ("eq", "assets", "cash", "sti", "ltd", "ltdnc", "dcur", "cp", "stb"):
+        Y["b_" + k] = [ga(Ab, k, i) for i in range(na)]
+    Y["debt"] = [(Y["b_ltd"][i] + (Y["b_cp"][i] or 0) + (Y["b_stb"][i] or 0)) if Y["b_ltd"][i] is not None else
+                 ((Y["b_ltdnc"][i] or 0) + (Y["b_dcur"][i] or 0) + (Y["b_cp"][i] or 0) if Y["b_ltdnc"][i] is not None or Y["b_dcur"][i] is not None else None) for i in range(na)]
+    Y["cashx"] = [(Y["b_cash"][i] or 0) + (Y["b_sti"][i] or 0) if Y["b_cash"][i] is not None else None for i in range(na)]
+    Y["nd"] = [Y["debt"][i] - Y["cashx"][i] if Y["debt"][i] is not None and Y["cashx"][i] is not None else None for i in range(na)]
+    Y["eq"], Y["assets"] = Y["b_eq"], Y["b_assets"]
+    for k in [k for k in Y if k.startswith("b_")]:
+        del Y[k]
+    Y["roe"] = [div0(Y["ni"][i], Y["eq"][i]) if (Y["eq"][i] or 0) > 0 else None for i in range(na)]
+    Y["roic"] = [div0(Y["opi"][i] * (1 - .21), (Y["debt"][i] or 0) + Y["eq"][i] - (Y["cashx"][i] or 0)) if Y["opi"][i] is not None and Y["eq"][i] and ((Y["debt"][i] or 0) + Y["eq"][i] - (Y["cashx"][i] or 0)) > 0 else None for i in range(na)]
+    for key, nm in (("rev", "rev"), ("ni", "ni"), ("fcf", "fcf"), ("eps", "eps"), ("ocf", "ocf")):
+        vals = Y[nm]
+        for yrs in (3, 5, 10):
+            if na > yrs:
+                r[f"{key}_cagr{yrs}"] = cagr(vals[-1 - yrs], vals[-1], yrs)
+    # multiples historiques (hebdomadaires) : cours du vendredi / dernier TTM publié (trimestre clos + 45 jours)
+    if b and mcap:
+        wd, wc = weekly_px(b, 20140101)
+        avail = [addays(x, 45) for x in q]
+        pe, ps, pb, eve, fy = [], [], [], [], []
+        for d_, c_ in zip(wd, wc):
+            j = bisect.bisect_right(avail, d_) - 1
+            if j < 0:
+                pe.append(None); ps.append(None); pb.append(None); eve.append(None); fy.append(None)  # noqa: E702
+                continue
+            mi = m(j)
+            mc = c_ * (mi.get("sh") or shares) / (k_fx or 1)
+            e = mc + (mi.get("debt") or 0) - (mi.get("cash") or 0)
+            pe.append(div0(mc, mi.get("ni")) if (mi.get("ni") or 0) > 0 else None)
+            ps.append(div0(mc, mi.get("rev")))
+            pb.append(div0(mc, mi.get("eq")) if (mi.get("eq") or 0) > 0 else None)
+            eve.append(div0(e, mi.get("ebitda")) if (mi.get("ebitda") or 0) > 0 else None)
+            fy.append(div0(mi.get("fcf"), mc))
+        r["mh"] = {"d": wd, "pe": pe, "ps": ps, "pb": pb, "ev_ebitda": eve, "fcfy": fy}
+    r["H"], r["Y"] = H, Y
+    return r
+
+
+def brvm_company(sid, s, fd_, fcf, dps_hist, b, tax):
+    """Ratios d'une société BRVM : comptes SikaFinance (5 exercices), flux de trésorerie SYSCOHADA lus dans les états financiers."""
+    S = (fd_ or {}).get("series", {})
+    bank = bool(s.get("bank"))
+    yrs = sorted({int(y) for k in ("ca", "resultat_net", "bnpa", "capitaux_propres") for y in (S.get(k) or {})} | {int(y) for y in (fcf or {})} | {int(y) for y in dps_hist})
+    yrs = [y for y in yrs if y >= 2010]
+    gv = lambda k, y: (S.get(k) or {}).get(str(y))  # noqa: E731
+    M = 1e6
+    Y = {"y": yrs}
+    for k, src in (("rev", "ca"), ("ni", "resultat_net"), ("eps", "bnpa"), ("ebit", "ebit"), ("ebitda", "ebitda"), ("eq", "capitaux_propres"), ("nd", "dette_nette"),
+                   ("cash", "tresorerie"), ("assets", "total_bilan"), ("opex", "charges_exploitation"), ("deposits", "depots_clientele"), ("loans", "credits_clientele"),
+                   ("cir", "coefficient_d_exploitation"), ("cor", "cout_du_risque"), ("solv", "ratio_de_solvabilite"), ("tier1", "ratio_tier_i"), ("roe_s", "roe"), ("roa_s", "roa"),
+                   ("nm_s", "marge_nette"), ("om_s", "marge_exploitation")):
+        Y[k] = [gv(src, y) for y in yrs]
+    # flux de trésorerie (états financiers) : contrôle d'échelle face au chiffre d'affaires (millions de FCFA attendus)
+    ca_y = {y: v for y, v in zip(yrs, Y["rev"]) if v}
+    Y["ocf"], Y["capex"], Y["fcf"] = [], [], []
+    for y in yrs:
+        rec = (fcf or {}).get(str(y)) or {}
+        cfo, cap, f_ = rec.get("cfo"), rec.get("capex"), rec.get("fcf")
+        ref = ca_y.get(y) or (ca_y[min(ca_y, key=lambda k: abs(k - y))] if ca_y else None)
+        div_ = None
+        if cfo is not None and ref:
+            for dv in (1.0, 1e-3, 1e-6):
+                if 0.003 <= abs(cfo * dv) / ref <= 1.5:
+                    div_ = dv
+                    break
+        if div_ is None:
+            cfo = cap = f_ = None
+        else:
+            cfo, cap, f_ = cfo * div_, (cap or 0) * div_, (f_ * div_ if f_ is not None else None)
+        Y["ocf"].append(cfo)
+        Y["capex"].append(cap if cfo is not None else None)
+        Y["fcf"].append(f_)
+    Y["dps"] = [dps_hist.get(y) for y in yrs]
+    Y["payout"] = [div0(Y["dps"][i], Y["eps"][i]) if Y["eps"][i] and Y["eps"][i] > 0 else None for i in range(len(yrs))]
+    sh = s.get("shares")
+    Y["fpay"] = [div0((Y["dps"][i] or 0) * sh / M, Y["fcf"][i]) if Y["dps"][i] and sh and Y["fcf"][i] and Y["fcf"][i] > 0 else None for i in range(len(yrs))]
+    Y["nm"] = [div0(Y["ni"][i], Y["rev"][i]) for i in range(len(yrs))]
+    Y["om"] = [div0(Y["ebit"][i], Y["rev"][i]) for i in range(len(yrs))]
+    Y["ebitdam"] = [div0(Y["ebitda"][i], Y["rev"][i]) for i in range(len(yrs))]
+    Y["fcfm"] = [div0(Y["fcf"][i], Y["rev"][i]) for i in range(len(yrs))]
+    Y["roe"] = [div0(Y["ni"][i], Y["eq"][i]) if (Y["eq"][i] or 0) > 0 else None for i in range(len(yrs))]
+    Y["roic"] = [None if bank else (div0(Y["ebit"][i] * (1 - tax), Y["eq"][i] + Y["nd"][i]) if Y["ebit"][i] is not None and Y["eq"][i] and Y["nd"][i] is not None and Y["eq"][i] + Y["nd"][i] > 0 else None) for i in range(len(yrs))]
+    Y["nd_ebitda"] = [div0(Y["nd"][i], Y["ebitda"][i]) if (Y["ebitda"][i] or 0) > 0 else None for i in range(len(yrs))]
+    Y["ld"] = [div0(Y["loans"][i], Y["deposits"][i]) for i in range(len(yrs))]
+    Y["cor_l"] = [div0(Y["cor"][i], Y["loans"][i]) for i in range(len(yrs))]
+    # dernier exercice disponible (comptes)
+    L = max([i for i in range(len(yrs)) if Y["ni"][i] is not None or Y["rev"][i] is not None] or [len(yrs) - 1])
+    price = b["c"][-1] if b else s.get("last")
+    mcap = price * sh if price and sh else None
+    li = lambda k: Y[k][L] if yrs else None  # noqa: E731
+
+    def lastv(k):
+        for i in range(len(yrs) - 1, -1, -1):
+            if Y[k][i] is not None:
+                return Y[k][i]
+        return None
+    fi = max([i for i in range(len(yrs)) if Y["fcf"][i] is not None] or [-1])
+    ev = mcap + li("nd") * M if mcap and li("nd") is not None and not bank else None
+    eps = li("eps")
+    r = {"src": "SikaFinance (comptes) · états financiers BRVM (flux de trésorerie)", "ccy": "XOF", "bank": bank, "fy": yrs[L] if yrs else None, "mcap": mcap, "ev": ev, "price": price,
+         "pe": div0(price, eps) if eps and eps > 0 else None, "pb": div0(mcap, li("eq") * M) if mcap and (li("eq") or 0) > 0 else None,
+         "ps": div0(mcap, li("rev") * M) if mcap and li("rev") else None,
+         "ev_ebitda": div0(ev, li("ebitda") * M) if ev and (li("ebitda") or 0) > 0 else None, "ev_sales": div0(ev, li("rev") * M) if ev and li("rev") else None,
+         "ev_ebit": div0(ev, li("ebit") * M) if ev and (li("ebit") or 0) > 0 else None, "ey": div0(li("ebit") * M, ev) if ev and li("ebit") is not None else None,
+         "fcf": Y["fcf"][fi] if fi >= 0 else None, "fcf_fy": yrs[fi] if fi >= 0 else None,
+         "fcfy": div0(Y["fcf"][fi] * M, mcap) if fi >= 0 and mcap and not bank and yrs[fi] >= yrs[L] - 1 else None, "dy": s.get("yld"),
+         "gm": None, "om": li("om"), "nm": li("nm"), "ebitdam": li("ebitdam"), "fcfm": Y["fcfm"][fi] if fi >= 0 else None,
+         "roe": li("roe"), "roa": div0(li("ni"), li("assets")), "roic": li("roic"), "tax": tax,
+         "conv": div0(Y["fcf"][fi], Y["ni"][fi]) if fi >= 0 and Y["ni"][fi] and Y["ni"][fi] > 0 else None,
+         "nd": li("nd") * M if li("nd") is not None else None, "nd_ebitda": li("nd_ebitda"), "de": div0(li("nd"), li("eq")) if li("nd") is not None and (li("eq") or 0) > 0 else None,
+         "payout": li("payout"), "fpay": Y["fpay"][fi] if fi >= 0 else None, "ld": lastv("ld"), "cir": lastv("cir"), "cor_l": lastv("cor_l"), "solv": lastv("solv")}
+    if L >= 1:
+        r["rev_g"] = grow(Y["rev"][L - 1], Y["rev"][L])
+        r["ni_g"] = grow(Y["ni"][L - 1], Y["ni"][L])
+        r["eps_g"] = grow(Y["eps"][L - 1], Y["eps"][L])
+        if Y["om"][L] is not None and Y["om"][L - 1] is not None:
+            r["om_chg"] = Y["om"][L] - Y["om"][L - 1]
+        if Y["nd"][L] is not None and Y["nd"][L - 1] and Y["nd"][L - 1] > 0:
+            r["nd_chg"] = grow(Y["nd"][L - 1], Y["nd"][L])
+    fy_idx = [i for i in range(len(yrs)) if Y["fcf"][i] is not None]
+    if len(fy_idx) >= 2 and fy_idx[-1] - fy_idx[-2] == 1:
+        r["fcf_g"] = grow(Y["fcf"][fy_idx[-2]], Y["fcf"][fy_idx[-1]])
+    for key in ("rev", "ni", "eps", "fcf"):
+        idx = [i for i in range(len(yrs)) if Y[key][i] is not None]
+        if not idx:
+            continue
+        last = idx[-1]
+        for n_ in (3, 5, 10):
+            j = last - n_
+            if j >= 0 and Y[key][j] is not None:
+                r[f"{key}_cagr{n_}"] = cagr(Y[key][j], Y[key][last], n_)
+    # Piotroski simplifié (données annuelles disponibles)
+    if L >= 1 and not bank:
+        crit = [Y["ni"][L] > 0 if Y["ni"][L] is not None else None,
+                Y["ocf"][L] > 0 if Y["ocf"][L] is not None else None,
+                (div0(Y["ni"][L], Y["assets"][L]) or 0) > (div0(Y["ni"][L - 1], Y["assets"][L - 1]) or 0) if Y["ni"][L] is not None and Y["ni"][L - 1] is not None and Y["assets"][L] and Y["assets"][L - 1] else None,
+                Y["ocf"][L] > Y["ni"][L] if Y["ocf"][L] is not None and Y["ni"][L] is not None else None,
+                (Y["nd"][L] or 0) <= (Y["nd"][L - 1] or 0) if Y["nd"][L] is not None and Y["nd"][L - 1] is not None else None,
+                None, None,
+                Y["om"][L] > Y["om"][L - 1] if Y["om"][L] is not None and Y["om"][L - 1] is not None else None,
+                div0(Y["rev"][L], Y["assets"][L]) > div0(Y["rev"][L - 1], Y["assets"][L - 1]) if Y["rev"][L] and Y["rev"][L - 1] and Y["assets"][L] and Y["assets"][L - 1] else None]
+        known = [x for x in crit if x is not None]
+        r["fscore"], r["fscore_n"], r["fcrit"] = sum(known), len(known), [None if x is None else int(x) for x in crit]
+    # multiples historiques : cours / dernier exercice publié (disponible fin avril de l'année suivante)
+    if b and yrs:
+        wd, wc = weekly_px(b, 20140101)
+        pe, pb, eve, fy, dy = [], [], [], [], []
+        for d_, c_ in zip(wd, wc):
+            yy = d_ // 10000 - (1 if d_ % 10000 >= 430 else 2)
+            i = yrs.index(yy) if yy in yrs else None
+            ep = Y["eps"][i] if i is not None else None
+            eq_ = Y["eq"][i] if i is not None else None
+            eb = Y["ebitda"][i] if i is not None else None
+            nd_ = Y["nd"][i] if i is not None else None
+            f_ = Y["fcf"][i] if i is not None else None
+            dp = Y["dps"][i] if i is not None else None
+            mc = c_ * sh if sh else None
+            pe.append(div0(c_, ep) if ep and ep > 0 else None)
+            pb.append(div0(mc, eq_ * M) if mc and eq_ and eq_ > 0 else None)
+            eve.append(div0(mc + nd_ * M, eb * M) if mc and nd_ is not None and eb and eb > 0 and not bank else None)
+            fy.append(div0(f_ * M, mc) if mc and f_ is not None and not bank else None)
+            dy.append(div0(dp, c_) if dp else None)
+        r["mh"] = {"d": wd, "pe": pe, "pb": pb, "ev_ebitda": eve, "fcfy": fy, "dy": dy}
+    r["Y"] = Y
+    return r
+
+
+def rnd_tree(o, nd=6):
+    if isinstance(o, float):
+        if not math.isfinite(o):
+            return None
+        if o == 0:
+            return 0
+        mag = math.floor(math.log10(abs(o)))
+        return round(o, max(0, nd - 1 - mag)) if mag < nd else round(o)
+    if isinstance(o, dict):
+        return {k: rnd_tree(v, nd) for k, v in o.items()}
+    if isinstance(o, list):
+        return [rnd_tree(v, nd) for v in o]
+    return o
+
+
+def fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, analyst, log):
+    sec = jload(os.path.join(extra, "secfacts.json"), {}) if extra else {}
+    fcf = (jload(fcf_path, {}) or {}).get("series", {}) if fcf_path else {}
+    fx = {"USD": 1.0}
+    if "EURUSD" in files:
+        fx["EUR"] = 1 / files["EURUSD"]["c"][-1]
+    if "USDTWD" in files:
+        fx["TWD"] = files["USDTWD"]["c"][-1]
+    idx = []
+    os.makedirs(os.path.join(out, "fa"), exist_ok=True)
+    keep = ("mcap", "ev", "pe", "fpe", "ps", "pb", "ev_ebitda", "ev_sales", "ev_ebit", "ey", "fcfy", "fcfy_sbc", "dy", "by", "shy", "gm", "om", "nm", "fcfm", "ebitdam", "roe", "roa", "roic",
+            "conv", "rev_g", "ni_g", "fcf_g", "eps_g", "sh_chg", "nd", "nd_ebitda", "de", "cur", "icov", "payout", "fpay", "accr", "gpa", "fscore", "fscore_n", "altz", "r40",
+            "rev_cagr3", "rev_cagr5", "rev_cagr10", "fcf_cagr3", "fcf_cagr5", "fcf_cagr10", "eps_cagr3", "eps_cagr5", "eps_cagr10", "ni_cagr3", "ni_cagr5",
+            "om_chg", "nd_chg", "capex_s", "sbc_s", "rnd_s", "ld", "cir", "cor_l", "fcf", "fcf_fy", "fy", "asof_q", "bank", "annual_only")
+    # États-Unis
+    for t, co in (sec.get("co") or {}).items():
+        s = secs_by.get(t)
+        if not s:
+            continue
+        try:
+            r = us_company(co, files.get(t), s, fx)
+        except Exception as e:  # noqa: BLE001
+            log("fa", t, e)
+            continue
+        if not r:
+            continue
+        an = (analyst or {}).get(t) or {}
+        sm = {k: (v or {}).get("value") for k, v in ((an.get("sum") or {}).get("summaryData") or {}).items()}
+        fpe = None
+        try:
+            fpe = float(str(sm.get("ForwardPE1Yr") or "").replace(",", "")) or None
+        except ValueError:
+            fpe = None
+        r["fpe"] = fpe
+        s["fa"] = True
+        jsave(os.path.join(out, "fa", t + ".json"), rnd_tree({"id": t, "mkt": "US", **r}))
+        idx.append({"id": t, "mkt": "US", "grp": s.get("grp"), **{k: r.get(k) for k in keep}})
+    # BRVM
+    dps = collections.defaultdict(dict)
+    for x in dmeta:
+        if x.get("t") and x.get("ex") and x.get("dps"):
+            dps[x["t"]][int(x["ex"])] = x["dps"]
+    for sid, s in secs_by.items():
+        if s.get("mkt") != "BRVM" or s.get("cls") != "Equity":
+            continue
+        fd_ = fund.get(sid)
+        if not fd_:
+            continue
+        try:
+            r = brvm_company(sid, s, fd_, fcf.get(sid), dps.get(sid, {}), files.get(sid), TAX_BRVM.get(s.get("cty"), .25))
+        except Exception as e:  # noqa: BLE001
+            log("fa", sid, e)
+            continue
+        s["fa"] = True
+        jsave(os.path.join(out, "fa", sid + ".json"), rnd_tree({"id": sid, "mkt": "BRVM", **r}))
+        idx.append({"id": sid, "mkt": "BRVM", "grp": s.get("grp"), **{k: r.get(k) for k in keep}})
+    jsave(os.path.join(out, "fa_index.json"), rnd_tree({"rows": idx, "fx": fx}))
+    log(f"fa : {len(idx)} sociétés ({sum(1 for x in idx if x['mkt'] == 'US')} US)")
+    return idx
+
+
+def ee(extra, out, secs_by, files, log):
+    A = jload(os.path.join(extra, "analyst.json"), {}) if extra else {}
+    res = {}
+    for t, a in (A or {}).items():
+        if t not in secs_by:
+            continue
+        sm = {k: (v or {}).get("value") for k, v in ((a.get("sum") or {}).get("summaryData") or {}).items()}
+        fc = a.get("fc") or {}
+        yr = ((fc.get("yearlyForecast") or {}).get("rows")) or []
+        qr = ((fc.get("quarterlyForecast") or {}).get("rows")) or []
+        tp = (a.get("tp") or {}).get("consensusOverview") or {}
+        ed = a.get("ed") or {}
+        res[t] = {"ts": a.get("ts"), "stale": a.get("stale", False), "sum": sm, "yr": yr, "qr": qr, "sur": a.get("surh", []), "snap": a.get("snap", [])[-260:],
+                  "tp": tp, "ed": ed.get("reportText") or ed.get("announcement") or ed.get("earningsDate") or None}
+        secs_by[t]["ee"] = bool(yr or a.get("surh"))
+    if res:
+        jsave(os.path.join(out, "ee.json"), res)
+        log(f"ee.json : {len(res)} sociétés")
+
+
+def per_brvm(extra, out, files, secs_by, fund, log):
+    """PER du marché BRVM : bulletin officiel (historique), calcul FQT pondéré par les capitalisations, sources prévisionnelles."""
+    boc = jload(os.path.join(extra, "boc.json"), {}) if extra else {}
+    d = sorted((boc or {}).get("d", {}).items())
+    res = {"boc": {"d": [int(k) for k, _ in d], **{f: [v.get(f) for _, v in d] for f in ("per", "rdt", "rent", "prime", "cap")}}}
+    # PER agrégé FQT : somme des capitalisations / somme des résultats nets du dernier exercice publié
+    ids = [s for s, x in secs_by.items() if x.get("mkt") == "BRVM" and x.get("cls") == "Equity"]
+    grid = files["BRVMC"]["d"] if "BRVMC" in files else []
+    grid = [g for g in grid if g >= 20190101][::5]
+    pe, cov = [], []
+    for g in grid:
+        mc = ni = 0.0
+        k = 0
+        yy = g // 10000 - (1 if g % 10000 >= 430 else 2)
+        for sid in ids:
+            sh = secs_by[sid].get("shares")
+            r = ((fund.get(sid) or {}).get("series") or {}).get("resultat_net") or {}
+            b = files.get(sid)
+            if not sh or not b or str(yy) not in r:
+                continue
+            j = bisect.bisect_right(b["d"], g) - 1
+            if j < 0:
+                continue
+            mc += b["c"][j] * sh
+            ni += r[str(yy)] * 1e6
+            k += 1
+        pe.append(r_(mc / ni, 2) if ni > 0 and k >= 30 else None)
+        cov.append(k)
+    res["fqt"] = {"d": grid, "pe": pe, "n": cov, "method": "Σ capitalisations ÷ Σ résultats nets du dernier exercice publié (disponible fin avril)"}
+    res["sources"] = jload(os.path.join(extra, "fpe_sources.json"), []) if extra else []
+    jsave(os.path.join(out, "per.json"), res)
+    log(f"per.json : {len(d)} bulletins, PER FQT {pe[-1] if pe else None}")
+
+
+def uemoa(extra, out, secs_by, cty_name, log):
+    wb = jload(os.path.join(extra, "worldbank.json")) if extra else None
+    if not wb:
+        return
+    cap = collections.defaultdict(float)
+    nb = collections.Counter()
+    iso = {"CI": "CIV", "SN": "SEN", "BF": "BFA", "BJ": "BEN", "ML": "MLI", "NE": "NER", "TG": "TGO"}
+    for s in secs_by.values():
+        if s.get("mkt") == "BRVM" and s.get("cls") == "Equity" and s.get("cty"):
+            cap[iso.get(s["cty"], s["cty"])] += s.get("mcap") or 0
+            nb[iso.get(s["cty"], s["cty"])] += 1
+    wb["brvm"] = {"cap": dict(cap), "n": dict(nb)}
+    jsave(os.path.join(out, "uemoa.json"), wb)
+    log(f"uemoa.json : {len(wb.get('ind', {}))} indicateurs")
+
+
+def derive(extra, out, files, secs, fund, fcf_path, dmeta, ndx, log):
+    secs_by = {s["id"]: s for s in secs}
+    us_ids = [s["id"] for s in secs if s["mkt"] == "US" and s["typ"] == "Equity"]
+    brvm_ids = [s["id"] for s in secs if s["mkt"] == "BRVM" and s["cls"] == "Equity"]
+    shares = {s["id"]: s.get("shares") for s in secs if s["mkt"] == "BRVM"}
+    F = None
+    for name, fn in (("eco", lambda: eco(extra, out, log) if extra else None),):
+        try:
+            F = fn()
+        except Exception as e:  # noqa: BLE001
+            log("échec", name, e)
+    steps = [("fg", lambda: fg(extra, out, files, ndx, us_ids, brvm_ids, dmeta, shares, F, log)),
+             ("liq", lambda: liq(out, files, secs_by, brvm_ids, log)),
+             ("ee", lambda: ee(extra, out, secs_by, files, log)),
+             ("fa", lambda: fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, jload(os.path.join(extra, "analyst.json"), {}) if extra else {}, log)),
+             ("per", lambda: per_brvm(extra, out, files, secs_by, fund, log)),
+             ("uemoa", lambda: uemoa(extra, out, secs_by, None, log))]
+    for name, fn in steps:
+        try:
+            fn()
+        except Exception as e:  # noqa: BLE001
+            import traceback
+            log("échec", name, e, traceback.format_exc()[-600:])

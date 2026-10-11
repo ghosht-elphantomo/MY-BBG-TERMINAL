@@ -320,6 +320,58 @@ IDX_CODE = {"BRVM-C": "BRVMC", "BRVM-30": "BRVM30", "BRVM-PRES": "BRVMPR", "BRVM
             "SF": "BRVM-SF", "CB": "BRVM-CB", "IN": "BRVM-IN", "EN": "BRVM-EN", "SP": "BRVM-SP"}
 
 
+MONTHS_EN = {m: i + 1 for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"])}
+NQ_SYM = {"CCMP": "COMP", "RTY": "RUT"}
+
+
+def us_batch(out_data):
+    """Cours différés de tous les titres US du terminal (actions, ETF, indices) : Nasdaq, par paquets de 40."""
+    summ = load("summary.json", folder=out_data) or {}
+    want = []
+    for x in summ.get("secs", []):
+        if x.get("mkt") != "US":
+            continue
+        ac = "etf" if x.get("typ") == "ETF" else "index" if x.get("cls") == "Index" else "stocks"
+        want.append((x["id"], NQ_SYM.get(x["id"], x["id"]), ac))
+    q = {}
+    for k in range(0, len(want), 40):
+        chunk = want[k:k + 40]
+        url = "https://api.nasdaq.com/api/quote/watchlist?" + "&".join("symbol=" + urllib.parse.quote(f"{s.lower()}|{ac}") for _, s, ac in chunk)
+        try:
+            j = json.loads(get(url, tries=2, headers=NQ_H))
+        except Exception as e:  # noqa: BLE001
+            fail("nasdaq_batch", e)
+            continue
+        rows = j.get("data") or []
+        if isinstance(rows, dict):
+            rows = rows.get("rows") or rows.get("data") or []
+        by = {sym.upper(): sid for sid, sym, _ in chunk}
+        for r in rows:
+            sid = by.get(str(r.get("symbol", "")).upper())
+            last = money(r.get("lastSalePrice") or r.get("lastsale"))
+            if not sid or not last:
+                continue
+            pct = num(str(r.get("percentageChange") or "").replace("%", "").replace("+", ""))
+            rec = {"last": last, "pct": round(pct / 100, 6) if pct is not None else None}
+            m = re.search(r"([A-Z][a-z]{2}) (\d{1,2}), (\d{4})", str(r.get("lastTradeTimestamp") or ""))
+            if m and m.group(1) in MONTHS_EN:
+                rec["d"] = f"{m.group(3)}-{MONTHS_EN[m.group(1)]:02d}-{int(m.group(2)):02d}"
+            vol = num(str(r.get("volume") or "").replace(",", ""))
+            if vol:
+                rec["vol"] = int(vol)
+            q[sid] = rec
+        time.sleep(0.4)
+    for sid, prod in (("BTC", "BTC-USD"), ("ETH", "ETH-USD"), ("SOL", "SOL-USD")):
+        try:
+            t = json.loads(get(f"https://api.exchange.coinbase.com/products/{prod}/ticker", tries=2))
+            st = json.loads(get(f"https://api.exchange.coinbase.com/products/{prod}/stats", tries=2))
+            last, op = float(t["price"]), float(st["open"])
+            q[sid] = {"last": last, "pct": round(last / op - 1, 6), "d": dt.datetime.now(dt.timezone.utc).date().isoformat(), "src": "coinbase 24h"}
+        except Exception as e:  # noqa: BLE001
+            fail("coinbase", e)
+    return q
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=["live", "eod"], default="live")
@@ -364,6 +416,12 @@ def main():
             code = IDX_CODE.get(x.get("k"))
             if code and x.get("v"):
                 q[code] = {"last": x["v"], "pct": round((x.get("vj") or 0) / 100, 6), "d": brvm["asof"]}
+    try:
+        for sid, rec in us_batch(out_data).items():
+            if sid not in q:
+                q[sid] = rec
+    except Exception as e:  # noqa: BLE001
+        fail("us_batch", e)
     now = int(time.time())
     dump({"ts": now, "qqq": live, "intraday": intraday, "errors": ERRORS}, os.path.join(out_data, "live.json"))
     dump({"ts": now, "asof": brvm.get("asof") if brvm else None, "q": q}, os.path.join(out_data, "quotes.json"))

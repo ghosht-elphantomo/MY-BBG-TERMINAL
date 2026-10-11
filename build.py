@@ -10,7 +10,9 @@ HEAD = ('<title>FQT Terminal</title>\n'
         '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
         '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap">\n'
         '<style>\n' + W("style.css") + '\n</style>\n')
-JS = "".join("<script>\n" + W(f) + "\n</script>\n" for f in ("engine.js", "chart.js", "pages1.js", "pages2.js", "core.js"))
+import glob
+PAGES = sorted(os.path.basename(f) for f in glob.glob(os.path.join(HERE, "web", "pages*.js")))
+JS = "".join("<script>\n" + W(f) + "\n</script>\n" for f in ["engine.js", "chart.js"] + PAGES + ["core.js"])
 BODY = W("body.html")
 if "--artifact" in sys.argv:
     out = sys.argv[sys.argv.index("--artifact") + 1]

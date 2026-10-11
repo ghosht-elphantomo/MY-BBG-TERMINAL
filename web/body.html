@@ -3,7 +3,7 @@
     <div class="logo" title="FOFCO Quant Terminal">FQT</div>
     <form class="cmd" id="cmdForm" autocomplete="off">
       <label for="cmd">&lt;CMD&gt;</label>
-      <input id="cmd" spellcheck="false" placeholder="Ticker ou fonction : SNTS GP, QQQ BTST, MACRO, EVTS…  puis Entrée" aria-label="Ligne de commande">
+      <input id="cmd" spellcheck="false" placeholder="Ticker puis espace pour ses fonctions (SNTS FA, QQQ EE…), ou une fonction : FG, TOP, CORR…" aria-label="Ligne de commande">
       <button class="go" type="submit">&lt;GO&gt;</button>
       <div class="ac" id="ac" hidden></div>
     </form>
@@ -12,6 +12,7 @@
   </header>
   <nav class="fkeys" id="fkeys" aria-label="Fonctions"></nav>
   <div class="secbar" id="secbar"></div>
+  <nav class="stabs" id="stabs" hidden aria-label="Fonctions du titre"></nav>
   <main id="main"><div class="empty">Chargement des données…</div></main>
   <footer class="status" id="status"></footer>
 </div>
