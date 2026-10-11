@@ -840,6 +840,23 @@ def run_probe(out):
                 note("probe-wayback", False, f"{pat}: {e}")
             time.sleep(1)
     save(os.path.join(dd, "wayback_cdx.json"), cdx)
+    # échantillon d'états financiers (texte extrait) pour l'analyseur des comptes sur 10 exercices
+    try:
+        evs = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/events.json", timeout=60))["events"]
+        picks = {}
+        for e in evs:
+            t, fy, u = e.get("ticker"), e.get("fiscal_year"), e.get("document_url") or ""
+            if e.get("category") == "financial_statements" and t in ("SNTS", "ORAC", "SLBC", "PALC", "SPHC", "TTLC", "CIEC", "SGBC", "SIBC", "NTLC") and fy in (2017, 2019) and u.lower().endswith(".pdf"):
+                picks.setdefault((t, fy), u)
+        for (t, fy), u in list(picks.items())[:14]:
+            try:
+                txt = pdftext(get(u, tries=2, timeout=60))
+                open(os.path.join(dd, f"pdf_{t}_{fy}.txt"), "w", encoding="utf8").write(f"{u}\n" + txt[:120000])
+                note("probe-pdf", ok=len(txt.strip()) > 200, err=None if len(txt.strip()) > 200 else f"{t} {fy}: texte vide (scan)")
+            except Exception as e:  # noqa: BLE001
+                note("probe-pdf", False, f"{t} {fy}: {e}")
+    except Exception as e:  # noqa: BLE001
+        note("probe-pdf", False, e)
     # un instantané ancien de chaque motif trouvé
     for pat, rows in cdx.items():
         rows = [r for r in rows[1:] if r and r[0][:4] in ("2016", "2017", "2018", "2019", "2020")] if rows else []
