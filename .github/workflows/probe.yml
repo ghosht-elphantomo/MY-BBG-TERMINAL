@@ -1,0 +1,48 @@
+name: Sonde des sources
+
+# Développement : lance une partie de la collecte (liste dans probe.txt) et publie rapports et échantillons sur la branche `probe`.
+on:
+  push:
+    branches: [main]
+    paths: ["probe.txt"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restaurer les données brutes
+        run: |
+          mkdir -p /tmp/raw /tmp/out
+          if git fetch -q --depth 1 origin raw; then git archive FETCH_HEAD | tar -x -C /tmp/raw || true; fi
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils >/dev/null || true
+      - name: Accès réseau
+        run: |
+          UA="FQT-Terminal research ghosht-elphantomo@users.noreply.github.com"
+          for u in https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10 https://www.sec.gov/files/company_tickers.json https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json \
+                   https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv https://production.dataviz.cnn.io/index/fearandgreed/graphdata \
+                   "https://api.exchange.coinbase.com/products/BTC-USD/candles?granularity=86400" "https://api.worldbank.org/v2/country/CIV/indicator/NY.GDP.MKTP.KD.ZG?format=json" \
+                   https://bfin.brvm.org/boc/BOC_JOUR/BOC_20260520.pdf https://www.brvm.org/fr/rapports-societes-cotees https://www.marketscreener.com/quote/stock/SONATEL-SA-6500147/ \
+                   https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2026/all?type=daily_treasury_yield_curve \
+                   https://news.google.com/rss/search?q=BRVM https://www.financialafrik.com/feed/; do
+            echo "$(curl -s -o /dev/null -m 25 -A "$UA" -w '%{http_code} %{time_total}s %{size_download}o' "$u") $u" | tee -a /tmp/out/net.txt
+          done
+      - name: Collecte partielle
+        continue-on-error: true
+        run: timeout 1200 python3 scripts/fetch_extra.py --out /tmp/raw --only "$(head -1 probe.txt)" --site /tmp/raw
+      - name: Publier les rapports (branche probe)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp /tmp/raw/report_*.json /tmp/out/ 2>/dev/null || true
+          cp -r /tmp/raw/debug /tmp/out/ 2>/dev/null || true
+          for d in fred cboe crypto; do ls /tmp/raw/$d 2>/dev/null | head -100 > /tmp/out/ls_$d.txt || true; done
+          ls -la /tmp/raw > /tmp/out/ls_raw.txt
+          for f in cnn_fg.json worldbank.json boc.json secfacts.json reports.json; do [ -f /tmp/raw/$f ] && head -c 4000 /tmp/raw/$f > /tmp/out/head_$f.txt || true; done
+          cd /tmp/out && git init -q -b probe && git config user.name fqt-bot && git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Sonde $(date -u +%H:%M)" && git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" probe

@@ -293,10 +293,16 @@ def run_nasdaq(out, prev):
 
 # ---------------------------------------------------------------- FRED, CBOE, CNN, crypto, Banque mondiale
 def run_fred(out):
+    fails = [0]
+
     def one(x):
         sid = x[0]
+        if fails[0] >= 6:
+            note("fred", False, f"{sid}: source injoignable, abandon")
+            return
         try:
-            b = get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}", timeout=60)
+            b = get(f"https://fred.stlouisfed.org/graph/fredgraph.csv?id={sid}", timeout=25, tries=2)
+            fails[0] = 0
             txt = b.decode("utf8", "replace")
             if "," not in txt.splitlines()[0]:
                 raise ValueError("réponse inattendue")
@@ -304,6 +310,7 @@ def run_fred(out):
             open(os.path.join(out, "fred", sid + ".csv"), "w", encoding="utf8").write(txt)
             note("fred")
         except Exception as e:  # noqa: BLE001
+            fails[0] += 1
             note("fred", False, f"{sid}: {e}")
     with ThreadPoolExecutor(4) as ex:
         list(ex.map(one, FRED))
@@ -594,17 +601,31 @@ def run_sec(out, prev, max_age_days):
         log("SEC : cache récent conservé", len(cache.get("co", {})))
         note("sec-cache")
         return
-    h = {"User-Agent": SEC_UA, "Accept-Encoding": "gzip", "Accept": "application/json"}
-    try:
-        tick = json.loads(get("https://www.sec.gov/files/company_tickers.json", headers=h))
-    except Exception as e:  # noqa: BLE001
-        note("sec", False, f"company_tickers: {e}")
+    h = {"User-Agent": SEC_UA, "Accept-Encoding": "gzip", "Accept": "application/json", "Host": None}
+    h.pop("Host")
+    cikmap = {}
+    seed = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "seed", "sec_cik.json")
+    if os.path.exists(seed):  # correspondance ticker -> CIK conservée dans le dépôt (la SEC bloque parfois www.sec.gov depuis le cloud)
+        cikmap.update(json.load(open(seed, encoding="utf8")))
+    for url in ("https://www.sec.gov/files/company_tickers.json", "https://www.sec.gov/include/ticker.txt"):
+        try:
+            b = get(url, headers=h, tries=2, timeout=30)
+            if url.endswith(".json"):
+                for v in json.loads(b).values():
+                    cikmap[v["ticker"].upper()] = v["cik_str"]
+            else:
+                for line in b.decode("utf8", "replace").splitlines():
+                    p_ = line.split()
+                    if len(p_) == 2 and p_[1].isdigit():
+                        cikmap[p_[0].upper()] = int(p_[1])
+            note("sec-tickers")
+            break
+        except Exception as e:  # noqa: BLE001
+            note("sec-tickers", False, f"{url}: {e}")
+    if not cikmap:
         if cache:
             save(os.path.join(out, "secfacts.json"), cache)
         return
-    cikmap = {}
-    for v in tick.values():
-        cikmap.setdefault(v["ticker"].upper(), v["cik_str"])
     res = {"ts": int(time.time()), "co": {}, "missing": []}
 
     def one(t):
@@ -1120,6 +1141,7 @@ def main():
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")
+    rp = os.path.join(a.out, "report_" + "-".join(sorted(only)) + ".json")
     for name, fn in steps:
         if name not in only:
             continue
@@ -1127,11 +1149,12 @@ def main():
         try:
             fn()
         except Exception as e:  # noqa: BLE001
-            note(name, False, f"étape interrompue : {e}")
-        log(f"{name}: {time.time() - t:.0f} s", json.dumps({k: (v['ok'], v['err']) for k, v in REPORT.items()}))
-    REPORT["_"] = {"ts": int(time.time()), "secs": round(time.time() - t0)}
-    rp = os.path.join(a.out, "report_" + "-".join(sorted(only)) + ".json")
-    save(rp, REPORT)
+            import traceback
+            note(name, False, f"étape interrompue : {e} {traceback.format_exc()[-300:]}")
+        REPORT.setdefault("_steps", {})[name] = round(time.time() - t)
+        REPORT["_"] = {"ts": int(time.time()), "secs": round(time.time() - t0)}
+        save(rp, REPORT)  # écrit après chaque étape : visible même si le passage est interrompu
+        log(f"{name}: {time.time() - t:.0f} s", json.dumps({k: (v['ok'], v['err']) for k, v in REPORT.items() if isinstance(v, dict) and 'ok' in v}))
     log(f"terminé en {time.time() - t0:.0f} s")
 
 
