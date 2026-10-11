@@ -42,7 +42,8 @@ function accountsTable(F, nY = 10, opts = {}) {
   const firstData = have.length ? Math.min(...have) : null;
   const why = y => F.mkt === 'BRVM' ? (firstData && y < firstData ? `aucun compte publié avant ${firstData} dans les sources (SikaFinance : 5 exercices ; états financiers BRVM lus quand le PDF est exploitable)` : 'non publié dans les sources') : 'absent des dépôts XBRL à la SEC';
   const cg = (k, n) => { const a = cols.map(y => { const i = ix(y); return i >= 0 ? Y[k][i] : null; }); return cagrA(a, n); };
-  const head = `<tr><th class="l">${U.lab}${F.mkt === 'US' ? ' · exercice clos' : ''}</th>${cols.map(y => `<th>${y}</th>`).join('')}${opts.cagr ? '<th>TCAM 3 a.</th><th>TCAM 5 a.</th><th>TCAM 10 a.</th>' : ''}</tr>`;
+  const srcOf = y => { const i = ix(y); return i >= 0 && Y.src ? Y.src[i] : null; };
+  const head = `<tr><th class="l">${U.lab}${F.mkt === 'US' ? ' · exercice clos' : ''}</th>${cols.map(y => { const sr = srcOf(y); return `<th title="${esc(sr || '')}">${y}${sr ? '<sup class="am">a</sup>' : ''}</th>`; }).join('')}${opts.cagr ? '<th>TCAM 3 a.</th><th>TCAM 5 a.</th><th>TCAM 10 a.</th>' : ''}</tr>`;
   const body = rows.filter(([k]) => Y[k]).map(([k, l, t, hl]) => {
     const vals = cols.map(y => { const i = ix(y); if (i < 0) return null; return t === 'g' ? gr(Y[k], i) : Y[k][i]; });
     if (vals.every(v => v == null) && t !== 'g') return '';
@@ -54,7 +55,7 @@ function accountsTable(F, nY = 10, opts = {}) {
 }
 function faSrcNote(F) {
   return F.mkt === 'US' ? `Source : SEC EDGAR (XBRL des 10-K/10-Q${F.annual_only ? ', 20-F annuels' : ''}), devise ${F.ccy || 'USD'}. FCF = flux d’exploitation − acquisitions d’immobilisations corporelles. Dette financière hors obligations locatives.`
-    : `Sources : SikaFinance (comptes, via BRVMetrics) et tableaux des flux de trésorerie lus dans les états financiers SYSCOHADA publiés sur brvm.org. FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
+    : `Sources : SikaFinance (comptes, via BRVMetrics) ; <sup class="am">a</sup> = exercice lu dans une page SikaFinance archivée (web.archive.org, chiffres clés : CA, résultat net, BNPA, dividende) ; flux de trésorerie lus dans les états financiers SYSCOHADA publiés sur brvm.org. FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
 }
 
 /* ------------------------------------------------------------------ FA */

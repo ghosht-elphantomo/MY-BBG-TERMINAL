@@ -283,6 +283,53 @@ def main():
     src = a.brvm_src
     acts = json.load(open(os.path.join(src, "actions.json"), encoding="utf8"))["actions"]
     fund = json.load(open(os.path.join(src, "fundamentals.json"), encoding="utf8"))
+    # exercices plus anciens : pages SikaFinance archivées (web.archive.org), ajoutés seulement là où la source actuelle n'a rien
+    sh_path = os.path.join(a.extra, "sika_hist.json") if a.extra else None
+    if sh_path and os.path.exists(sh_path):
+        hist = json.load(open(sh_path, encoding="utf8")).get("t", {})
+        kmap = {"ca": "ca", "rn": "resultat_net", "bnpa": "bnpa", "div": "dividende", "per": "per"}
+        for t, yrs in hist.items():
+            f = fund.get(t)
+            if not f:
+                continue
+            ser = f.setdefault("series", {})
+            src_y = f.setdefault("src_years", {})
+            for y, rec in yrs.items():
+                added = False
+                for k, sk in kmap.items():
+                    if rec.get(k) is None:
+                        continue
+                    o = ser.setdefault(sk, {})
+                    if o.get(y) is None:
+                        o[y] = rec[k]
+                        added = True
+                if added:
+                    src_y[y] = "archive SikaFinance " + rec.get("src", "")
+    # états financiers publiés sur brvm.org (PDF lus) : postes manquants et flux de trésorerie
+    pf_path = os.path.join(a.extra, "pdf_fin.json") if a.extra else None
+    pdf_cf = {}
+    if pf_path and os.path.exists(pf_path):
+        pf = json.load(open(pf_path, encoding="utf8")).get("t", {})
+        kmap2 = {"rev": "ca", "ni": "resultat_net", "ebitda": "ebitda", "ebit": "ebit", "eq": "capitaux_propres", "assets": "total_bilan"}
+        for t, yrs in pf.items():
+            f = fund.get(t)
+            if not f:
+                continue
+            ser = f.setdefault("series", {})
+            src_y = f.setdefault("src_years", {})
+            for y, rec in yrs.items():
+                added = False
+                for k, sk in kmap2.items():
+                    if rec.get(k) is None:
+                        continue
+                    o = ser.setdefault(sk, {})
+                    if o.get(y) is None:
+                        o[y] = rec[k]
+                        added = True
+                if added and y not in src_y:
+                    src_y[y] = "états financiers publiés (brvm.org)"
+                if rec.get("cfo") is not None:
+                    pdf_cf.setdefault(t, {})[y] = {"cfo": rec["cfo"], "capex": rec.get("capex", 0), "fcf": rec.get("fcf", rec["cfo"] - (rec.get("capex") or 0)), "src": rec.get("src")}
     divs = json.load(open(os.path.join(src, "dividendes.json"), encoding="utf8"))["all"]
     status = json.load(open(os.path.join(src, "trading_status.json"), encoding="utf8"))
     session = json.load(open(a.session, encoding="utf8")) if a.session and os.path.exists(a.session) else None
@@ -469,7 +516,16 @@ def main():
     emeta.sort(key=lambda x: x["d"] or "", reverse=True)
 
     # Calculs dérivés (macro, sentiment, liquidité, comptes, consensus, valorisation BRVM, UEMOA) ----
-    build_extra.derive(a.extra, out, files, secs, fund, a.fcf, dmeta, xinfo["ndx"], log)
+    fcf_path = a.fcf
+    if pdf_cf:  # flux de trésorerie : fichier hebdomadaire complété par les états financiers lus
+        base = json.load(open(a.fcf, encoding="utf8")) if a.fcf and os.path.exists(a.fcf) else {"series": {}}
+        for t, yrs in pdf_cf.items():
+            for y, r in yrs.items():
+                base.setdefault("series", {}).setdefault(t, {}).setdefault(y, r)
+        import tempfile
+        fcf_path = os.path.join(tempfile.gettempdir(), "fqt_fcf_merged.json")
+        json.dump(base, open(fcf_path, "w", encoding="utf8"))
+    build_extra.derive(a.extra, out, files, secs, fund, fcf_path, dmeta, xinfo["ndx"], log)
 
     # write ------------------------------------------------------------------
     for sid, body in files.items():

@@ -749,6 +749,147 @@ def run_sikah(out):
     save(path, db)
 
 
+# ---------------------------------------------------------------- états financiers BRVM (PDF) : comptes des exercices anciens et nouvelles publications
+FIN_LAB = [("rev", r"^(chiffre d.affaires( hors taxes)?( et autres produits)?|chiffre d.affaires net|produit net bancaire|total chiffre d.affaires)\b"),
+           ("ni", r"^(benifice net|benefice net|resultat net( de l.exercice)?|resultat net \(perte\)|resultat de l.exercice)\b(?!.*(par action|minoritaire))"),
+           ("ebitda", r"^excedent brut d.exploitation"), ("ebit", r"^resultat d.exploitation"),
+           ("eq", r"^(total )?capitaux propres$|^capitaux propres( et ressources assimilees)?$"), ("assets", r"^total (actif|bilan|general actif)"),
+           ("capex_c", r"^(-\s*)?(acquisitions?|decaissements lies aux acquisitions) d.immobilisations corporelles"),
+           ("capex_i", r"^(-\s*)?(acquisitions?|decaissements lies aux acquisitions) d.immobilisations incorporelles"),
+           ("cfo", r"^flux de tresorerie (provenant|provenants|issus?|nets?) (des|de l.) ?activites? (operationnelles|d.exploitation)")]
+FIN_NUM = re.compile(r"^\(?-?\s*\d{1,3}(?:[ . \xa0]\d{3})*(?:,\d+)?\)?$")
+
+
+def _nrm(x):
+    import unicodedata
+    return unicodedata.normalize("NFKD", x).encode("ascii", "ignore").decode().lower()
+
+
+def fin_parse(txt):
+    """Postes clés d'états financiers (texte pdftotext -layout) : {poste: [N, N-1]}, unité annoncée."""
+    lines = txt.splitlines()
+    unit = None
+    for ln in lines[:250]:
+        l_ = _nrm(ln)
+        if "millions" in l_ and ("fcfa" in l_ or "f cfa" in l_ or "xof" in l_):
+            unit = unit or 1.0
+        elif "milliers" in l_ and ("fcfa" in l_ or "f cfa" in l_ or "xof" in l_):
+            unit = unit or 1e-3
+    found = {}
+    for ln in lines:
+        segs = [x for x in re.split(r"\s{3,}", ln.strip()) if x]
+        i = 0
+        while i < len(segs):
+            lab = _nrm(segs[i]).strip(" :.-")
+            if FIN_NUM.match(segs[i].strip()) or not re.search(r"[a-z]", lab):
+                i += 1
+                continue
+            nums, j = [], i + 1
+            while j < len(segs) and FIN_NUM.match(segs[j].strip()) and len(nums) < 4:
+                t_ = segs[j].strip()
+                neg = t_.startswith("(") or t_.startswith("-")
+                try:
+                    v = float(re.sub(r"[()\s. \xa0-]", "", t_).replace(",", "."))
+                    nums.append(-v if neg else v)
+                except ValueError:
+                    pass
+                j += 1
+            lab = re.sub(r"\s+", " ", lab)
+            for k, pat in FIN_LAB:
+                if k not in found and nums and re.search(pat, lab):
+                    found[k] = nums[:2]
+            i = j if j > i + 1 else i + 1
+    return found, unit
+
+
+def fin_scale(found, unit, ref):
+    """Facteur vers les millions de FCFA : unité annoncée, sinon ordre de grandeur face au chiffre d'affaires de référence."""
+    v = (found.get("rev") or found.get("assets") or found.get("ni") or [None])[0]
+    if ref and v:
+        best = None
+        for dv in (1.0, 1e-3, 1e-6):
+            r = abs(v * dv) / ref
+            sc = abs(math.log10(r)) if r > 0 else 99
+            if best is None or sc < best[0]:
+                best = (sc, dv)
+        if best and best[0] < 0.8:  # à moins d'un facteur ~6 de la référence
+            return best[1]
+    return unit
+
+
+def fin_record(found, div_):
+    rec = [{}, {}]
+    for k, vals in found.items():
+        for c in (0, 1):
+            if c < len(vals) and vals[c] is not None:
+                rec[c][k] = round(vals[c] * div_, 1)
+    for r in rec:
+        if "capex_c" in r or "capex_i" in r:
+            r["capex"] = round(abs(r.pop("capex_c", 0) or 0) + abs(r.pop("capex_i", 0) or 0), 1)
+        if "cfo" in r and "capex" in r:
+            r["fcf"] = round(r["cfo"] - r["capex"], 1)
+    return rec
+
+
+def run_pdffin(out, budget=720):
+    path = os.path.join(out, "pdf_fin.json")
+    db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"t": {}, "docs": {}}
+    try:
+        evs = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/events.json", timeout=60))["events"]
+        fund = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/fundamentals.json", timeout=60))
+    except Exception as e:  # noqa: BLE001
+        note("pdffin", False, e)
+        return
+    sh = (json.load(open(os.path.join(out, "sika_hist.json"), encoding="utf8")).get("t", {}) if os.path.exists(os.path.join(out, "sika_hist.json")) else {})
+
+    def ref_ca(t, y):
+        ca = dict(((fund.get(t) or {}).get("series") or {}).get("ca") or {})
+        for yy, r in (sh.get(t) or {}).items():
+            if r.get("ca") and yy not in ca:
+                ca[yy] = r["ca"]
+        ca = {int(k): v for k, v in ca.items() if v}
+        if not ca:
+            return None
+        return ca[min(ca, key=lambda k: abs(k - y))]
+    cand = {}
+    for e in evs:
+        t, fy, u = e.get("ticker"), e.get("fiscal_year"), e.get("document_url") or ""
+        if not t or not fy or e.get("category") != "financial_statements" or not u.lower().endswith(".pdf"):
+            continue
+        ti = _nrm(e.get("title") or "")
+        rank = (0 if ("certifi" in ti or "approuv" in ti or "annule et remplace" in ti) else 1, -(int((e.get("published_at") or "0")[:10].replace("-", "") or 0)))
+        cand.setdefault((t, int(fy)), []).append((rank, u))
+    todo = [(k, sorted(v)[0][1]) for k, v in cand.items() if k[1] >= 2012 and sorted(v)[0][1] not in db["docs"]]
+    todo.sort(key=lambda x: -x[0][1])
+    t_end = time.time() + budget
+    for (t, fy), u in todo:
+        if time.time() > t_end:
+            break
+        try:
+            txt = pdftext(get(u, tries=2, timeout=60))
+        except Exception as e:  # noqa: BLE001
+            db["docs"][u] = f"erreur {str(e)[:80]}"
+            continue
+        if len(txt.strip()) < 300:
+            db["docs"][u] = "scan sans texte"
+            note("pdffin", False, f"{t} {fy}: scan")
+            continue
+        found, unit = fin_parse(txt)
+        div_ = fin_scale(found, unit, ref_ca(t, fy))
+        if not found or div_ is None:
+            db["docs"][u] = "postes introuvables" if not found else "échelle incertaine"
+            note("pdffin", False, f"{t} {fy}: {db['docs'][u]}")
+            continue
+        cur, prev = fin_record(found, div_)
+        tt = db["t"].setdefault(t, {})
+        for y, r in ((fy, cur), (fy - 1, prev)):
+            if r and (str(y) not in tt or y == fy):
+                tt[str(y)] = dict(r, src=u)
+        db["docs"][u] = "ok"
+        note("pdffin")
+    save(path, db)
+
+
 # ---------------------------------------------------------------- consensus des analystes (Nasdaq)
 def us_equities(out):
     nd = os.path.join(out, "nasdaq_meta.json")
@@ -1107,6 +1248,39 @@ def run_watch(raw, site_data):
     if fresh or sec_new:
         news["feeds"]["brvm-rapports"], news["feeds"]["sec"] = "brvm.org", "SEC EDGAR"
         save(np_, news)
+    # états financiers publiés à l'instant : comptes lus tout de suite (si pdftotext est disponible)
+    import shutil
+    newfs = [r for r in fresh if re.search(r"etats? financiers", _nrm(r["ti"])) and st["issuers"].get(r["slug"], {}).get("t")]
+    if newfs and not shutil.which("pdftotext"):
+        os.system("sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1")
+    if newfs and shutil.which("pdftotext"):
+        pp = os.path.join(raw, "pdf_fin.json")
+        db = json.load(open(pp, encoding="utf8")) if os.path.exists(pp) else {"t": {}, "docs": {}}
+        for r in newfs:
+            t = st["issuers"][r["slug"]]["t"]
+            m = re.search(r"(20\d\d)", re.sub(r"^.*exercice", "", _nrm(r["ti"])))
+            if not m:
+                continue
+            fy = int(m.group(1))
+            try:
+                found, unit = fin_parse(pdftext(get(r["u"], tries=2, timeout=60)))
+                tt = db["t"].get(t, {})
+                ref = None
+                for yy in sorted(tt, reverse=True):
+                    if tt[yy].get("rev"):
+                        ref = tt[yy]["rev"]
+                        break
+                div_ = fin_scale(found, unit, ref)
+                if found and div_:
+                    cur, prev = fin_record(found, div_)
+                    db["t"].setdefault(t, {})[str(fy)] = dict(cur, src=r["u"])
+                    db["t"][t].setdefault(str(fy - 1), dict(prev, src=r["u"]))
+                    db["docs"][r["u"]] = "ok"
+                    note("watch-pdf")
+            except Exception as e:  # noqa: BLE001
+                note("watch-pdf", False, f"{t}: {e}")
+        save(pp, db)
+        open(os.path.join(raw, ".dirty"), "a").write(" pdf")
     # comptes SEC rafraîchis tout de suite pour les sociétés qui viennent de déposer
     dirty = sorted({r["t"] for r in sec_new if r["form"] in ("10-Q", "10-K", "20-F", "6-K")})
     if dirty and co:
@@ -1245,7 +1419,7 @@ def main():
     steps = [("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
-             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("watch", lambda: run_watch(a.out, a.site))]
+             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

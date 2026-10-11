@@ -87,6 +87,11 @@ jobs:
         continue-on-error: true
         run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,probe,boc
 
+      - name: Comptes BRVM sur 10 exercices (archives SikaFinance, états financiers publiés)
+        if: steps.mode.outputs.mode == 'eod'
+        continue-on-error: true
+        run: timeout 1500 python3 scripts/fetch_extra.py --out /tmp/raw --only sikah,pdffin
+
       - name: Comptes SEC et consensus des analystes (EOD)
         if: steps.mode.outputs.mode == 'eod'
         continue-on-error: true

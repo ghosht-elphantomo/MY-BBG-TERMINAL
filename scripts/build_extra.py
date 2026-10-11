@@ -811,7 +811,8 @@ def brvm_company(sid, s, fd_, fcf, dps_hist, b, tax):
         Y["ocf"].append(cfo)
         Y["capex"].append(cap if cfo is not None else None)
         Y["fcf"].append(f_)
-    Y["dps"] = [dps_hist.get(y) for y in yrs]
+    Y["dps"] = [dps_hist.get(y) or gv("dividende", y) for y in yrs]
+    Y["src"] = [(fd_ or {}).get("src_years", {}).get(str(y)) for y in yrs]
     Y["payout"] = [div0(Y["dps"][i], Y["eps"][i]) if Y["eps"][i] and Y["eps"][i] > 0 else None for i in range(len(yrs))]
     sh = s.get("shares")
     Y["fpay"] = [div0((Y["dps"][i] or 0) * sh / M, Y["fcf"][i]) if Y["dps"][i] and sh and Y["fcf"][i] and Y["fcf"][i] > 0 else None for i in range(len(yrs))]
