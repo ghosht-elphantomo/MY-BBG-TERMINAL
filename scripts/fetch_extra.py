@@ -743,7 +743,7 @@ def run_boc(out):
         for url in (f"https://bfin.brvm.org/boc/BOC_JOUR/BOC_{k}.pdf", f"https://www.brvm.org/sites/default/files/boc_{k}_2.pdf",
                     f"https://www.brvm.org/sites/default/files/boc_{k}.pdf"):
             try:
-                b = get(url, tries=1, timeout=40)
+                b = get(url, tries=1, timeout=20)
                 if b[:4] != b"%PDF":
                     continue
                 txt = pdftext(b)
@@ -776,7 +776,7 @@ def run_boc(out):
         m += 1
         if m > 12:
             y, m = y + 1, 1
-    todo = todo[::-1][:30]
+    todo = todo[::-1][:14]
 
     def month(ym):
         y, m = ym
@@ -970,7 +970,7 @@ def main():
     steps = [("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
-             ("boc", lambda: run_boc(a.out)), ("probe", lambda: run_probe(a.out))]
+             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

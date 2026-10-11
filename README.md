@@ -35,10 +35,22 @@ Environ 112 séries, 320 000 lignes de cours, 7 200 avis, 328 dividendes.
 
 ## Circulation
 
-1. `.github/workflows/terminal.yml` relève les cours toutes les 30 min de 09:00 à 12:30 UTC et toutes les 15 min de 13:00 à 20:45 UTC, puis reconstruit toute la base à 22:35 UTC (lun-ven).
-2. Chaque passage réécrit la branche **`site`** : site complet et autonome (`index.html` + `data/`), donc le dépôt ne grossit pas. La séance BRVM est archivée chaque soir dans `seed/brvm_daily.csv`.
-3. Page claude.ai : une tâche planifiée recopie `data/live.json` et `data/quotes.json` dans la base de la page ; le bouton **SYNC** lance la copie tout de suite.
-4. Hébergement statique au choix : GitHub Pages sur la branche `site` (dépôt public ou compte Pro), ou Vercel, qui déploie automatiquement la branche.
+1. `.github/workflows/terminal.yml` relève les cours toutes les **15 minutes** de 09:00 à 20:45 UTC en semaine (séance BRVM puis séance US), toutes les heures le reste du temps (actualités, crypto), et reconstruit toute la base à 22:35 UTC.
+2. Chaque passage écrit la branche **`site`** : site complet et autonome (`index.html` + `data/`). En séance, seuls les fichiers modifiés partent (cours, séance, actualités) ; le soir, la branche est réécrite.
+3. Les données brutes (historiques Nasdaq, comptes SEC, bulletins BRVM…) vivent sur la branche **`raw`**, reprise à chaque soir pour ne relire que les dernières semaines.
+4. La page publiée relit `data/live.json` et `data/quotes.json` toutes les 5 minutes : aucun service extérieur à GitHub et à l'hébergeur n'est nécessaire.
+
+## Hébergement Vercel (mise à jour automatique)
+
+Une seule fois, sur vercel.com :
+
+1. **Add New → Project → Import** le dépôt `MY-BBG-TERMINAL` (autoriser l'application Vercel sur ce dépôt).
+2. Framework : **Other**. Build Command : vide. Output Directory : vide (racine).
+3. Après la création : **Settings → Git → Production Branch** = `site`, puis **Deployments → Redeploy** du dernier commit de `site`.
+
+Ensuite, chaque écriture de la branche `site` par GitHub Actions déclenche un déploiement (≈ 50 par jour de semaine, sous la limite de 100 du plan gratuit). Les branches `main` et `raw` ne sont pas déployées (`vercel.json`). Les fichiers `data/` sont servis sans cache.
+
+Minutes GitHub Actions : avec ce rythme, compter ≈ 3 000 minutes par mois. Un dépôt **public** a des minutes illimitées ; un dépôt privé du plan gratuit en a 2 000 (au-delà, les relevés s'arrêtent jusqu'au mois suivant).
 
 ## Fichiers
 
@@ -61,7 +73,5 @@ python3 scripts/build_terminal.py --brvm-src /tmp/brvmsrc --out /tmp/qsite/data 
 python3 build.py && cp index.html /tmp/qsite/
 python3 -m http.server -d /tmp/qsite 8000      # http://localhost:8000
 ```
-
-Coût Actions : environ 40 passages par jour ouvré (~900 min/mois), en plus du workflow FOFCO BRVM. Illimité si le dépôt est public.
 
 Les données de marché restent la propriété de leurs sources. Outil d'analyse personnel, pas un conseil en investissement.

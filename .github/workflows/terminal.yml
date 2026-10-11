@@ -7,8 +7,9 @@ name: Terminal
 # Heures UTC, lun-ven : BRVM 09:00-15:30, Nasdaq 13:30-20:00.
 on:
   schedule:
-    - cron: "*/30 9-12 * * 1-5"    # matinée BRVM
-    - cron: "*/15 13-20 * * 1-5"   # séance US (+ fin de séance BRVM)
+    - cron: "*/15 9-20 * * 1-5"    # toutes les 15 min : séance BRVM (09:00-15:30 UTC) et séance US (13:30-20:00 UTC)
+    - cron: "5 0-8,21-23 * * 1-5"  # hors séance : toutes les heures (actualités, crypto, cours après clôture)
+    - cron: "5 * * * 0,6"          # week-end : toutes les heures (actualités, crypto)
     - cron: "35 22 * * 1-5"        # EOD : base complète
   workflow_dispatch:
     inputs:
@@ -19,7 +20,7 @@ on:
         default: eod
   push:
     branches: [main]
-    paths: ["web/**", "scripts/**", "build.py", "index.html", ".github/workflows/terminal.yml"]
+    paths: ["web/**", "scripts/**", "build.py", "index.html", "vercel.site.json", ".github/workflows/terminal.yml"]
 
 permissions:
   contents: write
@@ -41,8 +42,13 @@ jobs:
           MODE=live
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then MODE="${{ inputs.mode }}"; fi
           if [ "${{ github.event.schedule }}" = "35 22 * * 1-5" ]; then MODE=eod; fi
-          if [ "${{ github.event_name }}" = "push" ]; then MODE=eod; fi
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # code des pages seulement : republier la page ; scripts de collecte modifiés : base complète
+            git fetch -q --depth 1 origin "${{ github.event.before }}" 2>/dev/null || true
+            if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" 2>/dev/null | grep -qE '^(scripts/|\.github/)'; then MODE=eod; fi
+          fi
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          echo "Mode : $MODE"
 
       - name: Restaurer le site précédent (branche site)
         run: |
@@ -97,6 +103,7 @@ jobs:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd /tmp/raw
+          printf '{"git":{"deploymentEnabled":false}}\n' > vercel.json
           rm -rf .git
           git init -q -b raw
           git config user.name "fqt-bot"
@@ -105,21 +112,26 @@ jobs:
           git commit -qm "Brut $(date -u +'%d/%m/%Y %H:%M') UTC" || exit 0
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" raw
 
-      - name: Publier sur la branche site
+      - name: Publier sur la branche site (déployée par Vercel)
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: ${{ steps.mode.outputs.mode }}
         run: |
           cp index.html /tmp/site/index.html
           touch /tmp/site/.nojekyll
-          printf '{"headers":[{"source":"/data/(.*)","headers":[{"key":"Cache-Control","value":"no-store"}]},{"source":"/(.*)","headers":[{"key":"X-Robots-Tag","value":"noindex, nofollow"}]}]}\n' > /tmp/site/vercel.json
-          cd /tmp/site
-          rm -rf .git
+          cp vercel.site.json /tmp/site/vercel.json
+          URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          export GIT_DIR=/tmp/pub.git GIT_WORK_TREE=/tmp/site
+          rm -rf "$GIT_DIR" /tmp/site/.git
           git init -q -b site
           git config user.name "fqt-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # séance : nouveau commit au-dessus du précédent (seuls les fichiers modifiés sont envoyés) ; soir : historique remis à zéro
+          ONTOP=0
+          if [ "$MODE" != "eod" ] && git fetch -q --depth 1 "$URL" site; then git reset -q FETCH_HEAD && ONTOP=1; fi
           git add -A
-          git commit -qm "Données $(date -u +'%d/%m/%Y %H:%M') UTC"
-          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" site
+          git commit -qm "Données $(date -u +'%d/%m/%Y %H:%M') UTC" || { echo "Rien de nouveau"; exit 0; }
+          if [ "$ONTOP" = 1 ]; then git push -q "$URL" HEAD:site || git push -q -f "$URL" HEAD:site; else git push -q -f "$URL" HEAD:site; fi
 
       - name: Archiver la séance BRVM sur main (EOD)
         if: steps.mode.outputs.mode == 'eod'

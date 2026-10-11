@@ -187,7 +187,7 @@ function renderStatus() {
   const L = Q.live && Q.live.qqq, ss = Q.sum.session;
   $('status').innerHTML = `<span>Données au <b>${fd(Q.sum.asof)}</b> · ${Q.sum.secs.length} titres · séance BRVM <b>${ss ? fds(ss.asof) : '—'}</b>${L ? ` · QQQ <b>${num(L.price, 2)}</b> (${L.state === 'REGULAR' ? 'séance' : L.state === 'CLOSED' ? 'clôturé' : L.state}, ${new Date(L.time * 1000).toISOString().slice(11, 16)} UTC)` : ''}</span>
     <span>Ticker + <b>Entrée</b> : menu du titre · ticker + <b>espace</b> : ses fonctions · graphiques : trackpad / molette, double-clic = vue initiale</span>
-    <span>Sources : Yahoo Finance · brvm.org · BRVMetrics · datasets.io — outil d'analyse, pas un conseil en investissement</span>`;
+    <span>Sources : brvm.org · BRVMetrics · SikaFinance · Nasdaq · Yahoo Finance · SEC · FRED · CBOE · CNN · Coinbase · Banque mondiale · datasets.io — outil d'analyse, pas un conseil en investissement</span>`;
 }
 function clocks() { const z = [['ABJ', 'Africa/Abidjan'], ['PAR', 'Europe/Paris'], ['NY', 'America/New_York'], ['TPE', 'Asia/Taipei']];
   const t = () => { $('clocks').innerHTML = z.map(([k, tz]) => `<span>${k} <b>${new Date().toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: k === 'ABJ' ? '2-digit' : undefined })}</b></span>`).join(''); };
@@ -201,12 +201,14 @@ function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hi
 async function initFeed() {
   if (!window.claude || !window.claude.use) { setInterval(pollStatic, 5 * 60 * 1000); return; }
   let db = null; try { db = await window.claude.use('db'); } catch (e) { } if (!db) return;
-  const apply = () => { applyQuotes(); for (const p of Object.values(Q.ser)) p.then(applyQuoteToSeries); Q.M = {}; feedState(); renderSecbar(); renderStatus(); if (['MON', 'BRVM'].includes(ST.fn)) render(); };
+  const apply = () => { applyQuotes(); for (const p of Object.values(Q.ser)) p.then(applyQuoteToSeries); Q.M = {}; feedState(); renderSecbar(); renderStatus(); if (['MON', 'BRVM', 'IMAP', 'US'].includes(ST.fn)) render(); };
   try { db.doc('feed/live').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.live || (d.ts || 0) >= (Q.live.ts || 0)) { Q.live = d; apply(); } } }, () => { }); } catch (e) { }
   try { db.doc('feed/quotes').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.quotes || (d.ts || 0) >= (Q.quotes.ts || 0)) { Q.quotes = d; apply(); } } }, () => { }); } catch (e) { }
+  try { db.doc('feed/news').onSnapshot(async sn => { if (!sn.exists) return; const d = sn.data(); const cur = await (Q.json['news.json'] || Promise.resolve(null)).catch(() => null);
+    if (!cur || (d.ts || 0) > (cur.ts || 0)) { Q.json['news.json'] = Promise.resolve(d); if (['TOP', 'CN'].includes(ST.fn)) render(); } }, () => { }); } catch (e) { }
 }
 async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.base + 'live.json?t=' + Date.now()).then(r => r.ok ? r.json() : null), fetch(Q.base + 'quotes.json?t=' + Date.now()).then(r => r.ok ? r.json() : null)]);
-  if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } feedState(); renderSecbar(); renderStatus(); if (['MON', 'BRVM'].includes(ST.fn)) render(); } catch (e) { } }
+  if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSecbar(); renderStatus(); if (['MON', 'BRVM', 'IMAP', 'US', 'TOP'].includes(ST.fn)) render(); } catch (e) { } }
 async function initSync() {
   if (!/^trig_/.test(TRIGGER_ID) || !window.claude || !window.claude.use) return; let mcp = null; try { mcp = await window.claude.use('mcp'); } catch (e) { } if (!mcp) return;
   const b = $('syncBtn'); b.hidden = false;
