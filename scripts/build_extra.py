@@ -64,8 +64,13 @@ def futures_ok(path):
     if not b or len(b.get("d", [])) < 250:
         return None
     d = b["d"]
-    big = sum(1 for x, y in zip(d, d[1:]) if (dt.date(y // 10000, y // 100 % 100, y % 100) - dt.date(x // 10000, x // 100 % 100, x % 100)).days > 7)
-    return b if big <= 5 else None
+    gap = [(dt.date(y // 10000, y // 100 % 100, y % 100) - dt.date(x // 10000, x // 100 % 100, x % 100)).days > 7 for x, y in zip(d, d[1:])]
+    if sum(gap) <= 5:
+        return b
+    k = max(i for i, g in enumerate(gap) if g) + 1  # points mensuels en tête : on garde la partie quotidienne
+    if len(d) - k < 250:
+        return None
+    return {key: (v[k:] if isinstance(v, list) and len(v) == len(d) else v) for key, v in b.items()}
 
 
 def ingest(extra, add, have, log):
