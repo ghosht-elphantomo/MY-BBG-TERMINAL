@@ -233,6 +233,43 @@ def ret_n(c, n):
     return [None if i < n or not c[i - n] else c[i] / c[i - n] - 1 for i in range(len(c))]
 
 
+def brvm_breadth(files, ids, grid, shares, W=20):
+    """BRVM (titres peu liquides) : part des actions ayant touché un plus haut 52 sem. dans les W dernières séances − part ayant
+    touché un plus bas (sans exiger une hausse le jour même : beaucoup de titres ne cotent pas tous les jours) ;
+    part de la capitalisation au-dessus de la moyenne 50 séances (la cote est très concentrée : Sonatel et Orange CI)."""
+    n = len(grid)
+    pos = {g: i for i, g in enumerate(grid)}
+    nh, nl, el, a50c, capt, n50 = ([0.0] * n for _ in range(6))
+    for sid in ids:
+        b = files.get(sid)
+        if not b or len(b["c"]) < 60:
+            continue
+        d, c = b["d"], b["c"]
+        mx, mn, s50 = roll_ext(c, 252, max), roll_ext(c, 252, min), sma_list(c, 50)
+        sh = shares.get(sid) or 0
+        lastH = lastL = -10 ** 9
+        for i in range(1, len(c)):
+            if mx[i] is not None:
+                if c[i] >= mx[i] and c[i] > mn[i]:
+                    lastH = i
+                if c[i] <= mn[i] and c[i] < mx[i]:
+                    lastL = i
+            k = pos.get(d[i])
+            if k is None:
+                continue
+            if mx[i] is not None:
+                el[k] += 1
+                nh[k] += (i - lastH) < W
+                nl[k] += (i - lastL) < W
+            if s50[i] is not None:
+                n50[k] += 1
+                if sh:
+                    capt[k] += sh * c[i]
+                    a50c[k] += sh * c[i] * (c[i] > s50[i])
+    return {"nhl": [(nh[i] - nl[i]) / el[i] if el[i] >= 8 else None for i in range(n)],
+            "a50c": [a50c[i] / capt[i] if capt[i] > 0 and n50[i] >= 8 else None for i in range(n)]}
+
+
 def universe_stats(files, ids, grid, want_flux=False):
     """Largeur d'un univers de titres sur la grille de dates : plus hauts/bas 52 sem., part au-dessus de la MM50,
     volume des hausses moins des baisses, RSI > 70 / < 30, flux de capitaux."""
@@ -477,20 +514,24 @@ def fg(extra, out, files, ndx, us_ids, brvm_ids, dmeta, shares, F, log):
         c = B["c"][k0:]
         sma125 = sma_list(B["c"], 125)[k0:]
         comps = {"mom": {"n": "Momentum : BRVM Composite contre sa moyenne 125 séances", "src": "BRVM", "raw": [c[i] / sma125[i] - 1 if sma125[i] else None for i in range(len(grid))]}}
+        mx52 = roll_ext(B["c"], 252, max)[k0:]
+        comps["top"] = {"n": "Sommet : BRVM Composite contre son plus haut 52 semaines", "src": "BRVM", "raw": [c[i] / mx52[i] - 1 if mx52[i] else None for i in range(len(grid))]}
         U = universe_stats(files, brvm_ids, grid)
-        comps["str"] = {"n": f"Force : plus hauts − plus bas 52 sem. ({len(brvm_ids)} actions)", "src": "BRVM", "raw": U["nhl"]}
-        comps["brd"] = {"n": "Largeur : part des actions au-dessus de leur moyenne 50 séances", "src": "BRVM", "raw": U["a50"]}
+        UB = brvm_breadth(files, brvm_ids, grid, shares)
+        comps["str"] = {"n": f"Force : plus hauts − plus bas 52 sem. touchés en 20 séances ({len(brvm_ids)} actions)", "src": "BRVM", "raw": UB["nhl"]}
+        comps["brd"] = {"n": "Largeur : part de la capitalisation au-dessus de sa moyenne 50 séances", "src": "BRVM", "raw": UB["a50c"]}
         fl = []
         for i in range(len(grid)):
             a, b = max(0, i - 19), i + 1
             up, dn, tot = sum(U["uv"][a:b]), sum(U["dv"][a:b]), sum(U["tot"][a:b])
             fl.append((up - dn) / tot if tot > 0 and i >= 19 else None)
         comps["flux"] = {"n": "Flux : montants échangés en hausse − en baisse sur 20 séances", "src": "BRVM", "raw": fl}
+        # volatilité baissière (semi-écart des seules baisses) : une forte hausse n'est pas un signe de peur
         lr = [math.log(B["c"][i] / B["c"][i - 1]) if i and B["c"][i - 1] > 0 else 0 for i in range(len(B["c"]))]
-        v20 = [statistics.pstdev(lr[i - 19:i + 1]) if i >= 19 else None for i in range(len(lr))]
-        v250 = sma_list(v20, 250)
-        vr = [v20[i] / v250[i] - 1 if v20[i] and v250[i] else None for i in range(len(lr))][k0:]
-        comps["vol"] = {"n": "Volatilité : 20 séances contre sa moyenne 250 séances", "src": "BRVM", "inv": True, "raw": vr}
+        dsd = [math.sqrt(sum(min(x, 0) ** 2 for x in lr[i - 19:i + 1]) / 20) if i >= 19 else None for i in range(len(lr))]
+        d250 = sma_list(dsd, 250)
+        vr = [dsd[i] / d250[i] - 1 if dsd[i] is not None and d250[i] else None for i in range(len(lr))][k0:]
+        comps["vol"] = {"n": "Volatilité baissière : 20 séances contre sa moyenne 250 séances", "src": "BRVM", "inv": True, "raw": vr}
         comps["rsi"] = {"n": "Surachat : part RSI > 70 − part RSI < 30", "src": "BRVM", "raw": U["rsi"]}
         # rendement du dividende du marché (12 mois glissants, pondéré par les capitalisations)
         ev = collections.defaultdict(list)
@@ -521,10 +562,10 @@ def fg(extra, out, files, ndx, us_ids, brvm_ids, dmeta, shares, F, log):
             first = min((d_ for v in ev.values() for d_, _ in v), default=99999999)
             yl = [num_[i] / den[i] if den[i] > 0 and grid[i] >= addays(first, 365) else None for i in range(len(grid))]
             comps["yld"] = {"n": "Valorisation : rendement du dividende du marché (12 mois)", "src": "BRVM (dividendes)", "inv": True, "raw": yl}
-        for k, cdef in comps.items():
-            cdef["s"] = zscore_scores(cdef["raw"], 250, cdef.get("inv", False))
+        for k, cdef in comps.items():  # marché aux cycles longs (baisse 2016-2020, hausse 2021-2026) : distribution sur 10 ans
+            cdef["s"] = zscore_scores(cdef["raw"], 2500, cdef.get("inv", False))
         score = compose(comps, grid, 4)
-        res["brvm"] = {"d": grid, "score": [r_(x, 1) for x in score],
+        res["brvm"] = {"d": grid, "win": 2500, "score": [r_(x, 1) for x in score],
                        "comp": {k: {"n": cd["n"], "src": cd["src"], "inv": cd.get("inv", False), "raw": [r_(x, 5) for x in cd["raw"]], "s": [r_(x, 1) for x in cd["s"]]} for k, cd in comps.items()}}
     if res:
         jsave(os.path.join(out, "fg.json"), res)
