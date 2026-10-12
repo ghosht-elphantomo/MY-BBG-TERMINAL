@@ -1142,6 +1142,7 @@ def run_boc(out):
 
 # ---------------------------------------------------------------- bulletins officiels de la cote : tableau des 48 actions, jour par jour
 BOC_COLS = ("prev", "o", "c", "var", "vol", "val", "ref", "ytd", "div", "div_d", "yld", "per")
+BOC_V = 2  # version du lecteur de bulletins
 
 
 def run_bochist(out):
@@ -1154,7 +1155,10 @@ def run_bochist(out):
     os.makedirs(d_dir, exist_ok=True)
     ip = os.path.join(d_dir, "_index.json")
     idx = json.load(open(ip, encoding="utf8")) if os.path.exists(ip) else {"done": [], "miss": []}
-    done, miss = set(idx["done"]), set(idx["miss"])
+    done, miss, bad = set(idx["done"]), set(idx["miss"]), set(idx.get("bad", []))
+    if idx.get("v") != BOC_V:  # lecteur amélioré : les bulletins illisibles sont relus
+        miss -= bad
+        bad = set()
     years = {}
 
     def year(y):
@@ -1170,38 +1174,49 @@ def run_bochist(out):
             todo.append(d)
         d -= dt.timedelta(days=1)
 
+    samples = {}
+
     def one(day):
         k = day.strftime("%Y%m%d")
+        got_pdf = False
         for url in (f"https://bfin.brvm.org/boc/BOC_JOUR/BOC_{k}.pdf", f"https://www.brvm.org/sites/default/files/boc_{k}_2.pdf",
                     f"https://www.brvm.org/sites/default/files/boc_{k}.pdf"):
             try:
                 b = get(url, tries=1, timeout=25)
                 if b[:4] != b"%PDF":
                     continue
-                rows = boc_stocks(pdftext(b))
+                got_pdf = True
+                txt = pdftext(b)
+                rows = boc_stocks(txt)
                 if len(rows) >= 15:
                     return k, rows
+                samples.setdefault(k[:4], txt[:40000])  # mise en page à apprendre
             except Exception:  # noqa: BLE001
                 continue
-        return k, None
+        return k, ("bad" if got_pdf else None)
     n_ok = n_miss = 0
     with ThreadPoolExecutor(4) as ex:
         for i in range(0, len(todo), 16):
             if time.time() - t0 > budget:
                 break
             for k, rows in ex.map(one, todo[i:i + 16]):
-                if rows:
+                if isinstance(rows, dict):
                     year(k[:4])[k] = {sym: [r.get(c) for c in BOC_COLS] for sym, r in rows.items()}
                     done.add(k)
                     miss.discard(k)
                     n_ok += 1
                 else:
                     miss.add(k)
+                    if rows == "bad":
+                        bad.add(k)
                     n_miss += 1
     for y, v in years.items():
         save(os.path.join(d_dir, f"{y}.json"), dict(sorted(v.items())))
-    save(ip, {"cols": BOC_COLS, "done": sorted(done), "miss": sorted(miss), "first": min(done) if done else None, "last": max(done) if done else None,
-              "left": max(0, len(todo) - n_ok - n_miss), "ts": int(time.time())})
+    for y, t in samples.items():
+        os.makedirs(os.path.join(d_dir, "_samples"), exist_ok=True)
+        open(os.path.join(d_dir, "_samples", f"{y}.txt"), "w", encoding="utf8").write(t)
+    save(ip, {"v": BOC_V, "cols": BOC_COLS, "done": sorted(done), "miss": sorted(miss), "bad": sorted(bad), "first": min(done) if done else None,
+              "last": max(done) if done else None, "left": max(0, len(todo) - n_ok - n_miss), "ts": int(time.time())})
     if n_ok:
         note("bochist")
     else:
@@ -2155,9 +2170,8 @@ def run_fut(out):
     for sid, sym in FUT_Y:
         p = os.path.join(out, "futures", sid + ".json")
         old = json.load(open(p, encoding="utf8")) if os.path.exists(p) else None
-        if old and len(old.get("d", [])) > 20:  # relevé précédent mensuel (range=max) : écarté
-            gaps = sorted((i2d(b_) - i2d(a_)).days for a_, b_ in zip(old["d"][-40:], old["d"][-39:]))
-            if gaps[len(gaps) // 2] > 5:
+        if old and len(old.get("d", [])) > 20:  # relevé précédent contenant des points mensuels (range=max) : écarté en entier
+            if sum(1 for a_, b_ in zip(old["d"], old["d"][1:]) if (i2d(b_) - i2d(a_)).days > 7) > 5:
                 old = None
         p1 = int(time.time()) - 2 * 366 * 86400 if old else 946684800  # 2000-01-01 : quotidien garanti avec period1/period2
         j, err = None, None
@@ -2185,8 +2199,7 @@ def run_fut(out):
                 o, h, lo, v = qd["open"][i] or c, qd["high"][i] or c, qd["low"][i] or c, qd["volume"][i] or 0
                 rows[d] = (round(o, 4), round(max(h, c, o), 4), round(min(lo, c, o), 4), round(c, 4), int(v))
             ks = sorted(rows)
-            gaps = sorted((i2d(b_) - i2d(a_)).days for a_, b_ in zip(ks[-60:], ks[-59:]))
-            if len(ks) < 250 or gaps[len(gaps) // 2] > 5:
+            if len(ks) < 250 or sum(1 for a_, b_ in zip(ks, ks[1:]) if (i2d(b_) - i2d(a_)).days > 7) > 5:
                 raise ValueError(f"historique non quotidien ({len(ks)} points)")
             save(p, {"sym": sym, "src": "Yahoo Finance (contrat 1er mois en continu)", "d": ks, "o": [rows[k][0] for k in ks], "h": [rows[k][1] for k in ks],
                      "l": [rows[k][2] for k in ks], "c": [rows[k][3] for k in ks], "v": [rows[k][4] for k in ks]})

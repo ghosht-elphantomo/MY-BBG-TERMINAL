@@ -63,9 +63,9 @@ def futures_ok(path):
     b = jload(path) if path and os.path.exists(path) else None
     if not b or len(b.get("d", [])) < 250:
         return None
-    d = b["d"][-60:]
-    gaps = sorted((dt.date(y // 10000, y // 100 % 100, y % 100) - dt.date(x // 10000, x // 100 % 100, x % 100)).days for x, y in zip(d, d[1:]))
-    return b if gaps[len(gaps) // 2] <= 5 else None
+    d = b["d"]
+    big = sum(1 for x, y in zip(d, d[1:]) if (dt.date(y // 10000, y // 100 % 100, y % 100) - dt.date(x // 10000, x // 100 % 100, x % 100)).days > 7)
+    return b if big <= 5 else None
 
 
 def ingest(extra, add, have, log):
