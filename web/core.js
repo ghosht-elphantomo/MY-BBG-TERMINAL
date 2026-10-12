@@ -74,7 +74,7 @@ function avail(code, s) {
   if (['EE', 'SURP'].includes(code)) return brvm ? 'aucun consensus d’analystes public pour la BRVM' : s.mkt === 'US' && eq ? (s.ee === false ? 'pas de consensus publié pour ce titre' : null) : 'réservé aux actions US';
   if (code === 'DVD' || code === 'DDM') return s.cls === 'Equity' || s.typ === 'ETF' ? null : 'pas de dividende';
   if (code === 'BTST' || code === 'QLAB' || code === 'ANOM') return s.f === 'D' ? null : 'série mensuelle';
-  if (code === 'HDS') return brvm && eq ? null : eq ? 'actionnariat publié uniquement pour les sociétés de la BRVM (SikaFinance)' : 'réservé aux actions';
+  if (code === 'HDS') return brvm && eq ? null : eq ? 'actionnariat publié uniquement pour les sociétés de la BRVM' : 'réservé aux actions';
   if (code === 'SCOR' || code === 'PEER') return eq && (brvm || s.fa) ? null : 'réservé aux actions dont les comptes sont disponibles';
   if (code === 'LQA') return s.cls === 'Equity' && s.f === 'D' ? null : 'réservé aux actions et ETF';
   if (code === 'TRA') return s.f === 'D' ? null : 'série mensuelle';
@@ -275,7 +275,8 @@ async function renderNews() {
   $('nwTop').onclick = () => go('TOP'); $('nwMin').onclick = () => { ST.newsMin = !ST.newsMin; try { localStorage.setItem('fqt.newsMin', ST.newsMin ? '1' : ''); } catch (e) { } renderNews().then(() => window.dispatchEvent(new Event('resize'))); };
   p.querySelectorAll('[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
 }
-function srcCode(x) { const s = (x.s || x.f || '').toLowerCase();
+const hideSrc = x => /brvm|sika/i.test((x.s || '') + ' ' + (x.f || '') + ' ' + (x.u || ''));
+function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (hideSrc(x)) return '';
   const M = [['brvm', 'BRVM'], ['sika', 'SIKA'], ['sec.gov', 'SEC'], ['edgar', 'SEC'], ['reuters', 'RTRS'], ['bloomberg', 'BBG'], ['zonebourse', 'ZB'], ['boursorama', 'BOURSO'], ['les echos', 'ECHOS'], ['jeune afrique', 'JA'], ['financial afrik', 'FAFRIK'], ['financialafrik', 'FAFRIK'], ['agence ecofin', 'ECOFIN'], ['ecofin', 'ECOFIN'], ['bceao', 'BCEAO'], ['fed', 'FED'], ['cnbc', 'CNBC'], ['marketwatch', 'MW'], ['yahoo', 'YHOO'], ['nasdaq', 'NDAQ'], ['lefigaro', 'FIGARO'], ['le monde', 'MONDE'], ['abidjan', 'ABJ.NET'], ['apa', 'APA'], ['afp', 'AFP']];
   for (const [k, v] of M) if (s.includes(k)) return v; return (x.s || 'WEB').replace(/^www\./, '').split(/[ .]/)[0].toUpperCase().slice(0, 6); }
 
@@ -303,7 +304,7 @@ function renderSecbar() { renderSech(); }
 function renderStatus() {
   const L = Q.live && Q.live.qqq, ss = Q.sum.session;
   $('status').innerHTML = `<span>Données au <b>${fd(Q.sum.asof)}</b> · ${Q.sum.secs.length} titres · séance BRVM <b>${ss ? fds(ss.asof) : '—'}</b>${L ? ` · QQQ <b>${num(L.price, 2)}</b> (${L.state === 'REGULAR' ? 'séance' : L.state === 'PRE' ? 'pré-marché' : L.state === 'POST' ? 'après-bourse' : L.state === 'CLOSED' ? 'clôturé' : L.state}, ${new Date(L.time * 1000).toISOString().slice(11, 16)} UTC)` : ''}</span>
-    <span>Sources : brvm.org · SikaFinance · BCEAO · UMOA-Titres · Nasdaq · SEC · FRED · CBOE · CNN · EIA · Coinbase · Banque mondiale — outil d'analyse, pas un conseil en investissement</span>`;
+    <span>Sources : BCEAO · UMOA-Titres · Nasdaq · SEC · FRED · CBOE · CNN · EIA · Coinbase · Banque mondiale — outil d'analyse, pas un conseil en investissement</span>`;
 }
 let clocksTick = () => { };
 function clocks() { const z = [['ABJ', 'Africa/Abidjan'], ['PAR', 'Europe/Paris'], ['NY', 'America/New_York'], ['TYO', 'Asia/Tokyo']];

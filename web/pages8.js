@@ -47,7 +47,7 @@ PAGES.DES = async (m, alive) => {
     const inst = P.inst, hold = P.holders;
     m.innerHTML = `<div class="pn">${head}
       <div class="desh" style="font-size:12.5px;padding-top:0;justify-content:flex-end;gap:14px"><span class="am">${P.sector || s.grp ? 'Classification' : ''}</span><span>${esc(brvm ? (s.grp || '') + (s.bank ? ' · banque' : '') : (P.sector ? P.sector + (P.ind ? ' · ' + P.ind : '') : s.grp || ''))}</span></div>
-      <div class="desd" id="desD">${P.desc ? esc(P.desc) : eq ? `<span class="dm">Description non encore collectée (fiche ${brvm ? 'SikaFinance' : 'Nasdaq'} relevée chaque soir).</span>` : esc(s.n) + ' · ' + esc(s.cls) + (s.grp ? ' · ' + esc(s.grp) : '')}</div>
+      <div class="desd" id="desD">${P.desc ? esc(P.desc) : eq ? `<span class="dm">Description non encore collectée (fiche ${brvm ? '' : 'Nasdaq '}relevée chaque soir).</span>` : esc(s.n) + ' · ' + esc(s.cls) + (s.grp ? ' · ' + esc(s.grp) : '')}</div>
       <div class="dcols">
         <div>${dsec(1, 'Graphique des cours', 'GP', s.id)}<div class="cv" id="desG" style="height:150px"></div>
           ${dkv([[`Cours / var. 1J (${esc(ccy)})`, `${px(s, last)} / ${pctS(s.pct) || '—'}`], [`Plus haut 52s (${fd(L.hiD).slice(0, 8)}${fd(L.hiD).slice(8)})`, px(s, L.hi)], [`Plus bas 52s (${fd(L.loD).slice(0, 8)}${fd(L.loD).slice(8)})`, px(s, L.lo)],
@@ -62,10 +62,10 @@ PAGES.DES = async (m, alive) => {
           ${dsec(eq ? 4 : etf ? 3 : 2, 'Rendement et risque', 'BETA', s.id)}${dkv([['Rendement total 12 mois', pctS(tr12), 'dividendes réinvestis'], [`Bêta vs ${esc(s.bench || '—')}`, nOr(s.beta, 2), 'hebdomadaire, 2 ans'], ['Écart au plus haut historique', pctS(s.dd, 1)], ['Première donnée', fd(s.first)]])}</div>
         <div>${eq ? dsec(5, 'Société', '') + dkv([P.url ? ['Site', `<a href="${esc(P.url)}" target="_blank" rel="noopener">${esc(P.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>`] : null, ['Adresse', P.addr ? esc(P.addr) : null], ['Téléphone', P.tel || P.phone ? esc(P.tel || P.phone) : null], brvm ? ['Pays', esc(Q.sum.cty[s.cty] || s.cty)] : ['Exercice clos le', P.fye ? P.fye.slice(2) + '/' + P.fye.slice(0, 2) : null],
               ['Place de cotation', brvm ? 'BRVM (Abidjan)' : esc(P.exch || 'États-Unis')]]) : ''}
-          ${eq ? dsec(6, 'Dirigeants', '') + (mg.length ? dkv(mg.slice(0, 5).map(([r, nm]) => [esc(r), esc(nm)])) : `<div class="src">${brvm ? 'Non publiés sur la fiche SikaFinance.' : 'Non collectés pour les sociétés US.'}</div>`) : ''}
+          ${eq ? dsec(6, 'Dirigeants', '') + (mg.length ? dkv(mg.slice(0, 5).map(([r, nm]) => [esc(r), esc(nm)])) : `<div class="src">${brvm ? 'Non publiés.' : 'Non collectés pour les sociétés US.'}</div>`) : ''}
           ${eq ? dsec(7, 'Actionnariat', 'HDS', s.id) + (hold && hold.length ? dkv(hold.slice(0, 4).map(([nm, p]) => [esc(nm), num(p, 2) + '%'])) : inst && inst.pct ? dkv([['Détention institutionnelle', esc(inst.pct)], ['Nombre d’institutions', inst.n ? num(+inst.n, 0) : null], inst.rows && inst.rows[0] ? ['1er détenteur', esc(inst.rows[0][0])] : null]) : '<div class="src">Actionnariat non encore collecté.</div>') : ''}</div>
       </div>
-      <div class="src">Sources : ${brvm ? 'SikaFinance (fiche société' + (P.d ? ', relevée le ' + fds(P.d) : '') + '), brvm.org (cours, dividendes)' : 'Nasdaq (profil, consensus Zacks, objectifs), SEC EDGAR (comptes, adresse)'} · cours ${fd(s.dt)}${s.live ? ' (séance en cours)' : ''}.</div></div>`;
+      <div class="src">${brvm ? (P.d ? 'Fiche relevée le ' + fds(P.d) : 'Fiche société') : 'Sources : Nasdaq (profil, consensus Zacks, objectifs), SEC EDGAR (comptes, adresse)'} · cours ${fd(s.dt)}${s.live ? ' (séance en cours)' : ''}.</div></div>`;
     miniBbg($('desG'), S);
     return;
   }
@@ -77,10 +77,10 @@ PAGES.DES = async (m, alive) => {
     const idxs = brvm ? ['BRVM Composite', 'BRVM 30 (si membre)', 'indice sectoriel ' + (s.grp || '')] : [s.ndx ? 'Nasdaq-100' : null].filter(Boolean);
     m.innerHTML = `<div class="pn">${head}<div class="dcols">
       <div>${dsec(1, 'Identification', '')}${dkv([['Code', esc(s.id)], ['Ticker', esc(ykey(s))], ['ISIN', P.isin ? esc(P.isin) : null], ['Place', brvm ? 'BRVM' : esc(P.exch || 'États-Unis')], ['Devise', esc(ccy)], ['Catégorie', 'Action ordinaire'], ['Pays', brvm ? esc(Q.sum.cty[s.cty] || s.cty) : esc(P.inc ? 'Constituée : ' + P.inc : 'États-Unis')], ['Statut', s.susp ? '<span class="dn">Cotation suspendue</span>' : 'Coté']])}</div>
-      <div>${dsec(2, 'Capital', 'HDS', s.id)}${dkv([['Nombre de titres', shares ? num(shares, 0) : null], ['Flottant', flt != null ? num(flt, 2) + '%' : null], ['Titres flottants', shares && flt != null ? num(shares * flt / 100, 0) : null], [`Capitalisation (${esc(ccy)})`, s.mcap ? big(s.mcap) : null], ['Capitalisation flottante', s.mcap && flt != null ? big(s.mcap * flt / 100) : null], ['Valeur d’entreprise', F.ev ? big(F.ev) : null], P.val_m ? ['Valorisation SikaFinance', big(P.val_m * 1e6)] : null])}
+      <div>${dsec(2, 'Capital', 'HDS', s.id)}${dkv([['Nombre de titres', shares ? num(shares, 0) : null], ['Flottant', flt != null ? num(flt, 2) + '%' : null], ['Titres flottants', shares && flt != null ? num(shares * flt / 100, 0) : null], [`Capitalisation (${esc(ccy)})`, s.mcap ? big(s.mcap) : null], ['Capitalisation flottante', s.mcap && flt != null ? big(s.mcap * flt / 100) : null], ['Valeur d’entreprise', F.ev ? big(F.ev) : null], P.val_m ? ['Valorisation (fiche société)', big(P.val_m * 1e6)] : null])}
         ${dsec(3, 'Indices', '')}${dkv(idxs.map(x => [esc(x), '✓']))}</div>
       <div>${dsec(4, 'Négociation', 'LQA', s.id)}${dkv([['Première donnée de cours', fd(s.first), 'début de l’historique disponible, pas la date d’introduction'], ['Volume moyen 20 séances', v20 ? num(v20, 0) : null], ['Montant moyen 60 séances', val60 ? big(val60) + ' ' + ccy : s.liq ? big(s.liq) + ' ' + ccy : null], ['Séances sans échange (60)', S.v.length >= 60 ? `${zero} / 60` : null], ['Volatilité 1 an', s.vol != null ? num(s.vol * 100, 1) + '%' : null], ['Plage 52 semaines', `${px(s, s.lo52)} – ${px(s, s.hi52)}`]])}</div></div>
-      <div class="src">Sources : ${brvm ? 'SikaFinance (ISIN, titres, flottant), brvm.org (cours, volumes)' : 'Nasdaq, SEC EDGAR'}.</div></div>`;
+      ${brvm ? '' : '<div class="src">Sources : Nasdaq, SEC EDGAR.</div>'}</div>`;
     return;
   }
   if (tab === 'r') {
@@ -155,8 +155,8 @@ PAGES.HDS = async (m, alive) => {
     setTabs([['c', 'Répartition du capital']], 'c', () => { });
     m.innerHTML = `<div class="grid c2">${pn(`${esc(s.n)} · principaux actionnaires`, 'HDS', H.length ? `<table class="t"><thead><tr><th class="l">#</th><th class="l">Actionnaire</th><th>% du capital</th><th>Titres (calculés)</th><th>Valeur au cours</th><th class="l">Type</th></tr></thead><tbody>
         ${H.map((h, i) => `<tr><td class="l">${i + 1})</td><td class="l nm">${esc(h[0])}</td><td>${num(h[1], 2)}%</td><td>${shares ? num(shares * h[1] / 100, 0) : '—'}</td><td>${s.mcap ? big(s.mcap * h[1] / 100) + ' XOF' : '—'}</td><td class="l dm">${isPub(h[0]) ? 'Public / flottant' : /etat|état|republique|république|gouvernement|tresor/i.test(h[0]) ? 'État' : /employ|salari|personnel/i.test(h[0]) ? 'Salariés' : 'Investisseur'}</td></tr>`).join('')}
-        <tr class="sep2"><td></td><td class="l">Total publié</td><td>${num(tot, 2)}%</td><td></td><td></td><td></td></tr></tbody></table>` : '<div class="empty">Répartition du capital non encore collectée (fiche SikaFinance relevée chaque soir).</div>',
-      { np: true, lect: `Source : SikaFinance, fiche société${P.d ? ' (relevée le ' + fds(P.d) + ')' : ''}. La BRVM ne publie pas de registre des actionnaires : seuls les principaux détenteurs déclarés par la société sont connus. Titres et valeurs = pourcentage × nombre de titres (${shares ? num(shares, 0) : 'n.d.'}) × cours du jour.` })}
+        <tr class="sep2"><td></td><td class="l">Total publié</td><td>${num(tot, 2)}%</td><td></td><td></td><td></td></tr></tbody></table>` : '<div class="empty">Répartition du capital non encore collectée (fiche relevée chaque soir).</div>',
+      { np: true, lect: `${P.d ? 'Fiche relevée le ' + fds(P.d) + '. ' : ''}La BRVM ne publie pas de registre des actionnaires : seuls les principaux détenteurs déclarés par la société sont connus. Titres et valeurs = pourcentage × nombre de titres (${shares ? num(shares, 0) : 'n.d.'}) × cours du jour.` })}
       ${pn('Répartition', 'HDS', '<div class="cv" id="hdsC" style="height:300px"></div>', { lect: `Flottant déclaré : <strong>${P.float != null ? num(P.float, 2) + ' %' : 'n.d.'}</strong>. ${P.float != null && H.some(h => isPub(h[0])) ? 'La ligne « public » de la répartition peut différer du flottant si la date de mise à jour n’est pas la même.' : ''}` })}</div>`;
     if (H.length) barChart($('hdsC'), { labels: H.map(h => h[0].slice(0, 12)), values: H.map(h => h[1]), fmt: v => num(v, 1) + '%', labelsOnBars: true, pos: '#3d7cc9', padB: 22 });
     return;
