@@ -48,7 +48,7 @@ a{color:var(--cyan)}
 .ac div.on,.ac div:hover{background:var(--sel)}
 .ac div.on span,.ac div:hover span{color:#fff}
 .ac div.off b,.ac div.off span{color:var(--dim2)}
-.ac .ach{display:block;padding:3px 8px;background:var(--hdr);color:#fff;font-size:11.5px;cursor:default}
+.ac .ach{display:block;margin:0;padding:2px 8px;background:var(--hdr);color:#fff;font-size:11.5px;cursor:default}
 .ac .hint{margin:0;padding:4px 8px;color:var(--dim);font-size:11px;border-top:1px solid var(--line2)}
 
 /* ---------- barre d'outils (◀ ▶, titre, fonction, fonctions associées) ---------- */
