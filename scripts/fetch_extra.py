@@ -2197,6 +2197,26 @@ def _xlsx_sheet(blob, want):
 
 def run_ei(out):
     path = os.path.join(out, "ei_oil.json")
+    # 1) Our World in Data (données de l'Energy Institute, fichier public sur GitHub) : production et consommation de pétrole en TWh
+    try:
+        rows = list(csv.DictReader(io.StringIO(get("https://raw.githubusercontent.com/owid/energy-data/master/owid-energy-data.csv", tries=2, timeout=120).decode("utf8", "replace"))))
+        res = {"src": "Energy Institute, Statistical Review of World Energy, via Our World in Data", "u": "https://github.com/owid/energy-data", "d": TODAY.isoformat()}
+        for key, col in (("prod", "oil_production"), ("cons", "oil_consumption")):
+            have = [r for r in rows if r.get(col) and (r.get("iso_code") or r["country"] == "World") and not (r.get("iso_code") or "").startswith("OWID_") or (r["country"] == "World" and r.get(col))]
+            ymax = max(int(r["year"]) for r in have)
+            years = list(range(ymax - 10, ymax + 1))
+            data = {}
+            for r in have:
+                y = int(r["year"])
+                if y in years:
+                    data.setdefault(r["country"], [None] * len(years))[years.index(y)] = round(float(r[col]), 1)
+            res[key] = {"years": years, "unit": "TWh", "rows": data}
+        if res["prod"]["rows"].get("United States"):
+            save(path, res)
+            note("ei")
+            return
+    except Exception as e:  # noqa: BLE001
+        note("ei", False, f"owid: {e}")
     for url in EI_URLS:
         try:
             blob = get(url, tries=2, timeout=120)

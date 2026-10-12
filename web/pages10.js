@@ -238,6 +238,7 @@ function gcDraw(host, lines) {
 
 /* ------------------------------------------------------------------ BMAP : carte et tableau de bord du pétrole */
 const OIL_COL = { exp: '#ff9e2b', imp: '#5fd0ea' };
+const eiv = (D, v) => v == null ? '—' : D && D.unit === 'TWh' ? num(v, 0) + ' TWh' : num(v / 1000, 2) + ' Mb/j';
 function oilFacts(CP, OIL, WP, EI) {
   const F = [], cb = OIL && OIL.curve && OIL.curve.BRENT || [], cw = OIL && OIL.curve && OIL.curve.WTI || [];
   if (cb.length > 1) { const m1 = cb[0], mL = cb.find(x => x.k === '@LCO.12') || cb[cb.length - 1], d = m1.last - mL.last;
@@ -251,7 +252,7 @@ function oilFacts(CP, OIL, WP, EI) {
   if (by.BAB && i23 >= 0) F.push(`Bab el-Mandeb : ${num(by.BAB[k], 1)} Mb/j (${CP.years[k]}) contre ${num(by.BAB[i23], 1)} en 2023 (${num((by.BAB[k] / by.BAB[i23] - 1) * 100, 0)} %) après les attaques en mer Rouge ; détour par le cap de Bonne-Espérance : ${num(by.CAP[k], 1)} Mb/j (${num(by.CAP[i23], 1)} en 2023).`);
   if (by.HOR) F.push(`Ormuz : ${num(by.HOR[k], 1)} Mb/j (${CP.years[k]}), soit ${num(by.HOR[k] / CP.world.maritime[k] * 100, 0)} % du commerce maritime mondial de pétrole.`);
   if (EI && EI.prod) { const Y = EI.prod.years, L = Y.length - 1, rows = Object.entries(EI.prod.rows).filter(([n]) => !/world|total|opec|non-opec|of which|europe$|africa$|america$|asia pacific|middle east$|cis$|oecd|european union/i.test(n)).sort((a, b) => (b[1][L] || 0) - (a[1][L] || 0));
-    if (rows.length > 2) F.push(`Premiers producteurs en ${Y[L]} : ${rows.slice(0, 3).map(([n, v]) => `${esc((CP.cty[n] || [])[2] || n)} ${num(v[L] / 1000, 1)} Mb/j`).join(', ')}.`); }
+    if (rows.length > 2) F.push(`Premiers producteurs de pétrole en ${Y[L]} : ${rows.slice(0, 3).map(([n, v]) => `${esc((CP.cty[n] || [])[2] || n)} ${eiv(EI.prod, v[L])}`).join(', ')} (Energy Institute).`); }
   return F;
 }
 PAGES.BMAP = async (m, alive) => {
@@ -311,9 +312,9 @@ PAGES.BMAP = async (m, alive) => {
     if (!EI || !EI.prod) { m.innerHTML = pn('Producteurs et consommateurs', 'BMAP', '<div class="empty">Statistiques annuelles en attente de la collecte du soir.</div>'); return; }
     const agg = /world|total|opec|non-opec|of which|europe$|africa$|america$|asia pacific|middle east$|cis$|oecd|european union|other/i;
     const tbl = (D, lab) => { const Y = D.years, L = Y.length - 1, w = (D.rows.World || D.rows['Total World'] || [])[L]; const rows = Object.entries(D.rows).filter(([n]) => !agg.test(n)).sort((a, b) => (b[1][L] || 0) - (a[1][L] || 0)).slice(0, 25);
-      return `<table class="t"><thead><tr><th class="l">${lab}</th><th>${Y[L]}</th><th>Part</th><th>Sur un an</th><th>Sur 10 ans</th><th></th></tr></thead><tbody>${rows.map(([n, v]) => `<tr><td class="l am">${esc((CP.cty[n] || [])[2] || n)}</td><td class="wh">${num(v[L] / 1000, 2)}</td><td>${w ? num(v[L] / w * 100, 1) + ' %' : '—'}</td><td>${v[L - 1] ? pc(v[L] / v[L - 1] - 1, 1) : '—'}</td><td>${v[0] ? pc(v[L] / v[0] - 1, 0) : '—'}</td><td>${sparkSVG(v, 80, 16)}</td></tr>`).join('')}${w ? `<tr class="sep2"><td class="l">Monde</td><td class="wh">${num(w / 1000, 2)}</td><td></td><td>${pc(w / (D.rows.World || D.rows['Total World'])[L - 1] - 1, 1)}</td><td></td><td></td></tr>` : ''}</tbody></table>`; };
-    m.innerHTML = `<div class="grid c2">${pn('Premiers producteurs de pétrole (Mb/j)', 'BMAP', tbl(EI.prod, 'Pays'), { np: true, lect: `Source : ${esc(EI.src)}. Production = brut, condensats, schistes, sables bitumineux et liquides de gaz naturel ; en millions de barils par jour.` })}
-      ${EI.cons ? pn('Premiers consommateurs de pétrole (Mb/j)', 'BMAP', tbl(EI.cons, 'Pays'), { np: true, lect: `Source : ${esc(EI.src)}.` }) : ''}</div>`;
+      return `<table class="t"><thead><tr><th class="l">${lab}</th><th>${Y[L]} (${D.unit === 'TWh' ? 'TWh' : 'Mb/j'})</th><th>Part</th><th>Sur un an</th><th>Sur 10 ans</th><th></th></tr></thead><tbody>${rows.map(([n, v]) => `<tr><td class="l am">${esc((CP.cty[n] || [])[2] || n)}</td><td class="wh">${D.unit === 'TWh' ? num(v[L], 0) : num(v[L] / 1000, 2)}</td><td>${w ? num(v[L] / w * 100, 1) + ' %' : '—'}</td><td>${v[L - 1] ? pc(v[L] / v[L - 1] - 1, 1) : '—'}</td><td>${v[0] ? pc(v[L] / v[0] - 1, 0) : '—'}</td><td>${sparkSVG(v, 80, 16)}</td></tr>`).join('')}${w ? `<tr class="sep2"><td class="l">Monde</td><td class="wh">${D.unit === 'TWh' ? num(w, 0) : num(w / 1000, 2)}</td><td></td><td>${pc(w / (D.rows.World || D.rows['Total World'])[L - 1] - 1, 1)}</td><td></td><td></td></tr>` : ''}</tbody></table>`; };
+    m.innerHTML = `<div class="grid c2">${pn('Premiers producteurs de pétrole', 'BMAP', tbl(EI.prod, 'Pays'), { np: true, lect: `Source : ${esc(EI.src)}. Production = brut, condensats, schistes, sables bitumineux et liquides de gaz naturel${EI.prod.unit === 'TWh' ? ', exprimée en énergie (TWh par an ; 1 Mb/j sur un an ≈ 620 TWh)' : ''}.` })}
+      ${EI.cons ? pn('Premiers consommateurs de pétrole', 'BMAP', tbl(EI.cons, 'Pays'), { np: true, lect: `Source : ${esc(EI.src)}.` }) : ''}</div>`;
     return;
   }
   /* détroits : historique */
@@ -337,7 +338,7 @@ function bmapDraw(host, G, CP, yi, lay, EI) {
   const cv = document.createElement('canvas'); host.appendChild(cv); const ctx = cv.getContext('2d');
   const byK = Object.fromEntries(CP.pts.map(p => [p.k, p])), vmax = Math.max(...CP.pts.map(p => p.v[yi])); let W = 0, H = 0, dpr = 1, land = null, t0 = performance.now(), hover = null;
   const PJ = (lon, lat) => [(lon + 180) / 360 * W, (72 - lat) / 128 * H];
-  const prod = []; if (EI && EI.prod && lay.pr) { const L = EI.prod.years.length - 1; for (const [n, v] of Object.entries(EI.prod.rows)) { const c = CP.cty[n]; if (c && v[L] > 600) prod.push({ n: c[2], lat: c[0], lon: c[1], v: v[L] / 1000, y: EI.prod.years[L] }); } }
+  const prod = []; if (EI && EI.prod && lay.pr) { const L = EI.prod.years.length - 1; const tw = EI.prod.unit === 'TWh'; for (const [n, v] of Object.entries(EI.prod.rows)) { const c = CP.cty[n]; if (c && v[L] > (tw ? 350 : 600)) prod.push({ n: c[2], lat: c[0], lon: c[1], v: v[L], u: tw ? 'TWh' : 'kb/j', y: EI.prod.years[L] }); } }
   const pmax = Math.max(1, ...prod.map(p => p.v));
   const size = () => { const r = host.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1); W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
     land = document.createElement('canvas'); land.width = cv.width; land.height = cv.height; const g = land.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#020b1a'; g.fillRect(0, 0, W, H);
@@ -346,7 +347,7 @@ function bmapDraw(host, G, CP, yi, lay, EI) {
     for (const c of G.c) for (const r of c.r) { g.beginPath(); let px0 = null; r.forEach((p, i) => { const [x, y] = PJ(p[0], p[1]); if (i && Math.abs(x - px0) > W / 2) { g.moveTo(x, y); } else i ? g.lineTo(x, y) : g.moveTo(x, y); px0 = x; }); g.closePath(); g.fill(); g.stroke(); } };
   const draw = now => { if (!document.body.contains(cv)) return; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.drawImage(land, 0, 0, W, H); const ph = ((now - t0) / 60) % 24;
     if (lay.pr) for (const p of prod) { const [x, y] = PJ(p.lon, p.lat), r = 3 + 26 * Math.sqrt(p.v / pmax); ctx.fillStyle = p === hover ? 'rgba(47,210,106,.45)' : 'rgba(47,210,106,.22)'; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(47,210,106,.7)'; ctx.lineWidth = 1; ctx.stroke();
-      if (p.v > 3.5) { ctx.font = '400 10.5px ' + MONO; ctx.fillStyle = '#9fe8b9'; ctx.textAlign = 'center'; ctx.fillText(`${p.n} ${num(p.v, 1)}`, x, y + r + 11); } }
+      if (p.v > pmax * .3) { ctx.font = '400 10.5px ' + MONO; ctx.fillStyle = '#9fe8b9'; ctx.textAlign = 'center'; ctx.fillText(p.n, x, y + r + 11); } }
     if (lay.rt) for (const rt of CP.routes) { const v = Math.max(...rt.via.map(k => byK[k].v[yi])); const lw = 1 + 7 * v / vmax; ctx.strokeStyle = 'rgba(249,163,58,.28)'; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.beginPath(); rt.p.forEach((p, i) => { const [x, y] = PJ(p[0], p[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,214,140,.85)'; ctx.lineWidth = Math.max(1, lw / 3); ctx.setLineDash([3, 21]); ctx.lineDashOffset = -ph; ctx.stroke(); ctx.setLineDash([]); }
     if (lay.pp) for (const pl of CP.pipes || []) { ctx.strokeStyle = pl === hover ? '#9be7ff' : '#5fd0ea'; ctx.lineWidth = 2.2; ctx.setLineDash([5, 4]); ctx.beginPath(); pl.p.forEach((p, i) => { const [x, y] = PJ(p[0], p[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.setLineDash([]); }
@@ -366,6 +367,6 @@ function bmapDraw(host, G, CP, yi, lay, EI) {
     if (o.v && Array.isArray(o.v)) tip(e, `<b>${esc(o.n)}</b><br>${CP.years.map((y, i) => `${y} : ${num(o.v[i], 1)}`).join(' · ')} Mb/j<br>part du commerce maritime ${CP.years[yi]} : ${num(o.v[yi] / CP.world.maritime[yi] * 100, 0)} %`);
     else if (o.cap) tip(e, `<b>${esc(o.n)}</b> (${esc(o.c)})<br>${esc(o.cap)}<br><span class="dm">${esc(o.src)}</span>`);
     else if (o.k) tip(e, `<b>${esc(o.n)}</b> · ${esc(o.c)}<br>terminal ${o.k === 'exp' ? 'd’exportation' : 'd’importation'} · ${esc(o.z)}`);
-    else tip(e, `<b>${esc(o.n)}</b><br>production ${o.y} : ${num(o.v, 2)} Mb/j`); };
+    else tip(e, `<b>${esc(o.n)}</b><br>production de pétrole ${o.y} : ${num(o.v, 0)} ${o.u}`); };
   cv.onmouseleave = () => { hover = null; untip(); };
 }
