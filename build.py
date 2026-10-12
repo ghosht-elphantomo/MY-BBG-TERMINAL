@@ -18,7 +18,8 @@ HEAD = ('<title>FQT Terminal</title>\n'
         '<meta name="robots" content="noindex, nofollow">\n'
         '<style>\n' + css() + '\n</style>\n')
 import glob
-PAGES = sorted(os.path.basename(f) for f in glob.glob(os.path.join(HERE, "web", "pages*.js")))
+import re
+PAGES = sorted((os.path.basename(f) for f in glob.glob(os.path.join(HERE, "web", "pages*.js"))), key=lambda n: int(re.sub(r"\D", "", n) or 0))
 JS = "".join("<script>\n" + W(f) + "\n</script>\n" for f in ["engine.js", "chart.js"] + PAGES + ["core.js"])
 BODY = W("body.html")
 if "--artifact" in sys.argv:

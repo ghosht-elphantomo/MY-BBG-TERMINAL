@@ -309,7 +309,7 @@ i.dot{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:
 .tile .tn{color:var(--amber);font-size:11.5px;line-height:1.25;height:29px;overflow:hidden}
 .tile .tv{font-size:15px;color:var(--white)}.tile .tv small{font-size:11px;color:var(--dim)}
 .tile .tc{font-size:11px;color:var(--txt)}.tile .ts{height:26px}
-.nw .tags{grid-column:3;display:flex;gap:4px;flex-wrap:wrap}.nw .tags b{font-weight:400;font-size:11.5px;color:#000;background:var(--org);padding:0 4px;cursor:pointer}
+.nw .tags{display:inline-flex;gap:4px;flex-wrap:wrap;margin-left:6px;vertical-align:1px}.nw .tags b{font-weight:400;font-size:11.5px;color:#000;background:var(--org);padding:0 4px;cursor:pointer}
 .recb{display:flex;height:8px;margin-top:8px;background:#151515}.recb i{display:block;height:100%}
 /* carte de chaleur */
 .imap{position:relative;background:#000;overflow:hidden}
@@ -346,3 +346,7 @@ i.dot{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:
 .gpr .ma{width:40px;text-align:center}
 .cal{display:inline-block;background:#5a5a5a;color:#ddd;font-size:11px;line-height:20px;padding:0 4px;margin-left:-3px}
 .t td.up{color:var(--up)}.t td.dn{color:var(--dn)}.t td.am{color:var(--amber)}.t td.dm,.t td.fl{color:var(--dim)}.t td.wh{color:var(--white)}
+.evb{display:inline-block;color:#000;font-weight:700;font-size:10px;line-height:13px;padding:0 4px;margin-right:5px;border-radius:1px;vertical-align:1px;white-space:nowrap}
+.bmap{position:relative;width:100%;background:#000}
+.bmap canvas{display:block;width:100%}
+.nw.s{grid-template-columns:80px 1fr;gap:6px}.nw.s .c{display:none}.nw.s .d{font-size:11px}

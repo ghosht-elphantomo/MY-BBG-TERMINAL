@@ -1613,6 +1613,415 @@ def run_profus(out):
                 note("profus", False, f"{t}: vide")
     save(path, db)
 
+# ---------------------------------------------------------------- BCEAO : bulletin mensuel des statistiques (PDF), taux directeurs
+FR_MON = {"janv": 1, "jan": 1, "fev": 2, "févr": 2, "fevr": 2, "mars": 3, "mar": 3, "avr": 4, "avril": 4, "mai": 5, "juin": 6, "juil": 7, "juillet": 7, "aout": 8, "août": 8,
+          "sept": 9, "sep": 9, "oct": 10, "nov": 11, "dec": 12, "déc": 12}
+
+
+def _frnum(x):
+    try:
+        return float(x.replace(" ", "").replace("\xa0", "").replace(" ", "").replace(",", "."))
+    except ValueError:
+        return None
+
+
+def _mon_key(lab):
+    """« août-26 », « juil.-26 », « Mar-2026 », « 2025 » -> AAAA-MM ou AAAA."""
+    t = lab.strip().lower().replace(".", "")
+    m = re.match(r"^(20\d\d)$", t)
+    if m:
+        return m.group(1)
+    m = re.match(r"^([a-zéû]+)-?\s*(\d{2,4})$", t)
+    if m:
+        mo = FR_MON.get(m.group(1)[:5]) or FR_MON.get(m.group(1)[:4]) or FR_MON.get(m.group(1)[:3])
+        y = int(m.group(2))
+        y = y + 2000 if y < 100 else y
+        if mo:
+            return f"{y}-{mo:02d}"
+    return None
+
+
+def parse_bceao_bulletin(txt):
+    """Tables du bulletin mensuel : taux directeurs, inflation par pays, crédits et taux bancaires, agrégats par pays,
+    indicateurs d'activité, émissions de titres publics. Valeurs telles que publiées (pourcentages et milliards de FCFA)."""
+    L = txt.split("\n")
+    out = {}
+
+    def find(pat, start=0):
+        for i in range(start, len(L)):
+            if re.search(pat, L[i]):
+                return i
+        return None
+    # taux directeurs (historique des modifications)
+    i = find(r"2\.2\.1\.1\.? *- *Taux directeurs")
+    if i is not None:
+        hist = []
+        for ln in L[i:i + 60]:
+            m = re.match(r"^\s*(20\d\d)\s+(\d{1,2})-([a-zéû]+)\.?\s+(-?\d+,\d+)\s+(-?\d+,\d+)\s+(-?\d+,\d+)\s+(-?\d+,\d+)", ln)
+            if m:
+                mo = FR_MON.get(m.group(3)[:4]) or FR_MON.get(m.group(3)[:3])
+                hist.append({"d": f"{m.group(1)}-{mo:02d}-{int(m.group(2)):02d}" if mo else m.group(1), "pret": _frnum(m.group(4)), "min": _frnum(m.group(6))})
+            if hist and re.search(r"Source", ln):
+                break
+        out["policy"] = hist
+    # taux moyens du marché monétaire (adjudications mensuelles)
+    i = find(r"2\.2\.1\.2\.? *- *Taux et montants de refinancement")
+    if i is not None:
+        mm = []
+        for ln in L[i:i + 200]:
+            m = re.match(r"^\s*([A-Za-zéû]+\.?-20\d\d)\s+(\d+,\d+)\s+([\d  ]+,\d+)", ln)
+            if m:
+                mm.append({"m": _mon_key(m.group(1).replace("-20", "-")), "t": _frnum(m.group(2)), "ref": _frnum(m.group(3))})
+            if re.search(r"^\s*2\.2\.2", ln):
+                break
+        out["mm"] = mm
+    # inflation par pays
+    i = find(r"Tableau 2\.3\.2\.1")
+    if i is not None:
+        hdr = None
+        rows = {}
+        for ln in L[i + 1:i + 40]:
+            toks = ln.split()
+            if not hdr and len(toks) >= 5 and all(_mon_key(t) for t in toks):
+                hdr = [_mon_key(t) for t in toks]
+                continue
+            m = re.match(r"^\s*([A-Za-zéèô' \-]+?)\s{2,}(-?\d+,\d.*)$", ln)
+            if hdr and m:
+                vals = [_frnum(v) for v in m.group(2).split()]
+                if len(vals) == len(hdr):
+                    rows[m.group(1).strip()] = dict(zip(hdr, vals))
+            if rows and re.search(r"Sources?", ln):
+                break
+        out["infl"] = rows
+    # crédits et dépôts bancaires
+    i = find(r"Tableau 2\.2\.2\.3\.1")
+    if i is not None:
+        hdr = None
+        rows = {}
+        sec_, sub = "credits", "vol"
+        for ln in L[i + 1:i + 45]:
+            toks = ln.split()
+            ks = [_mon_key(t) for t in toks]
+            if not hdr and sum(1 for k in ks if k) >= 5:
+                hdr = [k for k in ks if k]
+                continue
+            if re.search(r"Nouveaux dépôts", ln):
+                sec_, sub = "depots", "vol"
+            if re.search(r"Volume", ln):
+                sub = "vol"
+            elif re.search(r"Taux d.intérêt moyen", ln):
+                sub = "taux"
+            elif re.search(r"Durée moyenne", ln):
+                sub = "duree"
+            elif re.search(r"Marge moyenne", ln):
+                sec_, sub = "marge", "taux"
+            m = re.match(r"^\s*(.+?)\s{2,}(-?[\d  ]*\d,\d+(?:\s+-?[\d  ]*\d,\d+)+)\s*$", ln)
+            if hdr and m:
+                vals = re.findall(r"-?\d{1,3}(?: \d{3})*,\d+", m.group(2))
+                lab = re.sub(r"^[-(A-B)\s–]+", "", m.group(1)).strip()
+                if len(vals) == len(hdr):
+                    rows[f"{sec_}.{sub}.{lab}"] = dict(zip(hdr, [_frnum(v) for v in vals]))
+            if rows and re.search(r"^Source", ln.strip()):
+                break
+        out["credit"] = rows
+    # agrégats de monnaie par pays
+    i = find(r"Tableau 2\.1\.1 – Agrégats de monnaie|2\.1\.1 – Agrégats de monnaie")
+    if i is not None:
+        cty = ["Bénin", "Burkina", "Côte d'Ivoire", "Guinée-Bissau", "Mali", "Niger", "Sénégal", "Togo", "Union"]
+        m0 = re.search(r"à fin ([a-zéû]+) (20\d\d)", " ".join(L[i:i + 3]))
+        rows = {}
+        for ln in L[i:i + 70]:
+            m = re.match(r"^\s*(Masse monétaire \(M2\)|M1|Circulation fiduciaire|Créances sur les autres secteurs|Créances nettes sur l'Administration Centrale|Actifs extérieurs nets|Créances intérieures)\s+(.+)$", ln)
+            if m and m.group(1) not in rows:
+                vals = re.findall(r"-?\d{1,3}(?: \d{3})*,\d+", m.group(2))
+                if len(vals) == 9:
+                    rows[m.group(1)] = dict(zip(cty, [_frnum(v) for v in vals]))
+        out["money"] = {"asof": f"{m0.group(2)}-{FR_MON.get(m0.group(1)[:4]) or FR_MON.get(m0.group(1)[:3]):02d}" if m0 else None, "rows": rows}
+    # activité
+    i = find(r"Tableau 2\.3\.1\.1")
+    if i is not None:
+        hdr = None
+        rows = {}
+        name = []
+        for ln in L[i + 1:i + 40]:
+            toks = ln.split()
+            ks = [_mon_key(t.replace("(*)", "")) for t in toks if t != "(*)"]
+            if not hdr and len(ks) >= 5 and all(ks):
+                hdr = ks
+                continue
+            vals = re.findall(r"-?\d+,\d+", ln)
+            lab = re.sub(r"\(\*+\)", "", re.sub(r"-?\d+,\d+", "", ln)).strip()
+            if lab and not vals:
+                name.append(lab)
+            if hdr and len(vals) == len(hdr):
+                rows[" ".join(name + ([lab] if lab else [])).strip() or f"ligne {len(rows) + 1}"] = dict(zip(hdr, [_frnum(v) for v in vals]))
+                name = []
+            if rows and re.search(r"^Source", ln.strip()):
+                break
+        labs = ["Production industrielle", "Chiffre d'affaires du commerce", "Chiffre d'affaires des services marchands", "Services financiers"]
+        out["act"] = {labs[k] if len(rows) == 4 else n: v for k, (n, v) in enumerate(rows.items())}
+    # émissions de bons et obligations du Trésor par appel public à l'épargne
+    i = find(r"2\.2\.5\.1\.1 – Marché des titres de créances négociables")
+    if i is not None:
+        em = []
+        for ln in L[i:i + 260]:
+            m = re.match(r"^\s*- (Bons|Obligations) du Trésor (?:de la |du |de l'|des |d')?(.+?)(?: \((?:simultanée|Simultanée)\s*\))?\s{2,}([\d ]+)\s{2,}(\d{1,2} [a-zéû]+ 20\d\d)\s+(\d+)\s+(\d{1,2} [a-zéû]+ 20\d\d)\s+(\d+,\d+|multiples)", ln)
+            if m:
+                em.append({"k": m.group(1), "c": m.group(2).strip(), "amt": _frnum(m.group(3)), "d": m.group(4), "mois": int(m.group(5)), "ech": m.group(6), "t": _frnum(m.group(7)) if m.group(7) != "multiples" else None})
+            if em and re.search(r"^\s*2\.2\.5\.1\.2", ln):
+                break
+        out["issues"] = em
+    return out
+
+
+def run_bceao(out):
+    path = os.path.join(out, "bceao.json")
+    db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {}
+    try:
+        home = get("https://www.bceao.int/fr", tries=2, timeout=40).decode("utf8", "replace")
+    except Exception as e:  # noqa: BLE001
+        note("bceao", False, f"accueil : {e}")
+        return
+    # taux directeurs affichés sur l'accueil (« Principaux indicateurs et taux directeurs »)
+    t = re.sub(r"<[^>]+>", " ", home)
+    t = re.sub(r"\s+", " ", t)
+    m = re.search(r"Taux minimum de soumission[^0-9]{0,80}(\d+,\d+)\s*%.{0,300}?prêt marginal[^0-9]{0,80}(\d+,\d+)\s*%", t) or re.search(r"(\d+,\d+)\s*%\s*Taux minimum de soumission.{0,200}?(\d+,\d+)\s*%\s*Taux (?:du guichet )?de prêt marginal", t)
+    if m:
+        db["home"] = {"min": _frnum(m.group(1)), "pret": _frnum(m.group(2)), "d": TODAY.isoformat()}
+    m = re.search(r'href="([^"]*Bulletin(?:%20| )mensuel(?:%20| )des(?:%20| )statistiques[^"]*\.pdf)"', home, re.I)
+    if not m:
+        note("bceao", False, "lien du bulletin introuvable")
+        save(path, db)
+        return
+    url = m.group(1)
+    url = url if url.startswith("http") else "https://www.bceao.int" + url
+    lab = urllib.parse.unquote(url).rsplit("-", 1)[-1].replace(".pdf", "").strip()
+    if db.get("url") == url and db.get("infl"):
+        note("bceao")
+        save(path, db)
+        return
+    import subprocess, tempfile
+    try:
+        pdf = get(url, tries=2, timeout=90)
+        with tempfile.NamedTemporaryFile(suffix=".pdf") as f:
+            f.write(pdf)
+            f.flush()
+            txt = subprocess.run(["pdftotext", "-layout", f.name, "-"], capture_output=True, timeout=120).stdout.decode("utf8", "replace")
+    except Exception as e:  # noqa: BLE001
+        note("bceao", False, f"bulletin : {e}")
+        save(path, db)
+        return
+    data = parse_bceao_bulletin(txt)
+    # historique de l'inflation : on conserve les mois des bulletins précédents
+    hist = db.get("infl_hist") or {}
+    for c, row in (data.get("infl") or {}).items():
+        for k, v in row.items():
+            if len(k) == 7:
+                hist.setdefault(c, {})[k] = v
+    db.update(data)
+    db.update({"url": url, "label": lab, "d": TODAY.isoformat(), "infl_hist": hist})
+    save(path, db)
+    note("bceao")
+
+
+# ---------------------------------------------------------------- UMOA-Titres : courbes des taux souveraines (fichiers hebdomadaires)
+def _xlsx_rows(blob):
+    import zipfile, xml.etree.ElementTree as ET
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    ss = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall("m:si", ns):
+            ss.append("".join(x.text or "" for x in si.iter("{%s}t" % ns["m"])))
+    wb = ET.fromstring(z.read("xl/workbook.xml"))
+    names = [x.get("name") for x in wb.find("m:sheets", ns)]
+    sheets = {}
+    for k, nm in enumerate(names, 1):
+        try:
+            root = ET.fromstring(z.read(f"xl/worksheets/sheet{k}.xml"))
+        except KeyError:
+            continue
+        rows = []
+        for row in root.iter("{%s}row" % ns["m"]):
+            cells = {}
+            for c in row.findall("m:c", ns):
+                col = re.match(r"[A-Z]+", c.get("r")).group()
+                v = c.find("m:v", ns)
+                cells[col] = None if v is None else (ss[int(v.text)] if c.get("t") == "s" else v.text)
+            rows.append(cells)
+        sheets[nm] = rows
+    return sheets
+
+
+def _umoa_parse(blob):
+    out = {}
+    asof = None
+    for nm, rows in _xlsx_rows(blob).items():
+        pts = []
+        for r in rows:
+            for col, v in r.items():
+                if isinstance(v, str) and "COURBE DES TAUX" in v.upper():
+                    m = re.search(r"(\d{2}/\d{2}/\d{4})", v)
+                    if m:
+                        asof = m.group(1)
+            vals = list(r.values())
+            for j, v in enumerate(vals):
+                m = re.match(r"^\s*(\d+)\s*(mois|ans?)\s*$", str(v or ""))
+                if m and j + 2 < len(vals):
+                    try:
+                        zc, ls = float(vals[j + 1]), float(vals[j + 2])
+                    except (TypeError, ValueError):
+                        continue
+                    yrs = int(m.group(1)) / 12 if m.group(2) == "mois" else int(m.group(1))
+                    pts.append([v.strip(), round(yrs, 4), round(zc, 6), round(ls, 6)])
+        if pts:
+            out[nm.strip()] = sorted(pts, key=lambda p: p[1])
+    return asof, out
+
+
+def run_umoa(out):
+    path = os.path.join(out, "umoa_curves.json")
+    db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"curves": {}}
+    try:
+        page = get("https://www.umoatitres.org/fr/ressources-2/courbe-des-taux/", tries=2, timeout=60).decode("utf8", "replace")
+    except Exception as e:  # noqa: BLE001
+        note("umoa", False, f"page : {e}")
+        return
+    links = []
+    for u in set(re.findall(r'href="(https?://www\.umoatitres\.org/wp-content/uploads/[^"]+COURBES[^"]+\.xlsx)"', page, re.I)):
+        m = re.search(r"(\d{2})\.(\d{2})\.(\d{4})", u)
+        if m:
+            links.append((f"{m.group(3)}-{m.group(2)}-{m.group(1)}", u))
+    links.sort(reverse=True)
+    if not links:
+        note("umoa", False, "aucun fichier de courbe")
+        return
+    want = [links[0]]
+    d0 = dt.date.fromisoformat(links[0][0])
+    for lag in (28, 91, 182, 364):  # comparaisons : 1, 3, 6 et 12 mois
+        tgt = d0 - dt.timedelta(days=lag)
+        best = min(links, key=lambda x: abs((dt.date.fromisoformat(x[0]) - tgt).days))
+        if best not in want:
+            want.append(best)
+    for d, u in want:
+        if d in db["curves"]:
+            continue
+        try:
+            asof, cv = _umoa_parse(get(u, tries=2, timeout=60))
+            if cv:
+                db["curves"][d] = {"asof": asof, "src": u, "c": cv}
+                note("umoa")
+        except Exception as e:  # noqa: BLE001
+            note("umoa", False, f"{d}: {e}")
+    keep = sorted(db["curves"])[-40:]
+    db["curves"] = {k: db["curves"][k] for k in keep}
+    db["latest"] = links[0][0]
+    db["d"] = TODAY.isoformat()
+    save(path, db)
+
+
+# ---------------------------------------------------------------- obligations cotées à la BRVM
+def run_obl(out, site_data=None):
+    import html as H_
+    rows = {}
+    for cat, typ in ((20, "État"), (21, "Régional"), (55, "Privé"), (0, None)):
+        try:
+            h = get(f"https://www.brvm.org/fr/cours-obligations/{cat}", tries=2, timeout=40).decode("utf8", "replace")
+        except Exception as e:  # noqa: BLE001
+            note("obl", False, f"{cat}: {e}")
+            continue
+        for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", h, re.S):
+            c = [re.sub(r"\s+", " ", H_.unescape(re.sub(r"<[^>]+>", " ", x))).replace("\xa0", " ").strip() for x in re.findall(r"<td[^>]*>(.*?)</td>", tr, re.S)]
+            if len(c) < 7 or not re.match(r"^[A-Z0-9]+\.O\d+$", c[0]):
+                continue
+            code = c[0]
+            r = rows.get(code) or {"code": code, "n": c[1], "em": c[2], "mat": c[3] or None, "px": _frnum(c[4]) if c[4] else None, "cc": _frnum(c[5]) if c[5] else None}
+            m = re.match(r"(\d{2}/\d{2}/\d{4})\s*/\s*([\d ,]+)", c[6] or "")
+            if m:
+                r["lp_d"], r["lp_v"] = m.group(1), _frnum(m.group(2))
+            if typ and not r.get("typ"):
+                r["typ"] = typ
+            rows[code] = r
+        note("obl")
+        time.sleep(.5)
+    if not rows:
+        return
+    for r in rows.values():
+        m = re.search(r"(\d+(?:[,.]\d+)?)\s*%", r["n"])
+        r["cpn"] = float(m.group(1).replace(",", ".")) / 100 if m else None
+        m = re.search(r"(20\d\d)\s*-\s*(20\d\d)", r["n"])
+        if m:
+            r["y0"], r["y1"] = int(m.group(1)), int(m.group(2))
+        r["iss"] = re.sub(r"\s*\(?TX DE BASE.*$|\s*\d+(?:[,.]\d+)?\s*%.*$", "", r["n"]).strip()
+    o = {"ts": int(time.time()), "d": TODAY.isoformat(), "src": "brvm.org/fr/cours-obligations", "rows": sorted(rows.values(), key=lambda r: r["code"])}
+    save(os.path.join(out, "bonds.json"), o)
+    if site_data:
+        save(os.path.join(site_data, "bonds.json"), o)
+
+
+# ---------------------------------------------------------------- capitalisations mondiales (companiesmarketcap.com, CSV)
+def run_cmc(out, site_data=None):
+    """Toutes les sociétés cotées classées par capitalisation (USD) avec pays ; variation calculée contre le relevé du soir précédent."""
+    path = os.path.join(out, "cmc_eod.json")
+    eod = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {}
+    try:
+        raw = get("https://companiesmarketcap.com/?download=csv", tries=2, timeout=60).decode("utf8", "replace")
+    except Exception as e:  # noqa: BLE001
+        note("cmc", False, str(e))
+        return
+    rows = list(csv.reader(io.StringIO(raw)))
+    hdr = [h.strip().lower() for h in rows[0]] if rows else []
+    if "symbol" not in hdr:
+        note("cmc", False, "format inattendu")
+        return
+    ix = {h: i for i, h in enumerate(hdr)}
+    cur = {}
+    for r in rows[1:]:
+        try:
+            sym, mc, pxx = r[ix["symbol"]], float(r[ix["marketcap"]]), float(r[ix["price (usd)"]])
+        except (ValueError, IndexError, KeyError):
+            continue
+        cur[sym] = [r[ix["name"]], r[ix["country"]], mc, pxx]
+    now = int(time.time())
+    prev = eod.get("px") or {}
+    out_rows = []
+    for sym, (nm, cty, mc, pxx) in cur.items():
+        if mc < 2e9:
+            continue
+        p0 = prev.get(sym)
+        out_rows.append([sym, nm, cty, round(mc), pxx, round(pxx / p0 - 1, 5) if p0 else None])
+    out_rows.sort(key=lambda r: -r[3])
+    site = {"ts": now, "ref": eod.get("d"), "src": "companiesmarketcap.com", "rows": out_rows}
+    if site_data:
+        save(os.path.join(site_data, "world.json"), site)
+    if os.environ.get("FQT_MODE") == "eod" or not eod.get("px"):
+        save(path, {"d": dt.datetime.utcnow().strftime("%Y-%m-%d %H:%M"), "px": {k: v[3] for k, v in cur.items()}})
+        open(os.path.join(out, ".dirty"), "w").close()  # relevé de référence à conserver (branche raw)
+    note("cmc")
+
+
+# ---------------------------------------------------------------- EIA : stocks hebdomadaires de pétrole des États-Unis (Weekly Petroleum Status Report)
+def run_eia(out):
+    try:
+        raw = get("https://ir.eia.gov/wpsr/table1.csv", tries=2, timeout=40).decode("utf8", "replace")
+    except Exception as e:  # noqa: BLE001
+        note("eia", False, str(e))
+        return
+    rows = list(csv.reader(io.StringIO(raw)))
+    if not rows or len(rows[0]) < 4:
+        note("eia", False, "format")
+        return
+    hdr = rows[0]
+    keep = {}
+    for r in rows[1:]:
+        if len(r) >= 5 and r[0].strip():
+            try:
+                keep[r[0].strip()] = [float(x) if x not in ("", "NA") else None for x in r[1:8]]
+            except ValueError:
+                continue
+    save(os.path.join(out, "eia_wpsr.json"), {"d": TODAY.isoformat(), "src": "EIA, Weekly Petroleum Status Report, table 1 (millions de barils)", "hdr": hdr, "rows": keep})
+    note("eia")
+
 # ---------------------------------------------------------------- actualités reliées aux titres et typées
 NEWS_ALIAS = {  # noms usuels des sociétés dans la presse (en plus du nom officiel)
     "SNTS": ["Sonatel"], "ORAC": ["Orange Côte d'Ivoire", "Orange CI"], "SGBC": ["Société Générale Côte d'Ivoire", "SGBCI", "SGCI"],
@@ -1630,21 +2039,22 @@ NEWS_ALIAS = {  # noms usuels des sociétés dans la presse (en plus du nom offi
     "META": ["Meta Platforms", "Facebook"], "TSLA": ["Tesla"], "AVGO": ["Broadcom"], "AMD": ["AMD"], "NFLX": ["Netflix"], "COST": ["Costco"], "INTC": ["Intel"],
 }
 NEWS_STOP = {"meta", "arm", "apple"}  # trop ambigus seuls en minuscules : exigés avec la majuscule
-EVENT_RX = [  # (type, motif) — premier qui correspond
+EVENT_RX = [  # (type, motif) — premier qui correspond ; le premier motif repère les comptes rendus de séance
+    ("Marchés", r"(live updates|stock market today|stocks? (rise|fall|slip|gain|climb|drop|edge|rall|sink|surge|tumble|jump)|futures (rise|fall|slip|gain|climb|edge|point)|S&P 500 (is|rises|falls|slips|gains|climbs|hits|edges|closes|ends)|Dow (jumps|falls|rises|slips|gains|closes|ends)|Wall Street (ends|closes|opens|finit|termine|ouvre)|la BRVM (termine|cl[ôo]ture|ouvre|progresse|recule)|bourse de (paris|new york))"),
     ("Résultats", r"\b(r[ée]sultats?|b[ée]n[ée]fices?|chiffre d.affaires|earnings|revenue|profit|quarterly|trimestriel|semestriel|annual results|[ée]tats financiers|rapport.{0,4}activit)"),
     ("Dividende", r"\b(dividendes?|dividend|coupon|d[ée]tachement)"),
-    ("Assemblée", r"\b(assembl[ée]e g[ée]n[ée]rale|\bAGO\b|\bAGE\b|shareholder meeting)"),
+    ("Assemblée", r"\b(assembl[ée]e g[ée]n[ée]rale|AGO|AGE|shareholder meeting)\b"),
     ("Dirigeants", r"\b(nomm[ée]|nomination|directeur g[ée]n[ée]ral|PDG|CEO|appoint|steps down|d[ée]mission|conseil d.administration)"),
-    ("Analystes", r"(potentiel de hausse|r[ée]it[èe]re|abaisse son objectif|rel[èe]ve son objectif|rehausse|mise [àa] niveau|surpond[ée]r|sous-pond[ée]r|d[ée]grade|rel[èe]ve (sa|son)|recommandation|objectif de cours|price target|downgrades?|upgrades?|initiates coverage|forecasts)"),
-    ("Notation", r"\b(notation|note souveraine|moody|fitch|s&p global ratings|bloomfield|\bWARA\b|credit rating)"),
-    ("Émission", r"\b(emprunt obligataire|[ée]mission obligataire|eurobond|bond issue|sukuk|appel public|APE\b|obligations? du tr[ée]sor|bons du tr[ée]sor|UMOA-Titres|lev[ée]e de fonds)"),
-    ("Opération", r"\b(acquisition|rachat|fusion|merger|takeover|OPA|OPR|cession|stake|participation|introduction en bourse|IPO|division de (son|l.)action|fractionnement|stock split|split)"),
-    ("Régulation", r"\b(AMF-UMOA|CREPMF|SEC charges|amende|fine|sanction|enqu[êe]te|investigation|suspension|antitrust|r[ée]gulateur)"),
-    ("Banques centrales", r"\b(BCEAO|Fed\b|Federal Reserve|FOMC|BCE|ECB|taux directeurs?|policy rate|rate cut|rate hike|politique mon[ée]taire)"),
-    ("Macro", r"\b(inflation|PIB|GDP|croissance [ée]conomique|ch[ôo]mage|unemployment|payrolls|CPI|IPC|budget|dette publique|FMI|IMF|Banque mondiale)"),
-    ("Matières premières", r"\b(p[ée]trole|oil|brent|wti|OPEP|OPEC|gaz|gas|or\b|gold|cacao|cocoa|caf[ée]|coton|cotton|anacarde|cashew|uranium|lithium|cuivre|copper)"),
-    ("Crypto", r"\\b(bitcoin|ethereum|crypto|stablecoin)"),
-    ("Marchés", r"\b(bourse|BRVM|wall street|nasdaq|s&p 500|dow jones|cac 40|stocks?|actions?|indice|index|rally|selloff|march[ée]s?)"),
+    ("Analystes", r"(potentiel de hausse|r[ée]it[èe]re|abaisse son objectif|rel[èe]ve son objectif|rehausse|mise [àa] niveau|surpond[ée]r|sous-pond[ée]r|d[ée]grade|rel[èe]ve (sa|son)|recommandation|objectif de cours|price target|downgrades?|upgrades?|initiates coverage)"),
+    ("Notation", r"\b(notation|note souveraine|moody|fitch|s&p global ratings|bloomfield|WARA|credit rating)\b"),
+    ("Émission", r"\b(emprunt obligataire|[ée]mission obligataire|eurobond|bond issue|sukuk|appel public|APE|obligations? du tr[ée]sor|bons du tr[ée]sor|UMOA-Titres|lev[ée]e de fonds)\b"),
+    ("Opération", r"\b(acquisition|rachat|fusion|merger|takeover|OPA|OPR|cession|stake|prise de participation|introduction en bourse|IPO|division de (son|l.)action|fractionnement|stock split)\b"),
+    ("Régulation", r"\b(AMF-UMOA|CREPMF|SEC (charges|sues|probe)|amende|fined|sanctionn|antitrust|r[ée]gulateur|suspension de (la )?cotation|delisting|radiation)"),
+    ("Banques centrales", r"\b(BCEAO|Fed|Federal Reserve|FOMC|BCE|ECB|taux directeurs?|policy rate|rate cut|rate hike|politique mon[ée]taire)\b"),
+    ("Macro", r"\b(inflation|PIB|GDP|croissance [ée]conomique|ch[ôo]mage|unemployment|payrolls|CPI|IPC|budget|dette publique|FMI|IMF|Banque mondiale)\b"),
+    ("Matières premières", r"\b(p[ée]trole|oil|crude|brent|wti|OPEP|OPEC|gaz naturel|natural gas|l.or|gold|cacao|cocoa|caf[ée]|coton|cotton|anacarde|cashew|uranium|lithium|cuivre|copper)\b"),
+    ("Crypto", r"\b(bitcoin|ethereum|crypto\w*|stablecoins?)\b"),
+    ("Marchés", r"\b(bourse|BRVM|wall street|nasdaq|s&p 500|dow jones|cac 40|stocks?|indices?|index|rally|selloff|march[ée]s?)\b"),
 ]
 
 
@@ -1722,7 +2132,8 @@ def main():
     steps = [("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
-             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out))]
+             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
+             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

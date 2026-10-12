@@ -78,11 +78,12 @@ jobs:
       - name: Relever les cours (BRVM, QQQ, US, crypto)
         run: python3 scripts/scrape.py --mode "${{ steps.mode.outputs.mode }}" --state /tmp/state --out /tmp/site
 
-      - name: Actualités, publications BRVM et dépôts SEC
+      - name: Actualités, publications BRVM, dépôts SEC, obligations BRVM, capitalisations mondiales
         continue-on-error: true
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
-        run: timeout 300 python3 scripts/fetch_extra.py --out /tmp/raw --only watch --site /tmp/site/data --news /tmp/site/data/news.json
+          FQT_MODE: ${{ steps.mode.outputs.mode }}
+        run: timeout 360 python3 scripts/fetch_extra.py --out /tmp/raw --only watch,obl,cmc --site /tmp/site/data --news /tmp/site/data/news.json
 
       - name: Outils PDF (EOD)
         if: steps.mode.outputs.mode == 'eod'
@@ -91,7 +92,7 @@ jobs:
       - name: Sources complémentaires (FRED, CBOE, CNN, crypto, Banque mondiale, bulletins BRVM)
         if: steps.mode.outputs.mode == 'eod'
         continue-on-error: true
-        run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,probe,boc,prof
+        run: timeout 1100 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,probe,boc,prof,bceao,umoa,eia
 
       - name: Comptes BRVM sur 10 exercices (archives SikaFinance, états financiers publiés)
         if: steps.mode.outputs.mode == 'eod'
@@ -199,5 +200,15 @@ jobs:
         run: |
           git config user.name "fqt-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add seed/brvm.json seed/brvm_daily.csv
-          if git diff --cached --quiet; then echo "Rien à archiver"; else git commit -qm "séance BRVM $(date -u +%F)" && git pull -q --rebase origin main && git push -q origin HEAD:main; fi
+          # une autre exécution (relevé de 15 min ou push) peut avoir archivé entre-temps : on repart de main et on fusionne, sans rebase
+          mkdir -p /tmp/arch && cp seed/brvm.json seed/brvm_daily.csv /tmp/arch/
+          for i in 1 2 3 4; do
+            git fetch -q origin main
+            git reset -q --hard FETCH_HEAD
+            python3 scripts/archive_merge.py /tmp/arch
+            git add seed/brvm.json seed/brvm_daily.csv
+            if git diff --cached --quiet; then echo "Rien à archiver"; break; fi
+            git commit -qm "séance BRVM $(date -u +%F)"
+            if git push -q origin HEAD:main; then echo "Archivé"; break; fi
+            echo "main a bougé, nouvel essai ($i)"; sleep $((i * 5))
+          done
