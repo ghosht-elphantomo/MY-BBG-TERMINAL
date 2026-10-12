@@ -468,6 +468,11 @@ def main():
                                             ("NGS", "NATGAS", "NGUSHHUB Index", "Gaz Henry Hub, prix au comptant (EIA, USD/MMBtu)", "natural-gas/main/data/daily.csv", 3)):
         sp = macro(sid, tk, name, "Énergie", path, "Date", "Price", "D", nd=nd_)
         if sp and not (fut_dir and os.path.exists(os.path.join(fut_dir, sid_f + ".json"))):
+            QUOTES.pop(sid_f, None)  # cours du contrat à terme : jamais greffé sur la série au comptant (ni ici, ni dans la page)
+            if a.quotes and os.path.exists(a.quotes):
+                qj = json.load(open(a.quotes, encoding="utf8"))
+                if (qj.get("q") or {}).pop(sid_f, None) is not None:
+                    json.dump(qj, open(a.quotes, "w", encoding="utf8"), separators=(",", ":"), ensure_ascii=False)
             macro(sid_f, tk, name, "Énergie", path, "Date", "Price", "D", nd=nd_)
     macro("VIX", "VIX Index", "Volatilité implicite S&P 500", "Volatilité", "finance-vix/main/data/vix-daily.csv", "DATE", "CLOSE", "D", cls="Index", ccy="pts")
     try:
