@@ -1,0 +1,44 @@
+name: Bulletins officiels BRVM
+
+# Reconstitution de l'historique des 48 actions à partir des seuls bulletins officiels de la cote (BRVM) :
+# séances récentes d'abord, puis l'archive jusqu'en 2012, par tranches. Résultat sur la branche `boc` (lue par le terminal).
+on:
+  schedule:
+    - cron: "41 */2 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: boc
+  cancel-in-progress: false
+
+jobs:
+  boc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Outils PDF
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils >/dev/null
+      - name: Restaurer la branche boc
+        run: |
+          mkdir -p /tmp/boc
+          if git fetch -q --depth 1 origin boc; then git archive FETCH_HEAD | tar -x -C /tmp/boc; fi
+      - name: Lire les bulletins (récents puis archive)
+        continue-on-error: true
+        env:
+          BOC_BUDGET: "2700"
+        run: timeout 3200 python3 scripts/fetch_extra.py --out /tmp/boc --only bochist
+      - name: Publier (branche boc)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/boc/vercel.json
+          URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          export GIT_DIR=/tmp/boc.git GIT_WORK_TREE=/tmp/boc
+          rm -rf "$GIT_DIR"; git init -q -b boc
+          git config user.name "fqt-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Bulletins $(date -u +'%d/%m/%Y %H:%M') UTC" && git push -q -f "$URL" HEAD:boc

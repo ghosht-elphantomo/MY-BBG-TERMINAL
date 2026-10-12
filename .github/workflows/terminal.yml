@@ -185,6 +185,7 @@ jobs:
           cp index.html /tmp/web/public/index.html
           cp deploy/robots.txt /tmp/web/public/robots.txt
           cp web/fonts/LICENSE-DejaVu.txt /tmp/web/public/LICENSE-fonts.txt
+          cp web/icons/favicon.ico web/icons/favicon.svg web/icons/apple-touch-icon.png /tmp/web/public/
           URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           export GIT_DIR=/tmp/web.git GIT_WORK_TREE=/tmp/web
           rm -rf "$GIT_DIR"; git init -q -b site

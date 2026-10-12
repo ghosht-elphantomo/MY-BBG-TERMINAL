@@ -1019,6 +1019,54 @@ def boc_parse(txt):
     return out
 
 
+BOC_TOK = re.compile(r"SP|\d{1,2}-[a-zéûA-Z]+\.?-\d{2}|-?\d+(?: \d{3})*,\d+ ?%|-?\d+(?: \d{3})*(?:,\d+)?|,\d+")
+BOC_MON = {"janv": 1, "févr": 2, "fevr": 2, "mars": 3, "avr": 4, "mai": 5, "juin": 6, "juil": 7, "août": 8, "aout": 8, "sept": 9, "oct": 10, "nov": 11, "déc": 12, "dec": 12}
+
+
+def boc_stocks(txt):
+    """Tableau des actions du bulletin officiel de la cote : par symbole, cours précédent, ouverture, clôture, variation,
+    volume, valeur, cours de référence, variation annuelle, dernier dividende net et sa date, rendement net, PER."""
+    out = {}
+    num_ = lambda t: None if t in (None, "SP") else float(t.replace(" ", "").replace("%", "").replace(",", ".")) if t.strip(" %,") else None
+    for ln in txt.splitlines():
+        m = re.match(r"^\s{2,}([A-Z][A-Z0-9]{2,5})\s{2,}(\S.*?)\s{2,}(\S.*)$", ln)
+        if not m or m.group(1) == "TOTAL":
+            continue
+        toks = BOC_TOK.findall(m.group(3))
+        pi = [i for i, t in enumerate(toks) if t.endswith("%")]
+        di = [i for i, t in enumerate(toks) if re.match(r"\d{1,2}-", t)]
+        if not pi or pi[0] < 3:
+            continue
+        r = {"n": re.sub(r"\s+", " ", m.group(2)).strip(), "prev": num_(toks[0]), "o": num_(toks[1]), "c": num_(toks[2]), "var": num_(toks[pi[0]])}
+        mid = [t for t in toks[pi[0] + 1:(pi[1] if len(pi) > 1 else (di[0] if di else len(toks)))] if not t.endswith("%")]
+        if len(pi) == 1 and not di and len(mid) == 4:  # ni variation annuelle ni dividende : le dernier nombre est le PER
+            r["per"] = num_(mid.pop())
+        if len(mid) >= 3:
+            r["vol"], r["val"], r["ref"] = num_(mid[0]), num_(mid[1]), num_(mid[2])
+        elif mid:
+            r["ref"] = num_(mid[-1])
+        if len(pi) > 1 and (not di or pi[1] < di[0]):
+            r["ytd"] = num_(toks[pi[1]])
+        if di:
+            k = di[0]
+            if k >= 1 and not toks[k - 1].endswith("%"):
+                r["div"] = num_(toks[k - 1])
+            dm = re.match(r"(\d{1,2})-([a-zéûA-Z]+)\.?-(\d{2})", toks[k])
+            mo = BOC_MON.get(dm.group(2).lower().rstrip(".")[:5]) or BOC_MON.get(dm.group(2).lower()[:4])
+            if mo:
+                yy = int(dm.group(3))
+                r["div_d"] = f"{2000 + yy if yy < 70 else 1900 + yy}-{mo:02d}-{int(dm.group(1)):02d}"
+            tail = toks[k + 1:]
+            for t in tail:
+                if t.endswith("%"):
+                    r["yld"] = num_(t)
+                else:
+                    r["per"] = num_(t)
+        if r.get("c") or r.get("prev") or r.get("ref"):
+            out[m.group(1)] = {k: v for k, v in r.items() if v is not None}
+    return out
+
+
 def run_boc(out):
     import calendar
     path = os.path.join(out, "boc.json")
@@ -1090,6 +1138,75 @@ def run_boc(out):
     if latest_txt:
         os.makedirs(os.path.join(out, "debug"), exist_ok=True)
         open(os.path.join(out, "debug", "boc_sample.txt"), "w", encoding="utf8").write(latest_txt[:20000])
+
+
+# ---------------------------------------------------------------- bulletins officiels de la cote : tableau des 48 actions, jour par jour
+BOC_COLS = ("prev", "o", "c", "var", "vol", "val", "ref", "ytd", "div", "div_d", "yld", "per")
+
+
+def run_bochist(out):
+    """Reconstitue, à partir des seuls bulletins officiels de la BRVM, l'historique quotidien de chaque action : cours précédent,
+    ouverture, clôture, volume, valeur, cours de référence, variation annuelle, dernier dividende net et sa date, rendement, PER.
+    Jours récents d'abord, puis l'archive en remontant jusqu'en 2012, dans la limite de BOC_BUDGET secondes par passage."""
+    budget = float(os.environ.get("BOC_BUDGET", "600"))
+    t0 = time.time()
+    d_dir = os.path.join(out, "boc_px")
+    os.makedirs(d_dir, exist_ok=True)
+    ip = os.path.join(d_dir, "_index.json")
+    idx = json.load(open(ip, encoding="utf8")) if os.path.exists(ip) else {"done": [], "miss": []}
+    done, miss = set(idx["done"]), set(idx["miss"])
+    years = {}
+
+    def year(y):
+        if y not in years:
+            p_ = os.path.join(d_dir, f"{y}.json")
+            years[y] = json.load(open(p_, encoding="utf8")) if os.path.exists(p_) else {}
+        return years[y]
+    recent = {(TODAY - dt.timedelta(days=k)).strftime("%Y%m%d") for k in range(0, 12)}
+    todo, d = [], TODAY
+    while d >= dt.date(2012, 1, 2):
+        k = d.strftime("%Y%m%d")
+        if d.weekday() < 5 and k not in done and (k not in miss or k in recent):
+            todo.append(d)
+        d -= dt.timedelta(days=1)
+
+    def one(day):
+        k = day.strftime("%Y%m%d")
+        for url in (f"https://bfin.brvm.org/boc/BOC_JOUR/BOC_{k}.pdf", f"https://www.brvm.org/sites/default/files/boc_{k}_2.pdf",
+                    f"https://www.brvm.org/sites/default/files/boc_{k}.pdf"):
+            try:
+                b = get(url, tries=1, timeout=25)
+                if b[:4] != b"%PDF":
+                    continue
+                rows = boc_stocks(pdftext(b))
+                if len(rows) >= 15:
+                    return k, rows
+            except Exception:  # noqa: BLE001
+                continue
+        return k, None
+    n_ok = n_miss = 0
+    with ThreadPoolExecutor(4) as ex:
+        for i in range(0, len(todo), 16):
+            if time.time() - t0 > budget:
+                break
+            for k, rows in ex.map(one, todo[i:i + 16]):
+                if rows:
+                    year(k[:4])[k] = {sym: [r.get(c) for c in BOC_COLS] for sym, r in rows.items()}
+                    done.add(k)
+                    miss.discard(k)
+                    n_ok += 1
+                else:
+                    miss.add(k)
+                    n_miss += 1
+    for y, v in years.items():
+        save(os.path.join(d_dir, f"{y}.json"), dict(sorted(v.items())))
+    save(ip, {"cols": BOC_COLS, "done": sorted(done), "miss": sorted(miss), "first": min(done) if done else None, "last": max(done) if done else None,
+              "left": max(0, len(todo) - n_ok - n_miss), "ts": int(time.time())})
+    if n_ok:
+        note("bochist")
+    else:
+        note("bochist", False, f"aucun bulletin lu ({n_miss} jours sans bulletin)")
+    log(f"bulletins : {n_ok} lus, {n_miss} jours sans bulletin, reste {max(0, len(todo) - n_ok - n_miss)}")
 
 
 # ---------------------------------------------------------------- sondes (PER prévisionnel, archives SikaFinance)
@@ -2204,7 +2321,7 @@ def main():
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
-             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out))]
+             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

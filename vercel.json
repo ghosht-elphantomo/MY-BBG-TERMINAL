@@ -5,7 +5,8 @@
     "deploymentEnabled": {
       "raw": false,
       "data": false,
-      "probe": false
+      "probe": false,
+      "boc": false
     }
   },
   "rewrites": [

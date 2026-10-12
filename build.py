@@ -13,7 +13,9 @@ def css():
         b = base64.b64encode(open(os.path.join(HERE, "web", "fonts", f"dvm-{w}.woff2"), "rb").read()).decode()
         c = c.replace(f"url(fonts/dvm-{w}.woff2)", f"url(data:font/woff2;base64,{b})")
     return c
+_ico = base64.b64encode(open(os.path.join(HERE, "web", "icons", "favicon.svg"), "rb").read()).decode()
 HEAD = ('<title>FQT Terminal</title>\n'
+        f'<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{_ico}">\n'
         '<meta name="description" content="Terminal de marché : BRVM (48 actions, indices, obligations, dividendes), UEMOA, actions US, macro, quant.">\n'
         '<meta name="robots" content="noindex, nofollow">\n'
         '<style>\n' + css() + '\n</style>\n')
@@ -29,7 +31,8 @@ if "--artifact" in sys.argv:
     print("artifact", out)
 else:
     html = ('<!doctype html>\n<html lang="fr"><head><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n' + HEAD + '</head><body>\n' + BODY + JS + '</body></html>\n')
+            '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
+            '<link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="alternate icon" href="/favicon.ico">\n' + HEAD + '</head><body>\n' + BODY + JS + '</body></html>\n')
     open(os.path.join(HERE, "index.html"), "w", encoding="utf8").write(html)
     # dossier servi par Vercel (outputDirectory « public ») : main est déployable tel quel
     import shutil
@@ -37,4 +40,6 @@ else:
     open(os.path.join(HERE, "public", "index.html"), "w", encoding="utf8").write(html)
     shutil.copy(os.path.join(HERE, "deploy", "robots.txt"), os.path.join(HERE, "public", "robots.txt"))
     shutil.copy(os.path.join(HERE, "web", "fonts", "LICENSE-DejaVu.txt"), os.path.join(HERE, "public", "LICENSE-fonts.txt"))
+    for f in ("favicon.ico", "favicon.svg", "apple-touch-icon.png"):  # icône propre au terminal (sinon le navigateur garde une ancienne icône)
+        shutil.copy(os.path.join(HERE, "web", "icons", f), os.path.join(HERE, "public", f))
     print("index.html", len(html))
