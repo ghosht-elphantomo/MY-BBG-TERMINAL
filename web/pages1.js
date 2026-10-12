@@ -92,7 +92,11 @@ function bbgTicks(xs, i0, i1, span, W) {
     else { key = d; lab = String(dd).padStart(2, '0') + '/' + String(mo).padStart(2, '0'); }
     if (pk !== null && key !== pk) out.push([i, lab]); pk = key; }
   const room = Math.max(2, Math.floor((W || 800) / 64)); if (out.length <= room) return out;
-  const k = Math.ceil(out.length / room); return out.filter((o, j) => (mode === 'Y' ? +o[1] % k === 0 : j % k === 0) || (mode !== 'Y' && /^\d{4}$/.test(o[1]) && out.length / k < room * 1.4));
+  /* trop de repères : priorité aux années, puis espacement minimal (en séances) entre étiquettes retenues */
+  const gap = (i1 - i0) / room, keep = [];
+  const tryAdd = o => { if (keep.every(k => Math.abs(k[0] - o[0]) >= gap)) keep.push(o); };
+  out.filter(o => /^\d{4}$/.test(o[1])).forEach(tryAdd); out.filter(o => !/^\d{4}$/.test(o[1])).forEach(tryAdd);
+  return keep.sort((a, b) => a[0] - b[0]);
 }
 /* agrégation hebdomadaire / mensuelle (comme le menu « Daily ▾ » de GP) */
 function aggOHLC(S, per, tr) {

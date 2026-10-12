@@ -143,6 +143,7 @@ def stats_block(d, c, freq="D", h=None, l=None, v=None, val=None, ann=None):
         b = back(k)
         return (last / b - 1) if b else None
     wk, mo, q, yr, y3 = ((7, 30, 91, 365, 1095) if ann == 365 else (5, 21, 63, 252, 756)) if freq == "D" else (None, 1, 3, 12, 36)
+    h6 = (182 if ann == 365 else 126) if freq == "D" else 6
     ly = d[-1] // 10000 - 1
     base = None
     for i in range(n - 1, -1, -1):
@@ -166,7 +167,7 @@ def stats_block(d, c, freq="D", h=None, l=None, v=None, val=None, ann=None):
         rsi = 100 if losses == 0 else 100 - 100 / (1 + gains / losses)
     peak = max(c)
     return {"last": rnd(last, 4), "prev": rnd(prev, 4), "pct": rnd(last / prev - 1 if prev else 0, 6), "dt": d[-1], "first": d[0], "nobs": n,
-            "r1w": rnd(ret(wk), 5) if wk else None, "r1m": rnd(ret(mo), 5), "r3m": rnd(ret(q), 5), "r1y": rnd(ret(yr), 5), "r3y": rnd(ret(y3), 5),
+            "r1w": rnd(ret(wk), 5) if wk else None, "r1m": rnd(ret(mo), 5), "r3m": rnd(ret(q), 5), "r6m": rnd(ret(h6), 5), "r1y": rnd(ret(yr), 5), "r3y": rnd(ret(y3), 5),
             "ytd": rnd(last / base - 1, 5) if base else None, "vol": rnd(sd * math.sqrt(per_year), 5), "hi52": rnd(hi, 4), "lo52": rnd(lo, 4),
             "sma50": rnd(sma(50), 4) if freq == "D" else None, "sma200": rnd(sma(200), 4) if freq == "D" else None, "rsi": rnd(rsi, 2),
             "ath": rnd(peak, 4), "dd": rnd(last / peak - 1, 5), "spark": [rnd(x, 4) for x in c[-60:]],

@@ -7,7 +7,7 @@ derive(...)   écrit eco.json (FRED), fg.json (Fear & Greed US et BRVM), liq.jso
               (valorisation du marché BRVM), uemoa.json (Banque mondiale)
 Bibliothèque standard uniquement. Toute source absente est simplement ignorée (la page l'indique).
 """
-import bisect, collections, csv, datetime as dt, io, json, math, os, statistics
+import bisect, collections, csv, datetime as dt, io, json, math, os, re, statistics
 
 def clean_name(n):
     import re as _re
@@ -970,6 +970,34 @@ def rnd_tree(o, nd=6):
     return o
 
 
+def stability(r, dps_by_year=None):
+    """Régularité des résultats et des dividendes (5 à 10 derniers exercices) pour le score multifactoriel."""
+    Y = r.get("Y") or {}
+    o = {}
+    ni = [v for v in (Y.get("ni") or []) if v is not None][-6:]
+    if len(ni) >= 4:
+        m = sum(ni) / len(ni)
+        sd = (sum((x - m) ** 2 for x in ni) / (len(ni) - 1)) ** .5
+        o["ni_cv"] = sd / abs(m) if m > 0 else None
+        o["ni_dec"] = sum(1 for a, b in zip(ni, ni[1:]) if b < a)
+        o["ni_n"] = len(ni)
+    roe = [v for v in (Y.get("roe") or []) if v is not None][-5:]
+    if len(roe) >= 3:
+        m = sum(roe) / len(roe)
+        o["roe_sd"] = (sum((x - m) ** 2 for x in roe) / (len(roe) - 1)) ** .5
+    if dps_by_year:
+        ys = sorted(dps_by_year)
+        last = ys[-1]
+        win = [dps_by_year.get(y) for y in range(last - 9, last + 1)]
+        o["div_n10"] = sum(1 for v in win if v)
+        o["div_cut"] = sum(1 for a, b in zip(win, win[1:]) if a and b and b < a * .95)
+    elif Y.get("div") and Y.get("sh"):
+        d = [abs(v) / s_ if v is not None and s_ else None for v, s_ in zip(Y["div"], Y["sh"])][-10:]
+        o["div_n10"] = sum(1 for v in d if v)
+        o["div_cut"] = sum(1 for a, b in zip(d, d[1:]) if a and b and b < a * .95)
+    return o
+
+
 def fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, analyst, log):
     sec = jload(os.path.join(extra, "secfacts.json"), {}) if extra else {}
     fcf = (jload(fcf_path, {}) or {}).get("series", {}) if fcf_path else {}
@@ -1006,7 +1034,7 @@ def fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, analyst, log
         r["fpe"] = fpe
         s["fa"] = True
         jsave(os.path.join(out, "fa", t + ".json"), rnd_tree({"id": t, "mkt": "US", **r}))
-        idx.append({"id": t, "mkt": "US", "grp": s.get("grp"), **{k: r.get(k) for k in keep}})
+        idx.append({"id": t, "mkt": "US", "grp": s.get("grp"), **{k: r.get(k) for k in keep}, **stability(r)})
     # BRVM
     dps = collections.defaultdict(dict)
     for x in dmeta:
@@ -1025,7 +1053,7 @@ def fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, analyst, log
             continue
         s["fa"] = True
         jsave(os.path.join(out, "fa", sid + ".json"), rnd_tree({"id": sid, "mkt": "BRVM", **r}))
-        idx.append({"id": sid, "mkt": "BRVM", "grp": s.get("grp"), **{k: r.get(k) for k in keep}})
+        idx.append({"id": sid, "mkt": "BRVM", "grp": s.get("grp"), **{k: r.get(k) for k in keep}, **stability(r, dps.get(sid))})
     jsave(os.path.join(out, "fa_index.json"), rnd_tree({"rows": idx, "fx": fx}))
     log(f"fa : {len(idx)} sociétés ({sum(1 for x in idx if x['mkt'] == 'US')} US)")
     return idx
@@ -1113,6 +1141,137 @@ def profiles(extra, out, secs_by, log):
         log("profils", len(P))
 
 
+def anomalies(out, files, secs_by, log):
+    """Détection d'anomalies statistiques (alertes à vérifier, pas des preuves) pour toutes les actions BRVM et US :
+    variation de cours hors norme (écarts robustes MAD), montants échangés anormaux, écart extrême à la tendance, cours figé,
+    absence d'échange, trous de données, variations inhabituelles de résultat ou de dividende, incohérences de données."""
+    import time as _t
+    fa = {r["id"]: r for r in (jload(os.path.join(out, "fa_index.json"), {}) or {}).get("rows", [])}
+    dv = jload(os.path.join(out, "dividends.json"), []) or []
+    by_dv = collections.defaultdict(list)
+    for x in dv:
+        if x.get("t") and x.get("dps"):
+            by_dv[x["t"]].append(x)
+    cal = files.get("BRVMC") or {}
+    cal_d = cal.get("d") or []
+    res = {}
+
+    def mad(a):
+        m = statistics.median(a)
+        return m, statistics.median([abs(x - m) for x in a]) * 1.4826
+
+    for sid, s in secs_by.items():
+        if s.get("cls") != "Equity" or s.get("typ") == "ETF" or s.get("mkt") not in ("BRVM", "US"):
+            continue
+        b = files.get(sid)
+        if not b or len(b.get("c") or []) < 80:
+            continue
+        d, c = b["d"], b["c"]
+        v = b.get("v") or [0] * len(c)
+        val = b.get("val") or [x * y for x, y in zip(v, c)]
+        n = len(c)
+        L = []
+        brvm = s.get("mkt") == "BRVM"
+        exd = {}
+        for x in by_dv.get(sid, []):
+            k = (x.get("det") or x.get("pay") or "")[:10]
+            if k:
+                exd[int(k.replace("-", ""))] = x["dps"]
+        r = [c[i] / c[i - 1] - 1 if c[i - 1] else 0 for i in range(1, n)]
+        # 1. variations de cours hors norme (10 dernières séances), seuil BRVM de ±7,5 %
+        for i in range(max(61, n - 10), n):
+            ri = r[i - 1]
+            base = r[i - 61:i - 1]
+            med, sd = mad(base)
+            if sd <= 0:
+                sd = statistics.pstdev(base) or 1e-9
+            z = (ri - med) / sd
+            divi = next((exd[k] for k in exd if 0 <= (i2d(d[i]) - i2d(k)).days <= 3), None)
+            if ri <= -0.4:
+                L.append({"k": "Possible division d'action", "sv": 3, "d": d[i], "v": round(ri, 4), "vl": f"{ri * 100:+.1f} % en une séance", "m": f"baisse de {ri * 100:.0f} % en une séance : vérifier une division ou une opération sur titre avant toute analyse"})
+            elif abs(z) >= 4 and abs(ri) >= .03:
+                why = f" ; détachement d'un dividende de {divi:g} ce jour-là" if divi else ""
+                L.append({"k": "Variation de cours anormale", "sv": 1 if divi else (3 if abs(z) >= 8 else 2), "d": d[i], "v": round(ri, 4), "vl": f"{z:+.1f} écarts robustes", "m": f"{ri * 100:+.2f} % sur la séance, contre une variation habituelle de ±{sd * 100:.2f} %{why}"})
+            if brvm and abs(ri) >= .0745 and not divi:
+                L.append({"k": "Seuil de variation", "sv": 1, "d": d[i], "v": round(ri, 4), "vl": "seuil BRVM ±7,5 %", "m": f"cours au seuil journalier de variation ({ri * 100:+.2f} %)"})
+        # 2. montants échangés anormaux
+        for i in range(max(61, n - 10), n):
+            prev = [x for x in val[i - 60:i] if x and x > 0]
+            if len(prev) < 20 or not val[i]:
+                continue
+            md = statistics.median(prev)
+            if md > 0 and val[i] / md >= 5:
+                q = val[i] / md
+                L.append({"k": "Montant échangé anormal", "sv": 3 if q >= 10 else 2, "d": d[i], "v": round(q, 1), "vl": f"× {q:.1f} la médiane 60 séances", "m": f"{val[i]:,.0f} échangés contre une médiane de {md:,.0f}".replace(",", " ")})
+        # 3. écart extrême à la moyenne 200 séances (centiles sur 3 ans)
+        if n > 260:
+            dev = []
+            sm = sum(c[:200])
+            for i in range(200, n):
+                if i > 200:
+                    sm += c[i] - c[i - 200]
+                dev.append(c[i] / (sm / 200) - 1)
+            hist = sorted(dev[-756:-1])
+            if len(hist) > 100:
+                lo, hi = hist[int(len(hist) * .02)], hist[int(len(hist) * .98)]
+                if dev[-1] > hi or dev[-1] < lo:
+                    L.append({"k": "Écart de tendance extrême", "sv": 1, "d": d[-1], "v": round(dev[-1], 4), "vl": f"{dev[-1] * 100:+.1f} % de la moyenne 200", "m": f"cours {'au-dessus' if dev[-1] > 0 else 'au-dessous'} de sa moyenne 200 séances de {abs(dev[-1]) * 100:.1f} %, au-delà de {hi * 100 if dev[-1] > 0 else lo * 100:+.1f} % (centile {'98' if dev[-1] > 0 else '2'} sur 3 ans)"})
+        # 4. cours figé, absence d'échange, trous de données (calendrier BRVM Composite)
+        k = 0
+        for i in range(n - 1, 0, -1):
+            if c[i] == c[i - 1]:
+                k += 1
+            else:
+                break
+        if k >= 10:
+            L.append({"k": "Cours figé", "sv": 2, "d": d[-1], "v": k, "vl": f"{k} séances", "m": f"cours inchangé depuis {k} séances cotées : prix peu informatif"})
+        if brvm and cal_d:
+            last_cal = cal_d[-1]
+            gap = sum(1 for x in cal_d[-60:] if x > d[-1])
+            if gap >= 5:
+                L.append({"k": "Pas d'échange récent", "sv": 2, "d": d[-1], "v": gap, "vl": f"{gap} séances", "m": f"aucune transaction depuis {gap} séances (dernier cours le {i2d(d[-1]).strftime('%d/%m/%Y')}) : le cours affiché est ancien"})
+            have = set(d[-400:])
+            run = mx = 0
+            for x in cal_d[-250:]:
+                run = run + 1 if x not in have and x <= d[-1] else 0
+                mx = max(mx, run)
+            if mx >= 5:
+                L.append({"k": "Trou de données", "sv": 1, "d": None, "v": mx, "vl": f"{mx} séances", "m": f"jusqu'à {mx} séances consécutives sans ligne de cotation sur un an (suspension ou absence d'échange)"})
+        # 5. résultats et dividendes
+        f = fa.get(sid) or {}
+        ng = f.get("ni_g")
+        if ng is not None and abs(ng) >= .5:
+            L.append({"k": "Résultat : variation inhabituelle", "sv": 2 if abs(ng) >= 1 else 1, "d": None, "v": round(ng, 3), "vl": f"{ng * 100:+.0f} % sur un an", "m": f"résultat net {ng * 100:+.0f} % sur le dernier exercice : vérifier un élément exceptionnel"})
+        if f.get("payout") is not None and f["payout"] > 1:
+            L.append({"k": "Dividende supérieur au bénéfice", "sv": 2, "d": None, "v": round(f["payout"], 3), "vl": f"distribution {f['payout'] * 100:.0f} %", "m": "le dividende dépasse le résultat par action : prélevé sur les réserves, peu durable s'il se répète"})
+        ys = collections.defaultdict(float)
+        for x in by_dv.get(sid, []):
+            if x.get("ex"):
+                ys[int(x["ex"])] += x["dps"]
+        yy = sorted(ys)
+        if len(yy) >= 2 and yy[-1] - yy[-2] == 1 and ys[yy[-2]] > 0:
+            ch = ys[yy[-1]] / ys[yy[-2]] - 1
+            if abs(ch) >= .3:
+                L.append({"k": "Dividende : variation inhabituelle", "sv": 2 if ch < 0 else 1, "d": None, "v": round(ch, 3), "vl": f"{ch * 100:+.0f} %", "m": f"dividende de l'exercice {yy[-1]} : {ys[yy[-1]]:g} contre {ys[yy[-2]]:g} ({ch * 100:+.0f} %)"})
+        # 6. incohérences de données
+        if s.get("per") and s.get("bnpa") and s.get("last"):
+            pe2 = s["last"] / s["bnpa"]
+            if pe2 > 0 and abs(s["per"] / pe2 - 1) > .15:
+                L.append({"k": "Incohérence de données", "sv": 1, "d": None, "v": None, "m": f"PER publié {s['per']:.1f} contre cours ÷ BNPA = {pe2:.1f} : BNPA ou nombre de titres à vérifier"})
+        if brvm and s.get("mcap") and s.get("shares") and s.get("last"):
+            mc2 = s["shares"] * s["last"]
+            if abs(s["mcap"] / mc2 - 1) > .05:
+                L.append({"k": "Incohérence de données", "sv": 1, "d": None, "v": None, "m": f"capitalisation {s['mcap'] / 1e9:,.0f} Md contre titres × cours = {mc2 / 1e9:,.0f} Md".replace(",", " ")})
+        if L:
+            res[sid] = sorted(L, key=lambda a: (-a["sv"], -(a["d"] or 0)))
+    fr = lambda t: re.sub(r"(\d)\.(\d)", r"\1,\2", t) if isinstance(t, str) else t  # noqa: E731  (décimales à la française)
+    for L in res.values():
+        for a in L:
+            a["m"], a["vl"] = fr(a.get("m")), fr(a.get("vl"))
+    jsave(os.path.join(out, "anomalies.json"), {"ts": int(_t.time()), "by": res})
+    log("anomalies", sum(len(v) for v in res.values()), "alertes sur", len(res), "titres")
+
+
 def derive(extra, out, files, secs, fund, fcf_path, dmeta, ndx, log):
     secs_by = {s["id"]: s for s in secs}
     us_ids = [s["id"] for s in secs if s["mkt"] == "US" and s["typ"] == "Equity"]
@@ -1130,7 +1289,8 @@ def derive(extra, out, files, secs, fund, fcf_path, dmeta, ndx, log):
              ("fa", lambda: fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, jload(os.path.join(extra, "analyst.json"), {}) if extra else {}, log)),
              ("per", lambda: per_brvm(extra, out, files, secs_by, fund, log)),
              ("uemoa", lambda: uemoa(extra, out, secs_by, None, log)),
-             ("prof", lambda: profiles(extra, out, secs_by, log))]
+             ("prof", lambda: profiles(extra, out, secs_by, log)),
+             ("anom", lambda: anomalies(out, files, secs_by, log))]
     for name, fn in steps:
         try:
             fn()

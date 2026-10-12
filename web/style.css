@@ -345,3 +345,4 @@ i.dot{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:
 .gpr .dt{width:96px}
 .gpr .ma{width:40px;text-align:center}
 .cal{display:inline-block;background:#5a5a5a;color:#ddd;font-size:11px;line-height:20px;padding:0 4px;margin-left:-3px}
+.t td.up{color:var(--up)}.t td.dn{color:var(--dn)}.t td.am{color:var(--amber)}.t td.dm,.t td.fl{color:var(--dim)}.t td.wh{color:var(--white)}
