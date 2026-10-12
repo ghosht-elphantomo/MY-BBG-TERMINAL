@@ -1053,6 +1053,18 @@ def uemoa(extra, out, secs_by, cty_name, log):
     log(f"uemoa.json : {len(wb.get('ind', {}))} indicateurs")
 
 
+def profiles(extra, out, secs_by, log):
+    """Fiches sociétés (SikaFinance pour la BRVM ; Nasdaq/SEC pour les US) -> data/profiles.json, lu par DES et HDS."""
+    if not extra:
+        return
+    P = {}
+    for src in ("profiles.json", "profiles_us.json"):
+        P.update({k: v for k, v in (jload(os.path.join(extra, src), {}) or {}).items() if k in secs_by})
+    if P:
+        jsave(os.path.join(out, "profiles.json"), P)
+        log("profils", len(P))
+
+
 def derive(extra, out, files, secs, fund, fcf_path, dmeta, ndx, log):
     secs_by = {s["id"]: s for s in secs}
     us_ids = [s["id"] for s in secs if s["mkt"] == "US" and s["typ"] == "Equity"]
@@ -1069,7 +1081,8 @@ def derive(extra, out, files, secs, fund, fcf_path, dmeta, ndx, log):
              ("ee", lambda: ee(extra, out, secs_by, files, log)),
              ("fa", lambda: fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, jload(os.path.join(extra, "analyst.json"), {}) if extra else {}, log)),
              ("per", lambda: per_brvm(extra, out, files, secs_by, fund, log)),
-             ("uemoa", lambda: uemoa(extra, out, secs_by, None, log))]
+             ("uemoa", lambda: uemoa(extra, out, secs_by, None, log)),
+             ("prof", lambda: profiles(extra, out, secs_by, log))]
     for name, fn in steps:
         try:
             fn()

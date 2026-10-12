@@ -1432,6 +1432,187 @@ def run_news(path):
     save(path, {"ts": int(time.time()), "items": items, "feeds": {f[0]: f[1] for f in NEWS}})
 
 
+# ---------------------------------------------------------------- profils des sociétés BRVM (SikaFinance, page « Société »)
+def _sika_profile(h):
+    """Description, coordonnées, dirigeants, titres, flottant, actionnaires et chiffres clés d'une page société SikaFinance."""
+    import html as H_
+    o = {}
+    m = re.search(r"\b([A-Z]{2}[0-9A-Z]{9}[0-9])\b - [A-Z]{3,6}", h)
+    if m:
+        o["isin"] = m.group(1)
+    m = re.search(r'id="lstActionnaires"[^>]*>(.*?)</span>', h, re.S)
+    if m:
+        hold = []
+        for part in H_.unescape(m.group(1)).split(";"):
+            if "*" in part:
+                nm, pc = part.rsplit("*", 1)
+                try:
+                    hold.append([nm.strip(), float(pc.replace(",", ".").strip())])
+                except ValueError:
+                    pass
+        o["holders"] = hold
+    t = re.sub(r"<script.*?</script>|<style.*?</style>", " ", h, flags=re.S)
+    t = H_.unescape(re.sub(r"<[^>]+>", "\n", t)).replace("\xa0", " ")
+    t = re.sub(r"[ \t\r\f\v]+", " ", t)
+    flat = re.sub(r"\s*\n\s*", "\n", t)
+    one = re.sub(r"\s+", " ", t)
+    m = re.search(r"La société :\s*(.*?)\s*(?:Téléphone|Telephone|Adresse|Dirigeants)\s*:", one)
+    if m:
+        o["desc"] = m.group(1).strip()[:2500]
+    for k, lab in (("tel", "Téléphone"), ("fax", "Fax"), ("addr", "Adresse")):
+        m = re.search(lab + r"\s*:\s*(.*?)\s*(?:Fax|Adresse|Dirigeants|Nombre de titres)\s*:", one)
+        if m and m.group(1).strip():
+            o[k] = m.group(1).strip()[:200]
+    m = re.search(r"Dirigeants\s*:\s*(.*?)\s*Nombre de titres", flat, re.S)
+    if m:
+        mg = []
+        for line in m.group(1).split("\n"):
+            if ":" in line:
+                r_, n_ = line.split(":", 1)
+                if r_.strip() and n_.strip():
+                    mg.append([r_.strip(), n_.strip()])
+        if not mg:  # tout sur une ligne
+            for r_, n_ in re.findall(r"([A-ZÉ][^:]{3,60}?)\s*:\s*([A-ZÉÈ][A-Za-zÀ-ÿ'’\-\. ]{2,60}?)(?=\s+[A-ZÉ][a-zé]|$)", re.sub(r"\s+", " ", m.group(1))):
+                mg.append([r_.strip(), n_.strip()])
+        o["mgmt"] = mg[:8]
+    def numfr(x):
+        try:
+            return float(re.sub(r"[^0-9,\-]", "", x).replace(",", "."))
+        except ValueError:
+            return None
+    m = re.search(r"Nombre de titres\s*:\s*([\d  .]+)", one)
+    if m:
+        o["shares"] = numfr(m.group(1))
+    m = re.search(r"Flottant\s*:\s*([\d,]+)\s*%", one)
+    if m:
+        o["float"] = numfr(m.group(1))
+    m = re.search(r"Valorisation de la société\s*:\s*([\d  .]+)\s*MFCFA", one)
+    if m:
+        o["val_m"] = numfr(m.group(1))
+    tb = re.search(r'<table[^>]*tabSociete[^>]*>(.*?)</table>', h, re.S)
+    if tb:
+        cells = lambda r: [re.sub(r"\s+", " ", H_.unescape(re.sub(r"<[^>]+>", " ", c))).replace("\xa0", " ").strip() for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", r, re.S)]
+        rows = [cells(r) for r in re.findall(r"<tr[^>]*>(.*?)</tr>", tb.group(1), re.S)]
+        years = [c for c in (rows[0][1:] if rows else []) if re.fullmatch(r"20\d\d", c)]
+        keys = {"Chiffre d'affaires": "ca", "Croissance CA": "g_ca", "Résultat net": "rn", "Croissance RN": "g_rn", "BNPA": "bnpa", "PER": "per", "Dividende": "dps"}
+        kf = {}
+        for r in rows[1:]:
+            k = keys.get(r[0].strip()) if r else None
+            if not k:
+                continue
+            kf[k] = {y: numfr(v.replace(" ", "").replace("%", "")) for y, v in zip(years, r[1:]) if v and v.strip() not in ("-", "")}
+            kf[k] = {y: v for y, v in kf[k].items() if v is not None}
+        o["kf"] = kf
+    return o
+
+
+def run_prof(out):
+    path = os.path.join(out, "profiles.json")
+    db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {}
+    try:
+        fund = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/fundamentals.json", timeout=60))
+    except Exception as e:  # noqa: BLE001
+        note("prof", False, f"fundamentals: {e}")
+        return
+    todo = [(t, v.get("source_url")) for t, v in fund.items() if t != "_meta" and v.get("source_url") and "sikafinance" in v.get("source_url", "")]
+    def one(tu):
+        t, url = tu
+        url = url.replace("http://", "https://")
+        try:
+            h = get(url, tries=2, timeout=30, headers={"Accept-Language": "fr-FR,fr;q=0.9"}).decode("utf8", "replace")
+        except Exception:  # noqa: BLE001
+            try:
+                h = curl(url, ua=UA)
+                h = h.decode("utf8", "replace") if isinstance(h, bytes) else h
+            except Exception as e:  # noqa: BLE001
+                return t, None, str(e)
+        if "lstActionnaires" not in h and "La société" not in h:
+            return t, None, "page sans profil"
+        return t, _sika_profile(h), url
+    with ThreadPoolExecutor(4) as ex:
+        for t, o, info in ex.map(one, todo):
+            if o is None:
+                note("prof", False, f"{t}: {info}")
+                continue
+            o["src"] = info
+            o["d"] = TODAY.isoformat()
+            db[t] = o
+            note("prof")
+    save(path, db)
+
+
+def run_profus(out):
+    """Fiches des sociétés et ETF US : description et site (Nasdaq), résumé (objectif à 1 an, dividende, encours et frais des ETF),
+    principaux détenteurs institutionnels (déclarations 13F agrégées par Nasdaq), adresse et exercice (SEC)."""
+    path = os.path.join(out, "profiles_us.json")
+    db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {}
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cik = json.load(open(os.path.join(root, "seed", "sec_cik.json"), encoding="utf8"))
+    etfs = [t for t, _, ty, _ in US if ty == "ETF"]
+    def dv(d, k):
+        v = (d.get(k) or {}).get("value") if isinstance(d.get(k), dict) else None
+        return None if v in (None, "", "N/A") else v
+    def nq(url):
+        return json.loads(get(url, tries=2, timeout=25, headers=NQ_H)).get("data") or {}
+    def one(t, kind):
+        o = {"d": TODAY.isoformat()}
+        try:
+            sm = (nq(f"https://api.nasdaq.com/api/quote/{t}/summary?assetclass={kind}").get("summaryData")) or {}
+            for k, key in (("OneYrTarget", "tgt"), ("AverageVolume", "avgvol"), ("AnnualizedDividend", "divA"), ("ExDividendDate", "exdiv"), ("DividendPaymentDate", "paydiv"),
+                           ("Yield", "yld"), ("Exchange", "exch"), ("Sector", "sector"), ("Industry", "ind"), ("AUM", "aum"), ("ExpenseRatio", "er"), ("Beta", "beta"), ("MarketCap", "mcap")):
+                v = dv(sm, k)
+                if v is not None:
+                    o[key] = v
+        except Exception as e:  # noqa: BLE001
+            o["err_sum"] = str(e)[:120]
+        if kind == "stocks":
+            try:
+                pr = nq(f"https://api.nasdaq.com/api/company/{t}/company-profile")
+                for k, key in (("CompanyDescription", "desc"), ("CompanyUrl", "url"), ("Sector", "sector"), ("Industry", "ind"), ("Region", "region")):
+                    v = dv(pr, k)
+                    if v is not None:
+                        o[key] = v
+            except Exception as e:  # noqa: BLE001
+                o["err_prof"] = str(e)[:120]
+            try:
+                ih = nq(f"https://api.nasdaq.com/api/company/{t}/institutional-holdings?limit=15&type=TOTAL&sortColumn=marketValue")
+                osum = ih.get("ownershipSummary") or {}
+                rows = (((ih.get("holdingsTransactions") or {}).get("table") or {}).get("rows")) or []
+                o["inst"] = {"pct": dv(osum, "SharesOutstandingPCT"), "sh_m": dv(osum, "ShareoutstandingTotal"), "n": (ih.get("holdingsTransactions") or {}).get("totalRecords"),
+                             "rows": [[r.get("ownerName"), r.get("date"), r.get("sharesHeld"), r.get("sharesChange"), r.get("sharesChangePCT"), r.get("marketValue")] for r in rows[:15]],
+                             "pos": [[r.get("positions"), r.get("holders"), r.get("shares")] for r in ((ih.get("activePositions") or {}).get("rows") or [])]}
+            except Exception as e:  # noqa: BLE001
+                o["err_inst"] = str(e)[:120]
+            if t in cik:
+                try:
+                    sb = json.loads(get(f"https://data.sec.gov/submissions/CIK{int(cik[t]):010d}.json", tries=2, timeout=30, headers={"User-Agent": SEC_UA, "Accept-Encoding": "gzip"}))
+                    a_ = (sb.get("addresses") or {}).get("business") or {}
+                    o["addr"] = ", ".join(x for x in (a_.get("street1"), a_.get("street2"), a_.get("city"), a_.get("stateOrCountryDescription"), a_.get("zipCode")) if x)
+                    o["phone"] = sb.get("phone")
+                    o["fye"] = sb.get("fiscalYearEnd")
+                    o["sic"] = sb.get("sicDescription")
+                    o["inc"] = sb.get("stateOfIncorporation")
+                except Exception as e:  # noqa: BLE001
+                    o["err_sec"] = str(e)[:120]
+        return t, o
+    jobs = [(t, "stocks") for t in cik] + [(t, "etf") for t in etfs]
+    t_end = time.time() + 540
+    with ThreadPoolExecutor(4) as ex:
+        futs = [ex.submit(one, t, k) for t, k in jobs]
+        for f in futs:
+            try:
+                t, o = f.result(timeout=max(1, t_end - time.time()))
+            except Exception as e:  # noqa: BLE001
+                note("profus", False, str(e)[:100])
+                continue
+            if any(k in o for k in ("desc", "tgt", "aum", "inst")):
+                o["src"] = "nasdaq.com" + (" · sec.gov" if "addr" in o else "")
+                db[t] = o
+                note("profus")
+            else:
+                note("profus", False, f"{t}: vide")
+    save(path, db)
+
 # ---------------------------------------------------------------- actualités reliées aux titres et typées
 NEWS_ALIAS = {  # noms usuels des sociétés dans la presse (en plus du nom officiel)
     "SNTS": ["Sonatel"], "ORAC": ["Orange Côte d'Ivoire", "Orange CI"], "SGBC": ["Société Générale Côte d'Ivoire", "SGBCI", "SGCI"],
@@ -1541,7 +1722,7 @@ def main():
     steps = [("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
-             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site))]
+             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

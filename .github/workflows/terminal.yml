@@ -91,7 +91,7 @@ jobs:
       - name: Sources complémentaires (FRED, CBOE, CNN, crypto, Banque mondiale, bulletins BRVM)
         if: steps.mode.outputs.mode == 'eod'
         continue-on-error: true
-        run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,probe,boc
+        run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,probe,boc,prof
 
       - name: Comptes BRVM sur 10 exercices (archives SikaFinance, états financiers publiés)
         if: steps.mode.outputs.mode == 'eod'
@@ -104,6 +104,13 @@ jobs:
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
         run: timeout 1200 python3 scripts/fetch_extra.py --out /tmp/raw --only sec,analyst
+
+      - name: Fiches et détenteurs des sociétés US (EOD)
+        if: steps.mode.outputs.mode == 'eod'
+        continue-on-error: true
+        env:
+          SEC_UA: ${{ secrets.SEC_UA }}
+        run: timeout 600 python3 scripts/fetch_extra.py --out /tmp/raw --only profus
 
       - name: Historiques Nasdaq (EOD, incrémental)
         if: steps.mode.outputs.mode == 'eod'
