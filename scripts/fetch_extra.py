@@ -1029,7 +1029,7 @@ def boc_stocks(txt):
     out = {}
     num_ = lambda t: None if t in (None, "SP") else float(t.replace(" ", "").replace("%", "").replace(",", ".")) if t.strip(" %,") else None
     for ln in txt.splitlines():
-        m = re.match(r"^\s{2,}([A-Z][A-Z0-9]{2,5})\s{2,}(\S.*?)\s{2,}(\S.*)$", ln)
+        m = re.match(r"^\s*(?:[A-Z]{2,4}\s{2,})?([A-Z][A-Z0-9]{2,5})\s{2,}(\S.*?)\s{2,}(\S.*)$", ln)  # code secteur en tête (2024) ou non (2026)
         if not m or m.group(1) == "TOTAL":
             continue
         toks = BOC_TOK.findall(m.group(3))
@@ -1142,7 +1142,7 @@ def run_boc(out):
 
 # ---------------------------------------------------------------- bulletins officiels de la cote : tableau des 48 actions, jour par jour
 BOC_COLS = ("prev", "o", "c", "var", "vol", "val", "ref", "ytd", "div", "div_d", "yld", "per")
-BOC_V = 2  # version du lecteur de bulletins
+BOC_V = 3  # version du lecteur de bulletins
 
 
 def run_bochist(out):
