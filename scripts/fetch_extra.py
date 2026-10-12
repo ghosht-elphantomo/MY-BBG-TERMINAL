@@ -1176,6 +1176,19 @@ def norm_name(x):
     return re.sub(r"[^a-z0-9]+", " ", x).strip()
 
 
+def _doc_date(u):
+    """Date AAAAMMJJ en tête du nom de fichier d'une publication brvm.org (…/files/20260805_-_…pdf), sinon None."""
+    m = re.search(r"/(20\d{6})[_\-]", u or "")
+    return m.group(1) if m else None
+
+
+def _doc_recent(d8, days=30):
+    try:
+        return bool(d8) and 0 <= (TODAY - dt.date(int(d8[:4]), int(d8[4:6]), int(d8[6:8]))).days <= days
+    except ValueError:
+        return False
+
+
 def run_watch(raw, site_data):
     """Nouvelles publications des sociétés cotées (brvm.org) et nouveaux 10-K/10-Q (SEC) : actualités + données à jour."""
     path = os.path.join(site_data, "reports.json")
@@ -1225,16 +1238,24 @@ def run_watch(raw, site_data):
             dm = re.search(r"/(20\d{6})", url)
             rows.append({"d": dm.group(1) if dm else None, "ti": title[:200], "u": url})
         return slug, rows, None
+    # une publication n'est « nouvelle » que si son adresse n'a jamais été vue ET si elle est datée de moins de 30 jours
+    # (les pages de brvm.org ne sont pas triées : d'anciens rapports y réapparaissent régulièrement)
+    seen_u = set(st.get("seen") or [])
     with ThreadPoolExecutor(8) as ex:
         for slug, rows, err in ex.map(one, list(st["issuers"])):
             if rows is None:
                 note("watch-brvm", False, f"{slug}: {err}")
                 continue
             note("watch-brvm")
-            old = {r["u"] for r in st["docs"].get(slug, [])}
-            if st["docs"].get(slug) is not None:
-                fresh += [dict(r, slug=slug) for r in rows if r["u"] not in old]
-            st["docs"][slug] = rows[:40]
+            prev = st["docs"].get(slug)
+            known = {r["u"] for r in (prev or [])} | seen_u
+            if prev is not None:
+                fresh += [dict(r, slug=slug) for r in rows if r["u"] not in known and _doc_recent(r.get("d"))]
+            merged = {r["u"]: r for r in (prev or [])}
+            merged.update({r["u"]: r for r in rows})
+            st["docs"][slug] = sorted(merged.values(), key=lambda r: r.get("d") or "", reverse=True)[:60]
+            seen_u.update(r["u"] for r in rows)
+    st["seen"] = sorted(seen_u)[-20000:]
     st["ts"] = int(time.time())
     # dépôts SEC récents (10-K, 10-Q, 20-F, 6-K) des sociétés suivies
     sec_new = []
@@ -1267,9 +1288,16 @@ def run_watch(raw, site_data):
     np_ = os.path.join(site_data, "news.json")
     news = json.load(open(np_, encoding="utf8")) if os.path.exists(np_) else {"items": [], "feeds": {}}
     now = int(time.time())
+    n0 = len(news["items"])  # nettoyage : anciens rapports signalés à tort comme nouveaux
+    news["items"] = [x for x in news["items"] if x.get("f") != "brvm-rapports" or _doc_recent(_doc_date(x.get("u")))]
     for r in fresh:
         tk = st["issuers"].get(r["slug"], {}).get("t")
-        news["items"].insert(0, {"t": now, "ti": r["ti"], "u": r["u"], "s": "brvm.org", "c": "BRVM", "f": "brvm-rapports", "x": f"Nouvelle publication officielle{(' · ' + tk) if tk else ''}"})
+        d8 = r.get("d")
+        t_pub = now if d8 and (TODAY - dt.date(int(d8[:4]), int(d8[4:6]), int(d8[6:]))).days <= 1 else int(dt.datetime(int(d8[:4]), int(d8[4:6]), int(d8[6:]), 12, tzinfo=dt.timezone.utc).timestamp())
+        news["items"].insert(0, {"t": t_pub, "ti": HTML.unescape(r["ti"]), "u": r["u"], "s": "brvm.org", "c": "BRVM", "f": "brvm-rapports", "x": f"Publication officielle du {d8[6:]}/{d8[4:6]}/{d8[:4]}{(' · ' + tk) if tk else ''}"})
+    news["items"].sort(key=lambda x: -(x.get("t") or 0))
+    if len(news["items"]) != n0 and not (fresh or sec_new):
+        save(np_, news)
     for r in sec_new:
         news["items"].insert(0, {"t": now, "ti": f"Dépôt SEC {r['form']} : {r['ti']}", "u": r["u"], "s": "SEC EDGAR", "c": "Tech US", "f": "sec", "x": r["t"]})
     if fresh or sec_new:
