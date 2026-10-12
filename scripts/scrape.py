@@ -128,7 +128,22 @@ NQ_H = {"Origin": "https://www.nasdaq.com", "Referer": "https://www.nasdaq.com/"
 
 
 def money(x):
-    return num(str(x).replace("$", "")) if x not in (None, "", "N/A") else None
+    """« $1,234.56 » -> 1234.56 (format Nasdaq : virgule des milliers, point décimal)."""
+    if x in (None, "", "N/A"):
+        return None
+    try:
+        return float(str(x).replace("$", "").replace(",", "").strip())
+    except ValueError:
+        return None
+
+
+def us_session(now=None):
+    """Séance US d'après l'heure de New York (jours fériés non gérés : la date des cours le corrige)."""
+    t = (now or dt.datetime.now(NY)).astimezone(NY)
+    if t.weekday() >= 5:
+        return "CLOSED"
+    hm = (t.hour, t.minute)
+    return "PRE" if (4, 0) <= hm < (9, 30) else "REGULAR" if hm < (16, 0) and hm >= (9, 30) else "POST" if (16, 0) <= hm < (20, 0) else "CLOSED"
 
 
 def nasdaq_live():
@@ -152,8 +167,9 @@ def nasdaq_live():
             cur = [b, y, y, y, y, 0]
             bars.append(cur)
     day = dt.datetime.fromtimestamp(pts[-1][0], NY).date().isoformat()
-    mstat = str(d.get("marketStatus") or "").upper()
-    state = "REGULAR" if "OPEN" in mstat and "PRE" not in mstat and "AFTER" not in mstat else "PRE" if "PRE" in mstat else "POST" if "AFTER" in mstat else "CLOSED"
+    state = us_session()
+    if day != dt.datetime.now(NY).date().isoformat() and state == "REGULAR":
+        state = "CLOSED"
     r2 = lambda v: round(float(v), 2)  # noqa: E731
     return {"price": r2(price), "prev": r2(prev), "chg": round(price / prev - 1, 6), "day": day, "state": state,
             "open": r2(bars[0][1]), "dayHigh": r2(max(b[2] for b in bars)), "dayLow": r2(min(b[3] for b in bars)),
@@ -324,9 +340,59 @@ MONTHS_EN = {m: i + 1 for i, m in enumerate(["Jan", "Feb", "Mar", "Apr", "May", 
 NQ_SYM = {"CCMP": "COMP", "RTY": "RUT"}
 
 
+def _nq_rows(chunk):
+    """Un paquet watchlist Nasdaq ; en cas d'échec, le paquet est coupé en deux pour isoler le symbole fautif."""
+    url = "https://api.nasdaq.com/api/quote/watchlist?" + "&".join("symbol=" + urllib.parse.quote(f"{s.lower()}|{ac}") for _, s, ac in chunk)
+    try:
+        j = json.loads(get(url, tries=2, headers=NQ_H))
+        rows = j.get("data") or []
+        if isinstance(rows, dict):
+            rows = rows.get("rows") or rows.get("data") or []
+    except Exception as e:  # noqa: BLE001
+        rows, err = [], e
+    else:
+        err = None
+    if rows or len(chunk) == 1:
+        if not rows and err:
+            fail("nasdaq_" + chunk[0][1], err)
+        return rows
+    h = len(chunk) // 2
+    time.sleep(0.3)
+    return _nq_rows(chunk[:h]) + _nq_rows(chunk[h:])
+
+
+def _nq_ext(sym, ac, kind):
+    """Pré-marché (kind=pre) ou après-bourse (kind=post) d'un titre : dernier échange, volume, plus haut / bas."""
+    j = json.loads(get(f"https://api.nasdaq.com/api/quote/{sym}/extended-trading?markettype={kind}&assetclass={ac}&time=0", tries=1, timeout=15, headers=NQ_H))
+    d = j.get("data") or {}
+    rows = (d.get("infoTable") or {}).get("rows") or []
+    if not rows:
+        return None
+    r = rows[0]
+    m = re.match(r"\$?([\d,.]+)", str(r.get("consolidated") or ""))
+    if not m:
+        return None
+    last = money(m.group(1))
+    upd = " ".join(d.get("lastUpdateInfo") or [])
+    mt = re.search(r"([A-Z][a-z]{2}) (\d{1,2}), (\d{4}) (\d{1,2}):(\d{2}) (AM|PM) ET", upd)
+    when, t = None, None
+    if mt and mt.group(1) in MONTHS_EN:
+        hh = int(mt.group(4)) % 12 + (12 if mt.group(6) == "PM" else 0)
+        when = f"{mt.group(3)}-{MONTHS_EN[mt.group(1)]:02d}-{int(mt.group(2)):02d}"
+        t = f"{hh:02d}:{mt.group(5)} ET"
+    vol = num(str(r.get("volume") or "").replace(",", ""))
+    hi = re.match(r"\$?([\d,.]+)", str(r.get("highPrice") or ""))
+    lo = re.match(r"\$?([\d,.]+)", str(r.get("lowPrice") or ""))
+    rf = re.search(r"Close:\s*\$?([\d,.]+)", str(d.get("previousInfo") or ""))
+    return {"s": kind, "last": last, "d": when, "t": t, "vol": int(vol) if vol else None, "ref": money(rf.group(1)) if rf else None,
+            "hi": money(hi.group(1)) if hi else None, "lo": money(lo.group(1)) if lo else None}
+
+
 def us_batch(out_data):
-    """Cours différés de tous les titres US du terminal (actions, ETF, indices) : Nasdaq, par paquets de 40."""
+    """Cours différés de tous les titres US du terminal (actions, ETF, indices) : Nasdaq, par paquets de 25 d'une même classe ;
+    pré-marché et après-bourse des actions et ETF quand la séance étendue est ouverte."""
     summ = load("summary.json", folder=out_data) or {}
+    prev_q = (load("quotes.json", folder=out_data) or {}).get("q") or {}
     want = []
     for x in summ.get("secs", []):
         if x.get("mkt") != "US":
@@ -334,33 +400,71 @@ def us_batch(out_data):
         ac = "etf" if x.get("typ") == "ETF" else "index" if x.get("cls") == "Index" else "stocks"
         want.append((x["id"], NQ_SYM.get(x["id"], x["id"]), ac))
     q = {}
-    for k in range(0, len(want), 40):
-        chunk = want[k:k + 40]
-        url = "https://api.nasdaq.com/api/quote/watchlist?" + "&".join("symbol=" + urllib.parse.quote(f"{s.lower()}|{ac}") for _, s, ac in chunk)
-        try:
-            j = json.loads(get(url, tries=2, headers=NQ_H))
-        except Exception as e:  # noqa: BLE001
-            fail("nasdaq_batch", e)
-            continue
-        rows = j.get("data") or []
-        if isinstance(rows, dict):
-            rows = rows.get("rows") or rows.get("data") or []
-        by = {sym.upper(): sid for sid, sym, _ in chunk}
-        for r in rows:
-            sid = by.get(str(r.get("symbol", "")).upper())
-            last = money(r.get("lastSalePrice") or r.get("lastsale"))
-            if not sid or not last:
-                continue
-            pct = num(str(r.get("percentageChange") or "").replace("%", "").replace("+", ""))
-            rec = {"last": last, "pct": round(pct / 100, 6) if pct is not None else None}
-            m = re.search(r"([A-Z][a-z]{2}) (\d{1,2}), (\d{4})", str(r.get("lastTradeTimestamp") or ""))
-            if m and m.group(1) in MONTHS_EN:
-                rec["d"] = f"{m.group(3)}-{MONTHS_EN[m.group(1)]:02d}-{int(m.group(2)):02d}"
-            vol = num(str(r.get("volume") or "").replace(",", ""))
-            if vol:
-                rec["vol"] = int(vol)
-            q[sid] = rec
-        time.sleep(0.4)
+    for ac in ("stocks", "etf", "index"):
+        part = [w for w in want if w[2] == ac]
+        for k in range(0, len(part), 25):
+            chunk = part[k:k + 25]
+            by = {sym.upper(): sid for sid, sym, _ in chunk}
+            for r in _nq_rows(chunk):
+                sid = by.get(str(r.get("symbol", "")).upper())
+                last = money(r.get("lastSalePrice") or r.get("lastsale"))
+                if not sid or not last:
+                    continue
+                pct = num(str(r.get("percentageChange") or "").replace("%", "").replace("+", ""))
+                rec = {"last": last, "pct": round(pct / 100, 6) if pct is not None else None}
+                m = re.search(r"([A-Z][a-z]{2}) (\d{1,2}), (\d{4})(?: (\d{1,2}):(\d{2}) (AM|PM))?", str(r.get("lastTradeTimestamp") or ""))
+                if m and m.group(1) in MONTHS_EN:
+                    rec["d"] = f"{m.group(3)}-{MONTHS_EN[m.group(1)]:02d}-{int(m.group(2)):02d}"
+                    if m.group(4):
+                        rec["t"] = f"{int(m.group(4)) % 12 + (12 if m.group(6) == 'PM' else 0):02d}:{m.group(5)} ET"
+                vol = num(str(r.get("volume") or "").replace(",", ""))
+                if vol:
+                    rec["vol"] = int(vol)
+                for k2, f in (("prev", "previousClosePrice"), ("o", "openingPrice")):
+                    v = r.get(f)
+                    v = money(v) if isinstance(v, str) else v
+                    if isinstance(v, (int, float)) and v > 0:
+                        rec[k2] = round(float(v), 4)
+                if r.get("marketStatus"):
+                    rec["ms"] = str(r["marketStatus"])
+                q[sid] = rec
+            time.sleep(0.3)
+    # séance étendue : relevée pendant le pré-marché (04:00-09:30 ET) et l'après-bourse (16:00-20:00 ET, +15 min de marge) ;
+    # le dernier après-bourse est conservé la nuit et le week-end (comme sur le terminal), effacé à l'ouverture.
+    now = dt.datetime.now(NY)
+    sess = us_session(now)
+    late_post = now.weekday() < 5 and (20, 0) <= (now.hour, now.minute) < (20, 15)
+    kind = "pre" if sess == "PRE" else "post" if sess == "POST" or late_post else None
+    if kind:
+        from concurrent.futures import ThreadPoolExecutor
+        todo = [(sid, sym, ac) for sid, sym, ac in want if ac in ("stocks", "etf") and sid in q]
+        def one(w):
+            try:
+                return w[0], _nq_ext(w[1], w[2], kind)
+            except Exception as e:  # noqa: BLE001
+                return w[0], e
+        nfail = 0
+        with ThreadPoolExecutor(6) as ex:
+            for sid, ext in ex.map(one, todo):
+                if isinstance(ext, Exception):
+                    nfail += 1
+                    continue
+                if not ext or not ext.get("last"):
+                    continue
+                rec = q[sid]
+                ref = ext.pop("ref", None) or (rec.get("prev") if kind == "pre" else rec.get("last"))
+                if ref:
+                    ext["chg"] = round(ext["last"] - ref, 4)
+                    ext["pct"] = round(ext["last"] / ref - 1, 6)
+                rec["ext"] = ext
+        if nfail:
+            ERRORS["nasdaq_ext"] = f"{nfail}/{len(todo)} séances étendues non lues"
+        log("séance étendue", kind, sum(1 for v in q.values() if v.get("ext")), "titres")
+    elif sess == "CLOSED":
+        for sid, rec in q.items():
+            old = (prev_q.get(sid) or {}).get("ext")
+            if old and old.get("s") == "post":
+                rec["ext"] = old
     for sid, prod in (("BTC", "BTC-USD"), ("ETH", "ETH-USD"), ("SOL", "SOL-USD")):
         try:
             t = json.loads(get(f"https://api.exchange.coinbase.com/products/{prod}/ticker", tries=2))

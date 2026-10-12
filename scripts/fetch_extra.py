@@ -15,7 +15,7 @@ semaines d'une série déjà présente, sauf si un ajustement (split) est détec
 
 Usage : fetch_extra.py --out RAW_DIR [--only nasdaq,fred,cboe,cnn,crypto,wb,sec,analyst,boc,probe] [--news FILE]
 """
-import argparse, csv, datetime as dt, gzip, io, json, math, os, re, sys, time, urllib.parse, urllib.request
+import argparse, csv, datetime as dt, gzip, html as HTML, io, json, math, os, re, sys, time, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -1428,7 +1428,102 @@ def run_news(path):
             continue
         seen.add(k)
         items.append(x)
-    save(path, {"ts": int(time.time()), "items": items[:900], "feeds": {f[0]: f[1] for f in NEWS}})
+    items = tag_news(items[:900], os.path.join(os.path.dirname(path), "summary.json"))
+    save(path, {"ts": int(time.time()), "items": items, "feeds": {f[0]: f[1] for f in NEWS}})
+
+
+# ---------------------------------------------------------------- actualités reliées aux titres et typées
+NEWS_ALIAS = {  # noms usuels des sociétés dans la presse (en plus du nom officiel)
+    "SNTS": ["Sonatel"], "ORAC": ["Orange Côte d'Ivoire", "Orange CI"], "SGBC": ["Société Générale Côte d'Ivoire", "SGBCI", "SGCI"],
+    "ETIT": ["Ecobank Transnational", "Ecobank TI", "Ecobank", "ETI"], "ECOC": ["Ecobank Côte d'Ivoire", "Ecobank CI"], "SIBC": ["Société Ivoirienne de Banque", "SIB"],
+    "CBIBF": ["Coris Bank"], "PALC": ["Palm Côte d'Ivoire", "Palmci"], "SPHC": ["SAPH"], "SOGC": ["SOGB"], "NTLC": ["Nestlé Côte d'Ivoire", "Nestlé CI"],
+    "SLBC": ["Solibra"], "UNLC": ["Unilever Côte d'Ivoire"], "TTLC": ["TotalEnergies Marketing Côte d'Ivoire"], "TTLS": ["TotalEnergies Marketing Sénégal"],
+    "CIEC": ["Compagnie Ivoirienne d'Electricité", "CIE"], "SDCC": ["SODECI"], "ONTBF": ["Onatel"], "BOAC": ["BOA Côte d'Ivoire", "Bank of Africa Côte d'Ivoire"],
+    "BOABF": ["BOA Burkina", "Bank of Africa Burkina"], "BOAB": ["BOA Bénin", "Bank of Africa Bénin"], "BOAS": ["BOA Sénégal", "Bank of Africa Sénégal"],
+    "BOAM": ["BOA Mali", "Bank of Africa Mali"], "BOAN": ["BOA Niger", "Bank of Africa Niger"], "NSBC": ["NSIA Banque"], "BICC": ["BICICI", "BICI CI"],
+    "SMBC": ["SMB"], "STBC": ["SITAB"], "SDSC": ["Africa Global Logistics", "AGL Côte d'Ivoire"], "ORGT": ["Oragroup"], "SNTS ": [],
+    "SAFC": ["Safca"], "SICC": ["SICOR"], "SEMC": ["Eviosys", "SIEM"], "FTSC": ["Filtisac"], "CABC": ["Sicable"], "SIVC": ["Air Liquide Côte d'Ivoire"],
+    "PRSC": ["Tractafric Motors"], "BNBC": ["Bernabé"], "SCRC": ["Sucrivoire"], "ABJC": ["Servair Abidjan"], "LNBB": ["Loterie Nationale du Bénin"],
+    "BICB": ["BIIC Bénin", "Banque Internationale pour l'Industrie et le Commerce"], "SHEC": ["Vivo Energy Côte d'Ivoire"], "STAC": ["SETAO"], "UNXC": ["Uniwax"],
+    "NVDA": ["Nvidia"], "AAPL": ["Apple"], "MSFT": ["Microsoft"], "GOOG": ["Alphabet", "Google"], "GOOGL": ["Alphabet", "Google"], "AMZN": ["Amazon"],
+    "META": ["Meta Platforms", "Facebook"], "TSLA": ["Tesla"], "AVGO": ["Broadcom"], "AMD": ["AMD"], "NFLX": ["Netflix"], "COST": ["Costco"], "INTC": ["Intel"],
+}
+NEWS_STOP = {"meta", "arm", "apple"}  # trop ambigus seuls en minuscules : exigés avec la majuscule
+EVENT_RX = [  # (type, motif) — premier qui correspond
+    ("Résultats", r"\b(r[ée]sultats?|b[ée]n[ée]fices?|chiffre d.affaires|earnings|revenue|profit|quarterly|trimestriel|semestriel|annual results|[ée]tats financiers|rapport.{0,4}activit)"),
+    ("Dividende", r"\b(dividendes?|dividend|coupon|d[ée]tachement)"),
+    ("Assemblée", r"\b(assembl[ée]e g[ée]n[ée]rale|\bAGO\b|\bAGE\b|shareholder meeting)"),
+    ("Dirigeants", r"\b(nomm[ée]|nomination|directeur g[ée]n[ée]ral|PDG|CEO|appoint|steps down|d[ée]mission|conseil d.administration)"),
+    ("Analystes", r"(potentiel de hausse|r[ée]it[èe]re|abaisse son objectif|rel[èe]ve son objectif|rehausse|mise [àa] niveau|surpond[ée]r|sous-pond[ée]r|d[ée]grade|rel[èe]ve (sa|son)|recommandation|objectif de cours|price target|downgrades?|upgrades?|initiates coverage|forecasts)"),
+    ("Notation", r"\b(notation|note souveraine|moody|fitch|s&p global ratings|bloomfield|\bWARA\b|credit rating)"),
+    ("Émission", r"\b(emprunt obligataire|[ée]mission obligataire|eurobond|bond issue|sukuk|appel public|APE\b|obligations? du tr[ée]sor|bons du tr[ée]sor|UMOA-Titres|lev[ée]e de fonds)"),
+    ("Opération", r"\b(acquisition|rachat|fusion|merger|takeover|OPA|OPR|cession|stake|participation|introduction en bourse|IPO|division de (son|l.)action|fractionnement|stock split|split)"),
+    ("Régulation", r"\b(AMF-UMOA|CREPMF|SEC charges|amende|fine|sanction|enqu[êe]te|investigation|suspension|antitrust|r[ée]gulateur)"),
+    ("Banques centrales", r"\b(BCEAO|Fed\b|Federal Reserve|FOMC|BCE|ECB|taux directeurs?|policy rate|rate cut|rate hike|politique mon[ée]taire)"),
+    ("Macro", r"\b(inflation|PIB|GDP|croissance [ée]conomique|ch[ôo]mage|unemployment|payrolls|CPI|IPC|budget|dette publique|FMI|IMF|Banque mondiale)"),
+    ("Matières premières", r"\b(p[ée]trole|oil|brent|wti|OPEP|OPEC|gaz|gas|or\b|gold|cacao|cocoa|caf[ée]|coton|cotton|anacarde|cashew|uranium|lithium|cuivre|copper)"),
+    ("Crypto", r"\\b(bitcoin|ethereum|crypto|stablecoin)"),
+    ("Marchés", r"\b(bourse|BRVM|wall street|nasdaq|s&p 500|dow jones|cac 40|stocks?|actions?|indice|index|rally|selloff|march[ée]s?)"),
+]
+
+
+def _fold(t):
+    import unicodedata
+    return unicodedata.normalize("NFKD", t).encode("ascii", "ignore").decode().lower()
+
+
+def _alias_map(summary_path):
+    try:
+        secs = json.load(open(summary_path, encoding="utf8")).get("secs", [])
+    except Exception:  # noqa: BLE001
+        return []
+    out = []
+    for x in secs:
+        if x.get("cls") != "Equity" or x.get("typ") == "ETF":
+            continue
+        names = set(NEWS_ALIAS.get(x["id"], []))
+        n = re.sub(r"\b(SA|S\.A\.|Inc\.?|Corp\.?|Corporation|Holdings?|Ltd|PLC|plc|Group|Class [A-C]|Common Stock|Co\.|N\.V\.|SE)\b", "", x.get("short") or x.get("n") or "")
+        n = re.sub(r"[,.]", " ", n).strip()
+        n = re.sub(r"\s+", " ", n)
+        if len(n) >= 4:
+            names.add(n)
+        rx = []
+        for a in names:
+            if not a:
+                continue
+            if a.isupper() and len(a) <= 5:
+                rx.append((0, re.compile(r"(?<![A-Za-z])" + re.escape(a) + r"(?![A-Za-z])")))
+            elif a.lower() in NEWS_STOP:
+                rx.append((0, re.compile(r"\b" + re.escape(a) + r"\b")))
+            else:  # sans accents ni casse : « SENEGAL » = « Sénégal »
+                rx.append((1, re.compile(r"\b" + re.escape(_fold(a)) + r"\b")))
+        if len(x["id"]) >= 3 and x.get("mkt") == "BRVM":
+            rx.append((0, re.compile(r"(?<![A-Za-z])" + re.escape(x["id"]) + r"(?![A-Za-z])")))
+        out.append((x["id"], rx))
+    return out
+
+
+def tag_news(items, summary_path):
+    """Relie chaque dépêche aux titres cités (tk) et lui donne un type d'événement (ev). Correspondance sur le titre et le résumé."""
+    amap = _alias_map(summary_path)
+    erx = [(k, re.compile(r, re.I)) for k, r in EVENT_RX]
+    for x in items:
+        x["ti"] = HTML.unescape(HTML.unescape(x.get("ti") or "")).replace("\xa0", " ").strip()
+        if x.get("x"):
+            x["x"] = re.sub(r"\s+", " ", HTML.unescape(HTML.unescape(x["x"])).replace("\xa0", " ")).strip()
+        if x.get("s"):
+            x["s"] = HTML.unescape(x["s"])
+        txt = x["ti"] + " " + (x.get("x") or "")
+        ftx = _fold(txt)
+        tk = [sid for sid, rx in amap if any(r.search(ftx if f else txt) for f, r in rx)]
+        if tk:
+            x["tk"] = tk[:6]
+        else:
+            x.pop("tk", None)
+        ev = next((k for k, r in erx if r.search(x["ti"])), None)
+        if ev:
+            x["ev"] = ev
+    return items
 
 
 # ---------------------------------------------------------------- main
