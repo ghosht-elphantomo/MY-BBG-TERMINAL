@@ -1,5 +1,8 @@
-boc_2024|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20240603.pdf
-boc_2022|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20220601.pdf
-boc_2019|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20190603.pdf
-boc_2016|https://www.brvm.org/sites/default/files/boc_20160601_2.pdf
-boc_2014|https://www.brvm.org/sites/default/files/boc_20140602_2.pdf
+cnbc_curve|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=%40LCO.1%7C%40LCO.2%7C%40LCO.3%7C%40LCO.6%7C%40LCO.12%7C%40CL.1%7C%40CL.2%7C%40CL.3%7C%40CL.6%7C%40CL.12%7C%40RB.1%7C%40HO.1%7C%40NG.1%7C%40NG.2&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
+cnbc_eq|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=XOM%7CCVX%7CSHEL%7CBP%7CTTE%7CFRO%7CDHT%7CINSW%7CSTNG%7C2222-SA&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
+eia_t2|https://ir.eia.gov/wpsr/table2.csv
+eia_t4|https://ir.eia.gov/wpsr/table4.csv
+eia_t7|https://ir.eia.gov/wpsr/table7.csv
+eia_t9|https://ir.eia.gov/wpsr/table9.csv
+eia_sum|https://ir.eia.gov/wpsr/wpsrsummary.pdf
+eia_steo|https://www.eia.gov/outlooks/steo/data/browser/csv.php?v=3a&f=M&s=0&id=&maptype=0&linechart=&mapchart=
