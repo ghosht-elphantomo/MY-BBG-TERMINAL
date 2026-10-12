@@ -31,4 +31,10 @@ else:
     html = ('<!doctype html>\n<html lang="fr"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n' + HEAD + '</head><body>\n' + BODY + JS + '</body></html>\n')
     open(os.path.join(HERE, "index.html"), "w", encoding="utf8").write(html)
+    # dossier servi par Vercel (outputDirectory « public ») : main est déployable tel quel
+    import shutil
+    os.makedirs(os.path.join(HERE, "public"), exist_ok=True)
+    open(os.path.join(HERE, "public", "index.html"), "w", encoding="utf8").write(html)
+    shutil.copy(os.path.join(HERE, "deploy", "robots.txt"), os.path.join(HERE, "public", "robots.txt"))
+    shutil.copy(os.path.join(HERE, "web", "fonts", "LICENSE-DejaVu.txt"), os.path.join(HERE, "public", "LICENSE-fonts.txt"))
     print("index.html", len(html))

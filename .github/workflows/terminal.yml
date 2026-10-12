@@ -6,8 +6,9 @@ name: Terminal
 #   - tous les calculs refaits avec ces cours (ratios, Fear & Greed, cartes, corrélations, alertes...).
 # Chaque soir (22:35 UTC) : base complète (BRVM depuis 2006, Nasdaq, FRED, CBOE, CNN, SEC, Banque mondiale, bulletins BRVM).
 # Les données (data/) sont écrites toutes les 15 min sur la branche `data` ; le site Vercel les lit en direct par un relais
-# (deploy/api/data.js), sans redéploiement. La branche `site` (page + relais) n'est réécrite que si le code change :
-# Vercel ne redéploie donc qu'à ce moment (limite du plan gratuit : 100 déploiements par jour).
+# (api/data.js), sans redéploiement. Vercel déploie `main` (public/ + api/) et la branche `site` (même contenu, réécrite
+# seulement si le code change) ; les branches data, raw et probe ne déclenchent aucun déploiement (vercel.json) :
+# quelques déploiements par jour au plus (limite du plan gratuit : 100).
 # Les données brutes (historiques Nasdaq, comptes SEC, bulletins...) vivent sur la branche `raw`.
 on:
   schedule:
@@ -22,7 +23,7 @@ on:
         default: eod
   push:
     branches: [main]
-    paths: ["web/**", "scripts/**", "build.py", "index.html", "deploy/**", ".github/workflows/terminal.yml"]
+    paths: ["web/**", "scripts/**", "build.py", "index.html", "deploy/**", "api/**", "vercel.json", ".github/workflows/terminal.yml"]
 
 permissions:
   contents: write
@@ -179,8 +180,8 @@ jobs:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           rm -rf /tmp/web && mkdir -p /tmp/web/public /tmp/web/api
-          cp deploy/vercel.json /tmp/web/vercel.json
-          cp deploy/api/data.js /tmp/web/api/data.js
+          cp vercel.json /tmp/web/vercel.json
+          cp api/data.js /tmp/web/api/data.js
           cp index.html /tmp/web/public/index.html
           cp deploy/robots.txt /tmp/web/public/robots.txt
           cp web/fonts/LICENSE-DejaVu.txt /tmp/web/public/LICENSE-fonts.txt
