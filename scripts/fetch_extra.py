@@ -2159,6 +2159,80 @@ def run_cmc(out, site_data=None):
     note("cmc")
 
 
+# ---------------------------------------------------------------- Energy Institute, Statistical Review of World Energy : production et consommation de pétrole par pays
+EI_URLS = ["https://www.energyinst.org/__data/assets/excel_doc/0008/1656215/EI-Stats-Review-ALL-data.xlsx"]  # édition 2025 (données 2024)
+
+
+def _xlsx_sheet(blob, want):
+    """Lignes (listes de cellules) de la feuille dont le nom correspond à `want` (expression régulière), ou None."""
+    import zipfile, xml.etree.ElementTree as ET
+    z = zipfile.ZipFile(io.BytesIO(blob))
+    ns = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main", "r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships"}
+    wb = ET.fromstring(z.read("xl/workbook.xml"))
+    rels = ET.fromstring(z.read("xl/_rels/workbook.xml.rels"))
+    rid2t = {r.get("Id"): r.get("Target") for r in rels}
+    target = None
+    for sh in wb.find("m:sheets", ns):
+        if re.search(want, sh.get("name") or "", re.I):
+            target = rid2t.get(sh.get("{%s}id" % ns["r"]))
+            break
+    if not target:
+        return None
+    target = target.lstrip("/")
+    target = target if target.startswith("xl/") else "xl/" + target
+    ss = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall("m:si", ns):
+            ss.append("".join(x.text or "" for x in si.iter("{%s}t" % ns["m"])))
+    out = []
+    for row in ET.fromstring(z.read(target)).iter("{%s}row" % ns["m"]):
+        cells = {}
+        for c in row.findall("m:c", ns):
+            col = re.match(r"[A-Z]+", c.get("r")).group()
+            v = c.find("m:v", ns)
+            cells[col] = None if v is None else (ss[int(v.text)] if c.get("t") == "s" else v.text)
+        out.append(cells)
+    return out
+
+
+def run_ei(out):
+    path = os.path.join(out, "ei_oil.json")
+    for url in EI_URLS:
+        try:
+            blob = get(url, tries=2, timeout=120)
+            res = {"src": "Energy Institute, Statistical Review of World Energy 2025", "u": url, "d": TODAY.isoformat()}
+            for key, pat in (("prod", r"^Oil Production - (barrels|Tonnes)$|^Oil production - barrels"), ("cons", r"^Oil Consumption - barrels")):
+                rows = _xlsx_sheet(blob, pat)
+                if not rows:
+                    continue
+                hdr_i = next((i for i, r in enumerate(rows[:10]) if sum(1 for v in r.values() if re.match(r"^(19|20)\d\d$", str(v or ""))) > 10), None)
+                if hdr_i is None:
+                    continue
+                cols = {c: int(v) for c, v in rows[hdr_i].items() if re.match(r"^(19|20)\d\d$", str(v or ""))}
+                last = sorted(cols.items(), key=lambda x: x[1])[-11:]
+                data = {}
+                for r in rows[hdr_i + 1:]:
+                    name = (r.get("A") or "").strip()
+                    if not name or name.lower().startswith(("total", "of which", "other", "source", "note", "*", "#", "^")):
+                        continue
+                    vals = []
+                    for c, y in last:
+                        try:
+                            vals.append(round(float(r.get(c)), 1))
+                        except (TypeError, ValueError):
+                            vals.append(None)
+                    if any(v for v in vals if v):
+                        data[name] = vals
+                res[key] = {"years": [y for _, y in last], "unit": "milliers de barils par jour", "rows": data}
+            if res.get("prod") and "US" in res["prod"]["rows"] or res.get("prod") and "United States" in res["prod"]["rows"]:
+                save(path, res)
+                note("ei")
+                return
+            note("ei", False, "feuilles introuvables")
+        except Exception as e:  # noqa: BLE001
+            note("ei", False, str(e))
+
+
 # ---------------------------------------------------------------- contrats à terme en continu (1er mois) : Brent, WTI, gaz, or
 FUT_Y = (("BRENT", "BZ=F"), ("WTI", "CL=F"), ("NATGAS", "NG=F"), ("GOLD", "GC=F"))
 
@@ -2227,7 +2301,56 @@ def run_eia(out):
                 keep[r[0].strip()] = [float(x) if x not in ("", "NA") else None for x in r[1:8]]
             except ValueError:
                 continue
-    save(os.path.join(out, "eia_wpsr.json"), {"d": TODAY.isoformat(), "src": "EIA, Weekly Petroleum Status Report, table 1 (millions de barils)", "hdr": hdr, "rows": keep})
+    flows = {}
+
+    def tab(n):
+        try:
+            return list(csv.reader(io.StringIO(get(f"https://ir.eia.gov/wpsr/table{n}.csv", tries=2, timeout=40).decode("utf8", "replace"))))
+        except Exception as e:  # noqa: BLE001
+            note("eia", False, f"table {n}: {e}")
+            return []
+    fl = lambda x: float(x.replace(",", "")) if re.match(r"^-?[\d,]+(\.\d+)?$", (x or "").strip()) else None
+
+    def put(key, name, unit, r, ci):
+        try:
+            flows[key] = {"n": name, "u": unit, "v": [fl(r[ci[0]]), fl(r[ci[1]]), fl(r[ci[2]])]}
+        except IndexError:
+            pass
+    t9 = tab(9)  # production, raffinage
+    for r in t9[1:]:
+        lab = (r[1] if len(r) > 1 else "").strip()
+        if lab == "Domestic Production" and "prod" not in flows:
+            put("prod", "Production de brut des États-Unis", "kb/j", r, (2, 3, 4))
+        elif lab == "Crude Oil Inputs" and "ref_in" not in flows:
+            put("ref_in", "Brut traité par les raffineries", "kb/j", r, (2, 3, 4))
+        elif lab == "Percent Utilization" and "util" not in flows:
+            put("util", "Taux d’utilisation des raffineries", "%", r, (2, 3, 4))
+    t7 = tab(7)  # importations, exportations
+    sec_ = "tot"
+    for r in t7[1:]:
+        lab = (r[0] if r else "").strip()
+        if lab.startswith("Crude Oil Net Imports"):
+            sec_ = "crude"
+            put("crude_net", "Importations nettes de brut", "kb/j", r, (1, 2, 4))
+        elif lab.startswith("Total Products Net Imports"):
+            sec_ = "prod"
+            put("prod_net", "Importations nettes de produits", "kb/j", r, (1, 2, 4))
+        elif lab.startswith("Net Imports") and sec_ == "tot":
+            put("tot_net", "Importations nettes (pétrole et produits)", "kb/j", r, (1, 2, 4))
+        elif lab == "Commercial" and sec_ == "crude" and "crude_imp" not in flows:
+            put("crude_imp", "Importations de brut", "kb/j", r, (1, 2, 4))
+        elif lab == "Exports":
+            k = {"tot": "tot_exp", "crude": "crude_exp", "prod": "prod_exp"}[sec_]
+            if k not in flows:
+                put(k, {"tot_exp": "Exportations totales (brut et produits)", "crude_exp": "Exportations de brut", "prod_exp": "Exportations de produits"}[k], "kb/j", r, (1, 2, 4))
+    t4 = tab(4)  # stocks détaillés
+    for r in t4[1:]:
+        lab = (r[0] if r else "").strip()
+        for k, n in (("Cushing", "Stocks de Cushing (point de livraison du WTI)"), ("Total Stocks (Including SPR)", "Stocks totaux de pétrole (réserve stratégique comprise)")):
+            if lab == k:
+                put("cush" if k == "Cushing" else "tot_stk", n, "Mb", r, (1, 2, 4))
+    save(os.path.join(out, "eia_wpsr.json"), {"d": TODAY.isoformat(), "src": "EIA, Weekly Petroleum Status Report (tableaux 1, 4, 7, 9)", "hdr": hdr, "rows": keep,
+                                              "week": hdr[1] if len(hdr) > 1 else None, "flows": flows})
     note("eia")
 
 # ---------------------------------------------------------------- actualités reliées aux titres et typées
@@ -2341,7 +2464,7 @@ def main():
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
-             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out))]
+             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("ei", lambda: run_ei(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

@@ -1363,7 +1363,7 @@ def derive(extra, out, files, secs, fund, fcf_path, dmeta, ndx, log):
              ("uemoa", lambda: uemoa(extra, out, secs_by, None, log)),
              ("prof", lambda: profiles(extra, out, secs_by, log)),
              ("anom", lambda: anomalies(out, files, secs_by, log)),
-             ("macro", lambda: [jsave(os.path.join(out, f), jload(os.path.join(extra, f))) for f in ("bceao.json", "umoa_curves.json", "eia_wpsr.json") if extra and os.path.exists(os.path.join(extra, f))]),
+             ("macro", lambda: [jsave(os.path.join(out, f), jload(os.path.join(extra, f))) for f in ("bceao.json", "umoa_curves.json", "eia_wpsr.json", "ei_oil.json") if extra and os.path.exists(os.path.join(extra, f))]),
              ("seed", lambda: [jsave(os.path.join(out, f), jload(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "seed", f))) for f in ("geo_world.json", "chokepoints.json")])]
     for name, fn in steps:
         try:

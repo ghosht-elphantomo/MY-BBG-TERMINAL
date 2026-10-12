@@ -3243,42 +3243,139 @@ function gcDraw(host, lines) {
     if (best) tip(e, `<b>${esc(best[0].lab)}</b> · ${best[1][0] < 1 ? num(best[1][0] * 12, 0) + ' mois' : num(best[1][0], 0) + ' an(s)'} : <b>${num(best[1][1] * 100, 2)} %</b>`); else untip(); }; host.onmouseleave = untip;
 }
 
-/* ------------------------------------------------------------------ BMAP : carte des flux pétroliers (détroits EIA, cours, stocks US, actualités) */
+/* ------------------------------------------------------------------ BMAP : carte et tableau de bord du pétrole */
+const OIL_COL = { exp: '#ff9e2b', imp: '#5fd0ea' };
+function oilFacts(CP, OIL, WP, EI) {
+  const F = [], cb = OIL && OIL.curve && OIL.curve.BRENT || [], cw = OIL && OIL.curve && OIL.curve.WTI || [];
+  if (cb.length > 1) { const m1 = cb[0], mL = cb.find(x => x.k === '@LCO.12') || cb[cb.length - 1], d = m1.last - mL.last;
+    F.push(`Courbe du Brent en <b>${d > 0 ? 'déport' : 'report'}</b> : 1er mois ${num(m1.last, 2)} $ contre ${num(mL.last, 2)} $ à 12 mois (${d > 0 ? '+' : ''}${num(d, 2)} $). ${d > 5 ? 'Un déport aussi marqué signale un marché physique très tendu : le baril livrable tout de suite vaut beaucoup plus que le baril futur.' : d < -1 ? 'Le report signale un marché bien approvisionné (stockage rémunéré).' : 'Courbe presque plate : marché équilibré.'}`); }
+  if (cb.length && cw.length) F.push(`Écart Brent − WTI : <b>${num(cb[0].last - cw[0].last, 2)} $</b> (Brent ${num(cb[0].last, 2)} $, WTI ${num(cw[0].last, 2)} $).`);
+  const P = OIL && OIL.prod || {}; if (P['@RB.1'] && P['@HO.1'] && cw.length) { const c321 = (2 * P['@RB.1'].last * 42 + P['@HO.1'].last * 42 - 3 * cw[0].last) / 3; F.push(`Marge de raffinage 3-2-1 (essence + gazole contre WTI) : <b>${num(c321, 2)} $/b</b>${c321 > 35 ? ', très élevée : les produits raffinés manquent plus que le brut' : ''}.`); }
+  const fl = WP && WP.flows || {}; const yy = k => fl[k] && fl[k].v[2] ? fl[k].v[0] / fl[k].v[2] - 1 : null;
+  if (fl.crude_exp) F.push(`États-Unis, semaine au ${esc(WP.week || '')} : exportations de brut ${num(fl.crude_exp.v[0], 0)} kb/j (${yy('crude_exp') != null ? (yy('crude_exp') > 0 ? '+' : '') + num(yy('crude_exp') * 100, 0) + ' % sur un an' : ''}), production ${fl.prod ? num(fl.prod.v[0], 0) + ' kb/j' : 'n.d.'}.`);
+  const R = WP && WP.rows || {}; const spr = R['Strategic Petroleum Reserve (SPR)']; if (spr) F.push(`Réserve stratégique américaine : <b>${num(spr[0], 1)} Mb</b>, ${num((spr[0] / spr[4] - 1) * 100, 0)} % sur un an.`);
+  const k = CP.years.length - 1, by = Object.fromEntries(CP.pts.map(p => [p.k, p.v])), i23 = CP.years.indexOf(2023);
+  if (by.BAB && i23 >= 0) F.push(`Bab el-Mandeb : ${num(by.BAB[k], 1)} Mb/j (${CP.years[k]}) contre ${num(by.BAB[i23], 1)} en 2023 (${num((by.BAB[k] / by.BAB[i23] - 1) * 100, 0)} %) après les attaques en mer Rouge ; détour par le cap de Bonne-Espérance : ${num(by.CAP[k], 1)} Mb/j (${num(by.CAP[i23], 1)} en 2023).`);
+  if (by.HOR) F.push(`Ormuz : ${num(by.HOR[k], 1)} Mb/j (${CP.years[k]}), soit ${num(by.HOR[k] / CP.world.maritime[k] * 100, 0)} % du commerce maritime mondial de pétrole.`);
+  if (EI && EI.prod) { const Y = EI.prod.years, L = Y.length - 1, rows = Object.entries(EI.prod.rows).filter(([n]) => !/world|total|opec|non-opec|of which|europe$|africa$|america$|asia pacific|middle east$|cis$|oecd|european union/i.test(n)).sort((a, b) => (b[1][L] || 0) - (a[1][L] || 0));
+    if (rows.length > 2) F.push(`Premiers producteurs en ${Y[L]} : ${rows.slice(0, 3).map(([n, v]) => `${esc((CP.cty[n] || [])[2] || n)} ${num(v[L] / 1000, 1)} Mb/j`).join(', ')}.`); }
+  return F;
+}
 PAGES.BMAP = async (m, alive) => {
-  setTitle('Oil Flow Map'); const [G, CP, WP, N] = await Promise.all([getJSON('geo_world.json').catch(() => null), getJSON('chokepoints.json').catch(() => null), getJSON('eia_wpsr.json').catch(() => null), getJSON('news.json').catch(() => ({ items: [] }))]); if (!alive()) return;
+  setTitle('Oil Flow Map'); const [G, CP, WP, N, OIL, EI] = await Promise.all([getJSON('geo_world.json').catch(() => null), getJSON('chokepoints.json').catch(() => null), getJSON('eia_wpsr.json').catch(() => null), getJSON('news.json').catch(() => ({ items: [] })), getJSON('oil.json').catch(() => null), getJSON('ei_oil.json').catch(() => null)]); if (!alive()) return;
   if (!G || !CP) { m.innerHTML = pn('Carte du pétrole', 'BMAP', '<div class="empty">Fond de carte en attente du prochain relevé.</div>'); return; }
-  const st = ST.bmap = ST.bmap || { y: CP.years.length - 1 }; const yi = st.y, yr = CP.years[yi];
-  const oil = ['BRENT', 'WTI', 'BRENTS', 'NATGAS', 'USO', 'XLE'].map(id => Q.by[id]).filter(Boolean);
+  const st = ST.bmap = ST.bmap || { y: CP.years.length - 1, lay: { ch: 1, rt: 1, pp: 1, tm: 1, pr: 1 } }; const yi = Math.min(st.y, CP.years.length - 1), yr = CP.years[yi];
+  const tab = tabState('BMAP', 'map'); setTabs([['map', 'Carte des flux'], ['mkt', 'Marché et courbes'], ['us', 'Flux des États-Unis'], ['prod', 'Producteurs et consommateurs'], ['chk', 'Détroits : historique']], tab, k => { ST.tab.BMAP = k; render(); });
   const onews = (N.items || []).filter(x => /p[ée]trol(e|i[eè]re?s?)\b|\bbrent\b|\bwti\b|\boil\b|\bcrude\b|opep|opec|baril|barrel|ormuz|hormuz|tanker|raffinerie|refiner/i.test(x.ti)).slice(0, 40);
-  const R = WP && WP.rows || {}; const wr = k => R[k] || null;
-  setTabs(CP.years.map((y, i) => [String(i), String(y)]), String(yi), k => { st.y = +k; render(); });
-  m.innerHTML = `<div class="grid side"><div class="pn"><div class="pt">Flux pétroliers maritimes · détroits stratégiques · ${yr}<span class="sel">${esc(CP.unit)}</span><span class="code">BMAP</span></div><div class="cv" id="bmC" style="height:max(420px, calc(100vh - 300px - var(--nwh, 90px)))"></div>
-      <div class="lect">Cercles = volumes ${yr} par détroit (source : <b>EIA</b>, World Oil Transit Chokepoints, mise à jour du ${fds(CP.upd || '')}, données ${CP.years[0]} à ${CP.years[CP.years.length - 1]}, dernière édition publiée). Traits = principales routes, <b>schématiques</b> (épaisseur = volume du détroit traversé) : ce ne sont pas des positions de navires. Commerce maritime mondial de pétrole ${yr} : <strong>${num(CP.world.maritime[yi], 1)} Mb/j</strong> pour une offre mondiale de ${num(CP.world.supply[yi], 1)} Mb/j. Survol = historique.</div></div>
-    <div class="grid" style="align-content:start">${pn('Cours', 'BMAP', `<table class="t"><tbody><thead><tr><th class="l"></th><th>Dernier</th><th>Var.</th><th>1 mois</th><th>Date</th></tr></thead>${oil.map(s => `<tr data-sec="${s.id}" data-to="GP" title="${esc(s.n)}" style="cursor:pointer"><td class="l tk">${s.id}</td><td>${px(s, s.last)}</td><td>${pc(s.pct)}</td><td>${pc(s.r1m, 1)}</td><td class="dm">${fd(s.dt).slice(0, 5)}</td></tr>`).join('')}</tbody></table>`, { np: true, lect: `BRENT, WTI, NATGAS : contrats à terme 1er mois (ICE, NYMEX), les cours d’Investing, TradingView ou Bloomberg (CO1, CL1, NG1), différé d’environ 10 min${Q.by.BRENT && Q.by.BRENT.q && Q.by.BRENT.q.ct ? ' (Brent : ' + esc(Q.by.BRENT.q.ct) + ')' : ''}. BRENTS : Brent daté, prix physique au comptant publié par l’EIA (J-1) ; en période de crise il peut s’écarter fortement du contrat à terme. USO, XLE : ETF. Clic = graphique.` })}
-      ${WP ? pn('Stocks pétroliers des États-Unis (Mb)', 'BMAP', `<table class="t"><thead><tr><th class="l"></th><th>${esc(String((WP.hdr || [])[1] || '').replace(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/, (_, mo, da, y) => `${da.padStart(2, '0')}/${mo.padStart(2, '0')}/${y.length === 2 ? '20' + y : y}`))}</th><th>sem. préc.</th><th>Var.</th><th>il y a 1 an</th></tr></thead><tbody>${['Crude Oil', 'Commercial (Excluding SPR)', 'Strategic Petroleum Reserve (SPR)', 'Total Motor Gasoline', 'Distillate Fuel Oil'].map(k => wr(k) ? `<tr><td class="l am">${{ 'Crude Oil': 'Brut (total)', 'Commercial (Excluding SPR)': 'Brut commercial', 'Strategic Petroleum Reserve (SPR)': 'Réserve stratégique', 'Total Motor Gasoline': 'Essence', 'Distillate Fuel Oil': 'Distillats' }[k]}</td><td>${num(wr(k)[0], 1)}</td><td>${num(wr(k)[1], 1)}</td><td class="${cls(wr(k)[2])}">${num(wr(k)[2], 1)}</td><td>${num(wr(k)[4], 1)}</td></tr>` : '').join('')}</tbody></table>`, { np: true, lect: `Source : ${esc(WP.src || 'EIA')}, relevé le ${fds(WP.d)}. Publication hebdomadaire (mercredi).` }) : ''}
+  const cb = OIL && OIL.curve && OIL.curve.BRENT || [], cw = OIL && OIL.curve && OIL.curve.WTI || [], P = OIL && OIL.prod || {};
+  const oilT = OIL ? new Date(OIL.ts * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  const qrow = (lab, x, nd = 2, u = '') => x ? `<tr title="${esc(x.n || '')}"><td class="l am">${lab} <span class="dm">${esc((x.n || '').replace(/^.*\((.*)\)$/, '$1'))}</span></td><td class="wh">${num(x.last, nd)}${u}</td><td>${x.pct != null ? pc(x.pct) : '—'}</td></tr>` : '';
+  const mktPanel = () => { const c321 = P['@RB.1'] && P['@HO.1'] && cw[0] ? (2 * P['@RB.1'].last * 42 + P['@HO.1'].last * 42 - 3 * cw[0].last) / 3 : null, dsl = P['@HO.1'] && cb[0] ? P['@HO.1'].last * 42 - cb[0].last : null, b12 = cb.find(x => x.k === '@LCO.12');
+    return pn('Marché pétrolier', 'BMAP', `<table class="t"><thead><tr><th class="l">Contrat</th><th>Dernier</th><th>Var.</th></tr></thead><tbody>${qrow('Brent (ICE)', cb[0])}${qrow('WTI (NYMEX)', cw[0])}${qrow('Essence RBOB ($/gal)', P['@RB.1'], 4)}${qrow('Gazole ULSD ($/gal)', P['@HO.1'], 4)}${qrow('Gaz Henry Hub', P['@NG.1'], 3)}
+      ${cb[0] && cw[0] ? `<tr class="sep2"><td class="l am">Écart Brent − WTI</td><td class="wh">${num(cb[0].last - cw[0].last, 2)}</td><td class="dm">$/b</td></tr>` : ''}${cb[0] && b12 ? `<tr><td class="l am">Brent 1er mois − 12 mois</td><td class="wh">${num(cb[0].last - b12.last, 2)}</td><td class="dm">${cb[0].last > b12.last ? 'déport' : 'report'}</td></tr>` : ''}
+      ${c321 != null ? `<tr><td class="l am">Marge de raffinage 3-2-1 (WTI)</td><td class="wh">${num(c321, 2)}</td><td class="dm">$/b</td></tr>` : ''}${dsl != null ? `<tr><td class="l am">Marge gazole (Brent)</td><td class="wh">${num(dsl, 2)}</td><td class="dm">$/b</td></tr>` : ''}</tbody></table>`,
+      { np: true, lect: OIL ? `Contrats à terme 1er mois (ICE, NYMEX), relevé ${oilT}, différé d’environ 10 min. Marge 3-2-1 = (2 × essence + 1 × gazole − 3 × WTI) ÷ 3, en $ par baril (42 gallons). Clic ailleurs : BRENT, WTI pour les graphiques.` : 'Tableau de bord en attente du prochain relevé (toutes les 15 min).' }); };
+  const facts = oilFacts(CP, OIL, WP, EI);
+  if (tab === 'map') {
+    m.innerHTML = `<div class="grid side"><div class="pn"><div class="pt">Flux pétroliers maritimes · détroits ${yr}<span class="sel">${esc(CP.unit)}</span><span class="code">BMAP</span></div>
+      <div class="tools"><span class="tlab">Année</span>${CP.years.map((y, i) => `<button class="tb ${i === yi ? 'on' : ''}" data-yi="${i}">${y}</button>`).join('')}<span class="tlab">Couches</span>${[['ch', 'Détroits'], ['rt', 'Routes'], ['pp', 'Oléoducs'], ['tm', 'Terminaux'], ['pr', 'Producteurs']].map(([k, l]) => `<button class="tb ${st.lay[k] ? 'on' : ''}" data-ly="${k}">${l}</button>`).join('')}</div>
+      <div class="cv" id="bmC" style="height:max(440px, calc(100vh - 330px - var(--nwh, 90px)))"></div>
+      <div class="lect">Cercles rouges = volumes ${yr} par détroit (EIA, World Oil Transit Chokepoints, édition du ${fds(CP.upd || '')}). Traits ambre = routes principales, <b>schématiques</b>. Pointillés bleus = oléoducs de contournement (capacités : AIE). Carrés = grands terminaux (ambre : exportation, bleu : importation ; positions approximatives). Bulles vertes = production de pétrole par pays${EI && EI.prod ? ` (${EI.prod.years[EI.prod.years.length - 1]}, Energy Institute)` : ' (en attente de la collecte du soir)'}. Survol = détails.</div></div>
+      <div class="grid" style="align-content:start">${pn('Points clés', 'BMAP', `<div class="lectb">${facts.map(f => `<p>${f}</p>`).join('') || '<p class="dm">En attente des données.</p>'}</div>`)}
+      ${mktPanel()}
       ${CP.y2026 ? pn(esc(CP.y2026.title), 'BMAP', `<table class="t"><tbody>${CP.y2026.pts.map(x => `<tr><td class="l am" style="vertical-align:top;white-space:nowrap">${esc(x.d.length === 7 ? mLab(x.d) : x.d)}</td><td class="l" style="white-space:normal">${esc(x.t)} <a href="${esc(x.u)}" target="_blank" rel="noopener" class="dm">${esc(x.src)}</a></td></tr>`).join('')}</tbody></table>`, { np: true, lect: esc(CP.y2026.note || '') }) : ''}
       ${pn(`Actualités du pétrole (${onews.length})`, 'TOP', `<div style="max-height:360px;overflow:auto">${onews.map(x => newsRow2(x, { short: true })).join('') || '<div class="dm">Aucune dépêche récente.</div>'}</div>`)}</div></div>`;
-  /* dessin : projection équirectangulaire (latitudes 72 N à 56 S), routes animées */
-  const host = $('bmC'); const cv = document.createElement('canvas'); host.appendChild(cv); const ctx = cv.getContext('2d');
-  const byK = Object.fromEntries(CP.pts.map(p => [p.k, p])), vmax = Math.max(...CP.pts.map(p => p.v[yi]));
-  let W = 0, H = 0, dpr = 1, land = null, t0 = performance.now(), hover = null;
+    m.querySelectorAll('[data-yi]').forEach(b => b.onclick = () => { st.y = +b.dataset.yi; render(); }); m.querySelectorAll('[data-ly]').forEach(b => b.onclick = () => { st.lay[b.dataset.ly] = st.lay[b.dataset.ly] ? 0 : 1; render(); });
+    bmapDraw($('bmC'), G, CP, yi, st.lay, EI);
+    return;
+  }
+  if (tab === 'mkt') {
+    const eq = OIL && OIL.eq || [], maj = eq.filter(x => !['FRO', 'DHT', 'INSW', 'STNG', 'TNK', 'NAT'].includes(x.s)), tank = eq.filter(x => ['FRO', 'DHT', 'INSW', 'STNG', 'TNK', 'NAT'].includes(x.s));
+    const eqT = L => `<table class="t"><thead><tr><th class="l">Titre</th><th class="l">Société</th><th>Cours</th><th>Var.</th><th>Plus bas 52 s.</th><th>Plus haut 52 s.</th></tr></thead><tbody>${L.map(x => `<tr><td class="l tk">${esc(x.s)}</td><td class="l nm">${esc(x.n || '')}</td><td class="wh">${num(x.last, 2)}</td><td>${x.pct != null ? pc(x.pct) : '—'}</td><td>${num(x.lo52, 2)}</td><td>${num(x.hi52, 2)}</td></tr>`).join('')}</tbody></table>`;
+    m.innerHTML = `<div class="grid c2">${pn('Courbes à terme : Brent et WTI', 'BMAP', cvb('bmK', 300), { lect: `Prix de chaque échéance (abscisse = mois avant livraison). Courbe descendante = <b>déport</b> (backwardation) : le pétrole immédiat est rare. Courbe montante = <b>report</b> (contango). Relevé ${oilT}.` })}
+      ${pn('Échéances', 'BMAP', `<table class="t"><thead><tr><th class="l">Échéance</th><th>Brent</th><th>WTI</th><th>Écart</th></tr></thead><tbody>${cb.map((b, i) => { const w = cw[i]; return `<tr><td class="l am">${esc((b.n || '').replace(/^.*\((.*)\)$/, '$1'))}</td><td class="wh">${num(b.last, 2)}</td><td>${w ? num(w.last, 2) : '—'}</td><td>${w ? num(b.last - w.last, 2) : '—'}</td></tr>`; }).join('')}</tbody></table>`, { np: true })}</div>
+      <div class="grid c2">${mktPanel()}${pn('Brent et WTI sur un an (contrats 1er mois)', 'BMAP', cvb('bmH', 260))}</div>
+      <div class="grid c2">${pn('Grandes compagnies pétrolières (cours en $)', 'BMAP', eqT(maj), { np: true })}${pn('Armateurs de pétroliers : indicateur du fret', 'BMAP', eqT(tank), { np: true, lect: 'Quand les routes s’allongent (détours par le cap de Bonne-Espérance, crise d’Ormuz), les taux de fret montent et ces titres avec. NYSE, différé.' })}</div>`;
+    const kx = s_ => { const e = s_.exp ? new Date(s_.exp) : null; return e ? Math.max(0, (e - Date.now()) / 2.63e9) : null; };
+    oilCurveDraw($('bmK'), [{ lab: 'Brent', col: '#ff9e2b', pts: cb.map(x => [kx(x), x.last]) }, { lab: 'WTI', col: '#5fd0ea', pts: cw.map(x => [kx(x), x.last]) }]);
+    const [B, W] = await Promise.all([series('BRENT').catch(() => null), series('WTI').catch(() => null)]); if (!alive() || !B) return;
+    const k0 = Math.max(0, B.x.length - 260), X = B.x.slice(k0), wm = W ? new Map(W.x.map((d, i) => [d, W.c[i]])) : new Map();
+    new TSChart($('bmH'), { panes: [{ h: 1, fmt: v => num(v, 0) + ' $' }], grid: 'dot', xticks: bbgTicks }).set({ x: X, series: [{ y: B.c.slice(k0), color: '#ff9e2b', w: 1.5, label: 'Brent', fmt: v => num(v, 2) }, { y: X.map(d => wm.get(d) ?? null), color: '#5fd0ea', w: 1.3, label: 'WTI', fmt: v => num(v, 2), connect: true }] }, [0, X.length - 1]);
+    return;
+  }
+  if (tab === 'us') {
+    const fl = WP && WP.flows || {}, R = WP && WP.rows || {};
+    const frow = k => { const f = fl[k]; if (!f) return ''; const [a, b, c] = f.v; return `<tr><td class="l am" style="white-space:normal">${esc(f.n)}</td><td class="wh">${num(a, f.u === '%' ? 1 : f.u === 'Mb' ? 1 : 0)}</td><td>${num(b, f.u === '%' ? 1 : f.u === 'Mb' ? 1 : 0)}</td><td class="${cls(a - b)}">${a != null && b != null ? (a - b > 0 ? '+' : '') + num(a - b, f.u === 'kb/j' ? 0 : 1) : '—'}</td><td>${num(c, f.u === '%' ? 1 : f.u === 'Mb' ? 1 : 0)}</td><td>${f.u !== '%' && a != null && c ? pc(a / c - 1, 1) : '—'}</td><td class="dm">${f.u}</td></tr>`; };
+    const srow = (k, lab) => R[k] ? `<tr><td class="l am" style="white-space:normal">${lab}</td><td class="wh">${num(R[k][0], 1)}</td><td>${num(R[k][1], 1)}</td><td class="${cls(R[k][2])}">${num(R[k][2], 1)}</td><td>${num(R[k][4], 1)}</td><td>${pc(R[k][6] / 100, 1)}</td><td class="dm">Mb</td></tr>` : '';
+    const head = `<thead><tr><th class="l">Semaine au ${esc(WP && WP.week || '—')}</th><th>Dernière</th><th>Précédente</th><th>Var.</th><th>Il y a un an</th><th>Sur un an</th><th class="l">Unité</th></tr></thead>`;
+    m.innerHTML = `<div class="grid c2">${pn('États-Unis : production, échanges, raffinage', 'BMAP', `<table class="t">${head}<tbody>${['prod', 'crude_imp', 'crude_exp', 'crude_net', 'prod_exp', 'prod_net', 'tot_exp', 'tot_net', 'ref_in', 'util'].map(frow).join('')}</tbody></table>`, { np: true, lect: `Source : ${esc(WP && WP.src || 'EIA')}, relevé le ${fds(WP && WP.d)}. kb/j = milliers de barils par jour ; importations nettes négatives = exportateur net. Publication chaque mercredi.` })}
+      ${pn('États-Unis : stocks', 'BMAP', `<table class="t">${head}<tbody>${srow('Crude Oil', 'Brut (total)')}${srow('Commercial (Excluding SPR)', 'Brut commercial')}${frow('cush')}${srow('Strategic Petroleum Reserve (SPR)', 'Réserve stratégique')}${srow('Total Motor Gasoline', 'Essence')}${srow('Distillate Fuel Oil', 'Distillats (gazole, fioul)')}${srow('Kerosene-Type Jet Fuel', 'Kérosène')}${srow('Propane/Propylene', 'Propane')}${frow('tot_stk')}</tbody></table>`, { np: true })}</div>
+      <div class="grid c2">${pn('Exportations et importations de brut (kb/j)', 'BMAP', cvb('bmU', 230))}${pn('Lecture', 'BMAP', `<div class="lectb">${facts.filter(f => /États-Unis|stratégique/.test(f)).map(f => `<p>${f}</p>`).join('')}</div>`)}</div>`;
+    if (fl.crude_exp && fl.crude_imp) barChart($('bmU'), { labels: ['Import. sem.', 'Import. 1 an', 'Export. sem.', 'Export. 1 an'], values: [fl.crude_imp.v[0], fl.crude_imp.v[2], fl.crude_exp.v[0], fl.crude_exp.v[2]], fmt: v => num(v, 0), labelsOnBars: true, pos: '#3d7cc9' });
+    return;
+  }
+  if (tab === 'prod') {
+    if (!EI || !EI.prod) { m.innerHTML = pn('Producteurs et consommateurs', 'BMAP', '<div class="empty">Statistiques annuelles en attente de la collecte du soir.</div>'); return; }
+    const agg = /world|total|opec|non-opec|of which|europe$|africa$|america$|asia pacific|middle east$|cis$|oecd|european union|other/i;
+    const tbl = (D, lab) => { const Y = D.years, L = Y.length - 1, w = (D.rows.World || D.rows['Total World'] || [])[L]; const rows = Object.entries(D.rows).filter(([n]) => !agg.test(n)).sort((a, b) => (b[1][L] || 0) - (a[1][L] || 0)).slice(0, 25);
+      return `<table class="t"><thead><tr><th class="l">${lab}</th><th>${Y[L]}</th><th>Part</th><th>Sur un an</th><th>Sur 10 ans</th><th></th></tr></thead><tbody>${rows.map(([n, v]) => `<tr><td class="l am">${esc((CP.cty[n] || [])[2] || n)}</td><td class="wh">${num(v[L] / 1000, 2)}</td><td>${w ? num(v[L] / w * 100, 1) + ' %' : '—'}</td><td>${v[L - 1] ? pc(v[L] / v[L - 1] - 1, 1) : '—'}</td><td>${v[0] ? pc(v[L] / v[0] - 1, 0) : '—'}</td><td>${sparkSVG(v, 80, 16)}</td></tr>`).join('')}${w ? `<tr class="sep2"><td class="l">Monde</td><td class="wh">${num(w / 1000, 2)}</td><td></td><td>${pc(w / (D.rows.World || D.rows['Total World'])[L - 1] - 1, 1)}</td><td></td><td></td></tr>` : ''}</tbody></table>`; };
+    m.innerHTML = `<div class="grid c2">${pn('Premiers producteurs de pétrole (Mb/j)', 'BMAP', tbl(EI.prod, 'Pays'), { np: true, lect: `Source : ${esc(EI.src)}. Production = brut, condensats, schistes, sables bitumineux et liquides de gaz naturel ; en millions de barils par jour.` })}
+      ${EI.cons ? pn('Premiers consommateurs de pétrole (Mb/j)', 'BMAP', tbl(EI.cons, 'Pays'), { np: true, lect: `Source : ${esc(EI.src)}.` }) : ''}</div>`;
+    return;
+  }
+  /* détroits : historique */
+  const k23 = CP.years.indexOf(2023), L = CP.years.length - 1;
+  m.innerHTML = `${pn('Détroits stratégiques : volumes par année (Mb/j)', 'BMAP', `<table class="t"><thead><tr><th class="l">Détroit</th>${CP.years.map(y => `<th>${y}</th>`).join('')}<th>Part ${CP.years[L]}</th><th>vs 2023</th><th></th></tr></thead><tbody>${CP.pts.map(p => `<tr><td class="l am">${esc(p.n)}</td>${p.v.map(v => `<td>${num(v, 1)}</td>`).join('')}<td>${num(p.v[L] / CP.world.maritime[L] * 100, 0)} %</td><td>${k23 >= 0 ? pc(p.v[L] / p.v[k23] - 1, 0) : '—'}</td><td>${sparkSVG(p.v, 80, 16)}</td></tr>`).join('')}
+    <tr class="sep2"><td class="l">Commerce maritime mondial</td>${CP.world.maritime.map(v => `<td>${num(v, 1)}</td>`).join('')}<td></td><td></td><td></td></tr><tr><td class="l">Offre mondiale de pétrole</td>${CP.world.supply.map(v => `<td>${num(v, 1)}</td>`).join('')}<td></td><td></td><td></td></tr></tbody></table>`, { np: true, lect: `Source : EIA, World Oil Transit Chokepoints, édition du ${fds(CP.upd || '')} (brut et produits pétroliers ; le canal de Panama est compté par exercice budgétaire d’octobre à septembre). Les attaques en mer Rouge depuis fin 2023 ont fait chuter Bab el-Mandeb et Suez au profit du cap de Bonne-Espérance.` })}
+    <div class="grid c2">${pn(`Variation ${CP.years[L]} contre 2023 (Mb/j)`, 'BMAP', cvb('bmD', 260))}${pn('Lecture', 'BMAP', `<div class="lectb">${facts.filter(f => /Bab|Ormuz/.test(f)).map(f => `<p>${f}</p>`).join('')}</div>`)}</div>`;
+  if (k23 >= 0) barChart($('bmD'), { labels: CP.pts.map(p => p.n.split(' (')[0].replace('Détroit de ', '').replace("Détroit d'", '').replace('Canal de Suez et oléoduc SUMED', 'Suez + SUMED').replace('Cap de Bonne-Espérance', 'Cap B.-E.')), values: CP.pts.map(p => p.v[L] - p.v[k23]), fmt: v => num(v, 1), labelsOnBars: true, pos: '#2fd26a', neg: '#ff3d4d', padB: 30 });
+};
+function oilCurveDraw(host, lines) {
+  const { x, w, h } = setupCanvas(host); const padL = 46, padB = 22, padT = 10, W = w - padL - 12, H = h - padT - padB; const all = lines.flatMap(l => l.pts.filter(p => p[0] != null).map(p => p[1]));
+  if (!all.length) { host.insertAdjacentHTML('beforeend', '<div class="empty" style="position:absolute;inset:0">Courbe en attente du prochain relevé.</div>'); return; }
+  let lo = Math.min(...all), hi = Math.max(...all); const pd = (hi - lo) * .1 || 1; lo -= pd; hi += pd; const tmax = Math.max(12, ...lines.flatMap(l => l.pts.map(p => p[0] || 0)));
+  const X = t => padL + t / tmax * W, Y = v => padT + (hi - v) / (hi - lo) * H; x.font = FNUM; x.setLineDash([1, 3]);
+  for (const t of niceTicks(lo, hi, 5)) { const yy = Math.round(Y(t)) + .5; x.strokeStyle = 'rgba(160,160,160,.35)'; x.beginPath(); x.moveTo(padL, yy); x.lineTo(w - 12, yy); x.stroke(); x.fillStyle = '#ddd'; x.textAlign = 'right'; x.fillText(num(t, 0) + ' $', padL - 4, yy + 3); }
+  for (let t = 0; t <= tmax; t += 3) { const xx = Math.round(X(t)) + .5; x.beginPath(); x.moveTo(xx, padT); x.lineTo(xx, padT + H); x.stroke(); x.fillStyle = '#ddd'; x.textAlign = 'center'; x.fillText(t + ' m', xx, h - 6); } x.setLineDash([]);
+  lines.forEach(l => { x.strokeStyle = l.col; x.lineWidth = 2; x.beginPath(); l.pts.filter(p => p[0] != null).forEach((p, i) => i ? x.lineTo(X(p[0]), Y(p[1])) : x.moveTo(X(p[0]), Y(p[1]))); x.stroke(); x.fillStyle = l.col; l.pts.forEach(p => { if (p[0] == null) return; x.beginPath(); x.arc(X(p[0]), Y(p[1]), 3, 0, 7); x.fill(); }); });
+  let ly = padT + 4; x.font = FUI; x.textAlign = 'left'; for (const l of lines) { x.fillStyle = l.col; x.fillRect(w - 90, ly + 3, 8, 6); x.fillStyle = '#e6e6e6'; x.fillText(l.lab, w - 78, ly + 9); ly += 15; }
+}
+function bmapDraw(host, G, CP, yi, lay, EI) {
+  const cv = document.createElement('canvas'); host.appendChild(cv); const ctx = cv.getContext('2d');
+  const byK = Object.fromEntries(CP.pts.map(p => [p.k, p])), vmax = Math.max(...CP.pts.map(p => p.v[yi])); let W = 0, H = 0, dpr = 1, land = null, t0 = performance.now(), hover = null;
   const PJ = (lon, lat) => [(lon + 180) / 360 * W, (72 - lat) / 128 * H];
+  const prod = []; if (EI && EI.prod && lay.pr) { const L = EI.prod.years.length - 1; for (const [n, v] of Object.entries(EI.prod.rows)) { const c = CP.cty[n]; if (c && v[L] > 600) prod.push({ n: c[2], lat: c[0], lon: c[1], v: v[L] / 1000, y: EI.prod.years[L] }); } }
+  const pmax = Math.max(1, ...prod.map(p => p.v));
   const size = () => { const r = host.getBoundingClientRect(); dpr = Math.min(2, devicePixelRatio || 1); W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px';
     land = document.createElement('canvas'); land.width = cv.width; land.height = cv.height; const g = land.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#020b1a'; g.fillRect(0, 0, W, H);
     g.strokeStyle = 'rgba(80,110,150,.18)'; g.lineWidth = 1; for (let lo = -180; lo <= 180; lo += 30) { const [x0] = PJ(lo, 0); g.beginPath(); g.moveTo(x0, 0); g.lineTo(x0, H); g.stroke(); } for (let la = -60; la <= 60; la += 30) { const [, y0] = PJ(0, la); g.beginPath(); g.moveTo(0, y0); g.lineTo(W, y0); g.stroke(); }
     g.fillStyle = '#1b2433'; g.strokeStyle = '#2f3b4f'; g.lineWidth = .7;
     for (const c of G.c) for (const r of c.r) { g.beginPath(); let px0 = null; r.forEach((p, i) => { const [x, y] = PJ(p[0], p[1]); if (i && Math.abs(x - px0) > W / 2) { g.moveTo(x, y); } else i ? g.lineTo(x, y) : g.moveTo(x, y); px0 = x; }); g.closePath(); g.fill(); g.stroke(); } };
   const draw = now => { if (!document.body.contains(cv)) return; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.drawImage(land, 0, 0, W, H); const ph = ((now - t0) / 60) % 24;
-    for (const rt of CP.routes) { const v = Math.max(...rt.via.map(k => byK[k].v[yi])); const lw = 1 + 7 * v / vmax; ctx.strokeStyle = 'rgba(249,163,58,.28)'; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.beginPath(); rt.p.forEach((p, i) => { const [x, y] = PJ(p[0], p[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
+    if (lay.pr) for (const p of prod) { const [x, y] = PJ(p.lon, p.lat), r = 3 + 26 * Math.sqrt(p.v / pmax); ctx.fillStyle = p === hover ? 'rgba(47,210,106,.45)' : 'rgba(47,210,106,.22)'; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.strokeStyle = 'rgba(47,210,106,.7)'; ctx.lineWidth = 1; ctx.stroke();
+      if (p.v > 3.5) { ctx.font = '400 10.5px ' + MONO; ctx.fillStyle = '#9fe8b9'; ctx.textAlign = 'center'; ctx.fillText(`${p.n} ${num(p.v, 1)}`, x, y + r + 11); } }
+    if (lay.rt) for (const rt of CP.routes) { const v = Math.max(...rt.via.map(k => byK[k].v[yi])); const lw = 1 + 7 * v / vmax; ctx.strokeStyle = 'rgba(249,163,58,.28)'; ctx.lineWidth = lw; ctx.lineJoin = 'round'; ctx.beginPath(); rt.p.forEach((p, i) => { const [x, y] = PJ(p[0], p[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke();
       ctx.strokeStyle = 'rgba(255,214,140,.85)'; ctx.lineWidth = Math.max(1, lw / 3); ctx.setLineDash([3, 21]); ctx.lineDashOffset = -ph; ctx.stroke(); ctx.setLineDash([]); }
-    for (const p of CP.pts) { const [x, y] = PJ(p.lon, p.lat), r = 4 + 22 * Math.sqrt(p.v[yi] / vmax); ctx.fillStyle = p === hover ? 'rgba(255,61,77,.55)' : 'rgba(255,61,77,.35)'; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.strokeStyle = '#ff3d4d'; ctx.lineWidth = 1.2; ctx.stroke();
+    if (lay.pp) for (const pl of CP.pipes || []) { ctx.strokeStyle = pl === hover ? '#9be7ff' : '#5fd0ea'; ctx.lineWidth = 2.2; ctx.setLineDash([5, 4]); ctx.beginPath(); pl.p.forEach((p, i) => { const [x, y] = PJ(p[0], p[1]); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }); ctx.stroke(); ctx.setLineDash([]); }
+    if (lay.ch) for (const p of CP.pts) { const [x, y] = PJ(p.lon, p.lat), r = 4 + 22 * Math.sqrt(p.v[yi] / vmax); ctx.fillStyle = p === hover ? 'rgba(255,61,77,.55)' : 'rgba(255,61,77,.35)'; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill(); ctx.strokeStyle = '#ff3d4d'; ctx.lineWidth = 1.2; ctx.stroke();
       ctx.font = '400 11.5px ' + MONO; ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(`${p.n.split(' (')[0].replace(' et oléoduc SUMED', ' + SUMED')} ${num(p.v[yi], 1)}`, x + r + 3, y + 4); }
+    if (lay.tm) for (const t of CP.terms || []) { const [x, y] = PJ(t.lon, t.lat); ctx.fillStyle = OIL_COL[t.k] || '#fff'; ctx.fillRect(x - 3, y - 3, 6, 6); ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.strokeRect(x - 3, y - 3, 6, 6); }
+    if (CP.y2026 && lay.ch) { const h_ = byK.HOR; if (h_) { const [x, y] = PJ(h_.lon, h_.lat); ctx.font = '700 11px ' + MONO; ctx.fillStyle = '#ffd200'; ctx.textAlign = 'left'; ctx.fillText('2026 : crise d’Ormuz', x + 8, y + 22); } }
     requestAnimationFrame(draw); };
   size(); requestAnimationFrame(draw); new ResizeObserver(() => size()).observe(host);
-  cv.onmousemove = e => { const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top; hover = null; for (const p of CP.pts) { const [x, y] = PJ(p.lon, p.lat); if ((x - mx) ** 2 + (y - my) ** 2 < 26 * 26) hover = p; }
-    if (hover) tip(e, `<b>${esc(hover.n)}</b><br>${CP.years.map((y, i) => `${y} : ${num(hover.v[i], 1)}`).join(' · ')} Mb/j<br>part du commerce maritime ${yr} : ${num(hover.v[yi] / CP.world.maritime[yi] * 100, 0)} %`); else untip(); };
+  const near = (mx, my) => { let b = null, bd = 1e9; const chk = (o, x, y, r) => { const d = (x - mx) ** 2 + (y - my) ** 2; if (d < r * r && d < bd) { bd = d; b = o; } };
+    if (lay.tm) for (const t of CP.terms || []) { const [x, y] = PJ(t.lon, t.lat); chk(t, x, y, 8); }
+    if (lay.ch) for (const p of CP.pts) { const [x, y] = PJ(p.lon, p.lat); chk(p, x, y, 24); }
+    if (lay.pp) for (const pl of CP.pipes || []) for (const q of pl.p) { const [x, y] = PJ(q[0], q[1]); chk(pl, x, y, 12); }
+    if (lay.pr) for (const p of prod) { const [x, y] = PJ(p.lon, p.lat); chk(p, x, y, 3 + 26 * Math.sqrt(p.v / pmax)); }
+    return b; };
+  cv.onmousemove = e => { const r = cv.getBoundingClientRect(); hover = near(e.clientX - r.left, e.clientY - r.top); const o = hover; if (!o) { untip(); return; }
+    if (o.v && Array.isArray(o.v)) tip(e, `<b>${esc(o.n)}</b><br>${CP.years.map((y, i) => `${y} : ${num(o.v[i], 1)}`).join(' · ')} Mb/j<br>part du commerce maritime ${CP.years[yi]} : ${num(o.v[yi] / CP.world.maritime[yi] * 100, 0)} %`);
+    else if (o.cap) tip(e, `<b>${esc(o.n)}</b> (${esc(o.c)})<br>${esc(o.cap)}<br><span class="dm">${esc(o.src)}</span>`);
+    else if (o.k) tip(e, `<b>${esc(o.n)}</b> · ${esc(o.c)}<br>terminal ${o.k === 'exp' ? 'd’exportation' : 'd’importation'} · ${esc(o.z)}`);
+    else tip(e, `<b>${esc(o.n)}</b><br>production ${o.y} : ${num(o.v, 2)} Mb/j`); };
   cv.onmouseleave = () => { hover = null; untip(); };
-};
+}
 
 </script>
 <script>

@@ -421,6 +421,37 @@ def fut_quotes(q):
         fail("cnbc_futures", e)
 
 
+# tableau de bord pétrolier (CNBC, différé ~10 min) : courbes à terme Brent/WTI, essence et gazole (marges de raffinage), gaz,
+# grandes pétrolières et armateurs de pétroliers (indicateur du fret)
+OIL_CURVE = {"BRENT": ["@LCO.%d" % i for i in (1, 2, 3, 4, 5, 6, 9, 12, 18, 24)], "WTI": ["@CL.%d" % i for i in (1, 2, 3, 4, 5, 6, 9, 12, 18, 24)]}
+OIL_PROD = ["@RB.1", "@HO.1", "@NG.1", "@NG.2", "@GC.1"]
+OIL_EQ = ["XOM", "CVX", "SHEL", "BP", "TTE", "COP", "OXY", "EQNR", "PBR", "FRO", "DHT", "INSW", "STNG", "TNK", "NAT"]
+
+
+def oil_board(out_data):
+    syms = sum(OIL_CURVE.values(), []) + OIL_PROD + OIL_EQ
+    by = {}
+    try:
+        for i in range(0, len(syms), 20):
+            u = ("https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=" + urllib.parse.quote("|".join(syms[i:i + 20]))
+                 + "&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json")
+            for r in json.loads(get(u, tries=2))["FormattedQuoteResult"]["FormattedQuote"]:
+                if r.get("symbol") and r.get("last"):
+                    by[r["symbol"]] = r
+    except Exception as e:  # noqa: BLE001
+        fail("cnbc_oil", e)
+        return
+    def rec(r):
+        return {"n": r.get("name"), "last": _fnum(r.get("last")), "chg": _fnum(r.get("change")), "pct": (_fnum(r.get("change_pct")) or 0) / 100 if r.get("change_pct") else None,
+                "prev": _fnum(r.get("previous_day_closing")), "exp": r.get("expiration_date"), "t": r.get("last_time"), "ccy": r.get("currencyCode"),
+                "hi52": _fnum(r.get("yrhiprice")), "lo52": _fnum(r.get("yrloprice"))}
+    out = {"ts": int(time.time()), "src": "CNBC (ICE, NYMEX, NYSE ; différé)",
+           "curve": {k: [dict(rec(by[s_]), k=s_) for s_ in v if s_ in by] for k, v in OIL_CURVE.items()},
+           "prod": {s_: rec(by[s_]) for s_ in OIL_PROD if s_ in by}, "eq": [dict(rec(by[s_]), s=s_) for s_ in OIL_EQ if s_ in by]}
+    if out["curve"].get("BRENT"):
+        dump(out, os.path.join(out_data, "oil.json"))
+
+
 def us_batch(out_data):
     """Cours différés de tous les titres US du terminal (actions, ETF, indices) : Nasdaq, par paquets de 25 d'une même classe ;
     pré-marché et après-bourse des actions et ETF quand la séance étendue est ouverte."""
@@ -561,6 +592,7 @@ def main():
     except Exception as e:  # noqa: BLE001
         fail("us_batch", e)
     now = int(time.time())
+    oil_board(out_data)
     dump({"ts": now, "qqq": live, "intraday": intraday, "errors": ERRORS}, os.path.join(out_data, "live.json"))
     dump({"ts": now, "asof": brvm.get("asof") if brvm else None, "q": q}, os.path.join(out_data, "quotes.json"))
     if brvm:
