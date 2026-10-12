@@ -81,75 +81,139 @@ PAGES.BRVM = async (m, alive) => {
   ch.set({ x: B.d, series: [{ y: cy, color: CL.white, label: 'BRVMC' }, { pane: 1, y: B.a200, color: CL.amber, label: '>SMA200', fmt: fmtPctAxis }, { pane: 1, y: B.a50, color: CL.cyan, label: '>SMA50', w: 1, fmt: fmtPctAxis }, { pane: 2, type: 'bar', y: hl, colorFn: v => v >= 0 ? CL.up : CL.dn, label: 'H−B', fmt: v => num(v, 0) }] }, [B.d.length - 1260, B.d.length - 1]);
 };
 
-/* ------------------------------------------------------------------ GP */
+/* ------------------------------------------------------------------ GP (style Bloomberg par défaut : aire bleu nuit, ligne blanche, cartouche
+   Dernier / Plus haut / Moyenne / Plus bas sur la période affichée, volume en dessous ; bougies, ligne, aire et études toujours disponibles) */
+const MOIS_AX = ['Janv', 'Févr', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc'];
+function bbgTicks(xs, i0, i1, span, W) {
+  const mode = span > 2600 ? 'Y' : span > 800 ? 'Q' : span > 80 ? 'M' : span > 24 ? 'W' : 'D'; const out = []; let pk = null;
+  for (let i = Math.max(0, i0); i <= i1; i++) { const d = xs[i], y = Math.floor(d / 10000), mo = Math.floor(d / 100) % 100, dd = d % 100; let key, lab;
+    if (mode === 'Y') { key = y; lab = String(y); } else if (mode === 'Q') { key = y * 10 + Math.floor((mo - 1) / 3); lab = mo <= 3 ? String(y) : MOIS_AX[mo - 1]; }
+    else if (mode === 'M') { key = y * 100 + mo; lab = mo === 1 ? String(y) : MOIS_AX[mo - 1]; } else if (mode === 'W') { key = isoWeekKey(d); lab = String(dd).padStart(2, '0') + '/' + String(mo).padStart(2, '0'); }
+    else { key = d; lab = String(dd).padStart(2, '0') + '/' + String(mo).padStart(2, '0'); }
+    if (pk !== null && key !== pk) out.push([i, lab]); pk = key; }
+  const room = Math.max(2, Math.floor((W || 800) / 64)); if (out.length <= room) return out;
+  const k = Math.ceil(out.length / room); return out.filter((o, j) => (mode === 'Y' ? +o[1] % k === 0 : j % k === 0) || (mode !== 'Y' && /^\d{4}$/.test(o[1]) && out.length / k < room * 1.4));
+}
+/* agrégation hebdomadaire / mensuelle (comme le menu « Daily ▾ » de GP) */
+function aggOHLC(S, per, tr) {
+  if (per === 'D') return { x: S.x, o: S.o, h: S.h, l: S.l, c: S.c, v: S.v, tr };
+  const key = d => per === 'W' ? isoWeekKey(d) : Math.floor(d / 100); const R = { x: [], o: [], h: [], l: [], c: [], v: [], tr: tr ? [] : null }; let k0 = null;
+  for (let i = 0; i < S.x.length; i++) { const k = key(S.x[i]); const j = R.x.length - 1;
+    if (k !== k0) { R.x.push(S.x[i]); R.o.push(S.o[i]); R.h.push(S.h[i]); R.l.push(S.l[i]); R.c.push(S.c[i]); R.v.push(S.v[i] || 0); if (tr) R.tr.push(tr[i]); k0 = k; }
+    else { R.x[j] = S.x[i]; R.h[j] = Math.max(R.h[j], S.h[i]); R.l[j] = Math.min(R.l[j], S.l[i]); R.c[j] = S.c[i]; R.v[j] += S.v[i] || 0; if (tr) R.tr[j] = tr[i]; } }
+  return R;
+}
+const dmy = d => fmtD(d); const dmyShort = d => fmtD(d).slice(0, 6) + fmtD(d).slice(8);
+function parseDMY(t) { const m = String(t || '').trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/); if (!m) return null; let y = +m[3]; if (y < 100) y += 2000; return y * 10000 + (+m[2]) * 100 + (+m[1]); }
 PAGES.GP = async (m, alive) => {
-  const s = sec(ST.sec), g = ST.gp; const S = await series(ST.sec); if (!alive()) return;
-  const M = S.f === 'D' && S.c.length > 30 ? await market(ST.sec) : null; if (!alive()) return;
+  const s = sec(ST.sec), g = ST.gp; g.ma = g.ma || ['', '', '']; g.per = g.per || 'D'; g.px = g.px || 'last'; if (g.volOn == null) g.volOn = true;
+  const S0 = await series(ST.sec); if (!alive()) return;
   const intra = ST.sec === 'QQQ' && Q.live && Q.live.intraday && Q.live.intraday.t && Q.live.intraday.t.length > 10;
-  const ranges = S.f === 'M' ? ['5A', '10A', '20A', '50A', 'MAX'] : ['1M', '3M', '6M', 'YTD', '1A', '3A', '5A', '10A', 'MAX'];
-  if (!ranges.includes(g.range) && !(intra && g.range === '1J')) g.range = S.f === 'M' ? '20A' : '1A';
+  const monthly = S0.f === 'M'; if (monthly) g.per = 'D';
+  const ranges = monthly ? ['5A', '10A', '20A', '50A', 'MAX'] : ['1M', '3M', '6M', 'YTD', '1A', '3A', '5A', '10A', 'MAX'];
+  if (!ranges.includes(g.range) && !(intra && g.range === '1J')) g.range = monthly ? '20A' : '1A';
   if (g.range === '1J' && !intra) g.range = '1A';
-  const tb = (k, l, on, i) => `<button class="tb ${on ? 'on' : ''}" data-gp="${k}">${i ? `<em>${i})</em>` : ''}${l}</button>`;
-  const tools = `${(intra ? ['1J'] : []).concat(ranges).map((r, i) => tb('r:' + r, r === '1J' ? '1J · 5 MIN' : r, g.range === r, i + 1)).join('')}<span class="tsep"></span>
-    ${S.f === 'D' && s.cls !== 'Curncy' ? [['candle', 'Bougies'], ['line', 'Ligne'], ['area', 'Aire']].map(([k, l]) => `<button class="tb alt ${g.type === k ? 'on' : ''}" data-gp="t:${k}">${l}</button>`).join('') : ''}<span class="tsep"></span>
-    ${[['sma20', 'MM20'], ['sma50', 'MM50'], ['sma200', 'MM200'], ['boll', 'Bollinger']].map(([k, l]) => `<button class="tb alt ${g.ov[k] ? 'on' : ''}" data-gp="o:${k}">${l}</button>`).join('')}<span class="tsep"></span>
-    ${[['vol', 'Volume'], ['rsi', 'RSI'], ['macd', 'MACD'], ['dd', 'Drawdown']].map(([k, l]) => `<button class="tb alt ${g.st[k] ? 'on' : ''}" data-gp="s:${k}">${l}</button>`).join('')}
-    <button class="tb alt ${g.log ? 'on' : ''}" data-gp="log">Log</button><span class="tlab">Comparer</span><input id="cmpIn" placeholder="NVDA, XAU…" list="cmpList">${g.cmp.map(c => `<button class="tb alt on" data-gp="x:${c}">${c} ✕</button>`).join('')}`;
+  let TR = null; if (g.px === 'tr') { TR = await trSeries(s, S0); if (!alive()) return; if (!TR) { g.px = 'last'; toast('Pas de dividende recensé pour ce titre : rendement total = cours.'); } }
+  const S = aggOHLC(S0, g.per, TR), n = S.x.length, Y0 = g.px === 'tr' && S.tr ? S.tr : S.c;
+  const bbg = g.type === 'bbg', hasVol = S0.v.slice(-260).filter(v => v > 0).length > 120;
+  const fmtP = v => px(s, v), ccy = s.ccy === 'USD' ? 'USD' : s.ccy;
+  setTitle(g.cmp.length ? 'Comparative Returns' : g.type === 'candle' ? 'Candle Chart' : g.type === 'area' ? 'Mountain Chart' : 'Line Chart');
+  const peers = secsWhere(x => x.id !== s.id && x.mkt === s.mkt && x.cls === s.cls && x.grp === s.grp && !legacy(x)).sort((a, b) => (b.liq || 0) - (a.liq || 0)).slice(0, 6);
+  const bench = s.bench && Q.by[s.bench] && s.bench !== s.id ? s.bench : null;
+  setActs([{ n: 95, l: 'Comparer', menu: () => [{ h: 'Ajouter à la comparaison' }].concat(bench ? [{ code: bench, l: 'Indice de référence · ' + esc(Q.by[bench].n), run: () => { if (!g.cmp.includes(bench)) g.cmp.push(bench); render(); } }] : [],
+      peers.map(p => ({ code: p.id, l: esc(p.short || p.n), run: () => { if (!g.cmp.includes(p.id)) g.cmp.push(p.id); render(); } })),
+      [{ l: 'Autre titre : taper son code dans le champ Comparer', run: () => { const i = $('cmpIn'); if (i) i.focus(); } }], g.cmp.length ? [{ l: 'Effacer les comparaisons', run: () => { g.cmp = []; render(); } }] : []) },
+    { n: 97, l: 'Édition', menu: () => [{ h: 'Style du graphique' }, ...[['bbg', 'Bloomberg (aire bleue, ligne blanche)'], ['line', 'Ligne'], ['area', 'Aire'], ['candle', 'Bougies']].map(([k, l]) => ({ l: (g.type === k ? '● ' : '○ ') + l, run: () => { g.type = k; render(); } })),
+      { h: 'Affichage' }, { l: (g.log ? '● ' : '○ ') + 'Échelle logarithmique', run: () => { g.log = !g.log; render(); } }, { l: (g.volOn ? '● ' : '○ ') + 'Volume', run: () => { g.volOn = !g.volOn; render(); } }] }]);
+  const tb = (k, l, on) => `<button class="tb ${on ? 'on' : ''}" data-gp="${k}">${l}</button>`;
+  const row1 = `<div class="tools gpr"><input class="ofld dt" id="gpD0" title="Début (jj/mm/aaaa)"><span class="cal">▦</span><span class="dm">–</span><input class="ofld dt" id="gpD1" title="Fin (jj/mm/aaaa)"><span class="cal">▦</span>
+      <select class="ofld" id="gpPx"><option value="last" ${g.px === 'last' ? 'selected' : ''}>Dernier cours</option><option value="tr" ${g.px === 'tr' ? 'selected' : ''}>Rendement total (div. réinvestis)</option></select>
+      <span class="tlab">Moy. mob.</span>${g.ma.map((v, i) => `<input class="ofld ma" data-ma="${i}" value="${esc(v)}" placeholder="—" title="Période de la moyenne mobile (ex. 50)">`).join('')}
+      ${hasVol ? `<select class="ofld" id="gpVol"><option value="1" ${g.volOn ? 'selected' : ''}>Volume</option><option value="0" ${g.volOn ? '' : 'selected'}>Sans volume</option></select>` : ''}<span class="tlab" style="margin-left:auto">${esc(ccy)}</span></div>`;
+  const row2 = `<div class="tools">${(intra ? ['1J'] : []).concat(ranges).map(r => tb('r:' + r, r === '1J' ? '1J 5MIN' : r === 'MAX' ? 'Max' : r, g.range === r)).join('')}
+      ${!monthly ? `<select class="ofld" id="gpPer" style="margin-left:4px"><option value="D" ${g.per === 'D' ? 'selected' : ''}>Quotidien</option><option value="W" ${g.per === 'W' ? 'selected' : ''}>Hebdomadaire</option><option value="M" ${g.per === 'M' ? 'selected' : ''}>Mensuel</option></select>` : ''}<span class="tsep"></span>
+      ${[['bbg', 'Bloomberg'], ['line', 'Ligne'], ['area', 'Aire']].concat(s.cls !== 'Curncy' && !monthly ? [['candle', 'Bougies']] : []).map(([k, l]) => `<button class="tb alt ${g.type === k ? 'on' : ''}" data-gp="t:${k}">${l}</button>`).join('')}<span class="tsep"></span>
+      ${[['boll', 'Bollinger']].map(([k, l]) => `<button class="tb alt ${g.ov[k] ? 'on' : ''}" data-gp="o:${k}">${l}</button>`).join('')}${[['rsi', 'RSI'], ['macd', 'MACD'], ['dd', 'Drawdown']].map(([k, l]) => `<button class="tb alt ${g.st[k] ? 'on' : ''}" data-gp="s:${k}">${l}</button>`).join('')}
+      <button class="tb alt ${g.log ? 'on' : ''}" data-gp="log">Log</button><span class="tlab">Comparer</span><input id="cmpIn" placeholder="NVDA, BRVMC…">${g.cmp.map(c => `<button class="tb alt on" data-gp="x:${c}" title="Retirer">${c} ✕</button>`).join('')}</div>`;
   m.innerHTML = `<div class="grid side">
-    ${pn(`${s.tk} · graphique`, 'GP', `<div class="cv" id="gpCv" style="height:max(440px, calc(100vh - 205px))"></div>`, { np: true, tools, sel: S.f === 'M' ? 'série mensuelle' : g.cmp.length ? 'performance relative depuis le début de la période' : '' })}
-    <div class="grid" style="align-content:start">${pn('Statistiques', 'GP', '<div class="kv2" id="gpKv"></div>')}<div id="gpSide"></div></div></div>`;
-  const inp = $('cmpIn'); inp.onkeydown = e => { if (e.key === 'Enter') { const r = searchSecs(inp.value)[0]; if (r && r.id !== ST.sec && !g.cmp.includes(r.id)) { g.cmp.push(r.id); render(); } } };
+    <div class="pn">${row1}${row2}<div class="cv" id="gpCv" style="height:max(360px, calc(100vh - 246px - var(--nwh, 90px)))"></div></div>
+    <div class="grid" style="align-content:start">${pn('Statistiques', '', '<div class="kv2" id="gpKv"></div>')}<div id="gpSide"></div></div></div>`;
+  const inp = $('cmpIn'); inp.onkeydown = e => { if (e.key === 'Enter') { const r = searchSecs(inp.value)[0]; if (r && r.id !== ST.sec && !g.cmp.includes(r.id)) { g.cmp.push(r.id); render(); } else if (!r) toast('Titre introuvable.'); } };
   m.querySelectorAll('[data-gp]').forEach(b => b.onclick = () => { const [k, v] = b.dataset.gp.split(':');
     if (k === 'r') { g.range = v; if (v === '1J' || chart.intra || g.cmp.length) render(); else chart.setView(...rangeView(v)); m.querySelectorAll('[data-gp^="r:"]').forEach(x => x.classList.toggle('on', x === b)); return; }
     if (k === 't') g.type = v; if (k === 'o') g.ov[v] = !g.ov[v]; if (k === 's') g.st[v] = !g.st[v]; if (k === 'log') g.log = !g.log; if (k === 'x') g.cmp = g.cmp.filter(c => c !== v); render(); });
-  const rangeView = r => { const n = S.x.length, last = S.x[n - 1], y = Math.floor(last / 10000); const back = { '1M': 100, '3M': 300, '6M': 600, '1A': 10000, '3A': 30000, '5A': 50000, '10A': 100000, '20A': 200000, '50A': 500000 }[r];
-    let from = r === 'YTD' ? y * 10000 + 101 : r === 'MAX' ? 0 : last - back; let i0 = S.x.findIndex(d => d >= from); if (i0 < 0) i0 = 0; return [Math.min(i0, n - 20), n - 1]; };
-  const panes = [{ h: 3, log: g.log && !g.cmp.length, fmt: g.cmp.length ? fmtPctAxis : null }]; const ser = []; let pi = 0;
-  let chart;
+  $('gpPx').onchange = e => { g.px = e.target.value; render(); }; if ($('gpPer')) $('gpPer').onchange = e => { g.per = e.target.value; render(); }; if ($('gpVol')) $('gpVol').onchange = e => { g.volOn = e.target.value === '1'; render(); };
+  m.querySelectorAll('[data-ma]').forEach(el => el.onchange = () => { const v = el.value.trim(); g.ma[+el.dataset.ma] = /^\d{1,3}$/.test(v) && +v > 1 ? v : ''; render(); });
+  const rangeView = r => { const last = S.x[n - 1], y = Math.floor(last / 10000); const back = { '1M': 100, '3M': 300, '6M': 600, '1A': 10000, '3A': 30000, '5A': 50000, '10A': 100000, '20A': 200000, '50A': 500000 }[r];
+    let from = r === 'YTD' ? y * 10000 + 101 : r === 'MAX' ? 0 : last - back; let i0 = S.x.findIndex(d => d >= from); if (i0 < 0) i0 = 0; return [Math.min(i0, Math.max(0, n - 5)), n - 1]; };
+  const setDates = (i0, i1) => { const a = $('gpD0'), b = $('gpD1'); if (a && document.activeElement !== a) a.value = dmy(S.x[Math.max(0, i0)]); if (b && document.activeElement !== b) b.value = dmy(S.x[Math.min(n - 1, i1)]); };
+  const panes = [{ h: 3, log: g.log && !g.cmp.length, fmt: g.cmp.length ? fmtPctAxis : null, noLegend: bbg && !g.cmp.length }]; const ser = []; let pi = 0; let chart;
+  const MA_COL = ['#ffd200', '#ff5fd2', '#5fd0ea'];
   if (g.range === '1J' && intra) {
     const I = Q.live.intraday, tt = I.t.map(t => { const d = new Date(t * 1000); return d.getUTCFullYear() * 1e8 + (d.getUTCMonth() + 1) * 1e6 + d.getUTCDate() * 1e4 + d.getUTCHours() * 100 + d.getUTCMinutes(); });
     const ny = t => new Date(t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' });
-    chart = new TSChart($('gpCv'), { panes: [{ h: 3 }, { h: .8 }], xfmt: (v) => { const i = tt.indexOf(v); return i >= 0 ? ny(I.t[i]) : ''; } }); chart.intra = true;
-    chart.set({ x: tt, series: [{ type: 'candle', o: I.o, h: I.h, l: I.l, c: I.c, label: 'QQQ 5 min (heure NY)' }, { pane: 1, type: 'bar', y: I.v, colorFn: (v, i) => I.c[i] >= I.o[i] ? rgba(CL.up, .6) : rgba(CL.dn, .6), label: 'Vol' }] }, [0, tt.length - 1]);
+    chart = new TSChart($('gpCv'), { panes: [{ h: 3 }, { h: .8 }], grid: bbg ? 'dot' : null, xfmt: (v) => { const i = tt.indexOf(v); return i >= 0 ? ny(I.t[i]) : ''; } }); chart.intra = true;
+    chart.set({ x: tt, series: [bbg ? { type: 'area', y: I.c, color: '#ffffff', w: 1.3, grad: ['rgba(32,74,140,.95)', 'rgba(4,22,58,.92)'], label: 'QQQ 5 min (heure NY)' } : { type: 'candle', o: I.o, h: I.h, l: I.l, c: I.c, label: 'QQQ 5 min (heure NY)' }, { pane: 1, type: 'bar', y: I.v, colorFn: (v, i) => I.c[i] >= I.o[i] ? rgba(CL.up, .6) : rgba(CL.dn, .6), label: 'Vol' }] }, [0, tt.length - 1]);
+    ['gpD0', 'gpD1'].forEach(id => { const e = $(id); if (e) e.disabled = true; });
   } else {
     if (g.cmp.length) {
-      const [i0] = rangeView(g.range), base = S.c[i0]; ser.push({ y: S.c.map((v, i) => i < i0 ? null : v / base - 1), color: CL.white, w: 1.6, label: s.id, fmt: fmtPctAxis });
+      const [i0] = rangeView(g.range), base = Y0[i0]; ser.push({ y: Y0.map((v, i) => i < i0 ? null : v / base - 1), color: CL.white, w: 1.6, label: s.id, fmt: fmtPctAxis });
       const colors = [CL.amber, CL.cyan, CL.violet, CL.pink, CL.teal];
       for (const [k, cid] of g.cmp.entries()) { const C = await series(cid); if (!alive()) return; const mp = new Map(C.x.map((d, i) => [d, C.c[i]])); let lv = null; const al = S.x.map(d => { if (mp.has(d)) lv = mp.get(d); else if (C.f === 'M') { const mk = Math.floor(d / 100) * 100 + 1; if (mp.has(mk)) lv = mp.get(mk); } return lv; });
         const b = al[i0] || al.find((v, i) => i >= i0 && v != null); ser.push({ y: al.map((v, i) => i < i0 || v == null || !b ? null : v / b - 1), color: colors[k % colors.length], label: cid, fmt: fmtPctAxis }); }
     } else {
-      if (g.type === 'candle' && S.f === 'D' && s.cls !== 'Curncy') ser.push({ type: 'candle', o: S.o, h: S.h, l: S.l, c: S.c, label: s.id, fmt: v => px(s, v) });
-      else ser.push({ type: g.type === 'area' ? 'area' : 'line', y: S.c, color: CL.white, label: s.id, fmt: v => px(s, v), fill: rgba(CL.white, .07) });
-      if (M) { if (g.ov.sma20) ser.push({ y: Array.from(M.sma20), color: CL.violet, w: 1, label: 'MM20' }); if (g.ov.sma50) ser.push({ y: Array.from(M.sma50), color: CL.cyan, w: 1.1, label: 'MM50' }); if (g.ov.sma200) ser.push({ y: Array.from(M.sma200), color: CL.amber, w: 1.4, label: 'MM200' });
-        if (g.ov.boll) { const sd = U.rollStd(S.c, 20), up = [], dn = []; for (let i = 0; i < S.c.length; i++) { const mm = M.sma20[i], v = sd[i]; up.push(isFinite(mm) && isFinite(v) ? mm + 2 * v : null); dn.push(isFinite(mm) && isFinite(v) ? mm - 2 * v : null); } ser.push({ type: 'band', y1: up, y2: dn, fill: rgba(CL.violet, .08), noScale: true }, { y: up, color: rgba(CL.violet, .6), w: 1, noScale: true }, { y: dn, color: rgba(CL.violet, .6), w: 1, noScale: true }); } }
+      if (g.type === 'candle' && !monthly && s.cls !== 'Curncy' && g.px === 'last') ser.push({ type: 'candle', o: S.o, h: S.h, l: S.l, c: S.c, label: s.id, fmt: fmtP });
+      else if (bbg) ser.push({ type: 'area', y: Y0, color: '#ffffff', w: 1.25, grad: ['rgba(34,78,146,.96)', 'rgba(3,20,54,.94)'], label: g.px === 'tr' ? 'Rendement total' : 'Dernier cours', fmt: fmtP });
+      else ser.push({ type: g.type === 'area' ? 'area' : 'line', y: Y0, color: CL.white, label: s.id + (g.px === 'tr' ? ' (rendement total)' : ''), fmt: fmtP, fill: rgba(CL.white, .07) });
+      g.ma.forEach((v, j) => { if (v) ser.push({ y: Array.from(U.sma(Y0, +v)), color: MA_COL[j], w: 1.1, label: 'MM ' + v, fmt: fmtP }); });
+      if (g.ov.boll) { const mm = U.sma(Y0, 20), sd = U.rollStd(Y0, 20), up = [], dn = []; for (let i = 0; i < n; i++) { const a = mm[i], v = sd[i]; up.push(isFinite(a) && isFinite(v) ? a + 2 * v : null); dn.push(isFinite(a) && isFinite(v) ? a - 2 * v : null); }
+        ser.push({ type: 'band', y1: up, y2: dn, fill: rgba(CL.violet, .1), noScale: true }, { y: up, color: rgba(CL.violet, .7), w: 1, noScale: true }, { y: dn, color: rgba(CL.violet, .7), w: 1, noScale: true }); }
     }
-    if (g.st.vol && S.v.some(v => v > 0)) { pi++; panes.push({ h: .7, title: 'VOLUME', zero: true }); ser.push({ pane: pi, type: 'bar', y: S.v, colorFn: (v, i) => S.c[i] >= S.o[i] ? rgba(CL.up, .55) : rgba(CL.dn, .55), label: 'Vol', fmt: v => big(v) }); }
-    if (g.st.rsi && M) { pi++; panes.push({ h: .8, fixed: [0, 100], refs: [{ v: 70, color: CL.dn }, { v: 30, color: CL.up }], title: 'RSI 14' }); ser.push({ pane: pi, y: Array.from(M.rsi14), color: CL.amber, label: 'RSI', fmt: v => num(v, 1) }); }
-    if (g.st.macd && M) { pi++; const e12 = U.ema(S.c, 12), e26 = U.ema(S.c, 26), mac = S.c.map((_, i) => e12[i] - e26[i]), sig = U.ema(mac, 9); panes.push({ h: .8, title: 'MACD 12-26-9', refs: [{ v: 0, color: CL.dim2, dash: [] }] });
+    if (g.volOn && hasVol) { pi++; const vma = U.sma(S.v, 15); panes.push({ h: .75, title: bbg ? '' : 'VOLUME', zero: true, noLegend: bbg });
+      ser.push({ pane: pi, type: 'bar', y: S.v, colorFn: bbg ? () => 'rgba(215,215,215,.78)' : (v, i) => S.c[i] >= S.o[i] ? rgba(CL.up, .55) : rgba(CL.dn, .55), label: 'Volume', fmt: v => big(v) });
+      if (bbg) ser.push({ pane: pi, y: Array.from(vma), color: '#ffd200', w: 1, label: 'Moy. mob. (15)', fmt: v => big(v) }); }
+    if (g.st.rsi) { pi++; panes.push({ h: .8, fixed: [0, 100], refs: [{ v: 70, color: CL.dn }, { v: 30, color: CL.up }], title: 'RSI 14' }); ser.push({ pane: pi, y: Array.from(U.rsi(S.c, 14)), color: CL.amber, label: 'RSI', fmt: v => num(v, 1) }); }
+    if (g.st.macd) { pi++; const e12 = U.ema(S.c, 12), e26 = U.ema(S.c, 26), mac = S.c.map((_, i) => e12[i] - e26[i]), sig = U.ema(mac, 9); panes.push({ h: .8, title: 'MACD 12-26-9', refs: [{ v: 0, color: CL.dim2, dash: [] }] });
       ser.push({ pane: pi, type: 'bar', y: mac.map((v, i) => v - sig[i]), colorFn: v => v >= 0 ? rgba(CL.up, .6) : rgba(CL.dn, .6), label: 'Hist' }, { pane: pi, y: mac, color: CL.cyan, w: 1, label: 'MACD' }, { pane: pi, y: Array.from(sig), color: CL.amber, w: 1, label: 'Signal' }); }
-    if (g.st.dd) { pi++; let pk = -Infinity; const dd = S.c.map(v => { pk = Math.max(pk, v); return v / pk - 1; }); panes.push({ h: .8, fmt: fmtPctAxis, title: 'DRAWDOWN DEPUIS LE PLUS HAUT', max: 0 }); ser.push({ pane: pi, type: 'area', y: dd, color: CL.dn, fill: rgba(CL.dn, .2), label: 'DD', fmt: fmtPctAxis, base: 0 }); }
-    chart = new TSChart($('gpCv'), { panes });
+    if (g.st.dd) { pi++; let pk = -Infinity; const dd = Y0.map(v => { pk = Math.max(pk, v); return v / pk - 1; }); panes.push({ h: .8, fmt: fmtPctAxis, title: 'DRAWDOWN DEPUIS LE PLUS HAUT', max: 0 }); ser.push({ pane: pi, type: 'area', y: dd, color: CL.dn, fill: rgba(CL.dn, .2), label: 'DD', fmt: fmtPctAxis, base: 0 }); }
+    /* cartouche Bloomberg : Dernier, plus haut (date), moyenne, plus bas (date) sur la période affichée ; étiquette blanche du dernier cours sur l'axe */
+    const after = (x, o) => { if (g.cmp.length) return; const L = o.layout[0]; let hi = -Infinity, lo = Infinity, hiI = o.i0, loI = o.i0, sum = 0, k = 0;
+      for (let i = o.i0; i <= o.i1; i++) { const v = Y0[i]; if (v == null || !isFinite(v)) continue; if (v > hi) { hi = v; hiI = i; } if (v < lo) { lo = v; loI = i; } sum += v; k++; }
+      if (!k) return; const lastV = Y0[o.i1];
+      const rows = [['■', g.px === 'tr' ? 'Rendement total' : 'Dernier cours', fmtP(lastV)], ['⊤', 'Plus haut le ' + dmyShort(S.x[hiI]), fmtP(hi)], ['+', 'Moyenne', num(sum / k, pxd(s) + 2)], ['⊥', 'Plus bas le ' + dmyShort(S.x[loI]), fmtP(lo)]];
+      g.ma.forEach((v, j) => { if (v) { const a = U.sma(Y0, +v)[o.i1]; rows.push(['─', 'MM ' + v, isFinite(a) ? fmtP(a) : '—', MA_COL[j]]); } });
+      x.font = '400 12px ' + MONO; x.textBaseline = 'middle'; const w1 = Math.max(...rows.map(r => x.measureText(r[1]).width)), w2 = Math.max(...rows.map(r => x.measureText(r[2]).width)), W = 26 + w1 + 14 + w2 + 10, H = rows.length * 16 + 6;
+      x.fillStyle = 'rgba(0,0,0,.82)'; x.fillRect(8, L.top + 6, W, H); x.strokeStyle = '#3d3d3d'; x.strokeRect(8.5, L.top + 6.5, W - 1, H - 1);
+      rows.forEach((r, j) => { const yy = L.top + 14 + j * 16; x.fillStyle = r[3] || (j === 0 ? '#ffffff' : '#bfbfbf'); x.textAlign = 'center'; x.fillText(r[0], 20, yy); x.fillStyle = '#e6e6e6'; x.textAlign = 'left'; x.fillText(r[1], 30, yy); x.fillStyle = '#ffffff'; x.textAlign = 'right'; x.fillText(r[2], 30 + w1 + 14 + w2, yy); });
+      if (bbg) { const lv = Y0[n - 1], yy = L.Y(lv); if (yy >= L.top && yy <= L.bot) { x.fillStyle = '#ffffff'; x.fillRect(o.W + 1, yy - 8, 62, 16); x.fillStyle = '#000'; x.textAlign = 'left'; x.font = '400 11px ' + MONO; x.fillText(fmtP(lv), o.W + 4, yy); } }
+      if (bbg && o.layout[1] && g.volOn && hasVol) { const V = o.layout[1], vv = S.v[o.i1], txt = 'Volume ' + big(vv), t2 = 'Moy. mob. (15) ' + big(U.sma(S.v, 15)[o.i1]); x.font = '400 11.5px ' + MONO; const ww = Math.max(x.measureText(txt).width, x.measureText(t2).width) + 26;
+        x.fillStyle = 'rgba(0,0,0,.82)'; x.fillRect(8, V.top + 3, ww, 34); x.strokeStyle = '#3d3d3d'; x.strokeRect(8.5, V.top + 3.5, ww - 1, 33); x.textAlign = 'left'; x.fillStyle = 'rgba(215,215,215,.9)'; x.fillRect(14, V.top + 9, 7, 7); x.fillStyle = '#e6e6e6'; x.fillText(txt, 26, V.top + 13); x.fillStyle = '#ffd200'; x.fillRect(14, V.top + 26, 7, 2); x.fillStyle = '#e6e6e6'; x.fillText(t2, 26, V.top + 28); } };
+    chart = new TSChart($('gpCv'), { panes, grid: bbg ? 'dot' : null, xticks: bbg ? bbgTicks : null, padR: 66, after, onView: setDates });
     chart.set({ x: S.x, series: ser }, rangeView(g.range));
+    const dateIn = () => { const d0 = parseDMY($('gpD0').value), d1 = parseDMY($('gpD1').value); if (!d0 || !d1 || d1 <= d0) { toast('Dates au format jj/mm/aaaa, la fin après le début.'); return; }
+      let i0 = S.x.findIndex(d => d >= d0), i1 = S.x.length - 1; for (let i = n - 1; i >= 0; i--) if (S.x[i] <= d1) { i1 = i; break; } if (i0 < 0) i0 = 0; if (i1 - i0 < 3) { toast('Période trop courte.'); return; }
+      chart.setView(i0, i1); m.querySelectorAll('[data-gp^="r:"]').forEach(x => x.classList.remove('on')); };
+    ['gpD0', 'gpD1'].forEach(id => $(id).onkeydown = e => { if (e.key === 'Enter') dateIn(); }); ['gpD0', 'gpD1'].forEach(id => $(id).onchange = dateIn);
   }
-  // stats
-  const n = S.c.length, c = S.c, lr = []; for (let i = Math.max(1, n - 252); i < n; i++) lr.push(Math.log(c[i] / c[i - 1]));
-  const best = Math.max(...lr), worst = Math.min(...lr), upd = lr.filter(x => x > 0).length / lr.length;
-  let atr = null; if (S.f === 'D' && n > 20) { let a = 0; for (let i = n - 14; i < n; i++) a += Math.max(S.h[i] - S.l[i], Math.abs(S.h[i] - c[i - 1]), Math.abs(S.l[i] - c[i - 1])); atr = a / 14 / c[n - 1]; }
-  const v3 = S.v.slice(-63).reduce((a, b) => a + b, 0) / 63;
-  $('gpKv').innerHTML = `<span>Dernier</span><b>${px(s, c[n - 1])} ${s.ccy}</b><span>Variation</span><b>${pc(s.pct)}</b>
-    ${S.f === 'D' ? `<span>Ouverture / + haut / + bas</span><b>${px(s, S.o[n - 1])} / ${px(s, S.h[n - 1])} / ${px(s, S.l[n - 1])}</b>` : ''}
-    <span class="h">Performances</span>${S.f === 'D' ? `<span>1 semaine</span><b>${pc(s.r1w, 2)}</b>` : ''}<span>1 mois</span><b>${pc(s.r1m, 2)}</b><span>3 mois</span><b>${pc(s.r3m, 2)}</b><span>Depuis le 1er janvier</span><b>${pc(s.ytd, 2)}</b><span>1 an</span><b>${pc(s.r1y, 2)}</b><span>3 ans</span><b>${pc(s.r3y, 1)}</b>
-    <span class="h">Risque (1 an)</span><span>Volatilité annualisée</span><b>${num(s.vol * 100, 1)}%</b>${atr ? `<span>ATR 14 / cours</span><b>${num(atr * 100, 2)}%</b>` : ''}<span>Meilleure / pire ${S.f === 'D' ? 'séance' : 'mois'}</span><b>${sgn(Math.exp(best) - 1, 1)} / ${sgn(Math.exp(worst) - 1, 1)}</b>
-    <span>${S.f === 'D' ? 'Séances' : 'Mois'} en hausse</span><b>${num(upd * 100, 0)}%</b><span>Écart au plus haut historique</span><b>${pc(s.dd, 1)}</b>${s.beta != null ? `<span>Bêta / corr. vs ${s.bench}</span><b>${num(s.beta, 2)} / ${num(s.corr, 2)}</b>` : ''}
-    ${M ? `<span class="h">Technique</span><span>MM50 / écart</span><b>${px(s, M.sma50[n - 1])} · ${pc(c[n - 1] / M.sma50[n - 1] - 1, 1)}</b><span>MM200 / écart</span><b>${px(s, M.sma200[n - 1])} · ${pc(c[n - 1] / M.sma200[n - 1] - 1, 1)}</b><span>RSI 14</span><b>${num(M.rsi14[n - 1], 1)}</b>` : ''}
-    <span>Plage 52 semaines</span><b>${px(s, s.lo52)} – ${px(s, s.hi52)}</b>${v3 > 0 ? `<span>Volume moyen 3 mois</span><b>${big(v3)}</b>` : ''}${s.liq ? `<span>Montant moyen échangé</span><b>${big(s.liq)} ${s.ccy}</b>` : ''}
-    <span class="h">Historique</span><span>Première donnée</span><b>${fd(S.x[0])}</b><span>Observations</span><b>${num(n, 0)}</b>`;
+  // statistiques
+  const c = S0.c, nn = c.length, lr = []; for (let i = Math.max(1, nn - 252); i < nn; i++) lr.push(Math.log(c[i] / c[i - 1]));
+  const best = Math.max(...lr), worst = Math.min(...lr), upd = lr.filter(x => x > 0).length / lr.length; const M = !monthly && nn > 210 ? await market(ST.sec) : null; if (!alive()) return;
+  let atr = null; if (!monthly && nn > 20) { let a = 0; for (let i = nn - 14; i < nn; i++) a += Math.max(S0.h[i] - S0.l[i], Math.abs(S0.h[i] - c[i - 1]), Math.abs(S0.l[i] - c[i - 1])); atr = a / 14 / c[nn - 1]; }
+  const v3 = S0.v.slice(-63).reduce((a, b) => a + b, 0) / 63;
+  $('gpKv').innerHTML = `<span>Dernier</span><b>${px(s, c[nn - 1])} ${s.ccy}</b><span>Variation</span><b>${pc(s.pct)}</b>
+    ${!monthly ? `<span>Ouv. / haut / bas</span><b>${px(s, S0.o[nn - 1])} / ${px(s, S0.h[nn - 1])} / ${px(s, S0.l[nn - 1])}</b>` : ''}
+    <span class="h">Performances</span>${!monthly ? `<span>1 semaine</span><b>${pc(s.r1w, 2)}</b>` : ''}<span>1 mois</span><b>${pc(s.r1m, 2)}</b><span>3 mois</span><b>${pc(s.r3m, 2)}</b><span>Depuis le 1er janv.</span><b>${pc(s.ytd, 2)}</b><span>1 an</span><b>${pc(s.r1y, 2)}</b><span>3 ans</span><b>${pc(s.r3y, 1)}</b>
+    <span class="h">Risque (1 an)</span><span>Volatilité annualisée</span><b>${num(s.vol * 100, 1)}%</b>${atr ? `<span>ATR 14 / cours</span><b>${num(atr * 100, 2)}%</b>` : ''}<span>Meilleure / pire ${monthly ? 'mois' : 'séance'}</span><b>${sgn(Math.exp(best) - 1, 1)} / ${sgn(Math.exp(worst) - 1, 1)}</b>
+    <span>${monthly ? 'Mois' : 'Séances'} en hausse</span><b>${num(upd * 100, 0)}%</b><span>Écart au record</span><b>${pc(s.dd, 1)}</b>${s.beta != null ? `<span>Bêta / corr. ${s.bench}</span><b>${num(s.beta, 2)} / ${num(s.corr, 2)}</b>` : ''}
+    ${M ? `<span class="h">Technique</span><span>MM50 · écart</span><b>${px(s, M.sma50[nn - 1])} · ${pc(c[nn - 1] / M.sma50[nn - 1] - 1, 1)}</b><span>MM200 · écart</span><b>${px(s, M.sma200[nn - 1])} · ${pc(c[nn - 1] / M.sma200[nn - 1] - 1, 1)}</b><span>RSI 14</span><b>${num(M.rsi14[nn - 1], 1)}</b>` : ''}
+    <span>Plage 52 semaines</span><b>${px(s, s.lo52)} – ${px(s, s.hi52)}</b>${v3 > 0 && hasVol ? `<span>Volume moyen 3 mois</span><b>${big(v3)}</b>` : ''}${s.liq ? `<span>Échanges moyens / j</span><b>${big(s.liq)} ${s.ccy}</b>` : ''}
+    <span class="h">Historique</span><span>Première donnée</span><b>${fd(S0.x[0])}</b><span>Observations</span><b>${num(nn, 0)}</b>`;
   const side = $('gpSide');
   if (s.mkt === 'BRVM' && s.cls === 'Equity') {
     const [dv, ev] = await Promise.all([getJSON('dividends.json'), getJSON('events.json')]); if (!alive()) return;
     const d1 = dv.filter(x => x.t === s.id).sort((a, b) => (b.ex || 0) - (a.ex || 0)).slice(0, 6), e1 = ev.filter(x => x.t === s.id).slice(0, 8);
     side.innerHTML = pn('Dividendes', 'DVD', `<table class="t"><thead><tr><th class="l">Exercice</th><th>Net</th><th>Paiement</th></tr></thead><tbody>${d1.map(x => `<tr><td class="l">${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}</td><td>${fds(x.pay)}</td></tr>`).join('') || '<tr><td class="l dm" colspan="3">Aucun</td></tr>'}</tbody></table>`, { np: true })
-      + pn('Avis récents', 'EVTS', e1.map(e => `<div class="ev" style="grid-template-columns:72px 1fr"><span class="d">${fds(e.d)}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join('') || '<div class="dm">Aucun avis.</div>');
+      + pn('Avis récents', 'EVTS', e1.map(e => `<div class="ev" style="grid-template-columns:84px 1fr"><span class="d">${fds(e.d)}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join('') || '<div class="dm">Aucun avis.</div>');
   }
 };
 

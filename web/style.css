@@ -100,9 +100,9 @@ a{color:var(--cyan)}
 /* ---------- barre rouge d'action ---------- */
 .rbar{display:flex;align-items:stretch;background:var(--red);min-height:22px;white-space:nowrap;overflow-x:auto;scrollbar-width:none;border-top:1px solid #000}
 .rbar::-webkit-scrollbar{display:none}
-.rbar .ob{background:var(--org);color:#000;padding:0 10px;display:flex;align-items:center;font-size:14px;min-width:190px}
+.rbar .ob{flex:none;background:var(--org);color:#000;padding:0 10px;display:flex;align-items:center;font-size:14px;min-width:190px}
 .rbar .rt{margin-left:auto;color:#fff;font-size:14px;display:flex;align-items:center;padding:0 10px}
-.rbar .ab{background:var(--red);border:0;border-left:1px solid #6e0a12;border-right:1px solid #c5303c;color:#fff;font-size:13.5px;padding:0 14px;display:flex;align-items:center;gap:6px}
+.rbar .ab{flex:none;background:var(--red);border:0;border-left:1px solid #6e0a12;border-right:1px solid #c5303c;color:#fff;font-size:13.5px;padding:0 14px;display:flex;align-items:center;gap:6px}
 .rbar .ab em{font-style:normal;font-size:12px}
 .rbar .ab.mn:after{content:'▾';font-size:11px}
 .rbar .ab:hover{background:var(--red2)}
@@ -129,7 +129,7 @@ main{flex:1;padding:4px;display:grid;gap:4px;align-content:start;min-width:0}
 .c2b{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 .c3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .c4{grid-template-columns:repeat(4,minmax(0,1fr))}
-.side{grid-template-columns:minmax(0,1fr) 330px}
+.side{grid-template-columns:minmax(0,1fr) 370px}
 .bt{grid-template-columns:minmax(0,320px) minmax(0,1fr)}
 .pn{background:#000;border:1px solid #1f1f1f;display:flex;flex-direction:column;min-width:0;position:relative}
 .pt{display:flex;align-items:center;gap:8px;background:#333639;color:#fff;padding:1px 6px;font:400 12.5px var(--mono);min-height:20px;white-space:nowrap;overflow:hidden}
@@ -262,6 +262,8 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
   .rbar .ob{min-width:0}
   .nwp .nr{grid-template-columns:44px 1fr}.nwp .nr .n,.nwp .nr .s,.nwp .nr .k{display:none}
   .tbar .dd{max-width:150px}
+  .nwp .nh .nl{display:none}.nwp .nh{gap:12px;font-size:11.5px}.nwp .nh button{font-size:11.5px}
+  .nwp .nr:nth-of-type(n+4){display:none}
 }
 
 /* menu du titre */
@@ -337,3 +339,9 @@ i.dot{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:
 .src{color:var(--dim2);font-size:11px;padding:3px 6px}
 .est{color:#7fd3ff!important}
 .est-b{background:#06263d!important}
+
+/* GP : ligne des dates (champs orange) */
+.gpr{gap:4px}
+.gpr .dt{width:96px}
+.gpr .ma{width:40px;text-align:center}
+.cal{display:inline-block;background:#5a5a5a;color:#ddd;font-size:11px;line-height:20px;padding:0 4px;margin-left:-3px}

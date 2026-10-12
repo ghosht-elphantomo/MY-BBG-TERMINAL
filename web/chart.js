@@ -95,20 +95,26 @@ class TSChart {
       const lg = p.log && lo > 0; const pad = lg ? 0 : (hi - lo) * .06; if (!p.fixed) { lo -= p.zero && lo >= 0 ? 0 : pad; hi += pad; }
       const L = v => lg ? Math.log(v) : v, Y = v => bot - (L(v) - L(lo)) / (L(hi) - L(lo)) * (ph - 2) - 1;
       this.layout.push({ top, bot, lo, hi, Y, lg, p });
-      x.strokeStyle = CL.line; x.lineWidth = 1; x.strokeRect(.5, top + .5, W, ph);
+      x.strokeStyle = this.o.grid === 'dot' ? '#2a2a2a' : CL.line; x.lineWidth = 1; x.strokeRect(.5, top + .5, W, ph);
       const ticks = lg ? logTicks(lo, hi) : niceTicks(lo, hi, Math.max(2, Math.round(ph / 45)));
       x.font = FNUM; x.textBaseline = 'middle'; x.textAlign = 'left';
-      for (const t of ticks) { const yy = Math.round(Y(t)) + .5; if (yy < top + 4 || yy > bot - 4) continue; x.strokeStyle = rgba(CL.dim2, .35); x.beginPath(); x.moveTo(0, yy); x.lineTo(W, yy); x.stroke(); x.fillStyle = CL.dim; x.fillText((p.fmt || fmtAxis)(t), W + 5, yy); }
+      const dot = this.o.grid === 'dot'; if (dot) x.setLineDash([1, 3]);
+      for (const t of ticks) { const yy = Math.round(Y(t)) + .5; if (yy < top + 4 || yy > bot - 4) continue; x.strokeStyle = dot ? 'rgba(160,160,160,.45)' : rgba(CL.dim2, .35); x.beginPath(); x.moveTo(0, yy); x.lineTo(W, yy); x.stroke(); x.fillStyle = dot ? '#e6e6e6' : CL.dim; x.fillText((p.fmt || fmtAxis)(t), W + 5, yy); }
+      if (dot) { x.setLineDash([]); }
       for (const r of (p.refs || [])) { const yy = Math.round(Y(r.v)) + .5; if (yy < top || yy > bot) continue; x.strokeStyle = r.color || CL.dim; x.setLineDash(r.dash || [3, 3]); x.beginPath(); x.moveTo(0, yy); x.lineTo(W, yy); x.stroke(); x.setLineDash([]);
         if (r.label) { x.fillStyle = r.color || CL.dim; x.font = FUI; x.textAlign = 'left'; x.fillText(r.label, 4, yy - 7); } }
-      x.save(); x.beginPath(); x.rect(0, top, W, ph); x.clip();
+      if (this.o.grid === 'dot' && pi === 0) { x.setLineDash([1, 3]); x.strokeStyle = 'rgba(160,160,160,.35)'; const xs = this.vgrid || []; for (const xi of xs) { x.beginPath(); x.moveTo(xi, top); x.lineTo(xi, h - padB); x.stroke(); } x.setLineDash([]); }
+      x.save(); x.beginPath(); x.rect(0, top, W, ph); x.clip(); this._top = top;
       for (const s of ss) this.drawSeries(x, s, X, Y, bw, i0, i1, bot, lo);
       x.restore();
       if (p.title) { x.fillStyle = CL.amber; x.font = FUI; x.textAlign = 'right'; x.textBaseline = 'top'; x.fillText(p.title, W - 4, top + 3); }
     });
     const span = (D.x[i1] - D.x[i0]) / 10000 * 365 || nv; x.fillStyle = CL.dim; x.font = FNUM; x.textAlign = 'center'; x.textBaseline = 'alphabetic';
-    const step = Math.max(1, Math.round(nv / Math.max(2, W / 80)));
-    for (let i = Math.floor(i1 / step) * step; i >= i0; i -= step) { const px = X(i); if (px > W - 16) continue; if (px < 20) break; x.fillText((this.o.xfmt || dLab)(D.x[i], span), px, h - 4); }
+    const vg = [];
+    if (this.o.xticks) { for (const [i, lab] of this.o.xticks(D.x, i0, i1, span, W)) { const px = X(i); if (px > W - 10 || px < 8) continue; vg.push(Math.round(px) + .5); x.fillStyle = '#e6e6e6'; x.fillText(lab, px, h - 4); } }
+    else { const step = Math.max(1, Math.round(nv / Math.max(2, W / 80)));
+      for (let i = Math.floor(i1 / step) * step; i >= i0; i -= step) { const px = X(i); if (px > W - 16) continue; if (px < 20) break; vg.push(Math.round(px) + .5); x.fillText((this.o.xfmt || dLab)(D.x[i], span), px, h - 4); } }
+    const vgChanged = this.o.grid === 'dot' && (this.vgrid || []).join() !== vg.join(); this.vgrid = vg; if (vgChanged) this.req();
     if (this.hover) {
       const i = U.clamp(this.hover.i, i0, i1), px = Math.round(X(i)) + .5; x.strokeStyle = rgba(CL.white, .35); x.setLineDash([2, 3]); x.beginPath(); x.moveTo(px, 4); x.lineTo(px, h - padB); x.stroke();
       const lay = this.layout.find(l => this.hover.y >= l.top && this.hover.y <= l.bot);
@@ -117,10 +123,11 @@ class TSChart {
       x.setLineDash([]); const dl = (this.o.xfull || fmtD)(D.x[i]); x.font = FNUM; const tw = x.measureText(dl).width + 10; x.fillStyle = CL.amber; x.fillRect(U.clamp(px - tw / 2, 0, W - tw), h - padB + 1, tw, padB - 2); x.fillStyle = '#000'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(dl, U.clamp(px, tw / 2, W - tw / 2), h - padB / 2);
     }
     const li = this.hover ? U.clamp(this.hover.i, i0, i1) : i1;
-    this.layout.forEach((lay, pi) => { const ss = D.series.filter(s => (s.pane || 0) === pi && s.label); let lx = 6; x.font = FUI; x.textBaseline = 'top'; x.textAlign = 'left';
+    this.layout.forEach((lay, pi) => { if (lay.p.noLegend) return; const ss = D.series.filter(s => (s.pane || 0) === pi && s.label); let lx = 6; x.font = FUI; x.textBaseline = 'top'; x.textAlign = 'left';
       for (const s of ss) { const v = s.type === 'candle' ? s.c[li] : s.type === 'band' ? null : s.y[li]; const txt = s.label + (v != null && isFinite(v) ? ' ' + (s.fmt || lay.p.fmt || fmtAxis)(v) : '');
         const tw = x.measureText(txt).width; x.fillStyle = 'rgba(0,0,0,.65)'; x.fillRect(lx - 2, lay.top + 2, tw + 14, 14); x.fillStyle = s.color || CL.white; x.fillRect(lx, lay.top + 6, 7, 7); x.fillStyle = CL.txt; x.fillText(txt, lx + 10, lay.top + 3); lx += tw + 22; } });
-    if (this.o.after) this.o.after(x, { X, layout: this.layout, i0, i1, W, h });
+    if (this.o.after) this.o.after(x, { X, layout: this.layout, i0, i1, W, h, li });
+    if (this.o.onView && (this._lv0 !== i0 || this._lv1 !== i1)) { this._lv0 = i0; this._lv1 = i1; this.o.onView(i0, i1); }
   }
   drawSeries(x, s, X, Y, bw, i0, i1, bot, lo) {
     const t = s.type || 'line';
@@ -140,7 +147,9 @@ class TSChart {
     x.strokeStyle = s.color || CL.white; x.lineWidth = s.w || 1.3; x.setLineDash(s.dash || []); x.beginPath(); let st = false, first = null, last = null;
     for (let i = i0; i <= i1; i++) { const v = s.y[i]; if (v == null || !isFinite(v)) { if (!s.connect) st = false; continue; } const px = X(i), py = Y(v); if (!st) { x.moveTo(px, py); st = true; if (first == null) first = px; } else x.lineTo(px, py); last = px; }
     x.stroke(); x.setLineDash([]);
-    if (t === 'area' && first != null) { x.lineTo(last, s.base != null ? Y(s.base) : bot); x.lineTo(first, s.base != null ? Y(s.base) : bot); x.closePath(); x.fillStyle = s.fill || rgba(s.color || CL.white, .12); x.fill(); }
+    if (t === 'area' && first != null) { x.lineTo(last, s.base != null ? Y(s.base) : bot); x.lineTo(first, s.base != null ? Y(s.base) : bot); x.closePath();
+      if (s.grad) { const g = x.createLinearGradient(0, this._top || 0, 0, bot); g.addColorStop(0, s.grad[0]); g.addColorStop(1, s.grad[1]); x.fillStyle = g; } else x.fillStyle = s.fill || rgba(s.color || CL.white, .12);
+      x.fill(); if (s.grad) { x.strokeStyle = s.color || CL.white; x.lineWidth = s.w || 1.3; x.beginPath(); let st2 = false; for (let i = i0; i <= i1; i++) { const v = s.y[i]; if (v == null || !isFinite(v)) { st2 = false; continue; } st2 ? x.lineTo(X(i), Y(v)) : (x.moveTo(X(i), Y(v)), st2 = true); } x.stroke(); } }
   }
 }
 function fmtAxis(v) { const a = Math.abs(v); const t = a >= 1e12 ? (v / 1e12).toFixed(1) + 'T' : a >= 1e9 ? (v / 1e9).toFixed(1) + 'Md' : a >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : a >= 1e4 ? (v / 1e3).toFixed(0) + 'k' : a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : a >= 1 ? v.toFixed(2) : v.toFixed(3); return t.replace('.', ','); }

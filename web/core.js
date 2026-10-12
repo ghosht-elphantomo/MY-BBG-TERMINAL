@@ -271,7 +271,8 @@ async function renderNews() {
     return `<div class="nr" data-u="${esc(x.u || '')}"><span class="n">${401 + i})</span><span class="s">${esc(srcCode(x))}</span><span class="t">${d.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' })}</span><span class="h">${esc(deent(x.ti))}</span><span class="k">${esc(tk)}</span></div>`; }).join('');
   p.className = 'nwp' + (ST.newsMin ? ' min' : '');
   p.innerHTML = `<div class="nh"><span class="nl">Actualités · heure GMT (Abidjan)</span><button data-n="300" id="nwTop">300) Toutes les actualités</button><button data-n="301" id="nwMin">301) ${ST.newsMin ? 'Agrandir' : 'Réduire'} le panneau</button></div>${rows || '<div class="nr"><span></span><span></span><span></span><span class="h">Aucune actualité chargée.</span></div>'}`;
-  $('nwTop').onclick = () => go('TOP'); $('nwMin').onclick = () => { ST.newsMin = !ST.newsMin; try { localStorage.setItem('fqt.newsMin', ST.newsMin ? '1' : ''); } catch (e) { } renderNews(); };
+  document.documentElement.style.setProperty('--nwh', p.offsetHeight + 'px');
+  $('nwTop').onclick = () => go('TOP'); $('nwMin').onclick = () => { ST.newsMin = !ST.newsMin; try { localStorage.setItem('fqt.newsMin', ST.newsMin ? '1' : ''); } catch (e) { } renderNews().then(() => window.dispatchEvent(new Event('resize'))); };
   p.querySelectorAll('[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
 }
 function srcCode(x) { const s = (x.s || x.f || '').toLowerCase();
