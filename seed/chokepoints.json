@@ -1,1 +1,510 @@
-{"src":"U.S. Energy Information Administration (EIA), World Oil Transit Chokepoints, mise à jour du 25/06/2024 (tableau 2018-2023), https://www.eia.gov/international/analysis/special-topics/World_Oil_Transit_Chokepoints","unit":"millions de barils par jour (pétrole brut et produits pétroliers)","years":[2018,2019,2020,2021,2022,2023],"pts":[{"k":"MAL","n":"Détroit de Malacca","lat":2.5,"lon":101.3,"v":[23.0,23.1,22.8,21.9,22.9,23.7]},{"k":"HOR","n":"Détroit d'Ormuz","lat":26.6,"lon":56.3,"v":[21.4,20.0,18.4,19.0,21.1,20.9]},{"k":"SUE","n":"Canal de Suez et oléoduc SUMED","lat":30.6,"lon":32.3,"v":[6.4,6.2,5.3,5.1,7.3,8.8]},{"k":"BAB","n":"Bab el-Mandeb","lat":12.6,"lon":43.3,"v":[6.4,6.0,5.2,5.4,7.5,8.6]},{"k":"DAN","n":"Détroits danois","lat":55.7,"lon":12.7,"v":[3.3,3.4,3.1,3.1,4.2,4.9]},{"k":"TUR","n":"Détroits turcs (Bosphore, Dardanelles)","lat":41.1,"lon":29.0,"v":[3.4,3.5,3.3,3.4,3.2,3.4]},{"k":"PAN","n":"Canal de Panama (exercice budgétaire)","lat":9.1,"lon":-79.7,"v":[1.4,1.5,1.7,1.8,2.1,2.1]},{"k":"CAP","n":"Cap de Bonne-Espérance (route, pas un détroit)","lat":-34.4,"lon":18.5,"v":[7.6,7.5,7.7,7.0,5.9,6.0]}],"world":{"maritime":[78.5,78.2,73.0,74.3,76.2,77.5],"supply":[100.1,100.9,91.6,97.6,99.9,101.9]},"routes":[{"n":"Golfe → Asie de l'Est (Ormuz, Malacca)","via":["HOR","MAL"],"p":[[50.5,27.0],[56.3,26.6],[60.0,23.0],[72.0,10.0],[80.5,5.5],[95.0,6.0],[101.3,2.5],[104.0,1.3],[110.0,8.0],[118.0,20.0],[122.0,30.0],[128.0,34.5],[136.0,34.8]]},{"n":"Golfe → Europe (Ormuz, Bab el-Mandeb, Suez)","via":["HOR","BAB","SUE"],"p":[[50.5,27.0],[56.3,26.6],[58.5,22.5],[52.0,14.0],[45.0,12.0],[43.3,12.6],[38.5,20.0],[34.5,27.0],[32.5,29.9],[32.3,31.3],[25.0,33.5],[15.0,37.0],[5.0,38.5],[-5.6,36.0],[-9.5,39.0],[-5.0,47.5],[1.5,50.5],[4.0,52.0]]},{"n":"Golfe et Afrique de l'Ouest → Atlantique (cap de Bonne-Espérance)","via":["CAP"],"p":[[56.3,26.6],[60.0,20.0],[55.0,0.0],[40.0,-25.0],[25.0,-36.0],[18.5,-34.4],[10.0,-25.0],[3.0,-2.0],[-10.0,5.0],[-20.0,20.0],[-30.0,35.0],[-50.0,40.0],[-74.0,40.5]]},{"n":"Baltique russe → monde (détroits danois)","via":["DAN"],"p":[[28.5,59.9],[20.0,57.5],[14.0,55.3],[12.7,55.7],[10.5,57.6],[5.0,58.0],[-2.0,50.0],[-6.0,48.0]]},{"n":"Mer Noire → Méditerranée (détroits turcs)","via":["TUR"],"p":[[37.8,44.7],[31.0,43.0],[29.0,41.1],[26.4,40.1],[24.0,38.0],[18.0,36.0],[10.0,37.5]]},{"n":"Golfe du Mexique → Pacifique (Panama)","via":["PAN"],"p":[[-94.0,29.0],[-88.0,24.0],[-82.0,17.0],[-79.9,9.4],[-79.6,8.9],[-80.0,7.0],[-90.0,8.0],[-110.0,15.0],[-140.0,25.0],[-170.0,30.0]]}]}
+{
+ "src": "U.S. Energy Information Administration (EIA), World Oil Transit Chokepoints, mise à jour du 03/03/2026 (tableau 1 : 2020 à 1er semestre 2025 ; STEO février 2026, suivi des pétroliers Vortexa, autorité du canal de Panama), https://www.eia.gov/international/analysis/special-topics/World_Oil_Transit_Chokepoints",
+ "unit": "millions de barils par jour (pétrole brut et produits pétroliers)",
+ "years": [
+  2020,
+  2021,
+  2022,
+  2023,
+  2024,
+  "S1 2025"
+ ],
+ "pts": [
+  {
+   "k": "MAL",
+   "n": "Détroit de Malacca",
+   "lat": 2.5,
+   "lon": 101.3,
+   "v": [
+    22.8,
+    22.1,
+    23.0,
+    24.0,
+    22.5,
+    23.2
+   ]
+  },
+  {
+   "k": "HOR",
+   "n": "Détroit d'Ormuz",
+   "lat": 26.6,
+   "lon": 56.3,
+   "v": [
+    19.2,
+    19.7,
+    21.9,
+    21.8,
+    20.7,
+    20.9
+   ]
+  },
+  {
+   "k": "SUE",
+   "n": "Canal de Suez et oléoduc SUMED",
+   "lat": 30.6,
+   "lon": 32.3,
+   "v": [
+    5.4,
+    5.2,
+    7.3,
+    8.8,
+    4.8,
+    4.9
+   ]
+  },
+  {
+   "k": "BAB",
+   "n": "Bab el-Mandeb",
+   "lat": 12.6,
+   "lon": 43.3,
+   "v": [
+    5.7,
+    6.0,
+    8.0,
+    9.3,
+    4.1,
+    4.2
+   ]
+  },
+  {
+   "k": "DAN",
+   "n": "Détroits danois",
+   "lat": 55.7,
+   "lon": 12.7,
+   "v": [
+    3.1,
+    3.1,
+    4.2,
+    5.0,
+    4.9,
+    4.9
+   ]
+  },
+  {
+   "k": "TUR",
+   "n": "Détroits turcs (Dardanelles)",
+   "lat": 41.1,
+   "lon": 29.0,
+   "v": [
+    3.2,
+    3.3,
+    3.2,
+    3.5,
+    3.6,
+    3.7
+   ]
+  },
+  {
+   "k": "PAN",
+   "n": "Canal de Panama (exercice budgétaire)",
+   "lat": 9.1,
+   "lon": -79.7,
+   "v": [
+    1.7,
+    1.8,
+    2.2,
+    2.2,
+    2.0,
+    2.3
+   ]
+  },
+  {
+   "k": "CAP",
+   "n": "Cap de Bonne-Espérance (route, pas un détroit)",
+   "lat": -34.4,
+   "lon": 18.5,
+   "v": [
+    7.9,
+    7.2,
+    6.1,
+    6.2,
+    9.3,
+    9.1
+   ]
+  }
+ ],
+ "world": {
+  "maritime": [
+   74.1,
+   75.9,
+   78.6,
+   80.2,
+   79.7,
+   79.8
+  ],
+  "supply": [
+   94.1,
+   95.8,
+   100.6,
+   102.6,
+   103.3,
+   104.4
+  ]
+ },
+ "routes": [
+  {
+   "n": "Golfe → Asie de l'Est (Ormuz, Malacca)",
+   "via": [
+    "HOR",
+    "MAL"
+   ],
+   "p": [
+    [
+     50.5,
+     27.0
+    ],
+    [
+     56.3,
+     26.6
+    ],
+    [
+     60.0,
+     23.0
+    ],
+    [
+     72.0,
+     10.0
+    ],
+    [
+     80.5,
+     5.5
+    ],
+    [
+     95.0,
+     6.0
+    ],
+    [
+     101.3,
+     2.5
+    ],
+    [
+     104.0,
+     1.3
+    ],
+    [
+     110.0,
+     8.0
+    ],
+    [
+     118.0,
+     20.0
+    ],
+    [
+     122.0,
+     30.0
+    ],
+    [
+     128.0,
+     34.5
+    ],
+    [
+     136.0,
+     34.8
+    ]
+   ]
+  },
+  {
+   "n": "Golfe → Europe (Ormuz, Bab el-Mandeb, Suez)",
+   "via": [
+    "HOR",
+    "BAB",
+    "SUE"
+   ],
+   "p": [
+    [
+     50.5,
+     27.0
+    ],
+    [
+     56.3,
+     26.6
+    ],
+    [
+     58.5,
+     22.5
+    ],
+    [
+     52.0,
+     14.0
+    ],
+    [
+     45.0,
+     12.0
+    ],
+    [
+     43.3,
+     12.6
+    ],
+    [
+     38.5,
+     20.0
+    ],
+    [
+     34.5,
+     27.0
+    ],
+    [
+     32.5,
+     29.9
+    ],
+    [
+     32.3,
+     31.3
+    ],
+    [
+     25.0,
+     33.5
+    ],
+    [
+     15.0,
+     37.0
+    ],
+    [
+     5.0,
+     38.5
+    ],
+    [
+     -5.6,
+     36.0
+    ],
+    [
+     -9.5,
+     39.0
+    ],
+    [
+     -5.0,
+     47.5
+    ],
+    [
+     1.5,
+     50.5
+    ],
+    [
+     4.0,
+     52.0
+    ]
+   ]
+  },
+  {
+   "n": "Golfe et Afrique de l'Ouest → Atlantique (cap de Bonne-Espérance)",
+   "via": [
+    "CAP"
+   ],
+   "p": [
+    [
+     56.3,
+     26.6
+    ],
+    [
+     60.0,
+     20.0
+    ],
+    [
+     55.0,
+     0.0
+    ],
+    [
+     40.0,
+     -25.0
+    ],
+    [
+     25.0,
+     -36.0
+    ],
+    [
+     18.5,
+     -34.4
+    ],
+    [
+     10.0,
+     -25.0
+    ],
+    [
+     3.0,
+     -2.0
+    ],
+    [
+     -10.0,
+     5.0
+    ],
+    [
+     -20.0,
+     20.0
+    ],
+    [
+     -30.0,
+     35.0
+    ],
+    [
+     -50.0,
+     40.0
+    ],
+    [
+     -74.0,
+     40.5
+    ]
+   ]
+  },
+  {
+   "n": "Baltique russe → monde (détroits danois)",
+   "via": [
+    "DAN"
+   ],
+   "p": [
+    [
+     28.5,
+     59.9
+    ],
+    [
+     20.0,
+     57.5
+    ],
+    [
+     14.0,
+     55.3
+    ],
+    [
+     12.7,
+     55.7
+    ],
+    [
+     10.5,
+     57.6
+    ],
+    [
+     5.0,
+     58.0
+    ],
+    [
+     -2.0,
+     50.0
+    ],
+    [
+     -6.0,
+     48.0
+    ]
+   ]
+  },
+  {
+   "n": "Mer Noire → Méditerranée (détroits turcs)",
+   "via": [
+    "TUR"
+   ],
+   "p": [
+    [
+     37.8,
+     44.7
+    ],
+    [
+     31.0,
+     43.0
+    ],
+    [
+     29.0,
+     41.1
+    ],
+    [
+     26.4,
+     40.1
+    ],
+    [
+     24.0,
+     38.0
+    ],
+    [
+     18.0,
+     36.0
+    ],
+    [
+     10.0,
+     37.5
+    ]
+   ]
+  },
+  {
+   "n": "Golfe du Mexique → Pacifique (Panama)",
+   "via": [
+    "PAN"
+   ],
+   "p": [
+    [
+     -94.0,
+     29.0
+    ],
+    [
+     -88.0,
+     24.0
+    ],
+    [
+     -82.0,
+     17.0
+    ],
+    [
+     -79.9,
+     9.4
+    ],
+    [
+     -79.6,
+     8.9
+    ],
+    [
+     -80.0,
+     7.0
+    ],
+    [
+     -90.0,
+     8.0
+    ],
+    [
+     -110.0,
+     15.0
+    ],
+    [
+     -140.0,
+     25.0
+    ],
+    [
+     -170.0,
+     30.0
+    ]
+   ]
+  }
+ ],
+ "upd": "2026-03-03",
+ "y2026": {
+  "title": "2026 : guerre avec l'Iran et crise du détroit d'Ormuz",
+  "pts": [
+   {
+    "d": "2025",
+    "t": "Ormuz, année 2025 : 19,9 Mb/j (14,95 de brut + 4,93 de produits), environ 25 % du commerce maritime mondial de pétrole ; 80 % vers l'Asie",
+    "src": "AIE, « Strait of Hormuz » (mise à jour février 2026)",
+    "u": "https://www.iea.org/about/oil-security-and-emergency-response/strait-of-hormuz"
+   },
+   {
+    "d": "2025",
+    "t": "Contournements possibles : oléoduc saoudien Est-Ouest vers Yanbu (5 Mb/j de capacité nominale) et oléoduc émirien Habshan-Fujaïrah (1,5 Mb/j) ; capacité disponible estimée à 3,5–5,5 Mb/j",
+    "src": "AIE, « Strait of Hormuz » (février 2026)",
+    "u": "https://www.iea.org/about/oil-security-and-emergency-response/strait-of-hormuz"
+   },
+   {
+    "d": "2026-04",
+    "t": "Prime record de 35 $/b du Brent daté (physique) sur le Brent à terme ICE à la mi-avril ; Brent daté en moyenne 120,36 $/b en avril",
+    "src": "AIE, Oil Market Report, mai 2026",
+    "u": "https://www.iea.org/reports/oil-market-report-may-2026"
+   },
+   {
+    "d": "2026-05",
+    "t": "Ormuz : flux tombés à 9,6 Mb/j en mai (plus bas), remontés à environ 12 Mb/j début juin",
+    "src": "AIE, Oil Market Report, juin 2026",
+    "u": "https://www.iea.org/reports/oil-market-report-june-2026"
+   },
+   {
+    "d": "2026-08",
+    "t": "Exportations totales de pétrole des pays du Golfe estimées à environ 13 Mb/j en août, près de la moitié de leur niveau d'avant-guerre ; plus de 10 Mb/j de production du Golfe à l'arrêt ; nouvelles attaques dans le Golfe et à Bab el-Mandeb",
+    "src": "AIE, Oil Market Report, septembre 2026",
+    "u": "https://www.iea.org/reports/oil-market-report-september-2026"
+   }
+  ],
+  "note": "Aucune statistique annuelle par détroit n'est encore publiée pour 2025 complet et 2026 : la carte s'arrête au 1er semestre 2025 (dernière édition EIA) ; les points 2026 ci-dessus sont les chiffres datés publiés par l'AIE."
+ }
+}

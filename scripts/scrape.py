@@ -388,6 +388,39 @@ def _nq_ext(sym, ac, kind):
             "hi": money(hi.group(1)) if hi else None, "lo": money(lo.group(1)) if lo else None}
 
 
+# contrats à terme 1er mois (différé ~10 min) : les cours d'Investing, TradingView, Bloomberg (CO1, CL1, NG1, GC1)
+FUTS = (("BRENT", "@LCO.1"), ("WTI", "@CL.1"), ("NATGAS", "@NG.1"), ("GOLD", "@GC.1"))
+
+
+def _fnum(x):
+    try:
+        return float(str(x).replace(",", "").replace("%", "").replace("+", ""))
+    except (TypeError, ValueError):
+        return None
+
+
+def fut_quotes(q):
+    try:
+        u = ("https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=" + urllib.parse.quote("|".join(c for _, c in FUTS))
+             + "&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json")
+        rows = json.loads(get(u, tries=2))["FormattedQuoteResult"]["FormattedQuote"]
+        by = {r.get("symbol"): r for r in rows}
+        for sid, cs in FUTS:
+            r = by.get(cs) or {}
+            last, prev = _fnum(r.get("last")), _fnum(r.get("previous_day_closing"))
+            if not last or not r.get("last_time"):
+                continue
+            t = dt.datetime.fromisoformat(re.sub(r"([+-]\d\d)(\d\d)$", r"\1:\2", r["last_time"])).astimezone(NY)
+            day = t.date() + (dt.timedelta(days=1) if t.hour >= 18 else dt.timedelta(0))  # séance CME/ICE : ouverte la veille à 18 h (New York)
+            while day.weekday() >= 5:
+                day += dt.timedelta(days=1)
+            q[sid] = {"last": last, "prev": prev, "pct": round(last / prev - 1, 6) if prev else None, "d": day.isoformat(),
+                      "o": _fnum(r.get("open")), "h": _fnum(r.get("high")), "l": _fnum(r.get("low")), "vol": int(_fnum(r.get("volume")) or 0),
+                      "src": "CNBC", "ct": r.get("name"), "exp": r.get("expiration_date")}
+    except Exception as e:  # noqa: BLE001
+        fail("cnbc_futures", e)
+
+
 def us_batch(out_data):
     """Cours différés de tous les titres US du terminal (actions, ETF, indices) : Nasdaq, par paquets de 25 d'une même classe ;
     pré-marché et après-bourse des actions et ETF quand la séance étendue est ouverte."""
@@ -465,6 +498,7 @@ def us_batch(out_data):
             old = (prev_q.get(sid) or {}).get("ext")
             if old and old.get("s") == "post":
                 rec["ext"] = old
+    fut_quotes(q)
     for sid, prod in (("BTC", "BTC-USD"), ("ETH", "ETH-USD"), ("SOL", "SOL-USD")):
         try:
             t = json.loads(get(f"https://api.exchange.coinbase.com/products/{prod}/ticker", tries=2))

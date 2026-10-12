@@ -2028,6 +2028,49 @@ def run_cmc(out, site_data=None):
     note("cmc")
 
 
+# ---------------------------------------------------------------- contrats à terme en continu (1er mois) : Brent, WTI, gaz, or
+FUT_Y = (("BRENT", "BZ=F"), ("WTI", "CL=F"), ("NATGAS", "NG=F"), ("GOLD", "GC=F"))
+
+
+def run_fut(out):
+    """Historique quotidien des contrats à terme 1er mois (Yahoo Finance), fusionné avec le relevé précédent.
+    Ce sont les prix affichés par Investing, TradingView ou Bloomberg (CO1, CL1, NG1, GC1), pas les prix au comptant."""
+    for sid, sym in FUT_Y:
+        p = os.path.join(out, "futures", sid + ".json")
+        old = json.load(open(p, encoding="utf8")) if os.path.exists(p) else None
+        j, err = None, None
+        for host in ("query1", "query2"):
+            try:
+                j = json.loads(get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}?range={'2y' if old else 'max'}&interval=1d",
+                                   tries=2, timeout=40, headers={"Referer": "https://finance.yahoo.com/", "Origin": "https://finance.yahoo.com"}))
+                break
+            except Exception as e:  # noqa: BLE001
+                err = e
+        try:
+            if not j:
+                raise err or ValueError("aucune réponse")
+            res = j["chart"]["result"][0]
+            ts, qd, off = res["timestamp"], res["indicators"]["quote"][0], res["meta"].get("gmtoffset", 0)
+            rows = {}
+            if old:
+                for i, d in enumerate(old["d"]):
+                    rows[d] = (old["o"][i], old["h"][i], old["l"][i], old["c"][i], old["v"][i])
+            for i, t in enumerate(ts):
+                c = qd["close"][i]
+                if c is None or c <= 0:
+                    continue
+                d = d2i(dt.datetime.fromtimestamp(t + off, dt.timezone.utc).date())
+                o, h, lo, v = qd["open"][i] or c, qd["high"][i] or c, qd["low"][i] or c, qd["volume"][i] or 0
+                rows[d] = (round(o, 4), round(max(h, c, o), 4), round(min(lo, c, o), 4), round(c, 4), int(v))
+            ks = sorted(rows)
+            save(p, {"sym": sym, "src": "Yahoo Finance (contrat 1er mois en continu)", "d": ks, "o": [rows[k][0] for k in ks], "h": [rows[k][1] for k in ks],
+                     "l": [rows[k][2] for k in ks], "c": [rows[k][3] for k in ks], "v": [rows[k][4] for k in ks]})
+            note("fut")
+        except Exception as e:  # noqa: BLE001
+            note("fut", False, f"{sid}: {e}")
+        time.sleep(.5)
+
+
 # ---------------------------------------------------------------- EIA : stocks hebdomadaires de pétrole des États-Unis (Weekly Petroleum Status Report)
 def run_eia(out):
     try:
@@ -2161,7 +2204,7 @@ def main():
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
-             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out))]
+             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

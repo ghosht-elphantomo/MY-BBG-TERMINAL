@@ -403,9 +403,15 @@ def main():
     macro("CAPE", "CAPE Index", "S&P 500 PER de Shiller (CAPE)", "Valorisation", "s-and-p-500/main/data/data.csv", "Date", "PE10", "M", cls="Index")
     macro("CPI", "CPI INDX", "Indice des prix US (CPI-U)", "Inflation", "cpi-us/main/data/cpiai.csv", "Date", "Index", "M", cls="Index")
     macro("US10Y", "USGG10YR Index", "Taux US 10 ans (%)", "Taux", "bond-yields-us-10y/main/data/monthly.csv", "Date", "Rate", "M", cls="Rate", ccy="%")
-    macro("BRENT", "CO1 Comdty", "Pétrole Brent (USD/baril)", "Énergie", "oil-prices/main/data/brent-daily.csv", "Date", "Price", "D")
-    macro("WTI", "CL1 Comdty", "Pétrole WTI (USD/baril)", "Énergie", "oil-prices/main/data/wti-daily.csv", "Date", "Price", "D")
-    macro("NATGAS", "NG1 Comdty", "Gaz naturel Henry Hub (USD/MMBtu)", "Énergie", "natural-gas/main/data/daily.csv", "Date", "Price", "D", nd=3)
+    # prix au comptant publiés par l'EIA (J-1) : Brent daté (physique), WTI Cushing, gaz Henry Hub. Les contrats à terme
+    # (CO1, CL1, NG1 : ceux d'Investing, TradingView, Bloomberg) sont ajoutés par build_extra.ingest sous BRENT, WTI, NATGAS.
+    fut_dir = os.path.join(a.extra, "futures") if a.extra else None
+    for sid, sid_f, tk, name, path, nd_ in (("BRENTS", "BRENT", "EUCRBRDT Index", "Brent daté, prix au comptant (EIA, USD/baril)", "oil-prices/main/data/brent-daily.csv", 2),
+                                            ("WTIS", "WTI", "USCRWTIC Index", "WTI Cushing, prix au comptant (EIA, USD/baril)", "oil-prices/main/data/wti-daily.csv", 2),
+                                            ("NGS", "NATGAS", "NGUSHHUB Index", "Gaz Henry Hub, prix au comptant (EIA, USD/MMBtu)", "natural-gas/main/data/daily.csv", 3)):
+        sp = macro(sid, tk, name, "Énergie", path, "Date", "Price", "D", nd=nd_)
+        if sp and not (fut_dir and os.path.exists(os.path.join(fut_dir, sid_f + ".json"))):
+            macro(sid_f, tk, name, "Énergie", path, "Date", "Price", "D", nd=nd_)
     macro("VIX", "VIX Index", "Volatilité implicite S&P 500", "Volatilité", "finance-vix/main/data/vix-daily.csv", "DATE", "CLOSE", "D", cls="Index", ccy="pts")
     try:
         fx = fetch(DS.format("exchange-rates/main/data/daily.csv"), a.cache).decode("utf8")

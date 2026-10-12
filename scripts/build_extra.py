@@ -125,6 +125,18 @@ def ingest(extra, add, have, log):
             have.discard(s)
         add({"id": s, "tk": f"{s} Index", "n": n, "cls": "Index", "typ": "Index", "mkt": "MACRO", "grp": "Volatilité", "ccy": "pts", "src": "CBOE"},
             [x[0] for x in rr], [x[4] for x in rr], [x[1] for x in rr], [x[2] for x in rr], [x[3] for x in rr], replace=True)
+    # contrats à terme 1er mois : remplacent les prix au comptant des datasets sous les mêmes codes (copie au comptant : BRENTS, WTIS, NGS)
+    for sid, tk, n, grp, nd in (("BRENT", "CO1 Comdty", "Pétrole Brent, contrat à terme ICE 1er mois (USD/baril)", "Énergie", 2),
+                                ("WTI", "CL1 Comdty", "Pétrole WTI, contrat à terme NYMEX 1er mois (USD/baril)", "Énergie", 2),
+                                ("NATGAS", "NG1 Comdty", "Gaz naturel Henry Hub, contrat à terme NYMEX 1er mois (USD/MMBtu)", "Énergie", 3),
+                                ("GOLD", "GC1 Comdty", "Or, contrat à terme COMEX 1er mois (USD/once)", "Métaux", 2)):
+        b = body("futures", sid)
+        if not b or len(b["d"]) < 250:
+            continue
+        if sid in have:
+            have.discard(sid)
+        add({"id": sid, "tk": tk, "n": n, "cls": "Comdty", "typ": "Comdty", "mkt": "MACRO", "grp": grp, "ccy": "USD", "src": "ICE / NYMEX via Yahoo Finance et CNBC"},
+            b["d"], b["c"], b["o"], b["h"], b["l"], b["v"], nd=nd, replace=True)
     for sid, n in (("BTC", "Bitcoin"), ("ETH", "Ether"), ("SOL", "Solana")):
         b = body("crypto", sid)
         if not b:
