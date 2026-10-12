@@ -115,10 +115,10 @@ function peersOf(s, IDX) {
 const qtl = (a, q) => { const v = a.filter(x => x != null && isFinite(x)).sort((p, r) => p - r); if (!v.length) return null; const i = (v.length - 1) * q, lo = Math.floor(i); return v[lo] + (v[Math.min(v.length - 1, lo + 1)] - v[lo]) * (i - lo); };
 const med = a => { const v = a.filter(x => x != null && isFinite(x)).sort((p, q) => p - q); return v.length ? (v.length % 2 ? v[(v.length - 1) / 2] : (v[v.length / 2 - 1] + v[v.length / 2]) / 2) : null; };
 const pctRank = (a, v) => { const o = a.filter(x => x != null && isFinite(x)); return o.length && v != null ? o.filter(x => x <= v).length / o.length : null; };
-PAGES.RV = async (m, alive) => {
+async function RV_main(m, alive) {
   const s = sec(ST.sec); const [IDX, F] = await Promise.all([getJSON('fa_index.json'), faJSON(s.id).catch(() => null)]); if (!alive()) return;
   const me = IDX.rows.find(r => r.id === s.id); if (!me || !F) { m.innerHTML = pn(s.tk + ' · valorisation relative', 'RV', '<div class="empty">Comptes non disponibles.</div>'); return; }
-  const st = ST.rv = ST.rv || { mh: 'pe', yrs: 5, sx: 'roe', sy: 'pe' }; const P = peersOf(s, IDX);
+  const st = ST.rv = ST.rv || { mh: 'pe', yrs: 5, sx: 'roe', sy: 'pe' }; if (st.base !== s.id) { st.base = s.id; if (s.bank || me.bank) { st.sx = 'roe'; st.sy = 'pb'; } } const P = peersOf(s, IDX);
   const MH = F.mh || { d: [] }; const k0 = MH.d.length ? MH.d.findIndex(d => d >= MH.d[MH.d.length - 1] - st.yrs * 10000) : 0;
   const hist = k => { const a = (MH[k] || []).slice(Math.max(0, k0)).filter(v => v != null && isFinite(v) && v > 0 && v < (k === 'fcfy' || k === 'dy' ? 1 : 500)); if (a.length < 20) return null; const mu = U.mean(a), sd = U.std(a); return { mu, sd, n: a.length, last: a[a.length - 1], pr: pctRank(a, a[a.length - 1]) }; };
   const rows = MULT.filter(([k]) => k !== 'fpe' || s.mkt === 'US').map(([k, l, t, hint]) => {

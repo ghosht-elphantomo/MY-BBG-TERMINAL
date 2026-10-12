@@ -277,3 +277,43 @@ PAGES.PEER = async (m, alive) => {
   const pin = $('peIn'); if (pin) pin.onkeydown = e => { if (e.key !== 'Enter') return; const r = searchSecs(pin.value).find(x => x.cls === 'Equity'); if (!r) { toast('Titre introuvable.'); return; } if (st.list.includes(r.id)) return; if (st.list.length >= 10) { toast('10 sociétés au maximum.'); return; } st.list.push(r.id); render(); };
   m.querySelectorAll('[data-rm]').forEach(b => b.onclick = () => { if (st.list.length <= 2) { toast('2 sociétés au minimum.'); return; } st.list = st.list.filter(x => x !== b.dataset.rm); render(); });
 };
+
+/* ------------------------------------------------------------------ RV : onglets (pairs et historique / juste valeur et marge de sécurité) */
+PAGES.RV = async (m, alive) => {
+  const s = sec(ST.sec); const tab = tabState('RV', 'p'); setTabs([['p', 'Pairs et historique'], ['f', 'Juste valeur']], tab, k => { ST.tab.RV = k; render(); });
+  if (tab === 'p') return RV_main(m, alive);
+  const [F, IDX] = await Promise.all([faJSON(s.id).catch(() => null), getJSON('fa_index.json')]); if (!alive()) return;
+  if (!F || !F.Y) { m.innerHTML = pn('Juste valeur', 'RV', '<div class="empty">Comptes non disponibles.</div>'); return; }
+  const Y = yDerived(F), us = F.mkt === 'US', L = Y.y.map((_, i) => i).filter(i => Y.ni[i] != null && Y.eps[i] != null && Y.eq && Y.eq[i] != null).pop();
+  if (L == null) { m.innerHTML = pn('Juste valeur', 'RV', '<div class="empty">Capitaux propres ou BPA absents des sources.</div>'); return; }
+  const eps = Y.eps[L], sh = Y.ni[L] / eps, bvps = Y.eq[L] / sh, price = s.last, bank = !!(s.bank || F.bank);
+  const roes = (Y.roe || []).slice(Math.max(0, L - 4), L + 1).filter(v => v != null && isFinite(v)); const roeAvg = roes.length ? roes.reduce((a, b) => a + b, 0) / roes.length : Y.ni[L] / Y.eq[L];
+  const pay = us ? (Y.div && Y.div[L] != null && Y.ni[L] > 0 ? Math.abs(Y.div[L]) / Y.ni[L] : 0) : (Y.payout && Y.payout[L] != null ? Y.payout[L] : 0);
+  const g5 = cagrA(Y.eps.slice(0, L + 1), 5); const rf = us && Q.by.US10Y ? Q.by.US10Y.last / 100 : null;
+  const def = { r: us ? (rf != null ? +(rf + .05).toFixed(3) : .09) : .12, g: Math.max(0, Math.min(.05, g5 != null ? g5 : .03)), roe: roeAvg };
+  const key = 'fv.' + s.id; const H = Object.assign({}, def, lsGet(key, {}));
+  const P = peersOf(s, IDX), medP = k => med(P.filter(r => r.id !== s.id).map(r => r[k]).filter(v => v != null && v > 0 && v < 200));
+  const peH = (F.mh && F.mh.pe || []).filter(v => v > 0 && v < 200).slice(-260), peHist = peH.length > 20 ? med(peH) : null;
+  const just = (roe, g, r) => r > g ? bvps * (roe - g) / (r - g) : null, gord = (g, r) => r > g && eps > 0 ? eps * pay * (1 + g) / (r - g) : null;
+  const ebitda = Y.ebitda && Y.ebitda[L], nd = Y.nd && Y.nd[L];
+  const rows = [['P/B justifié : (ROE − g) ÷ (r − g)', just(H.roe, H.g, H.r), `ROE ${P1(H.roe)}, g ${P1(H.g)}, r ${P1(H.r)} → P/B ${num((H.roe - H.g) / (H.r - H.g), 2)} x`],
+    ['Gordon : BPA × distribution × (1 + g) ÷ (r − g)', gord(H.g, H.r), `distribution ${P1(pay)}, g ${P1(H.g)}, r ${P1(H.r)}`],
+    ['PER médian des pairs', eps > 0 && medP('pe') ? eps * medP('pe') : null, `${num(medP('pe'), 1)} x × BPA ${num(eps, 2)} (${esc(P.label)})`],
+    ['P/B médian des pairs', medP('pb') ? bvps * medP('pb') : null, `${num(medP('pb'), 2)} x × actif net ${num(bvps, 0)} par action`],
+    bank ? null : ['VE/EBITDA médian des pairs', ebitda > 0 && medP('ev_ebitda') ? (ebitda * medP('ev_ebitda') - (nd || 0)) / sh : null, `${num(medP('ev_ebitda'), 1)} x × EBITDA − dette nette`],
+    ['PER médian de son historique (5 ans)', eps > 0 && peHist ? eps * peHist : null, `${num(peHist, 1)} x × BPA`]].filter(Boolean);
+  const mos = v => v == null || v <= 0 ? null : 1 - price / v;
+  const ok = rows.map(r => r[1]).filter(v => v != null && v > 0); const mid = ok.length ? med(ok) : null;
+  const gs = [0, .01, .02, .03, .04, .05, .06], rs = [-.05, -.025, 0, .025, .05].map(d => Math.max(.01, H.roe + d));
+  const mcol = v => v == null ? '' : v > .3 ? 'background:#0f5b2a' : v > 0 ? 'background:#0b3a1d' : v > -.3 ? 'background:#4a1212' : 'background:#6e0a12';
+  m.innerHTML = `<div class="tools gpr"><span class="tlab">Rendement exigé r</span><input class="ofld ma" id="fvR" value="${num(H.r * 100, 1)}">%<span class="tlab">Croissance de long terme g</span><input class="ofld ma" id="fvG" value="${num(H.g * 100, 1)}">%<span class="tlab">ROE durable</span><input class="ofld ma" id="fvE" value="${num(H.roe * 100, 1)}">%<button class="tb rd" id="fvGo">Calculer</button><button class="tb" id="fvD">Par défaut</button></div>
+    <div class="grid c2">${pn(`${esc(s.tk)} · valeur selon plusieurs méthodes (cours ${px(s, price)} ${esc(s.ccy)})`, 'RV', `<table class="t"><thead><tr><th class="l">Méthode</th><th>Valeur / action</th><th>Marge de sécurité</th><th class="l">Hypothèses</th></tr></thead><tbody>
+        ${rows.map(([l, v, h]) => `<tr><td class="l am">${l}</td><td class="yl">${v != null && v > 0 ? px(s, v) : NDc('non calculable (résultat négatif, r ≤ g ou donnée absente)')}</td><td class="${cls(mos(v))}">${mos(v) != null ? num(mos(v) * 100, 0) + ' %' : '—'}</td><td class="l dm" style="white-space:normal">${h}</td></tr>`).join('')}
+        <tr class="sep2"><td class="l">Médiane des méthodes</td><td class="yl">${mid ? px(s, mid) : '—'}</td><td class="${cls(mos(mid))}">${mos(mid) != null ? num(mos(mid) * 100, 0) + ' %' : '—'}</td><td class="l dm">${ok.length} méthode(s)</td></tr></tbody></table>`,
+        { np: true, lect: `Marge de sécurité = 1 − cours ÷ valeur (positive = le cours est sous la valeur estimée). Données publiées : BPA ${num(eps, 2)}, actif net par action ${num(bvps, 0)}, distribution ${P1(pay)}, exercice ${us ? yLab(Y.y[L]) : Y.y[L]}. <b>Hypothèses</b> (cases orange) : r = ${us ? 'taux à 10 ans US + 5 points de prime de risque' : '12 % (rendement exigé sur une action BRVM, à ajuster)'}, g = croissance du BPA sur 5 ans bornée entre 0 et 5 %, ROE = moyenne des 5 derniers exercices. ${bank ? 'Banque : la méthode P/B face au ROE est la plus adaptée ; le PER seul ne suffit pas.' : 'Société non financière : comparer de préférence VE/EBITDA et rendement FCF entre sociétés du même secteur.'} Estimations, pas des objectifs de cours.` })}
+      ${pn('Sensibilité du P/B justifié (valeur par action)', 'RV', `<table class="t"><thead><tr><th class="l">ROE \\ g</th>${gs.map(g => `<th>${num(g * 100, 0)} %</th>`).join('')}</tr></thead><tbody>${rs.map(roe => `<tr><td class="l am">${num(roe * 100, 1)} %</td>${gs.map(g => { const v = just(roe, g, H.r); return `<td style="${mcol(mos(v))}">${v != null && v > 0 ? px(s, v) : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>`,
+        { np: true, lect: `r = ${P1(H.r)}. Vert = valeur au-dessus du cours (marge positive), rouge = en dessous. Lecture : quel couple rentabilité / croissance le cours actuel suppose-t-il ? P/B implicite au cours : <strong>${num(price / bvps, 2)} x</strong> ; ROE implicite (g = ${P1(H.g)}) : <strong>${P1(H.g + price / bvps * (H.r - H.g))}</strong>.` })}</div>`;
+  const rd = id => { const v = parseFloat($(id).value.replace(',', '.')); return isFinite(v) ? v / 100 : null; };
+  $('fvGo').onclick = () => { const h = { r: rd('fvR') ?? H.r, g: rd('fvG') ?? H.g, roe: rd('fvE') ?? H.roe }; if (h.r <= h.g) { toast('Le rendement exigé doit dépasser la croissance.'); return; } lsSet(key, h); render(); };
+  $('fvD').onclick = () => { lsSet(key, {}); render(); };
+};
