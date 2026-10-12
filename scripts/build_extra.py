@@ -1008,7 +1008,7 @@ def fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, analyst, log
         fx["TWD"] = files["USDTWD"]["c"][-1]
     idx = []
     os.makedirs(os.path.join(out, "fa"), exist_ok=True)
-    keep = ("mcap", "ev", "pe", "fpe", "ps", "pb", "ev_ebitda", "ev_sales", "ev_ebit", "ey", "fcfy", "fcfy_sbc", "dy", "by", "shy", "gm", "om", "nm", "fcfm", "ebitdam", "roe", "roa", "roic",
+    keep = ("mcap", "ev", "pe", "fpe", "fpe_fy", "ps", "pb", "ev_ebitda", "ev_sales", "ev_ebit", "ey", "fcfy", "fcfy_sbc", "dy", "by", "shy", "gm", "om", "nm", "fcfm", "ebitdam", "roe", "roa", "roic",
             "conv", "rev_g", "ni_g", "fcf_g", "eps_g", "sh_chg", "nd", "nd_ebitda", "de", "cur", "icov", "payout", "fpay", "accr", "gpa", "fscore", "fscore_n", "altz", "r40",
             "rev_cagr3", "rev_cagr5", "rev_cagr10", "fcf_cagr3", "fcf_cagr5", "fcf_cagr10", "eps_cagr3", "eps_cagr5", "eps_cagr10", "ni_cagr3", "ni_cagr5",
             "om_chg", "nd_chg", "capex_s", "sbc_s", "rnd_s", "ld", "cir", "cor_l", "fcf", "fcf_fy", "fy", "asof_q", "bank", "annual_only")
@@ -1031,6 +1031,15 @@ def fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, analyst, log
             fpe = float(str(sm.get("ForwardPE1Yr") or "").replace(",", "")) or None
         except ValueError:
             fpe = None
+        if not fpe:  # Nasdaq ne publie plus ce ratio : cours ÷ BPA consensuel du premier exercice non publié (tableau annuel des prévisions)
+            fr = (((an.get("fc") or {}).get("yearlyForecast") or {}).get("rows") or [])
+            e1 = fr[0].get("consensusEPSForecast") if fr else None
+            try:
+                e1 = float(e1)
+            except (TypeError, ValueError):
+                e1 = None
+            if e1 and e1 > 0 and s.get("last"):
+                fpe, r["fpe_fy"] = round(s["last"] / e1, 2), fr[0].get("fiscalEnd")
         r["fpe"] = fpe
         s["fa"] = True
         jsave(os.path.join(out, "fa", t + ".json"), rnd_tree({"id": t, "mkt": "US", **r}))
