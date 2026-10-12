@@ -1,6 +1,7 @@
 /* ================= FQT — pages: MON, BRVM, GP, DES, HELP ================= */
 'use strict';
-const pn = (title, code, body, o = {}) => `<div class="pn" ${o.id ? `id="${o.id}"` : ''} ${o.style ? `style="${o.style}"` : ''}><div class="pt">${title}${o.sel ? `<span class="sel">${o.sel}</span>` : ''}<span class="code">${code || ''}</span></div>${o.tools ? `<div class="tools">${o.tools}</div>` : ''}<div class="pb ${o.np ? 'np' : ''}">${body}</div>${o.lect ? `<div class="lect">${o.lect}</div>` : ''}</div>`;
+const codeAttr = code => { const w = String(code || '').trim().split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
+const pn = (title, code, body, o = {}) => `<div class="pn" ${o.id ? `id="${o.id}"` : ''} ${o.style ? `style="${o.style}"` : ''}><div class="pt">${title}${o.sel ? `<span class="sel">${o.sel}</span>` : ''}<span class="code"${codeAttr(code)}>${code || ''}</span></div>${o.tools ? `<div class="tools">${o.tools}</div>` : ''}<div class="pb ${o.np ? 'np' : ''}">${body}</div>${o.lect ? `<div class="lect">${o.lect}</div>` : ''}</div>`;
 const cvb = (id, h) => `<div class="cv" id="${id}" style="height:${h}px"></div>`;
 const rangeBar = s => { if (!(s.hi52 > s.lo52)) return ''; const f = U.clamp((s.last - s.lo52) / (s.hi52 - s.lo52), 0, 1); return `<span class="rng" title="${px(s, s.lo52)} – ${px(s, s.hi52)}"><i style="left:${(f * 68).toFixed(0)}px"></i></span>`; };
 const freqLab = s => s.f === 'M' ? 'mens.' : '';
@@ -181,7 +182,7 @@ PAGES.DES = async (m, alive) => {
     const ev = EV.filter(x => x.t === s.id);
     m.innerHTML = `<div class="grid c2">
       ${pn('Profil · ' + esc(s.short || s.n), 'DES', `<div class="grid c2b" style="gap:12px"><div class="kv2">
-          <span>Raison sociale</span><b style="font-family:var(--ui)">${esc(s.n)}</b><span>Ticker</span><b>${s.tk}</b><span>Secteur</span><b style="font-family:var(--ui)">${esc(s.grp)}${s.bank ? ' · banque' : ''}</b><span>Pays</span><b style="font-family:var(--ui)">${esc(Q.sum.cty[s.cty] || s.cty)}</b>
+          <span>Raison sociale</span><b>${esc(s.n)}</b><span>Ticker</span><b>${s.tk}</b><span>Secteur</span><b>${esc(s.grp)}${s.bank ? ' · banque' : ''}</b><span>Pays</span><b>${esc(Q.sum.cty[s.cty] || s.cty)}</b>
           <span>Nombre de titres</span><b>${num(f.shares, 0)}</b><span>Flottant</span><b>${f.float != null ? num(f.float, 1) + '%' : '—'}</b><span>Capitalisation</span><b>${big(s.mcap)} XOF</b><span>Statut</span><b>${s.susp ? '<span class="dn">Cotation suspendue</span>' : 'Coté'}</b></div>
         <div class="kv2"><span>Cours</span><b>${px(s, s.last)} XOF</b><span>BNPA ${f.ex || ''}</span><b>${num(s.bnpa, 2)}</b><span>PER</span><b>${num(s.per, 1)}</b><span>Actif net / titre</span><b>${num(bvps, 0)}</b><span>Cours / actif net</span><b>${bvps ? num(s.last / bvps, 2) : '—'}</b>
           <span>Dernier dividende net</span><b>${num(s.dps, 2)}${s.dps_ex ? ' (ex. ' + s.dps_ex + ')' : ''}</b><span>Rendement</span><b>${s.yld ? num(s.yld * 100, 2) + '%' : '—'}</b><span>Payout</span><b>${s.dps && s.bnpa ? num(s.dps / s.bnpa * 100, 0) + '%' : '—'}</b><span>Paiement</span><b>${fds(s.dps_pay)}</b></div></div>`,
@@ -200,7 +201,7 @@ PAGES.DES = async (m, alive) => {
   } else {
     const FAu = s.fa ? await faJSON(s.id).catch(() => null) : null; if (!alive()) return;
     const accU = FAu ? pn('Comptes · 10 exercices', 'FA', accountsTable(FAu, 10), { np: true, lect: faSrcNote(FAu) + ' Détail, graphiques et taux de croissance : <b>FA</b>.' }) : '';
-    m.innerHTML = `<div class="grid c2">${pn('Profil · ' + esc(s.n), 'DES', `<div class="kv2"><span>Ticker</span><b>${s.tk}</b><span>Nom</span><b style="font-family:var(--ui)">${esc(s.n)}</b><span>Classe</span><b style="font-family:var(--ui)">${s.cls} · ${esc(s.grp || '')}</b><span>Devise / unité</span><b>${s.ccy}</b><span>Fréquence</span><b style="font-family:var(--ui)">${S.f === 'D' ? 'quotidienne' : 'mensuelle'}</b><span>Historique</span><b>${fd(S.x[0])} → ${fd(S.x[n - 1])}</b><span>Observations</span><b>${num(n, 0)}</b>
+    m.innerHTML = `<div class="grid c2">${pn('Profil · ' + esc(s.n), 'DES', `<div class="kv2"><span>Ticker</span><b>${s.tk}</b><span>Nom</span><b>${esc(s.n)}</b><span>Classe</span><b>${s.cls} · ${esc(s.grp || '')}</b><span>Devise / unité</span><b>${s.ccy}</b><span>Fréquence</span><b>${S.f === 'D' ? 'quotidienne' : 'mensuelle'}</b><span>Historique</span><b>${fd(S.x[0])} → ${fd(S.x[n - 1])}</b><span>Observations</span><b>${num(n, 0)}</b>
         <span>Plus haut historique</span><b>${px(s, s.ath)}</b><span>Écart au plus haut</span><b>${pc(s.dd, 1)}</b>${s.beta != null ? `<span>Bêta vs ${s.bench} (hebdo, 2 ans)</span><b>${num(s.beta, 2)}</b>` : ''}</div>`)}
       <div class="grid" style="align-content:start">${retChart}${ddPanel}</div></div>${accU}${perfPanel}`;
   }

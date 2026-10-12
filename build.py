@@ -5,11 +5,18 @@
 import os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 W = lambda p: open(os.path.join(HERE, "web", p), encoding="utf8").read()
+import base64
+def css():
+    # police embarquée (DejaVu Sans Mono, sous-ensemble Latin + symboles) : aucune dépendance externe
+    c = W("style.css")
+    for w in ("400", "700"):
+        b = base64.b64encode(open(os.path.join(HERE, "web", "fonts", f"dvm-{w}.woff2"), "rb").read()).decode()
+        c = c.replace(f"url(fonts/dvm-{w}.woff2)", f"url(data:font/woff2;base64,{b})")
+    return c
 HEAD = ('<title>FQT Terminal</title>\n'
-        '<meta name="description" content="Terminal de marché : BRVM (48 actions, indices, dividendes, avis), actions US, macro et or, backtests et statistiques.">\n'
-        '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
-        '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;500;600;700&family=Roboto+Mono:wght@400;500;600&display=swap">\n'
-        '<style>\n' + W("style.css") + '\n</style>\n')
+        '<meta name="description" content="Terminal de marché : BRVM (48 actions, indices, obligations, dividendes), UEMOA, actions US, macro, quant.">\n'
+        '<meta name="robots" content="noindex, nofollow">\n'
+        '<style>\n' + css() + '\n</style>\n')
 import glob
 PAGES = sorted(os.path.basename(f) for f in glob.glob(os.path.join(HERE, "web", "pages*.js")))
 JS = "".join("<script>\n" + W(f) + "\n</script>\n" for f in ["engine.js", "chart.js"] + PAGES + ["core.js"])

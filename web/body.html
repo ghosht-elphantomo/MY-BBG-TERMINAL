@@ -1,20 +1,22 @@
 <div id="app">
   <header class="top">
-    <div class="logo" title="FOFCO Quant Terminal">FQT</div>
+    <i class="clm" aria-hidden="true"></i>
     <form class="cmd" id="cmdForm" autocomplete="off">
-      <label for="cmd">&lt;CMD&gt;</label>
-      <input id="cmd" spellcheck="false" placeholder="Ticker puis espace pour ses fonctions (SNTS FA, QQQ EE…), ou une fonction : FG, TOP, CORR…" aria-label="Ligne de commande">
-      <button class="go" type="submit">&lt;GO&gt;</button>
+      <label for="cmd">Commande</label>
+      <input id="cmd" spellcheck="false" placeholder="Ticker (SNTS, AAPL…) puis espace : ses fonctions · ou une fonction : FG, TOP, IMAP…" aria-label="Ligne de commande">
+      <button class="go" type="submit" title="Exécuter (Entrée)">GO</button>
       <div class="ac" id="ac" hidden></div>
     </form>
-    <div class="clocks" id="clocks"></div>
-    <div class="feed" id="feed"><i></i><span id="feedTxt">—</span><button id="syncBtn" hidden title="Récupérer tout de suite le dernier relevé">SYNC</button></div>
   </header>
-  <nav class="fkeys" id="fkeys" aria-label="Fonctions"></nav>
-  <div class="secbar" id="secbar"></div>
-  <nav class="stabs" id="stabs" hidden aria-label="Fonctions du titre"></nav>
+  <div class="tbar" id="tbar"></div>
+  <nav class="fkeys" id="fkeys" aria-label="Fonctions de marché"></nav>
+  <div class="sech" id="sech" hidden></div>
+  <div class="rbar" id="rbar"></div>
+  <nav class="ptabs" id="ptabs" hidden aria-label="Onglets"></nav>
   <main id="main"><div class="empty">Chargement des données…</div></main>
+  <section class="nwp" id="nwp" aria-label="Dernières actualités"></section>
   <footer class="status" id="status"></footer>
 </div>
+<div class="ddm" id="ddm" hidden></div>
 <div class="tip" id="tip" hidden></div>
 <div class="toast" id="toast" role="status" hidden></div>

@@ -5,8 +5,9 @@ const PAGES = {};
 function readCL() { const cs = getComputedStyle(document.documentElement);
   for (const k of ['bg', 'bg2', 'bg3', 'line', 'line2', 'amber', 'white', 'txt', 'dim', 'dim2', 'up', 'dn', 'navy', 'navy2', 'yel', 'cyan', 'violet', 'pink', 'teal']) CL[k] = cs.getPropertyValue('--' + k).trim(); }
 function rgba(hex, a) { hex = hex.replace('#', ''); if (hex.length === 3) hex = hex.split('').map(x => x + x).join(''); const n = parseInt(hex, 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; }
-const FNUM = '500 10.5px "Roboto Mono", ui-monospace, Menlo, monospace';
-const FUI = '500 11px "Roboto Condensed", "Arial Narrow", Arial, sans-serif';
+const MONO = '"Bloomberg Fixed Unicode B", "Bloomberg Fixed Unicode", "FQT Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace';
+const FNUM = '400 11px ' + MONO;
+const FUI = '400 11px ' + MONO;
 function setupCanvas(host) {
   let cv = host.querySelector('canvas'); if (!cv) { cv = document.createElement('canvas'); host.appendChild(cv); }
   const r = host.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.max(30, r.width), h = Math.max(30, r.height);
@@ -157,7 +158,7 @@ function barChart(host, o) {
   if (o.band) { x.fillStyle = rgba(CL.white, .07); x.fillRect(padL, Y(o.band), W, Y(-o.band) - Y(o.band)); }
   const z = Y(0); x.strokeStyle = CL.dim2; x.beginPath(); x.moveTo(padL, z + .5); x.lineTo(w - 6, z + .5); x.stroke();
   for (let i = 0; i < n; i++) { const v = V[i]; if (!isFinite(v)) continue; const yy = Y(v); x.fillStyle = o.colors ? o.colors[i] : v >= 0 ? (o.pos || CL.up) : (o.neg || CL.dn); x.fillRect(padL + i * bw + bw * .15, Math.min(yy, z), bw * .7, Math.max(1, Math.abs(z - yy)));
-    if (o.labelsOnBars && bw > 26) { x.fillStyle = CL.txt; x.textAlign = 'center'; x.textBaseline = v >= 0 ? 'bottom' : 'top'; x.font = '500 9.5px "Roboto Mono", monospace'; x.fillText(fmt(v), padL + (i + .5) * bw, v >= 0 ? yy - 1 : yy + 1); } }
+    if (o.labelsOnBars && bw > 26) { x.fillStyle = CL.txt; x.textAlign = 'center'; x.textBaseline = v >= 0 ? 'bottom' : 'top'; x.font = '400 10px ' + MONO; x.fillText(fmt(v), padL + (i + .5) * bw, v >= 0 ? yy - 1 : yy + 1); } }
   for (const r of (o.refs || [])) { const yy = Math.round(Y(r.v)) + .5; x.strokeStyle = r.color || CL.amber; x.setLineDash([4, 3]); x.beginPath(); x.moveTo(padL, yy); x.lineTo(w - 6, yy); x.stroke(); x.setLineDash([]); if (r.label) { x.fillStyle = r.color || CL.amber; x.font = FUI; x.textAlign = 'left'; x.textBaseline = 'bottom'; x.fillText(r.label, padL + 4, yy - 2); } }
   x.fillStyle = CL.dim; x.font = FUI; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; const every = Math.max(1, Math.ceil(n / Math.max(1, W / 34)));
   for (let i = 0; i < n; i += every) x.fillText(L[i], padL + (i + .5) * bw, h - 5);
@@ -212,7 +213,7 @@ function scatterL(host, o) {
   const px = (xh - xl) * .06 || 1, py = (yh - yl) * .06 || 1; xl -= px; xh += px; yl -= py; yh += py;
   const W = w - padL - padR, H = h - padT - padB, X = v => padL + (v - xl) / (xh - xl) * W, Y = v => padT + (yh - v) / (yh - yl) * H; const fx = o.fx || fmtAxis, fy = o.fy || fmtAxis;
   if (o.quad) { const cx = X(o.cx), cy = Y(o.cy); const q = o.quad; x.fillStyle = q[0]; x.fillRect(cx, padT, padL + W - cx, cy - padT); x.fillStyle = q[1]; x.fillRect(padL, padT, cx - padL, cy - padT); x.fillStyle = q[2]; x.fillRect(padL, cy, cx - padL, padT + H - cy); x.fillStyle = q[3]; x.fillRect(cx, cy, padL + W - cx, padT + H - cy);
-    if (o.qlab) { x.font = '600 11px "Roboto Condensed", sans-serif'; x.fillStyle = rgba(CL.white, .35); x.textBaseline = 'top'; x.textAlign = 'right'; x.fillText(o.qlab[0], padL + W - 6, padT + 4); x.textAlign = 'left'; x.fillText(o.qlab[1], padL + 6, padT + 4); x.textBaseline = 'bottom'; x.fillText(o.qlab[2], padL + 6, padT + H - 4); x.textAlign = 'right'; x.fillText(o.qlab[3], padL + W - 6, padT + H - 4); } }
+    if (o.qlab) { x.font = '400 11px ' + MONO; x.fillStyle = rgba(CL.white, .35); x.textBaseline = 'top'; x.textAlign = 'right'; x.fillText(o.qlab[0], padL + W - 6, padT + 4); x.textAlign = 'left'; x.fillText(o.qlab[1], padL + 6, padT + 4); x.textBaseline = 'bottom'; x.fillText(o.qlab[2], padL + 6, padT + H - 4); x.textAlign = 'right'; x.fillText(o.qlab[3], padL + W - 6, padT + H - 4); } }
   x.font = FNUM; x.textAlign = 'right'; x.textBaseline = 'middle';
   for (const t of niceTicks(yl, yh, Math.max(2, Math.min(6, Math.floor(H / 40))))) { const yy = Math.round(Y(t)) + .5; x.strokeStyle = rgba(CL.dim2, .3); x.beginPath(); x.moveTo(padL, yy); x.lineTo(w - padR, yy); x.stroke(); x.fillStyle = CL.dim; x.fillText(fy(t), padL - 4, yy); }
   x.textAlign = 'center'; x.textBaseline = 'alphabetic'; for (const t of niceTicks(xl, xh, Math.max(2, Math.min(7, Math.floor(W / 70))))) { const xx = Math.round(X(t)) + .5; x.strokeStyle = rgba(CL.dim2, .3); x.beginPath(); x.moveTo(xx, padT); x.lineTo(xx, padT + H); x.stroke(); x.fillStyle = CL.dim; x.fillText(fx(t), xx, h - 5); }
@@ -224,7 +225,7 @@ function scatterL(host, o) {
   const many = P.length > (o.maxLabels || 30);
   for (const p of P.slice().sort((a, b) => (a.hi ? 1 : 0) - (b.hi ? 1 : 0))) { const r = p.r || (p.hi ? 5 : 3.5); x.fillStyle = p.color || rgba(CL.cyan, .8); x.beginPath(); x.arc(X(p.x), Y(p.y), r, 0, 7); x.fill();
     if (p.hi) { x.strokeStyle = CL.yel; x.lineWidth = 2; x.beginPath(); x.arc(X(p.x), Y(p.y), r + 3, 0, 7); x.stroke(); x.lineWidth = 1; }
-    if (p.label && (!many || p.hi || o.labels)) { x.font = p.hi ? '600 11px "Roboto Condensed", sans-serif' : '500 10px "Roboto Condensed", sans-serif'; x.fillStyle = p.hi ? CL.yel : CL.txt; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText(p.label, X(p.x) + r + 3, Y(p.y)); } }
+    if (p.label && (!many || p.hi || o.labels)) { x.font = p.hi ? '700 11px ' + MONO : '400 10.5px ' + MONO; x.fillStyle = p.hi ? CL.yel : CL.txt; x.textAlign = 'left'; x.textBaseline = 'middle'; x.fillText(p.label, X(p.x) + r + 3, Y(p.y)); } }
   if (o.xlab) { x.fillStyle = CL.amber; x.font = FUI; x.textAlign = 'right'; x.textBaseline = 'bottom'; x.fillText(o.xlab, w - padR, padT + H - 3); } if (o.ylab) { x.fillStyle = CL.amber; x.font = FUI; x.textAlign = 'left'; x.textBaseline = 'top'; x.fillText(o.ylab, padL + 4, padT + 2); }
   const near = e => { const r = host.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top; let b = null, bd = 144; for (const p of P) { const d = (X(p.x) - mx) ** 2 + (Y(p.y) - my) ** 2; if (d < bd) { bd = d; b = p; } } return b; };
   host.onmousemove = e => { const p = near(e); host.style.cursor = p && p.id ? 'pointer' : ''; if (p) tip(e, o.tipf ? o.tipf(p) : `<b>${esc(p.label || p.id)}</b> · ${fx(p.x)} · ${fy(p.y)}`); else untip(); };

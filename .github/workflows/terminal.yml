@@ -5,7 +5,9 @@ name: Terminal
 #     nouvelles publications des sociétés cotées (brvm.org) et nouveaux dépôts SEC (comptes rafraîchis aussitôt) ;
 #   - tous les calculs refaits avec ces cours (ratios, Fear & Greed, cartes, corrélations, alertes...).
 # Chaque soir (22:35 UTC) : base complète (BRVM depuis 2006, Nasdaq, FRED, CBOE, CNN, SEC, Banque mondiale, bulletins BRVM).
-# Le site complet (index.html + data/) est écrit sur la branche `site`, que Vercel déploie à chaque écriture.
+# Les données (data/) sont écrites toutes les 15 min sur la branche `data` ; le site Vercel les lit en direct par un relais
+# (deploy/api/data.js), sans redéploiement. La branche `site` (page + relais) n'est réécrite que si le code change :
+# Vercel ne redéploie donc qu'à ce moment (limite du plan gratuit : 100 déploiements par jour).
 # Les données brutes (historiques Nasdaq, comptes SEC, bulletins...) vivent sur la branche `raw`.
 on:
   schedule:
@@ -20,7 +22,7 @@ on:
         default: eod
   push:
     branches: [main]
-    paths: ["web/**", "scripts/**", "build.py", "index.html", "vercel.site.json", ".github/workflows/terminal.yml"]
+    paths: ["web/**", "scripts/**", "build.py", "index.html", "deploy/**", ".github/workflows/terminal.yml"]
 
 permissions:
   contents: write
@@ -51,13 +53,15 @@ jobs:
           echo "mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "Mode : $MODE"
 
-      - name: Restaurer le site et les données brutes
+      - name: Restaurer les données et les données brutes
         run: |
           mkdir -p /tmp/site /tmp/state /tmp/raw
           cp seed/brvm.json /tmp/state/brvm.json
-          if git fetch -q --depth 1 origin site; then
-            git rev-parse FETCH_HEAD > /tmp/site_sha
-            git archive FETCH_HEAD | tar -x -C /tmp/site || true
+          # données publiées (branche data ; à défaut l'ancienne branche site qui les contenait)
+          if git fetch -q --depth 1 origin data; then SRC=data; elif git fetch -q --depth 1 origin site; then SRC=site; else SRC=; fi
+          if [ -n "$SRC" ]; then
+            git rev-parse FETCH_HEAD > /tmp/data_sha; echo "$SRC" > /tmp/data_src
+            git archive FETCH_HEAD data | tar -x -C /tmp/site || true
             if [ -f /tmp/site/data/session.json ]; then cp /tmp/site/data/session.json /tmp/state/brvm.json; fi
           fi
           mkdir -p /tmp/site/data
@@ -139,31 +143,49 @@ jobs:
             git push -q -f "$URL" HEAD:raw
           fi
 
-      - name: Publier sur la branche site (déployée par Vercel)
+      - name: Publier les données (branche data, lue en direct par le site toutes les 15 min)
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MODE: ${{ steps.mode.outputs.mode }}
         run: |
-          cp index.html /tmp/site/index.html
-          touch /tmp/site/.nojekyll
-          cp vercel.site.json /tmp/site/vercel.json
+          mkdir -p /tmp/dpub && rm -rf /tmp/dpub/* && cp -r /tmp/site/data /tmp/dpub/data
+          printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/dpub/vercel.json
           URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          export GIT_DIR=/tmp/pub.git GIT_WORK_TREE=/tmp/site
-          rm -rf "$GIT_DIR" /tmp/site/.git
-          git init -q -b site
+          export GIT_DIR=/tmp/dpub.git GIT_WORK_TREE=/tmp/dpub
+          rm -rf "$GIT_DIR"; git init -q -b data
           git config user.name "fqt-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # relevé de 15 min : nouveau commit au-dessus du précédent (seuls les fichiers modifiés partent) ; soir : historique remis à zéro
           ONTOP=0
-          if [ "$MODE" != "eod" ] && git fetch -q --depth 1 "$URL" site; then
+          if [ "$MODE" != "eod" ] && [ "$(cat /tmp/data_src 2>/dev/null)" = "data" ] && git fetch -q --depth 1 "$URL" data; then
             # une base complète publiée pendant ce relevé l'emporte : le relevé suivant repartira d'elle
-            if [ "$(git rev-parse FETCH_HEAD)" != "$(cat /tmp/site_sha 2>/dev/null)" ]; then echo "Branche site republiée entre-temps : relevé ignoré"; exit 0; fi
+            if [ "$(git rev-parse FETCH_HEAD)" != "$(cat /tmp/data_sha 2>/dev/null)" ]; then echo "Branche data republiée entre-temps : relevé ignoré"; exit 0; fi
             git reset -q FETCH_HEAD && ONTOP=1
           fi
           git add -A
           git commit -qm "Données $(date -u +'%d/%m/%Y %H:%M') UTC" || { echo "Rien de nouveau"; exit 0; }
-          if [ "$ONTOP" = 1 ]; then git push -q "$URL" HEAD:site || echo "Branche site modifiée entre-temps (base du soir) : ce relevé est ignoré, le suivant repartira de la nouvelle base"
-          else git push -q -f "$URL" HEAD:site; fi
+          if [ "$ONTOP" = 1 ]; then git push -q "$URL" HEAD:data || echo "Branche data modifiée entre-temps : ce relevé est ignoré"
+          else git push -q -f "$URL" HEAD:data; fi
+
+      - name: Publier le site (branche site déployée par Vercel, seulement si le code change)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          rm -rf /tmp/web && mkdir -p /tmp/web/public /tmp/web/api
+          cp deploy/vercel.json /tmp/web/vercel.json
+          cp deploy/api/data.js /tmp/web/api/data.js
+          cp index.html /tmp/web/public/index.html
+          cp deploy/robots.txt /tmp/web/public/robots.txt
+          cp web/fonts/LICENSE-DejaVu.txt /tmp/web/public/LICENSE-fonts.txt
+          URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          export GIT_DIR=/tmp/web.git GIT_WORK_TREE=/tmp/web
+          rm -rf "$GIT_DIR"; git init -q -b site
+          git config user.name "fqt-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Site $(date -u +'%d/%m/%Y %H:%M') UTC"
+          NEW=$(git rev-parse HEAD^{tree})
+          OLD=$(git fetch -q --depth 1 "$URL" site 2>/dev/null && git rev-parse FETCH_HEAD^{tree} || echo none)
+          if [ "$NEW" = "$OLD" ]; then echo "Code inchangé : pas de redéploiement Vercel"; exit 0; fi
+          git push -q -f "$URL" HEAD:site && echo "Site publié : Vercel redéploie"
 
       - name: Archiver la séance BRVM sur main (EOD)
         if: steps.mode.outputs.mode == 'eod'

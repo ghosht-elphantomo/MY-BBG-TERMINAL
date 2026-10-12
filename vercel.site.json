@@ -1,7 +1,0 @@
-{
-  "git": { "deploymentEnabled": { "main": false, "raw": false } },
-  "headers": [
-    { "source": "/data/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }] },
-    { "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }
-  ]
-}

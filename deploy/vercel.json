@@ -1,0 +1,10 @@
+{
+  "outputDirectory": "public",
+  "cleanUrls": false,
+  "git": { "deploymentEnabled": { "main": false, "raw": false, "data": false, "probe": false } },
+  "rewrites": [{ "source": "/data/:path*", "destination": "/api/data?p=:path*" }],
+  "headers": [
+    { "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }, { "key": "X-Content-Type-Options", "value": "nosniff" }] },
+    { "source": "/", "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }] }
+  ]
+}

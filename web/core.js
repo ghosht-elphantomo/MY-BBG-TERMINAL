@@ -1,70 +1,93 @@
-/* ================= FQT — data, formatting, command line, router ================= */
+/* ================= FQT — données, formats, ligne de commande, chrome Bloomberg, routeur ================= */
 'use strict';
 const $ = id => document.getElementById(id);
 const Q = { base: 'data/', sum: null, by: {}, ser: {}, M: {}, json: {}, live: null, quotes: null };
-const ST = { fn: 'MON', sec: 'QQQ', gp: { range: '1A', type: 'candle', ov: { sma50: true, sma200: true }, st: { vol: true }, log: false, cmp: [] }, corr: { u: 'BRVMW', win: 104, pair: null },
-  brvm: { sort: { k: 'mcap', dir: -1 }, sector: 'ALL' }, dvd: { sort: { k: 'yld', dir: -1 } }, ev: { cat: '', tk: '', q: '', page: 0 }, bt: null, qlab: {} };
-/* Registre des fonctions : code -> [libellé, portée (sec = titre, mkt = marché), groupe, description] */
+const ST = { fn: 'MON', sec: 'QQQ', gp: { range: '1A', type: 'bbg', ov: { sma50: false, sma200: false }, st: { vol: true }, log: false, cmp: [] }, corr: { u: 'BRVMW', win: 104, pair: null },
+  brvm: { sort: { k: 'mcap', dir: -1 }, sector: 'ALL' }, dvd: { sort: { k: 'yld', dir: -1 } }, ev: { cat: '', tk: '', q: '', page: 0 }, bt: null, qlab: {}, tab: {}, hist: [], hpos: -1, newsMin: false };
+
+/* Registre des fonctions : code -> [libellé, portée (sec = titre, mkt = marché), groupe, définition courte, titre Bloomberg]
+   Les définitions suivent celles de l'autocomplétion Bloomberg (nom anglais de la fonction + ce qu'elle montre). */
 const FN = {
-  MON: ['Marchés', 'mkt', 'Marchés', 'Tous les titres, règle SMA 200, séance BRVM, carte des capitalisations'],
-  BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, 17 indices, largeur du marché, secteurs'],
-  IMAP: ['Carte de chaleur', 'mkt', 'Marchés', 'BRVM, Nasdaq-100 et ETF : surface = capitalisation, couleur = performance, par secteur'],
-  US: ['Nasdaq-100 & ETF', 'mkt', 'Marchés', 'Nasdaq-100, ETF secteurs, facteurs, pays, obligations, matières, crypto'],
-  TOP: ['Actualités', 'mkt', 'Marchés', 'Fil d’actualités BRVM, UEMOA, marchés mondiaux, banques centrales'],
-  FG: ['Fear & Greed', 'mkt', 'Sentiment', 'Indice peur/avidité US (CNN + réplique) et BRVM (calculé)'],
-  ECO: ['Macro US', 'mkt', 'Macro', 'FRED : courbe des taux, crédit, liquidité, emploi, inflation, récession'],
-  UEMOA: ['UEMOA', 'mkt', 'Macro', 'Les 8 économies de l’Union : croissance, inflation, dette, BRVM par pays'],
-  MACRO: ['Macro & Or', 'mkt', 'Macro', 'Or depuis 1833, krachs, CAPE, inflation, pétrole, VIX'],
-  FX: ['Franc CFA', 'mkt', 'Macro', 'USD/XOF, EUR/USD, effet de change, simulateur'],
-  CORR: ['Corrélations', 'mkt', 'Quant', 'Matrice BRVM × monde, paire au choix, ACP'],
-  RRG: ['Rotation (RRG)', 'mkt', 'Quant', 'Graphe de rotation relative : secteurs, facteurs, pays, BRVM'],
-  PER: ['Valorisation BRVM', 'mkt', 'Fondamentaux', 'PER du marché (BRVM officiel), PER prévisionnel des sources, historique'],
-  EQS: ['Screener', 'mkt', 'Fondamentaux', 'Filtrer US et BRVM par ratios : FCF, croissance, qualité, valorisation'],
-  LIQ: ['Liquidité BRVM', 'mkt', 'Marchés', 'Montants échangés, jours cotés, Amihud, délai pour constituer une position'],
-  ALRT: ['Alertes', 'mkt', 'Fondamentaux', 'Marges, FCF, dette, révisions, seuils de valorisation, résultats à venir'],
-  DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique'],
-  EVTS: ['Avis BRVM', 'mkt', 'Marchés', 'Avis officiels depuis 2000'],
-  HELP: ['Aide', 'mkt', 'Aide', 'Fonctions, sources, raccourcis'],
-  MENU: ['Menu du titre', 'sec', 'Titre', 'Toutes les fonctions disponibles pour ce titre'],
-  DES: ['Fiche', 'sec', 'Description', 'Profil, comptes sur 10 exercices, dividendes, avis officiels'],
-  CN: ['Actualités du titre', 'sec', 'Description', 'Articles qui citent la société et avis officiels'],
-  GP: ['Graphique', 'sec', 'Cours', 'Bougies, moyennes, Bollinger, RSI, MACD, comparaison'],
-  HP: ['Historique des cours', 'sec', 'Cours', 'Cours quotidiens, hebdomadaires, mensuels avec variations et volumes'],
-  COMP: ['Comparaison', 'sec', 'Cours', 'Performance contre d’autres titres et un indice, dividendes réinvestis'],
-  SEAS: ['Saisonnalité', 'sec', 'Cours', 'Rendements années × mois, jour de semaine, Sell in May'],
-  FA: ['Analyse financière', 'sec', 'Fondamentaux', 'Revenus, EBITDA, résultat, BPA, marges, flux, FCF, croissance, dette, ROE, ROIC'],
-  RV: ['Valorisation relative', 'sec', 'Fondamentaux', 'PER, VE/EBITDA, VE/CA, P/B, rendement FCF contre pairs et historique'],
-  WACC: ['Création de valeur', 'sec', 'Fondamentaux', 'Coût du capital, ROIC, écart ROIC − WACC'],
-  DVD: ['Dividendes du titre', 'sec', 'Fondamentaux', 'Historique, rendement, croissance, taux de distribution, couverture par le FCF'],
-  DDM: ['Valeur par les dividendes', 'sec', 'Fondamentaux', 'Gordon-Shapiro, croissance implicite, sensibilité'],
-  EE: ['Estimations', 'sec', 'Analystes', 'Consensus du BPA, révisions, croissance attendue'],
-  SURP: ['Surprises', 'sec', 'Analystes', 'BPA publié contre consensus, réaction du cours'],
-  BETA: ['Risque & bêta', 'sec', 'Risque', 'Bêta sur plusieurs fenêtres, volatilité, corrélation, drawdown, pairs'],
-  QLAB: ['Quant Lab', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne'],
-  BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns'],
+  MON: ['Moniteur de marchés', 'mkt', 'Marchés', 'Tous les titres suivis, signal SMA 200 de QQQ, séance BRVM, carte des capitalisations', 'Market Monitor'],
+  BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs', 'BRVM Overview'],
+  IMAP: ['Carte de chaleur', 'mkt', 'Marchés', 'BRVM, États-Unis, Europe, Royaume-Uni, Asie : surface = capitalisation, couleur = variation', 'Intraday Market Map'],
+  US: ['Marché US', 'mkt', 'Marchés', 'Nasdaq-100, ETF secteurs, facteurs, pays, matières, crypto ; pré-marché et après-bourse', 'US Market Overview'],
+  TOP: ['Actualités', 'mkt', 'Actualités', 'Fil d’actualités relié aux titres : BRVM, UEMOA, marchés mondiaux, banques centrales', 'Top News'],
+  FG: ['Fear & Greed', 'mkt', 'Sentiment', 'Indice peur/avidité US (CNN + réplique) et BRVM (calculé)', 'Fear & Greed Index'],
+  ECO: ['Macro US', 'mkt', 'Macro', 'FRED : courbe des taux, crédit, liquidité, emploi, inflation, récession', 'US Economic Indicators'],
+  UEMOA: ['Macro UEMOA', 'mkt', 'Macro', 'BCEAO, inflation, croissance, dette, crédit, titres publics des 8 États', 'WAEMU Economic Dashboard'],
+  SRCH: ['Obligations UEMOA', 'mkt', 'Taux', 'Obligations cotées à la BRVM : coupon, échéance, cours, rendement, duration, sensibilité', 'Fixed Income Search'],
+  GC: ['Courbes souveraines', 'mkt', 'Taux', 'Courbes des taux des États de l’UEMOA (UMOA-Titres) et coupons à l’émission', 'Graph Curves'],
+  BMAP: ['Carte du pétrole', 'mkt', 'Matières premières', 'Flux pétroliers mondiaux, détroits stratégiques, Brent et WTI, stocks US', 'Oil Flow Map'],
+  MACRO: ['Macro & Or', 'mkt', 'Macro', 'Or depuis 1833, krachs, CAPE, inflation, pétrole, VIX', 'Macro & Gold'],
+  FX: ['Franc CFA', 'mkt', 'Macro', 'USD/XOF, EUR/USD, effet de change, simulateur', 'FX Monitor'],
+  CORR: ['Corrélations', 'mkt', 'Quant', 'Matrice BRVM × monde, paire au choix, ACP', 'Correlation Matrix'],
+  RRG: ['Rotation (RRG)', 'mkt', 'Quant', 'Graphe de rotation relative : secteurs, facteurs, pays, BRVM', 'Relative Rotation Graph'],
+  PER: ['Valorisation BRVM', 'mkt', 'Fondamentaux', 'PER du marché (BRVM officiel), PER prévisionnel des sources, historique', 'Market Valuation'],
+  EQS: ['Screener', 'mkt', 'Fondamentaux', 'Filtrer US et BRVM par ratios : FCF, croissance, qualité, valorisation, score', 'Equity Screening'],
+  LIQ: ['Liquidité BRVM', 'mkt', 'Marchés', 'Montants échangés, jours cotés, Amihud, délai pour constituer une position', 'Market Liquidity'],
+  ALRT: ['Alertes', 'mkt', 'Fondamentaux', 'Marges, FCF, dette, révisions, seuils de valorisation, résultats à venir', 'Alert Monitor'],
+  DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique', 'Dividend Calendar'],
+  EVTS: ['Avis BRVM', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers', 'Corporate Events'],
+  HELP: ['Aide', 'mkt', 'Aide', 'Fonctions, sources, raccourcis', 'Help'],
+  MENU: ['Menu du titre', 'sec', 'Titre', 'Toutes les fonctions disponibles pour ce titre, classées par thème', 'Security Menu'],
+  DES: ['Description', 'sec', 'Description', 'Profil, émission, ratios, chiffre d’affaires et BPA, secteur : la fiche d’identité du titre', 'Security Description'],
+  CN: ['Actualités de la société', 'sec', 'Description', 'Articles qui citent la société, publications officielles, historique des événements', 'Company News'],
+  HDS: ['Actionnariat', 'sec', 'Description', 'Principaux actionnaires, répartition du capital et flottant', 'Holdings: Current'],
+  GP: ['Graphique', 'sec', 'Cours', 'Ligne style Bloomberg, bougies, moyennes mobiles, volume, RSI, MACD, comparaison', 'Line Chart'],
+  HP: ['Historique des cours', 'sec', 'Cours', 'Cours quotidiens, hebdomadaires, mensuels avec variations et volumes', 'Historical Price Table'],
+  TRA: ['Rendement total', 'sec', 'Cours', 'Dividendes réinvestis contre cours seul, par période et par année', 'Total Return Analysis'],
+  COMP: ['Rendements comparés', 'sec', 'Cours', 'Performance contre d’autres titres et un indice, dividendes réinvestis', 'Comparative Returns'],
+  SEAS: ['Saisonnalité', 'sec', 'Cours', 'Rendements années × mois, jour de la semaine, « Sell in May »', 'Seasonality Chart'],
+  FA: ['Analyse financière', 'sec', 'Fondamentaux', 'Chiffres clés, compte de résultat, bilan, flux, ratios sur 10 exercices', 'Financial Analysis'],
+  RV: ['Valorisation relative', 'sec', 'Fondamentaux', 'Multiples contre pairs du secteur et contre son propre historique, juste valeur', 'Relative Valuation'],
+  WACC: ['Coût du capital', 'sec', 'Fondamentaux', 'WACC, ROIC et création de valeur (ROIC − WACC)', 'Weighted Average Cost of Capital'],
+  DVD: ['Dividendes', 'sec', 'Fondamentaux', 'Historique, rendement, croissance, taux de distribution, couverture par le FCF', 'Dividend/Split Summary'],
+  DDM: ['Modèle de dividendes', 'sec', 'Fondamentaux', 'Gordon-Shapiro, croissance implicite, sensibilité', 'Dividend Discount Model'],
+  MODL: ['Scénarios bull/base/bear', 'sec', 'Fondamentaux', 'Simulateur de valorisation : hypothèses modifiables, séparées des données publiées', 'Scenario Valuation Model'],
+  EE: ['Estimations', 'sec', 'Analystes', 'Consensus du BPA, révisions, croissance attendue', 'Earnings & Estimates'],
+  SURP: ['Surprises de résultats', 'sec', 'Analystes', 'BPA publié contre consensus, réaction du cours', 'Earnings Surprise'],
+  SCOR: ['Score multifactoriel', 'sec', 'Quant', 'Note /100 : value, qualité, croissance, momentum, rendement, faible volatilité', 'Multi-Factor Score'],
+  LQA: ['Liquidité et coûts', 'sec', 'Quant', 'Échanges 20/60 séances, séances sans échange, coût d’aller-retour, délai de sortie, taille de position', 'Liquidity Assessment'],
+  ANOM: ['Anomalies', 'sec', 'Quant', 'Alertes statistiques : cours, volume, tendance, résultats, dividendes, données suspectes', 'Anomaly Monitor'],
+  PEER: ['Comparateur de sociétés', 'sec', 'Quant', '2 à 10 sociétés côte à côte, nuage de points sur deux critères', 'Peer Comparison'],
+  BETA: ['Bêta historique', 'sec', 'Risque', 'Bêta sur plusieurs fenêtres, volatilité, corrélation, drawdown, pairs', 'Historical Beta'],
+  QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
+  BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['MON', 'BRVM', 'IMAP', 'US', 'TOP', 'FG', 'ECO', 'UEMOA', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'EVTS', 'HELP'];
-const SEC_TABS = ['DES', 'GP', 'HP', 'FA', 'RV', 'WACC', 'DVD', 'DDM', 'EE', 'SURP', 'COMP', 'BETA', 'QLAB', 'BTST', 'SEAS', 'CN'];
-const MENU_GROUPS = [['Description', ['DES', 'CN']], ['Cours', ['GP', 'HP', 'COMP', 'SEAS']], ['Fondamentaux', ['FA', 'RV', 'WACC', 'DVD', 'DDM']],
-  ['Analystes', ['EE', 'SURP']], ['Risque & quant', ['BETA', 'QLAB', 'BTST']]];
-const FNS = Object.entries(FN).map(([k, v]) => [k, v[0]]);
+const MKT_KEYS = ['MON', 'BRVM', 'IMAP', 'US', 'TOP', 'FG', 'ECO', 'UEMOA', 'SRCH', 'GC', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'EVTS', 'HELP'];
+const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS']], ['Cours', ['GP', 'HP', 'TRA', 'COMP', 'SEAS']], ['Fondamentaux', ['FA', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
+  ['Analystes', ['EE', 'SURP']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
+const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
+/* Fonctions associées (menu « Fonctions associées » de la barre d'outils) */
+const REL = { GP: ['HP', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
+  DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'EQS'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'EQS'],
+  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'TOP', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'EQS'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
+  BMAP: ['MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECO'] };
+const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
 function avail(code, s) {
   if (!s) return 'aucun titre';
   const eq = s.cls === 'Equity' && s.typ !== 'ETF', brvm = s.mkt === 'BRVM';
-  if (['FA', 'RV', 'WACC'].includes(code)) return eq ? (brvm || s.fa ? null : 'comptes SEC non disponibles pour ce titre') : 'réservé aux actions';
+  if (['FA', 'RV', 'WACC', 'MODL'].includes(code)) return eq ? (brvm || s.fa ? null : 'comptes SEC non disponibles pour ce titre') : 'réservé aux actions';
   if (['EE', 'SURP'].includes(code)) return brvm ? 'aucun consensus d’analystes public pour la BRVM' : s.mkt === 'US' && eq ? (s.ee === false ? 'pas de consensus publié pour ce titre' : null) : 'réservé aux actions US';
   if (code === 'DVD' || code === 'DDM') return s.cls === 'Equity' || s.typ === 'ETF' ? null : 'pas de dividende';
-  if (code === 'BTST' || code === 'QLAB') return s.f === 'D' ? null : 'série mensuelle';
+  if (code === 'BTST' || code === 'QLAB' || code === 'ANOM') return s.f === 'D' ? null : 'série mensuelle';
+  if (code === 'HDS') return brvm && eq ? null : eq ? 'actionnariat publié uniquement pour les sociétés de la BRVM (SikaFinance)' : 'réservé aux actions';
+  if (code === 'SCOR' || code === 'PEER') return eq && (brvm || s.fa) ? null : 'réservé aux actions dont les comptes sont disponibles';
+  if (code === 'LQA') return s.cls === 'Equity' && s.f === 'D' ? null : 'réservé aux actions et ETF';
+  if (code === 'TRA') return s.f === 'D' ? null : 'série mensuelle';
   return null;
 }
+/* « SNTS BC Equity », « XAU Curncy »… : le libellé de la case orange */
+function ykey(s) { if (!s) return ''; return /\b(Equity|Index|INDX|Curncy|Comdty|Govt|Corp)\b/.test(s.tk) ? s.tk : s.tk + ' ' + (s.cls === 'Equity' ? 'Equity' : s.cls === 'Crypto' ? 'Curncy' : s.cls === 'Rate' ? 'Index' : s.cls); }
 
 const TRIGGER_ID = '__TRIGGER_ID__';
 
-/* ---------- formatting (French conventions) ---------- */
+/* ---------- formats (conventions françaises) ---------- */
 const NF = {}; const nf = d => NF[d] || (NF[d] = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }));
-const num = (v, d = 2) => v == null || !isFinite(v) ? '—' : nf(d).format(v).replace(/ /g, ' ');
+const num = (v, d = 2) => v == null || !isFinite(v) ? '—' : nf(d).format(v).replace(/ /g, ' ');
 const pxd = s => s && (s.ccy === 'XOF' && s.cls === 'Equity') ? 0 : s && s.last < 1 ? 4 : 2;
 const px = (s, v) => num(v, pxd(s));
 const sgn = (v, d = 2, suf = '%', mul = 100) => v == null || !isFinite(v) ? '<span class="fl">—</span>' : `<span class="${v > 0 ? 'up' : v < 0 ? 'dn' : 'fl'}">${v > 0 ? '+' : ''}${num(v * mul, d)}${suf}</span>`;
@@ -75,8 +98,9 @@ const fds = s => s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) 
 const i2s = d => `${Math.floor(d / 10000)}-${String(Math.floor(d / 100) % 100).padStart(2, '0')}-${String(d % 100).padStart(2, '0')}`;
 const s2i = s => +s.replace(/-/g, '');
 const cls = v => v > 0 ? 'up' : v < 0 ? 'dn' : 'fl';
+const deent = s => { if (s == null) return ''; s = String(s); if (!/&[#a-z0-9]+;/i.test(s)) return s; const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
 
-/* ---------- data ---------- */
+/* ---------- données ---------- */
 async function getJSON(path) { if (!Q.json[path]) Q.json[path] = fetch(Q.base + path, { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error(path + ' ' + r.status); return r.json(); }); return Q.json[path]; }
 async function series(id) {
   if (!Q.ser[id]) Q.ser[id] = getJSON('s/' + id.replace('.', '_') + '.json').then(b => {
@@ -90,7 +114,7 @@ function secsWhere(f) { return Q.sum.secs.filter(f); }
 function applyQuotes() {
   const q = Q.quotes && Q.quotes.q; if (!q) return;
   for (const [id, r] of Object.entries(q)) { const s = Q.by[id]; if (!s || !r.last) continue; const day = r.d ? s2i(r.d) : s.dt;
-    if (day > s.dt) { s.prev = s.last; s.dt = day; } s.last = r.last; s.pct = r.pct != null ? r.pct : s.last / s.prev - 1; if (r.vol != null) s.shd = r.vol; s.live = true; }
+    if (day > s.dt) { s.prev = r.prev || s.last; s.dt = day; } s.last = r.last; s.pct = r.pct != null ? r.pct : s.last / s.prev - 1; if (r.vol != null) s.shd = r.vol; s.live = true; s.q = r; }
 }
 function applyQuoteToSeries(s) {
   const q = Q.quotes && Q.quotes.q && Q.quotes.q[s.id]; if (!q || !q.last || !q.d) return; const day = s2i(q.d), n = s.x.length;
@@ -98,7 +122,7 @@ function applyQuoteToSeries(s) {
   else if (day === s.x[n - 1]) { s.c[n - 1] = q.last; s.h[n - 1] = Math.max(s.h[n - 1], q.last); s.l[n - 1] = Math.min(s.l[n - 1], q.last); if (q.vol != null) s.v[n - 1] = q.vol; }
 }
 
-/* ---------- command line ---------- */
+/* ---------- ligne de commande ---------- */
 function searchSecs(qs) {
   const q = qs.trim().toUpperCase(); if (!q) return [];
   const out = []; for (const s of Q.sum.secs) { const id = s.id.toUpperCase(), tk = s.tk.toUpperCase(), n = (s.n || '').toUpperCase(), sh = (s.short || '').toUpperCase();
@@ -107,127 +131,222 @@ function searchSecs(qs) {
 }
 function parseCmd(txt) {
   const toks = txt.trim().toUpperCase().replace(/<GO>|\bGO\b|EQUITY|INDEX|CURNCY|COMDTY/g, ' ').split(/\s+/).filter(Boolean);
-  let fn = null, s = null; for (const t of toks) { if (!fn && FN[t]) { fn = t; continue; } if (t === 'AIDE') { fn = 'HELP'; continue; } if (!s) { const m = Q.by[t] || searchSecs(t)[0]; if (m) s = m.id; } }
+  let fn = null, s = null; for (const t of toks) { if (!fn && FN[t] && has(t)) { fn = t; continue; } if (t === 'AIDE') { fn = 'HELP'; continue; } if (!s) { const m = Q.by[t] || searchSecs(t)[0]; if (m) s = m.id; } }
   if (!s && toks.length > 1 && !fn) { const m = searchSecs(toks.join(' '))[0]; if (m) s = m.id; }
   return { fn, s };
 }
+/* « 2 <GO> » : active l'élément numéroté 2 de l'écran (onglet, bouton d'action, section, ligne de menu) */
+function numCmd(t) { const el = document.querySelector(`[data-n="${t}"]`); if (el) { el.click(); return true; } return false; }
 function runCmd(txt) {
-  const t = txt.trim(); if (ST.fn === 'MENU' && /^\d{1,2}$/.test(t)) { const it = menuItems(sec(ST.sec))[+t - 1]; if (it) { go(it, ST.sec); return; } }
-  const { fn, s } = parseCmd(txt); if (!fn && !s) { toast('Commande inconnue. Exemples : SNTS (menu du titre) · SNTS FA · QQQ BTST · FG · TOP'); return; }
+  const t = txt.trim(); if (/^\d{1,3}$/.test(t)) { if (numCmd(t)) return; if (ST.fn === 'MENU') { const it = menuItems(sec(ST.sec))[+t - 1]; if (it) { go(it, ST.sec); return; } } toast('Aucun élément numéroté ' + t + ' sur cet écran.'); return; }
+  const { fn, s } = parseCmd(txt); if (!fn && !s) { toast('Commande inconnue. Exemples : SNTS (menu du titre) · SNTS FA · AAPL GP · FG · TOP · IMAP'); return; }
   if (fn && FN[fn][1] === 'mkt') { go(fn, s); return; }
   go(fn || 'MENU', s || ST.sec);
 }
-function menuItems(s) { return MENU_GROUPS.flatMap(g => g[1]); }
-/* Saisie façon Bloomberg : « SNTS » propose les titres ; « SNTS » + espace (ou Tab) propose les fonctions du titre. */
+function menuItems(s) { return SEC_TABS.filter(has); }
 function exactSec(t) { const u = (t || '').toUpperCase(); return Q.by[u] || Q.sum.secs.find(s => s.tk.toUpperCase().split(' ')[0] === u) || null; }
+/* Saisie façon Bloomberg : « SNTS » propose les titres ; « SNTS » + espace (ou Tab) liste les fonctions du titre avec leur définition. */
 function initCmd() {
   const inp = $('cmd'), ac = $('ac'); let sel = 0, items = [];
+  const row = (it, i) => it.k === 'h' ? `<p class="ach">${esc(it.a)}</p>` : `<div class="${i === sel ? 'on' : ''}${it.off ? ' off' : ''}" data-i="${i}" title="${esc(it.tt || '')}"><b>${esc(it.a)}</b><span>${it.b}</span><span>${esc(it.c)}</span></div>`;
   const show = () => {
     const v = inp.value, toks = v.trim().split(/\s+/).filter(Boolean), sp = /\s$/.test(v); const S = toks.length ? exactSec(toks[0]) : null;
     if (S && (toks.length > 1 || sp)) {
       const part = (toks.length > 1 ? toks[toks.length - 1] : '').toUpperCase();
-      items = menuItems(S).concat(['CORR']).filter(c => !part || c.startsWith(part) || FN[c][0].toUpperCase().includes(part))
-        .map(c => { const why = avail(c, S); return { k: 'sfn', id: c, sec: S.id, a: `${S.id} ${c}`, b: FN[c][0] + ' — ' + FN[c][3], c: why ? 'n.d.' : FN[c][2], off: !!why }; });
+      const codes = SEC_TABS.filter(has).filter(c => !part || c.startsWith(part) || FN[c][0].toUpperCase().includes(part) || FN[c][4].toUpperCase().includes(part));
+      items = [{ k: 'h', a: `${ykey(S)} · ${S.n}` }];
+      for (const [g, cs] of MENU_GROUPS) { const gc = cs.filter(c => codes.includes(c)); if (!gc.length) continue; if (!part) items.push({ k: 'h', a: g });
+        for (const c of gc) { const why = avail(c, S); items.push({ k: 'sfn', id: c, sec: S.id, a: c, b: `${esc(FN[c][4])} <i>— ${esc(FN[c][3])}</i>`, c: why ? 'n.d.' : FN[c][0], off: !!why, tt: why ? 'Non disponible : ' + why : FN[c][3] }); } }
     } else {
       const last = toks[toks.length - 1] || '', L = last.toUpperCase();
-      const fns = Object.keys(FN).filter(k => k !== 'MENU' && L && (k.startsWith(L) || FN[k][0].toUpperCase().startsWith(L)))
-        .map(k => ({ k: 'fn', id: k, a: k, b: FN[k][0] + ' — ' + FN[k][3], c: FN[k][1] === 'sec' ? 'TITRE' : 'FONCTION' }));
-      const ss = searchSecs(last).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: s.tk, b: s.n, c: s.cls === 'Equity' ? (s.mkt === 'BRVM' ? 'BRVM' : s.typ) : s.cls }));
-      items = (ss.length && ss[0].id.toUpperCase() === L ? ss.concat(fns) : fns.concat(ss)).slice(0, 16);
+      const fns = Object.keys(FN).filter(k => has(k) && k !== 'MENU' && L && (k.startsWith(L) || FN[k][0].toUpperCase().startsWith(L) || FN[k][4].toUpperCase().startsWith(L)))
+        .map(k => ({ k: 'fn', id: k, a: k, b: `${esc(FN[k][4])} <i>— ${esc(FN[k][3])}</i>`, c: FN[k][1] === 'sec' ? 'fonction titre' : 'fonction', tt: FN[k][3] }));
+      const ss = searchSecs(last).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: ykey(s), b: esc(s.n), c: s.mkt === 'BRVM' ? 'BRVM' : s.mkt === 'US' ? (s.typ === 'ETF' ? 'ETF US' : 'US') : s.cls }));
+      items = (ss.length && ss[0].id.toUpperCase() === L ? ss.concat(fns) : fns.concat(ss)).slice(0, 18);
     }
-    sel = Math.max(0, items.findIndex(it => !it.off)); ac.hidden = !items.length;
-    ac.innerHTML = items.map((it, i) => `<div class="${i === sel ? 'on' : ''}${it.off ? ' off' : ''}" data-i="${i}"><b>${esc(it.a)}</b><span>${esc(it.b)}</span><span>${it.c}</span></div>`).join('') +
-      (items.length && items[0].k !== 'sfn' && items.some(it => it.k === 'sec') ? '<p class="hint">Entrée : menu du titre · Tab : ses fonctions</p>' : '');
+    sel = Math.max(0, items.findIndex(it => it.k !== 'h' && !it.off)); ac.hidden = !items.length;
+    ac.innerHTML = items.map(row).join('') + (items.length && items.some(it => it.k === 'sec') ? '<p class="hint">Entrée : menu du titre · espace ou Tab : ses fonctions avec leur définition</p>' : items.some(it => it.k === 'sfn') ? '<p class="hint">↑ ↓ puis Entrée · ou tapez le code (ex. FA) · grisé = non disponible pour ce titre</p>' : '');
   };
-  const pick = (i, tab) => { const it = items[i]; if (!it) return;
+  const pick = (i, tab) => { const it = items[i]; if (!it || it.k === 'h') return;
     if (it.k === 'sec' && tab) { inp.value = it.id + ' '; show(); return; }
     ac.hidden = true; inp.value = ''; inp.blur();
     if (it.k === 'sfn') go(it.id, it.sec); else if (it.k === 'fn') go(it.id, ST.sec); else go('MENU', it.id); };
+  const step = d => { let k = sel; for (let j = 0; j < items.length; j++) { k = (k + d + items.length) % items.length; if (items[k].k !== 'h') break; } sel = k;
+    [...ac.querySelectorAll('[data-i]')].forEach(c => c.classList.toggle('on', +c.dataset.i === sel)); const d0 = ac.querySelector('div.on'); if (d0) d0.scrollIntoView({ block: 'nearest' }); };
   inp.addEventListener('input', show); inp.addEventListener('focus', () => { if (inp.value) show(); });
   inp.addEventListener('keydown', e => { if (ac.hidden) return;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length; [...ac.querySelectorAll('div')].forEach((c, i) => c.classList.toggle('on', i === sel)); c0(); }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); step(e.key === 'ArrowDown' ? 1 : -1); }
     if (e.key === 'Tab') { e.preventDefault(); pick(sel, true); } if (e.key === 'Escape') { ac.hidden = true; } });
-  const c0 = () => { const d = ac.querySelector('div.on'); if (d) d.scrollIntoView({ block: 'nearest' }); };
   ac.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); if (d) { e.preventDefault(); pick(+d.dataset.i); } });
   $('cmdForm').addEventListener('submit', e => { e.preventDefault(); const v = inp.value.trim();
-    if (!ac.hidden && items.length && !/^\d{1,2}$/.test(v)) { const exactFn = v.toUpperCase().split(/\s+/); const typedFn = exactFn.length === 1 && FN[exactFn[0]];
-      if (!typedFn || items[sel].a === exactFn[0]) { pick(sel); return; } }
+    if (!ac.hidden && items.length && !/^\d{1,3}$/.test(v)) { const w = v.toUpperCase().split(/\s+/); const typedFn = w.length === 1 && FN[w[0]] && has(w[0]);
+      const it = items[sel]; const typedSecFn = w.length === 2 && exactSec(w[0]) && FN[w[1]] && has(w[1]);
+      if (!typedSecFn && it && (!typedFn || it.a === w[0])) { pick(sel); return; } }
     ac.hidden = true; inp.value = ''; inp.blur(); runCmd(v); });
   inp.addEventListener('blur', () => setTimeout(() => { ac.hidden = true; }, 150));
-  document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') go('MON'); });
+  document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') { if (!$('ddm').hidden) { ddClose(); return; } go(SECFN.has(ST.fn) && ST.fn !== 'MENU' ? 'MENU' : 'MON'); } });
 }
 
-/* ---------- router ---------- */
+/* ---------- menus déroulants ---------- */
+function ddOpen(anchor, rows) {
+  const d = $('ddm'); d.innerHTML = rows.map((r, i) => r.h ? `<div class="dh">${esc(r.h)}</div>` : `<div class="di${r.code ? '' : ' nc'}${r.off ? ' off' : ''}" data-di="${i}" title="${esc(r.tt || '')}"><em>${r.n != null ? r.n + ')' : ''}</em>${r.code ? `<b>${esc(r.code)}</b>` : ''}<span>${r.l}</span></div>`).join('');
+  d.hidden = false; const a = anchor.getBoundingClientRect(); const w = d.getBoundingClientRect().width;
+  d.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, a.left)) + 'px'; d.style.top = (a.bottom + 1) + 'px';
+  d.onclick = e => { const x = e.target.closest('[data-di]'); if (!x) return; const r = rows[+x.dataset.di]; ddClose(); if (r && r.run && !r.off) r.run(); };
+}
+function ddClose() { $('ddm').hidden = true; }
+document.addEventListener('mousedown', e => { if (!e.target.closest('#ddm') && !e.target.closest('[data-dd]')) ddClose(); });
+
+/* ---------- chrome : barre d'outils, en-tête du titre, barre rouge, onglets, actualités ---------- */
+const PG = { acts: [], tabs: null, title: null };
+function setTabs(list, cur, cb, o = {}) {
+  const t = $('ptabs'); PG.tabs = list; t.hidden = false;
+  t.innerHTML = list.map(([k, l, off], i) => `<button class="ptab${k === cur ? ' on' : ''}${off ? ' off' : ''}" data-n="${i + 1}" data-tab="${esc(k)}" title="${off ? esc(off) : ''}"><em>${i + 1})</em> ${esc(l)}</button>`).join('');
+  t.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => cb(b.dataset.tab));
+}
+/* Sous-onglets bleus (comme « 11) Adj Highlights ») : renvoie le HTML, numérotés à partir de base */
+function subTabs(list, cur, attr, base = 11) { return `<div class="stabs2">${list.map(([k, l], i) => `<button class="stab${k === cur ? ' on' : ''}" data-n="${base + i}" ${attr}="${esc(k)}"><em>${base + i})</em> ${esc(l)}</button>`).join('')}</div>`; }
+function setActs(acts) { PG.acts = acts || []; renderRbar(); }
+function setTitle(t) { PG.title = t; renderRbar(); }
+function tabState(fn, def) { if (ST.tab[fn] == null) ST.tab[fn] = def; return ST.tab[fn]; }
+function stdActs() {
+  return { n: 96, l: 'Actions', menu: () => [
+    { l: 'Exporter le tableau principal (CSV)', run: exportCSV }, { l: 'Copier le lien de cet écran', run: () => { navigator.clipboard && navigator.clipboard.writeText(location.href).then(() => toast('Lien copié.'), () => toast(location.href)); } },
+    { l: 'Imprimer / PDF', run: () => window.print() }, { l: 'Recharger les données', run: () => { Q.json = {}; Q.ser = {}; Q.M = {}; pollStatic(); render(); } }] };
+}
+function exportCSV() {
+  const t = $('main').querySelector('table.t'); if (!t) { toast('Aucun tableau sur cet écran.'); return; }
+  const rows = [...t.querySelectorAll('tr')].map(tr => [...tr.children].map(c => '"' + c.innerText.replace(/ | /g, ' ').replace(/"/g, '""').trim() + '"').join(';'));
+  const blob = new Blob(['﻿' + rows.join('\n')], { type: 'text/csv;charset=utf-8' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `FQT_${ST.fn}_${SECFN.has(ST.fn) ? ST.sec + '_' : ''}${new Date().toISOString().slice(0, 10)}.csv`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function renderRbar() {
+  const b = $('rbar'), s = sec(ST.sec), isSec = SECFN.has(ST.fn) && s;
+  const acts = PG.acts.concat([stdActs()]).sort((a, b) => a.n - b.n);
+  b.innerHTML = (isSec ? `<span class="ob">${esc(ykey(s))}</span>` : `<span class="ret">&lt;Menu&gt; pour revenir</span>`) +
+    acts.map((a, i) => `<button class="ab${a.menu ? ' mn' : ''}${a.on ? ' on' : ''}" data-n="${a.n}" data-dd="1" data-ai="${i}"><em>${a.n})</em> ${esc(a.l)}</button>`).join('') +
+    `<span class="rt">${esc(PG.title || FN[ST.fn][4] || FN[ST.fn][0])}</span>`;
+  b.querySelectorAll('[data-ai]').forEach(x => x.onclick = () => { const a = acts[+x.dataset.ai]; if (a.menu) ddOpen(x, a.menu()); else if (a.run) a.run(); });
+  b.querySelector('.ret') && (b.querySelector('.ret').onclick = () => go(SECFN.has(ST.fn) ? 'MENU' : 'MON'));
+}
+function renderTbar() {
+  const t = $('tbar'), s = sec(ST.sec), isSec = SECFN.has(ST.fn);
+  t.innerHTML = `<button class="nv" id="hb" title="Écran précédent" ${ST.hpos > 0 ? '' : 'disabled'}>◀</button><button class="nv" id="hf" title="Écran suivant" ${ST.hpos < ST.hist.length - 1 ? '' : 'disabled'}>▶</button>
+    <button class="dd" data-dd="1" id="ddSec" title="Titre actif"><span>${esc(s ? (s.short || s.n).toUpperCase() + ' ' + ykey(s).split(' ').pop() : '—')}</span></button>
+    <button class="dd" data-dd="1" id="ddFn" title="Fonction"><span>${ST.fn}</span></button>
+    <button class="dd" data-dd="1" id="ddRel" title="Fonctions associées"><span>Fonctions associées</span></button>
+    <span class="sp"></span><div class="feed" id="feed"><i></i><span id="feedTxt">—</span><button id="syncBtn" hidden title="Récupérer tout de suite le dernier relevé">SYNC</button></div><div class="clocks" id="clocks"></div>`;
+  $('hb').onclick = () => histGo(-1); $('hf').onclick = () => histGo(1); bindSync();
+  $('ddSec').onclick = e => { const seen = []; for (let i = ST.hist.length - 1; i >= 0 && seen.length < 12; i--) { const id = ST.hist[i][1]; if (id && Q.by[id] && !seen.includes(id)) seen.push(id); }
+    ddOpen(e.currentTarget, [{ h: 'Titres récents' }].concat(seen.map((id, i) => ({ n: i + 1, code: id, l: esc(Q.by[id].n), run: () => go(isSec ? ST.fn : 'MENU', id) })), [{ h: 'Autre titre' }, { l: 'Taper un ticker dans la ligne de commande…', run: () => $('cmd').focus() }])); };
+  $('ddFn').onclick = e => { const rows = []; let n = 0;
+    if (s) { rows.push({ h: 'Fonctions de ' + ykey(s) }); for (const [g, cs] of MENU_GROUPS) for (const c of cs.filter(has)) { const why = avail(c, s); n++; rows.push({ n, code: c, l: esc(FN[c][4]) + ' · ' + esc(FN[c][0]), off: !!why, tt: why || FN[c][3], run: () => go(c, s.id) }); } }
+    rows.push({ h: 'Fonctions de marché' }); for (const c of MKT_KEYS.filter(has)) { n++; rows.push({ n, code: c, l: esc(FN[c][4]) + ' · ' + esc(FN[c][0]), tt: FN[c][3], run: () => go(c) }); }
+    ddOpen(e.currentTarget, rows); };
+  $('ddRel').onclick = e => { const base = REL[ST.fn] || (MENU_GROUPS.find(g => g[1].includes(ST.fn)) || [0, []])[1].filter(c => c !== ST.fn); const list = (base.length ? base : isSec ? SEC_TABS : MKT_KEYS).filter(has);
+    ddOpen(e.currentTarget, [{ h: 'Fonctions associées à ' + ST.fn }].concat(list.map((c, i) => { const why = FN[c][1] === 'sec' ? avail(c, s) : null; return { n: i + 1, code: c, l: esc(FN[c][4]) + ' · ' + esc(FN[c][0]), off: !!why, tt: why || FN[c][3], run: () => go(c, FN[c][1] === 'sec' ? ST.sec : undefined) }; }), [{ h: '' }, { code: 'MENU', l: 'Toutes les fonctions du titre', run: () => go('MENU') }])); };
+}
+/* En-tête du titre sur deux lignes, comme Bloomberg : ticker, devise, ▲ cours, variation, mini-graphique, pré/post-marché ;
+   puis heure, volume, ouverture, plus haut, plus bas, montant échangé. */
+function renderSech() {
+  const b = $('sech'), s = sec(ST.sec); if (!SECFN.has(ST.fn) || !s) { b.hidden = true; return; } b.hidden = false;
+  const q = s.q || {}, ch = s.last - s.prev, c = cls(ch), arr = ch > 0 ? '↑' : ch < 0 ? '↓' : '';
+  const brvm = s.mkt === 'BRVM', us = s.mkt === 'US';
+  const tm = q.t ? q.t : Q.quotes && Q.quotes.ts && s.live ? new Date(Q.quotes.ts * 1000).toLocaleTimeString('fr-FR', { timeZone: brvm ? 'Africa/Abidjan' : 'Europe/Paris', hour: '2-digit', minute: '2-digit' }) + (brvm ? ' GMT' : '') : null;
+  const x = q.ext; const xt = x && x.last ? `<span class="xt"><span class="lb">${x.s === 'pre' ? 'Pré-marché' : 'Après-bourse'}</span><span class="${cls(x.chg)}">${px(s, x.last)} ${x.chg != null ? (x.chg > 0 ? '+' : '') + num(x.chg, 2) : ''} (${x.pct != null ? (x.pct > 0 ? '+' : '') + num(x.pct * 100, 2) + '%' : '—'})</span>${x.t ? ` <span class="ex">${esc(x.t)}</span>` : ''}</span>` : '';
+  const kv = (l, v, e) => v == null || v === '' ? '' : `<span><span class="lb">${l}</span> <span class="vl">${v}</span>${e ? `<span class="ex">${e}</span>` : ''}</span>`;
+  const sp = s.spark && s.spark.length > 5 ? sparkSVG(s.spark.slice(-40), 110, 16) : '';
+  b.innerHTML = `<div class="l1"><i class="mk"></i><span class="tk">${esc(s.tk.split(' ').slice(0, 2).join(' '))}</span><span class="cu">${esc(s.ccy === 'USD' ? '$' : s.ccy || '')}</span>
+      <span class="p ${c}">${arr}${px(s, s.last)}</span><span class="${c}">${ch > 0 ? '+' : ''}${px(s, ch)}</span><span class="${c}">${s.pct != null ? (s.pct > 0 ? '+' : '') + num(s.pct * 100, 2) + '%' : ''}</span>${sp}${xt}
+      ${s.susp ? '<span class="dn">COTATION SUSPENDUE</span>' : ''}</div>
+    <div class="l2"><i class="bars"></i>${kv(s.live ? 'À' : 'Clôt.', s.live && tm ? tm : fd(s.dt), s.live ? ' ' + fd(s.dt).slice(0, 5) : '')}${kv('Vol', s.shd != null ? num(s.shd, 0) : null)}${kv('O', q.o ? px(s, q.o) : null)}${kv('H', q.h ? px(s, q.h) : null)}${kv('L', q.l ? px(s, q.l) : null)}
+      ${kv('Val', q.val ? big(q.val) : brvm && s.vday ? big(s.vday) : null)}${kv('Préc', px(s, s.prev))}${kv('52s', s.hi52 ? px(s, s.lo52) + ' – ' + px(s, s.hi52) : null)}${s.mcap ? kv('Capi', big(s.mcap), ' ' + (brvm ? 'XOF' : 'USD')) : ''}${s.per ? kv('PER', num(s.per, 1)) : ''}${s.yld ? kv('Rdt', num(s.yld * 100, 2) + '%') : ''}
+      ${us && q.ms ? `<span class="ex">${esc(q.ms)}</span>` : ''}</div>`;
+}
+/* Bandeau d'actualités du bas : les 4 dernières dépêches, numérotées, avec source et heure. */
+let NEWS_CACHE = null;
+async function renderNews() {
+  const p = $('nwp'); let n = null; try { n = await getJSON('news.json'); } catch (e) { }
+  const it = (n && (n.items || n)) || []; NEWS_CACHE = it;
+  const rows = it.slice(0, 4).map((x, i) => { const d = new Date((x.t || 0) * 1000), tk = (x.tk || []).slice(0, 2).join(' ');
+    return `<div class="nr" data-u="${esc(x.u || '')}"><span class="n">${401 + i})</span><span class="s">${esc(srcCode(x))}</span><span class="t">${d.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' })}</span><span class="h">${esc(deent(x.ti))}</span><span class="k">${esc(tk)}</span></div>`; }).join('');
+  p.className = 'nwp' + (ST.newsMin ? ' min' : '');
+  p.innerHTML = `<div class="nh"><span class="nl">Actualités · heure GMT (Abidjan)</span><button data-n="300" id="nwTop">300) Toutes les actualités</button><button data-n="301" id="nwMin">301) ${ST.newsMin ? 'Agrandir' : 'Réduire'} le panneau</button></div>${rows || '<div class="nr"><span></span><span></span><span></span><span class="h">Aucune actualité chargée.</span></div>'}`;
+  $('nwTop').onclick = () => go('TOP'); $('nwMin').onclick = () => { ST.newsMin = !ST.newsMin; try { localStorage.setItem('fqt.newsMin', ST.newsMin ? '1' : ''); } catch (e) { } renderNews(); };
+  p.querySelectorAll('[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
+}
+function srcCode(x) { const s = (x.s || x.f || '').toLowerCase();
+  const M = [['brvm', 'BRVM'], ['sika', 'SIKA'], ['sec.gov', 'SEC'], ['edgar', 'SEC'], ['reuters', 'RTRS'], ['bloomberg', 'BBG'], ['zonebourse', 'ZB'], ['boursorama', 'BOURSO'], ['les echos', 'ECHOS'], ['jeune afrique', 'JA'], ['financial afrik', 'FAFRIK'], ['financialafrik', 'FAFRIK'], ['agence ecofin', 'ECOFIN'], ['ecofin', 'ECOFIN'], ['bceao', 'BCEAO'], ['fed', 'FED'], ['cnbc', 'CNBC'], ['marketwatch', 'MW'], ['yahoo', 'YHOO'], ['nasdaq', 'NDAQ'], ['lefigaro', 'FIGARO'], ['le monde', 'MONDE'], ['abidjan', 'ABJ.NET'], ['apa', 'APA'], ['afp', 'AFP']];
+  for (const [k, v] of M) if (s.includes(k)) return v; return (x.s || 'WEB').replace(/^www\./, '').split(/[ .]/)[0].toUpperCase().slice(0, 6); }
+
+/* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
-function go(fn, s) { if (fn && FN[fn]) ST.fn = fn; if (s && Q.by[s]) ST.sec = s; try { history.replaceState(null, '', '#' + ST.fn + (SECFN.has(ST.fn) ? '~' + ST.sec : '')); } catch (e) { } render(); window.scrollTo(0, 0); }
+function go(fn, s, o = {}) {
+  if (fn && FN[fn]) ST.fn = fn; if (s && Q.by[s]) ST.sec = s;
+  if (!o.nohist) { const cur = [ST.fn, ST.sec]; const last = ST.hist[ST.hpos]; if (!last || last[0] !== cur[0] || (SECFN.has(cur[0]) && last[1] !== cur[1])) { ST.hist = ST.hist.slice(0, ST.hpos + 1); ST.hist.push(cur); if (ST.hist.length > 60) ST.hist.shift(); ST.hpos = ST.hist.length - 1; } }
+  try { history.replaceState(null, '', '#' + ST.fn + (SECFN.has(ST.fn) ? '~' + ST.sec : '')); } catch (e) { } ddClose(); render(); window.scrollTo(0, 0);
+}
+function histGo(d) { const k = ST.hpos + d; if (k < 0 || k >= ST.hist.length) return; ST.hpos = k; const [f, s] = ST.hist[k]; go(f, s, { nohist: true }); }
 function fromHash() { const h = decodeURIComponent(location.hash.slice(1)); if (!h) return; const [f, s] = h.split('~'); if (FN[f]) ST.fn = f; if (s && Q.by[s]) ST.sec = s; }
 async function render() {
-  const seq = ++renderSeq; untip(); renderKeys(); renderSecbar(); renderStatus();
+  const seq = ++renderSeq; untip(); PG.acts = []; PG.title = null; $('ptabs').hidden = true; $('ptabs').innerHTML = '';
+  renderKeys(); renderTbar(); renderSech(); renderRbar(); renderStatus(); feedState(); clocksTick();
   const m = $('main'); m.innerHTML = '<div class="empty">Chargement…</div>';
   const why = SECFN.has(ST.fn) && ST.fn !== 'MENU' ? avail(ST.fn, sec(ST.sec)) : null;
-  if (why) { m.innerHTML = `<div class="pn"><div class="pt">${sec(ST.sec).tk} · ${FN[ST.fn][0]}<span class="code">${ST.fn}</span></div><div class="pb"><div class="empty">Non disponible pour ce titre : ${esc(why)}.<br><br><button class="tb" data-fn="MENU">Voir les fonctions disponibles</button></div></div></div>`; return; }
+  if (why) { m.innerHTML = `<div class="pn"><div class="pt">${esc(ykey(sec(ST.sec)))} · ${FN[ST.fn][0]}<span class="code">${ST.fn}</span></div><div class="pb"><div class="empty">Non disponible pour ce titre : ${esc(why)}.<br><br><button class="tb" data-fn="MENU">Voir les fonctions disponibles</button></div></div></div>`; return; }
   if (!PAGES[ST.fn]) { m.innerHTML = '<div class="empty">Fonction en préparation.</div>'; return; }
   try { await PAGES[ST.fn](m, () => seq === renderSeq); }
   catch (e) { console.error(e); if (seq === renderSeq) m.innerHTML = `<div class="empty">Impossible d'afficher cette fonction : ${esc(e.message)}</div>`; }
 }
-function renderKeys() { $('fkeys').innerHTML = MKT_KEYS.map((k, i) => `<button class="fk ${ST.fn === k ? 'on' : ''}" data-fn="${k}" title="${esc(FN[k][3])}"><em>${i + 1})</em><b>${k}</b>${FN[k][0]}</button>`).join(''); }
-function renderSecbar() {
-  const b = $('secbar'); if (!SECFN.has(ST.fn)) { b.hidden = true; $('stabs').hidden = true; return; } b.hidden = false; const s = sec(ST.sec);
-  b.innerHTML = `<span class="tk">${s.tk}<small>${s.cls === 'Equity' ? 'Equity' : s.cls}</small></span><span class="nm">${esc(s.n)}</span>
-    <span class="px">${px(s, s.last)}</span><span class="kv">${s.ccy}</span><span>${sgn(s.last - s.prev, pxd(s), '', 1)} ${pc(s.pct)}</span>
-    <span class="kv">Date<b>${fd(s.dt)}${s.live ? ' · séance' : ''}</b></span>
-    ${s.shd != null ? `<span class="kv">Vol<b>${num(s.shd, 0)}</b></span>` : ''}
-    <span class="kv">52 sem.<b>${px(s, s.lo52)} – ${px(s, s.hi52)}</b></span><span class="kv">YTD<b>${pc(s.ytd, 1)}</b></span><span class="kv">1 an<b>${pc(s.r1y, 1)}</b></span>
-    ${s.mcap ? `<span class="kv">Capi<b>${big(s.mcap)} XOF</b></span>` : ''}${s.per ? `<span class="kv">PER<b>${num(s.per, 1)}</b></span>` : ''}${s.yld ? `<span class="kv">Rdt<b>${num(s.yld * 100, 2)}%</b></span>` : ''}
-    <span class="kv">${s.grp ? esc(s.grp) : ''}${s.cty ? ' · ' + esc(Q.sum.cty[s.cty] || s.cty) : ''}</span>`;
-  const t = $('stabs'); t.hidden = false;
-  t.innerHTML = `<button class="st ${ST.fn === 'MENU' ? 'on' : ''}" data-fn="MENU">MENU</button>` + SEC_TABS.map(k => { const why = avail(k, s); return `<button class="st ${ST.fn === k ? 'on' : ''}${why ? ' off' : ''}" data-fn="${k}" title="${esc(FN[k][0] + (why ? ' — ' + why : ''))}">${k}<small>${FN[k][0]}</small></button>`; }).join('');
-}
+function renderKeys() { $('fkeys').innerHTML = MKT_KEYS.filter(has).map(k => `<button class="fk ${ST.fn === k ? 'on' : ''}" data-fn="${k}" title="${esc(FN[k][4] + ' — ' + FN[k][3])}"><b>${k}</b><span>${FN[k][0]}</span></button>`).join(''); }
+function renderSecbar() { renderSech(); }
 function renderStatus() {
   const L = Q.live && Q.live.qqq, ss = Q.sum.session;
-  $('status').innerHTML = `<span>Données au <b>${fd(Q.sum.asof)}</b> · ${Q.sum.secs.length} titres · séance BRVM <b>${ss ? fds(ss.asof) : '—'}</b>${L ? ` · QQQ <b>${num(L.price, 2)}</b> (${L.state === 'REGULAR' ? 'séance' : L.state === 'CLOSED' ? 'clôturé' : L.state}, ${new Date(L.time * 1000).toISOString().slice(11, 16)} UTC)` : ''}</span>
-    <span>Ticker + <b>Entrée</b> : menu du titre · ticker + <b>espace</b> : ses fonctions · graphiques : trackpad / molette, double-clic = vue initiale</span>
-    <span>Sources : brvm.org · BRVMetrics · SikaFinance · Nasdaq · Yahoo Finance · SEC · FRED · CBOE · CNN · Coinbase · Banque mondiale · datasets.io — outil d'analyse, pas un conseil en investissement</span>`;
+  $('status').innerHTML = `<span>Données au <b>${fd(Q.sum.asof)}</b> · ${Q.sum.secs.length} titres · séance BRVM <b>${ss ? fds(ss.asof) : '—'}</b>${L ? ` · QQQ <b>${num(L.price, 2)}</b> (${L.state === 'REGULAR' ? 'séance' : L.state === 'PRE' ? 'pré-marché' : L.state === 'POST' ? 'après-bourse' : L.state === 'CLOSED' ? 'clôturé' : L.state}, ${new Date(L.time * 1000).toISOString().slice(11, 16)} UTC)` : ''}</span>
+    <span>Sources : brvm.org · SikaFinance · BCEAO · UMOA-Titres · Nasdaq · SEC · FRED · CBOE · CNN · EIA · Coinbase · Banque mondiale — outil d'analyse, pas un conseil en investissement</span>`;
 }
-function clocks() { const z = [['ABJ', 'Africa/Abidjan'], ['PAR', 'Europe/Paris'], ['NY', 'America/New_York'], ['TPE', 'Asia/Taipei']];
-  const t = () => { $('clocks').innerHTML = z.map(([k, tz]) => `<span>${k} <b>${new Date().toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: k === 'ABJ' ? '2-digit' : undefined })}</b></span>`).join(''); };
-  t(); setInterval(t, 1000); }
-function feedState() { const L = Q.live && Q.live.qqq, f = $('feed'); const age = Q.live ? Date.now() / 1000 - (Q.live.ts || 0) : 1e9;
+let clocksTick = () => { };
+function clocks() { const z = [['ABJ', 'Africa/Abidjan'], ['PAR', 'Europe/Paris'], ['NY', 'America/New_York'], ['TYO', 'Asia/Tokyo']];
+  clocksTick = () => { const c = $('clocks'); if (c) c.innerHTML = z.map(([k, tz]) => `<span>${k} <b>${new Date().toLocaleTimeString('fr-FR', { timeZone: tz, hour: '2-digit', minute: '2-digit', second: k === 'ABJ' ? '2-digit' : undefined })}</b></span>`).join(''); };
+  clocksTick(); setInterval(clocksTick, 1000); }
+function feedState() { const L = Q.live && Q.live.qqq, f = $('feed'); if (!f) return; const age = Q.live ? Date.now() / 1000 - (Q.live.ts || 0) : 1e9;
   const live = L && L.state === 'REGULAR' && age < 40 * 60; f.classList.toggle('live', !!live);
   $('feedTxt').textContent = live ? 'FLUX 15 MIN' : Q.live ? 'MAJ ' + new Date(Q.live.ts * 1000).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'EOD ' + fd(Q.sum.asof); }
 function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms); }
 
-/* ---------- live feed (artifact db written by the sync task) + polling (static hosting) ---------- */
+/* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
 async function initFeed() {
   if (!window.claude || !window.claude.use) { setInterval(pollStatic, 5 * 60 * 1000); return; }
   let db = null; try { db = await window.claude.use('db'); } catch (e) { } if (!db) return;
-  const apply = () => { applyQuotes(); for (const p of Object.values(Q.ser)) p.then(applyQuoteToSeries); Q.M = {}; feedState(); renderSecbar(); renderStatus(); if (['MON', 'BRVM', 'IMAP', 'US'].includes(ST.fn)) render(); };
+  const apply = () => { applyQuotes(); for (const p of Object.values(Q.ser)) p.then(applyQuoteToSeries); Q.M = {}; feedState(); renderSech(); renderStatus(); if (['MON', 'BRVM', 'IMAP', 'US'].includes(ST.fn)) render(); };
   try { db.doc('feed/live').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.live || (d.ts || 0) >= (Q.live.ts || 0)) { Q.live = d; apply(); } } }, () => { }); } catch (e) { }
   try { db.doc('feed/quotes').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.quotes || (d.ts || 0) >= (Q.quotes.ts || 0)) { Q.quotes = d; apply(); } } }, () => { }); } catch (e) { }
   try { db.doc('feed/news').onSnapshot(async sn => { if (!sn.exists) return; const d = sn.data(); const cur = await (Q.json['news.json'] || Promise.resolve(null)).catch(() => null);
-    if (!cur || (d.ts || 0) > (cur.ts || 0)) { Q.json['news.json'] = Promise.resolve(d); if (['TOP', 'CN'].includes(ST.fn)) render(); } }, () => { }); } catch (e) { }
+    if (!cur || (d.ts || 0) > (cur.ts || 0)) { Q.json['news.json'] = Promise.resolve(d); renderNews(); if (['TOP', 'CN'].includes(ST.fn)) render(); } }, () => { }); } catch (e) { }
 }
-async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.base + 'live.json?t=' + Date.now()).then(r => r.ok ? r.json() : null), fetch(Q.base + 'quotes.json?t=' + Date.now()).then(r => r.ok ? r.json() : null)]);
-  if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSecbar(); renderStatus(); if (['MON', 'BRVM', 'IMAP', 'US', 'TOP'].includes(ST.fn)) render(); } catch (e) { } }
+async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.base + 'live.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null), fetch(Q.base + 'quotes.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)]);
+  if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews(); if (['MON', 'BRVM', 'IMAP', 'US', 'TOP'].includes(ST.fn)) render(); } catch (e) { } }
+let SYNC_RUN = null;
+function bindSync() { const b = $('syncBtn'); if (!b || !SYNC_RUN) return; b.hidden = false; b.onclick = () => SYNC_RUN(b); }
 async function initSync() {
   if (!/^trig_/.test(TRIGGER_ID) || !window.claude || !window.claude.use) return; let mcp = null; try { mcp = await window.claude.use('mcp'); } catch (e) { } if (!mcp) return;
-  const b = $('syncBtn'); b.hidden = false;
-  b.addEventListener('click', async () => { b.disabled = true; b.textContent = '…';
+  SYNC_RUN = async b => { b.disabled = true; b.textContent = '…';
     try { await mcp.callTool('Claude Code Remote', 'fire_trigger', { trigger_id: TRIGGER_ID }, { cache: false }); toast('Synchronisation lancée : le dernier relevé arrive dans 2 à 4 minutes, sans recharger la page.', 9000); b.textContent = 'OK'; }
     catch (e) { const c = e && e.code; b.textContent = 'SYNC'; toast(c === 'rate_limited' ? 'Trop de demandes rapprochées : réessaie dans quelques minutes.' : c === 'not_granted' || c === 'consent_required' ? 'Autorisation refusée : ouvre le menu Autorisations de la page.' : 'La synchro n’a pas pu être lancée (' + (c || 'erreur') + '). La mise à jour planifiée tourne quand même.', 9000); }
-    finally { setTimeout(() => { b.disabled = false; b.textContent = 'SYNC'; }, 60000); } });
+    finally { setTimeout(() => { b.disabled = false; b.textContent = 'SYNC'; }, 60000); } };
+  bindSync();
 }
 
-/* ---------- boot ---------- */
+/* ---------- démarrage ---------- */
 async function boot() {
-  readCL(); renderKeysSkeleton();
+  readCL(); renderKeysSkeleton(); try { ST.newsMin = localStorage.getItem('fqt.newsMin') === '1'; } catch (e) { }
   try { Q.sum = await getJSON('summary.json'); } catch (e) { $('main').innerHTML = `<div class="empty">Données introuvables (data/summary.json).</div>`; return; }
   for (const s of Q.sum.secs) Q.by[s.id] = s;
   try { Q.live = await getJSON('live.json'); } catch (e) { } try { Q.quotes = await getJSON('quotes.json'); applyQuotes(); } catch (e) { }
-  fromHash(); initCmd(); clocks(); feedState();
-  document.addEventListener('click', e => { const f = e.target.closest('[data-fn]'); if (f) { go(f.dataset.fn, f.dataset.s); return; }
+  fromHash(); initCmd(); clocks();
+  document.addEventListener('click', e => { const f = e.target.closest('[data-fn]'); if (f && !f.closest('#ddm')) { go(f.dataset.fn, f.dataset.s); return; }
     const s = e.target.closest('[data-sec]'); if (s && !e.target.closest('a')) { const id = s.dataset.sec; go(s.dataset.to || (SECFN.has(ST.fn) && ST.fn !== 'MENU' && !avail(ST.fn, sec(id)) ? ST.fn : 'MENU'), id); } });
-  render(); initFeed(); initSync();
+  window.addEventListener('hashchange', () => { const a = ST.fn + ST.sec; fromHash(); if (ST.fn + ST.sec !== a) go(ST.fn, ST.sec); });
+  go(ST.fn, ST.sec); renderNews(); initFeed(); initSync();
 }
-function renderKeysSkeleton() { $('fkeys').innerHTML = MKT_KEYS.map((k, i) => `<button class="fk" data-fn="${k}"><em>${i + 1})</em><b>${k}</b>${FN[k][0]}</button>`).join(''); }
+function renderKeysSkeleton() { $('fkeys').innerHTML = MKT_KEYS.map(k => `<button class="fk" data-fn="${k}"><b>${k}</b></button>`).join(''); }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();

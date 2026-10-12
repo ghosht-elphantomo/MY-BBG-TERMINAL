@@ -59,5 +59,6 @@ jobs:
           for d in fred cboe crypto; do ls /tmp/raw/$d 2>/dev/null | head -100 > /tmp/out/ls_$d.txt || true; done
           ls -la /tmp/raw > /tmp/out/ls_raw.txt
           cp /tmp/raw/sika_hist.json /tmp/out/ 2>/dev/null || true; ls /tmp/raw/fred 2>/dev/null | wc -l > /tmp/out/n_fred.txt; for f in cnn_fg.json worldbank.json boc.json secfacts.json reports.json; do [ -f /tmp/raw/$f ] && head -c 4000 /tmp/raw/$f > /tmp/out/head_$f.txt || true; done
+          printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/out/vercel.json
           cd /tmp/out && git init -q -b probe && git config user.name fqt-bot && git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A && git commit -qm "Sonde $(date -u +%H:%M)" && git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" probe
