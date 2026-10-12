@@ -36,7 +36,7 @@ function cellFmt(t, v, U) {
 /* Tableau des comptes sur N exercices (10 par défaut), colonnes manquantes marquées n.d. avec la raison. */
 function accountsTable(F, nY = 10, opts = {}) {
   const Y = yDerived(F), U = unitOf(F), rows = accRows(F);
-  const have = Y.y.filter((y, i) => rows.some(([k]) => Y[k] && Y[k][i] != null));
+  const have = Y.y.filter((y, i) => rows.some(([k]) => Y[k] && Y[k][i] != null)).map(y => F.mkt === 'US' ? Math.floor(y / 10000) : y);
   const last = have.length ? Math.max(...have) : new Date().getFullYear() - 1; const cols = []; for (let y = last - nY + 1; y <= last; y++) cols.push(y);
   const ix = y => Y.y.indexOf(F.mkt === 'US' ? Y.y.find(d => Math.floor(d / 10000) === y) : y);
   const firstData = have.length ? Math.min(...have) : null;
@@ -44,7 +44,7 @@ function accountsTable(F, nY = 10, opts = {}) {
   const cg = (k, n) => { const a = cols.map(y => { const i = ix(y); return i >= 0 ? Y[k][i] : null; }); return cagrA(a, n); };
   const srcOf = y => { const i = ix(y); return i >= 0 && Y.src ? Y.src[i] : null; };
   const head = `<tr><th class="l">${U.lab}${F.mkt === 'US' ? ' · exercice clos' : ''}</th>${cols.map(y => { const sr = srcOf(y); return `<th title="${esc(sr || '')}">${y}${sr ? '<sup class="am">a</sup>' : ''}</th>`; }).join('')}${opts.cagr ? '<th>TCAM 3 a.</th><th>TCAM 5 a.</th><th>TCAM 10 a.</th>' : ''}</tr>`;
-  const body = rows.filter(([k]) => Y[k]).map(([k, l, t, hl]) => {
+  const body = rows.filter(([k]) => Y[k] && (!opts.only || opts.only.has(k))).map(([k, l, t, hl]) => {
     const vals = cols.map(y => { const i = ix(y); if (i < 0) return null; return t === 'g' ? gr(Y[k], i) : Y[k][i]; });
     if (vals.every(v => v == null) && t !== 'g') return '';
     const tds = vals.map((v, j) => { if (v == null) return `<td>${NDc(why(cols[j]))}</td>`; if (t === 'g') return `<td>${sgn(v, 1)}</td>`; return `<td class="${hl ? 'yl' : 'wh'}">${cellFmt(t, v, U)}</td>`; }).join('');
@@ -65,6 +65,13 @@ PAGES.FA = async (m, alive) => {
   const st = ST.fa = ST.fa || { v: 'A' }; const qtr = F.mkt === 'US' && F.H && F.H.q && F.H.q.length > 4 && !F.annual_only; if (!qtr) st.v = 'A';
   const Y = yDerived(F), U = unitOf(F), x = Y.y.map(y => F.mkt === 'US' ? y : y * 10000 + 1231);
   const kpi = [['Chiffre d’affaires', F.mkt === 'US' ? 'rev_g' : 'rev_g', 'croissance sur 1 an'], ['Free cash-flow', 'fcf_g', 'croissance sur 1 an'], ['Marge FCF', 'fcfm', ''], ['ROE', 'roe', ''], ['ROIC', 'roic', ''], ['Dette nette / EBITDA', 'nd_ebitda', '']];
+  const tab = tabState('FA', 'k'); setTabs([['k', 'Chiffres clés'], ['is', 'Compte de résultat'], ['bs', 'Bilan'], ['cf', 'Flux de trésorerie'], ['r', 'Ratios']], tab, k => { ST.tab.FA = k; render(); });
+  setActs([{ n: 97, l: 'Sortie', menu: () => [{ l: 'Exporter le tableau (CSV)', run: exportCSV }, { l: 'Imprimer / PDF', run: () => window.print() }] }]);
+  if (tab !== 'k') { const ONLY = F.bank ? { is: ['rev', 'ni', 'nm', 'eps', 'dps', 'payout', 'cir', 'cor'], bs: ['eq', 'assets', 'deposits', 'loans', 'ld', 'solv'], cf: ['dps', 'payout'], r: ['roe', 'roa_s', 'nm', 'ld', 'cir', 'cor_l', 'solv', 'payout'] }[tab]
+      : { is: ['rev', 'gm', 'ebitda', 'opi', 'ebit', 'om', 'ni', 'nm', 'eps', 'dps', 'payout'], bs: ['cashx', 'cash', 'debt', 'nd', 'eq', 'assets', 'sh'], cf: ['ocf', 'capex', 'fcf', 'fcfm', 'sbc', 'div', 'buy', 'fpay'], r: ['om', 'nm', 'fcfm', 'roe', 'roic', 'nd_ebitda', 'payout', 'fpay'] }[tab];
+    const lab = { is: 'Compte de résultat', bs: 'Bilan', cf: 'Flux de trésorerie', r: 'Ratios' }[tab];
+    m.innerHTML = `${subTabs([['A', 'Annuel']], 'A', 'data-v')}${pn(`${esc(s.tk)} · ${lab} · 10 exercices`, 'FA', accountsTable(F, 10, { cagr: tab !== 'r', only: new Set(ONLY) }), { np: true, lect: faSrcNote(F) + (F.bank && tab === 'cf' ? ' Banques : pas de tableau de flux exploitable dans les sources (le passif est l’outil de production).' : '') })}`;
+    return; }
   const tools = qtr ? `<span class="tlab">Vue</span><button class="tb ${st.v === 'A' ? 'on' : ''}" data-v="A">Annuelle (10 exercices)</button><button class="tb ${st.v === 'Q' ? 'on' : ''}" data-v="Q">Trimestrielle (12 mois glissants)</button>` : '<span class="tlab">Vue annuelle' + (F.mkt === 'BRVM' ? ' · les sociétés BRVM publient des comptes annuels (et semestriels non repris par les sources)' : '') + '</span>';
   const kv = `<div class="kv2">${[['Exercice de référence', F.fy || (F.asof_q ? fd(F.asof_q) : '—')], ['Croissance du CA', pc(F.rev_g, 1)], ['Croissance du résultat', pc(F.ni_g, 1)], ['Croissance du BPA', pc(F.eps_g, 1)], ['Croissance du FCF', pc(F.fcf_g, 1)],
     ['TCAM CA 3 / 5 / 10 ans', `${P1(F.rev_cagr3)} · ${P1(F.rev_cagr5)} · ${P1(F.rev_cagr10)}`], ['TCAM FCF 3 / 5 / 10 ans', `${P1(F.fcf_cagr3)} · ${P1(F.fcf_cagr5)} · ${P1(F.fcf_cagr10)}`], ['TCAM BPA 3 / 5 / 10 ans', `${P1(F.eps_cagr3)} · ${P1(F.eps_cagr5)} · ${P1(F.eps_cagr10)}`],

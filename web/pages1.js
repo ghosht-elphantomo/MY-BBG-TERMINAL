@@ -217,61 +217,6 @@ PAGES.GP = async (m, alive) => {
   }
 };
 
-/* ------------------------------------------------------------------ DES */
-PAGES.DES = async (m, alive) => {
-  const s = sec(ST.sec); const S = await series(ST.sec); if (!alive()) return;
-  const n = S.c.length, yrs = {}; for (let i = 1; i < n; i++) { const y = Math.floor(S.x[i] / 10000); (yrs[y] = yrs[y] || []).push(i); }
-  const yearRows = Object.entries(yrs).map(([y, ix]) => { const i0 = ix[0] - 1, i1 = ix[ix.length - 1]; let pk = S.c[i0], mdd = 0; const lr = [];
-    for (const i of ix) { pk = Math.max(pk, S.c[i]); mdd = Math.min(mdd, S.c[i] / pk - 1); lr.push(Math.log(S.c[i] / S.c[i - 1])); }
-    return { y: +y, ret: S.c[i1] / S.c[i0] - 1, mdd, vol: U.std(lr) * Math.sqrt(S.f === 'D' ? 252 : 12), best: Math.exp(Math.max(...lr)) - 1, worst: Math.exp(Math.min(...lr)) - 1, nobs: ix.length, last: S.c[i1] }; }).reverse();
-  const eps = []; { let pk = S.c[0], pi = 0, tr = 0, ti = 0, inDD = false;
-    for (let i = 1; i < n; i++) { if (S.c[i] >= pk) { if (inDD && 1 - tr / pk >= .05) eps.push({ p: pi, t: ti, r: i, depth: tr / pk - 1 }); pk = S.c[i]; pi = i; tr = pk; inDD = false; } else { inDD = true; if (S.c[i] < tr || !tr) { tr = S.c[i]; ti = i; } } }
-    if (inDD && 1 - tr / pk >= .05) eps.push({ p: pi, t: ti, r: null, depth: tr / pk - 1 }); }
-  const topDD = eps.sort((a, b) => a.depth - b.depth).slice(0, 10);
-  const unit = S.f === 'D' ? 'séances' : 'mois';
-  const perfPanel = pn('Performances annuelles', 'DES', `<div class="tw" style="max-height:420px"><table class="t"><thead><tr><th class="l">Année</th><th>Clôture</th><th>Perf.</th><th>Max DD</th><th>Vol.</th><th>Meilleure</th><th>Pire</th><th>Obs.</th></tr></thead><tbody>
-    ${yearRows.map(r => `<tr><td class="l am">${r.y}</td><td class="wh">${px(s, r.last)}</td><td>${pc(r.ret, 1)}</td><td>${pc(r.mdd, 1)}</td><td>${num(r.vol * 100, 1)}%</td><td>${pc(r.best, 1)}</td><td>${pc(r.worst, 1)}</td><td>${r.nobs}</td></tr>`).join('')}</tbody></table></div>`, { np: true });
-  const ddPanel = pn('Drawdowns majeurs (≥ 5 %)', 'DES', `<table class="t"><thead><tr><th class="l">Sommet</th><th class="l">Creux</th><th>Baisse</th><th>Durée baisse</th><th class="l">Retour au sommet</th><th>Durée totale</th></tr></thead><tbody>
-    ${topDD.map(e => `<tr><td class="l">${fd(S.x[e.p])}</td><td class="l">${fd(S.x[e.t])}</td><td>${pc(e.depth, 1)}</td><td>${e.t - e.p} ${unit}</td><td class="l">${e.r ? fd(S.x[e.r]) : '<span class="am">en cours</span>'}</td><td>${(e.r || n - 1) - e.p} ${unit}</td></tr>`).join('')}</tbody></table>`, { np: true, lect: 'Baisses du sommet au creux, classées par profondeur. La durée totale va du sommet au retour à ce niveau.' });
-  const retChart = pn('Rendement par année', 'DES', cvb('desYr', 190));
-  if (s.mkt === 'BRVM' && s.cls === 'Equity') {
-    const [F, DV, EV, FA_] = await Promise.all([getJSON('fundamentals.json'), getJSON('dividends.json'), getJSON('events.json'), faJSON(s.id).catch(() => null)]); if (!alive()) return;
-    const f = F[s.id] || { series: {} }, se = f.series || {}, years = [...new Set(Object.values(se).flatMap(o => Object.keys(o)))].sort();
-    const LBL = [['ca', 'Chiffre d’affaires / PNB (M)', 0], ['croissance_ca', 'Croissance CA %', 1], ['resultat_net', 'Résultat net (M)', 0], ['croissance_resultat_net', 'Croissance RN %', 1], ['bnpa', 'BNPA (XOF)', 2], ['dividende', 'Dividende net (XOF)', 2],
-      ['per', 'PER', 1], ['roe', 'ROE %', 1], ['roa', 'ROA %', 2], ['marge_nette', 'Marge nette %', 1], ['marge_exploitation', 'Marge d’exploitation %', 1], ['capitaux_propres', 'Capitaux propres (M)', 0], ['total_bilan', 'Total bilan (M)', 0],
-      ['depots_clientele', 'Dépôts clientèle (M)', 0], ['credits_clientele', 'Crédits clientèle (M)', 0], ['coefficient_d_exploitation', 'Coef. d’exploitation %', 1], ['cout_du_risque', 'Coût du risque (M)', 0], ['dette_nette', 'Dette nette (M)', 0], ['tresorerie', 'Trésorerie (M)', 0], ['ebitda', 'EBITDA (M)', 0]];
-    const lastY = years[years.length - 1], eq = se.capitaux_propres && se.capitaux_propres[lastY], bvps = eq && f.shares ? eq * 1e6 / f.shares : null;
-    const myDiv = DV.filter(x => x.t === s.id).sort((a, b) => (b.ex || 0) - (a.ex || 0) || (b.pay || '').localeCompare(a.pay || ''));
-    const pxAt = ds => { if (!ds) return null; const d = s2i(ds); let k = S.x.findIndex(x => x >= d); if (k < 0) k = n - 1; return S.c[k]; };
-    const ev = EV.filter(x => x.t === s.id);
-    m.innerHTML = `<div class="grid c2">
-      ${pn('Profil · ' + esc(s.short || s.n), 'DES', `<div class="grid c2b" style="gap:12px"><div class="kv2">
-          <span>Raison sociale</span><b>${esc(s.n)}</b><span>Ticker</span><b>${s.tk}</b><span>Secteur</span><b>${esc(s.grp)}${s.bank ? ' · banque' : ''}</b><span>Pays</span><b>${esc(Q.sum.cty[s.cty] || s.cty)}</b>
-          <span>Nombre de titres</span><b>${num(f.shares, 0)}</b><span>Flottant</span><b>${f.float != null ? num(f.float, 1) + '%' : '—'}</b><span>Capitalisation</span><b>${big(s.mcap)} XOF</b><span>Statut</span><b>${s.susp ? '<span class="dn">Cotation suspendue</span>' : 'Coté'}</b></div>
-        <div class="kv2"><span>Cours</span><b>${px(s, s.last)} XOF</b><span>BNPA ${f.ex || ''}</span><b>${num(s.bnpa, 2)}</b><span>PER</span><b>${num(s.per, 1)}</b><span>Actif net / titre</span><b>${num(bvps, 0)}</b><span>Cours / actif net</span><b>${bvps ? num(s.last / bvps, 2) : '—'}</b>
-          <span>Dernier dividende net</span><b>${num(s.dps, 2)}${s.dps_ex ? ' (ex. ' + s.dps_ex + ')' : ''}</b><span>Rendement</span><b>${s.yld ? num(s.yld * 100, 2) + '%' : '—'}</b><span>Payout</span><b>${s.dps && s.bnpa ? num(s.dps / s.bnpa * 100, 0) + '%' : '—'}</b><span>Paiement</span><b>${fds(s.dps_pay)}</b></div></div>`,
-        { lect: '<b>PER</b> = cours ÷ BNPA du dernier exercice publié. <b>Cours / actif net</b> = capitalisation ÷ capitaux propres. Fondamentaux : SikaFinance (via BRVMetrics), en millions de XOF.' })}
-      ${FA_ ? pn('Comptes · 10 exercices', 'FA', accountsTable(FA_, 10), { np: true, lect: faSrcNote(FA_) + ' Détail, graphiques et taux de croissance : <b>FA</b>.' }) : pn('Comptes · ' + years.length + ' exercices', 'FA', `<div class="tw"><table class="t"><thead><tr><th class="l">Rubrique</th>${years.map(y => `<th>${y}</th>`).join('')}</tr></thead><tbody>
-        ${LBL.filter(([k]) => se[k] && Object.keys(se[k]).length).map(([k, l, d]) => `<tr><td class="l am">${l}</td>${years.map(y => { const v = se[k][y]; return `<td class="${/croissance/.test(k) ? cls(v) : 'wh'}">${v == null ? '—' : num(v, d)}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`, { np: true })}
-    </div>
-    <div class="grid c4">${pn('Chiffre d’affaires (M XOF)', 'FA', cvb('fa1', 150))}${pn('Résultat net (M XOF)', 'FA', cvb('fa2', 150))}${pn('BNPA (XOF)', 'FA', cvb('fa3', 150))}${pn('Dividende net (XOF)', 'FA', cvb('fa4', 150))}</div>
-    <div class="grid c2">
-      ${pn('Historique des dividendes', 'DVD', `<div class="tw" style="max-height:330px"><table class="t"><thead><tr><th class="l">Exercice</th><th>Net / titre</th><th>Variation</th><th class="l">Annonce</th><th class="l">Détachement</th><th class="l">Paiement</th><th>Cours au détach.</th><th>Rdt au détach.</th></tr></thead><tbody>
-        ${myDiv.map((x, i) => { const p = pxAt(x.det || x.pay), prv = myDiv[i + 1]; return `<tr><td class="l am">${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}</td><td>${prv && prv.dps ? pc(x.dps / prv.dps - 1, 1) : '—'}</td><td class="l">${fds(x.ann)}</td><td class="l">${fds(x.det)}</td><td class="l">${fds(x.pay)}</td><td>${p ? num(p, 0) : '—'}</td><td>${p ? num(x.dps / p * 100, 2) + '%' : '—'}</td></tr>`; }).join('') || '<tr><td class="l dm" colspan="8">Aucun dividende recensé</td></tr>'}</tbody></table></div>`, { np: true })}
-      ${pn('Avis officiels · ' + ev.length, 'EVTS', `<div style="max-height:330px;overflow:auto">${ev.slice(0, 120).map(e => `<div class="ev" style="grid-template-columns:72px 1fr"><span class="d">${fds(e.d)}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join('') || '<div class="dm">Aucun avis.</div>'}</div>`)}
-    </div><div class="grid c2">${perfPanel}<div class="grid" style="align-content:start">${retChart}${ddPanel}</div></div>`;
-    const bc = (id, k, d) => { const o = se[k] || {}; const ys = Object.keys(o).sort(); if (!ys.length) { $(id).innerHTML = '<div class="empty">—</div>'; return; } barChart($(id), { labels: ys, values: ys.map(y => o[y]), fmt: v => num(v, d), labelsOnBars: true, pos: k === 'dividende' ? CL.amber : CL.up }); };
-    bc('fa1', 'ca', 0); bc('fa2', 'resultat_net', 0); bc('fa3', 'bnpa', 0); bc('fa4', 'dividende', 0);
-  } else {
-    const FAu = s.fa ? await faJSON(s.id).catch(() => null) : null; if (!alive()) return;
-    const accU = FAu ? pn('Comptes · 10 exercices', 'FA', accountsTable(FAu, 10), { np: true, lect: faSrcNote(FAu) + ' Détail, graphiques et taux de croissance : <b>FA</b>.' }) : '';
-    m.innerHTML = `<div class="grid c2">${pn('Profil · ' + esc(s.n), 'DES', `<div class="kv2"><span>Ticker</span><b>${s.tk}</b><span>Nom</span><b>${esc(s.n)}</b><span>Classe</span><b>${s.cls} · ${esc(s.grp || '')}</b><span>Devise / unité</span><b>${s.ccy}</b><span>Fréquence</span><b>${S.f === 'D' ? 'quotidienne' : 'mensuelle'}</b><span>Historique</span><b>${fd(S.x[0])} → ${fd(S.x[n - 1])}</b><span>Observations</span><b>${num(n, 0)}</b>
-        <span>Plus haut historique</span><b>${px(s, s.ath)}</b><span>Écart au plus haut</span><b>${pc(s.dd, 1)}</b>${s.beta != null ? `<span>Bêta vs ${s.bench} (hebdo, 2 ans)</span><b>${num(s.beta, 2)}</b>` : ''}</div>`)}
-      <div class="grid" style="align-content:start">${retChart}${ddPanel}</div></div>${accU}${perfPanel}`;
-  }
-  const yr = yearRows.slice().reverse(); barChart($('desYr'), { labels: yr.map(r => String(r.y).slice(2)), values: yr.map(r => r.ret * 100), fmt: v => num(v, 0) + '%', extra: i => 'max DD ' + num(yr[i].mdd * 100, 1) + '%' });
-};
-
 /* ------------------------------------------------------------------ HELP */
 PAGES.HELP = async m => {
   const rows = [['MON', 'Marchés : tous les titres, signal SMA200 de QQQ, séance BRVM, carte des capitalisations', 'MON'], ['BRVM', '48 actions triables (PER, rendement, bêta, liquidité…), indices, largeur du marché, secteurs', 'BRVM'],

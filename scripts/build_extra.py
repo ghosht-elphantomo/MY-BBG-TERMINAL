@@ -606,6 +606,36 @@ def weekly_px(b, since):
     return k, [out[x] for x in k]
 
 
+_SPLIT_B = [1.5, 2, 3, 4, 5, 6, 7, 8, 10, 15, 20, 25, 30, 40, 50]
+SPLIT_C = sorted({1.0} | set(_SPLIT_B) | {a * b for a in _SPLIT_B for b in _SPLIT_B if a * b <= 400} | {1 / x for x in _SPLIT_B})
+# sauts d'actions dus à des fusions (pas des divisions) : séries laissées telles quelles
+SPLIT_EXCLUDE = {"KDP", "TMUS", "LIN", "FANG"}
+
+
+def split_adjust(sh, q=None, first=None):
+    """Actions diluées ramenées à la base actuelle. Les dépôts XBRL mélangent des trimestres retraités après une division d'actions
+    et d'autres non : chaque période est comparée à la suivante déjà ajustée ; un écart proche d'un rapport de division
+    (2:1, 4:1, 10:1, 4×10, regroupement 1:2…) est corrigé, les autres écarts (émissions, rachats) sont conservés.
+    Les trimestres antérieurs à la cotation (introductions, SPAC) ne sont pas ajustés."""
+    out, nxt, ev = list(sh), None, []
+    for j in range(len(sh) - 1, -1, -1):
+        v = sh[j]
+        if not v:
+            continue
+        c = 1.0
+        recent = first and first > int((dt.date.today() - dt.timedelta(days=int(365.25 * 9.5))).strftime("%Y%m%d"))
+        listed = not (recent and q and q[j] < first + 200)  # historique de cours tronqué ≠ introduction en bourse
+        if nxt and listed:
+            r = nxt / v
+            best = min(SPLIT_C, key=lambda k: abs(math.log(r / k)))
+            if best != 1.0 and abs(math.log(r / best)) < math.log(1.08) and abs(math.log(r)) > math.log(1.35):
+                c = best
+                ev.append((j, round(c, 3)))
+        out[j] = v * c
+        nxt = out[j]
+    return out, ev
+
+
 def us_company(co, b, s, fx):
     """Ratios d'une société US à partir des faits XBRL (TTM trimestriels + exercices annuels)."""
     q = [int(x.replace("-", "")) for x in co["q"]]
@@ -615,6 +645,8 @@ def us_company(co, b, s, fx):
         return None
     g = lambda blk, k, i: (blk.get(k) or [None] * n)[i] if 0 <= i < n else None  # noqa: E731
     shd = co.get("shd") or [None] * n
+    if co.get("t") not in SPLIT_EXCLUDE and (s or {}).get("id") not in SPLIT_EXCLUDE:
+        shd, _ev = split_adjust(shd, q, (b or {}).get("d", [None])[0] if b else None)
 
     def gp(i):
         v = g(T, "gp", i)
@@ -773,6 +805,22 @@ def us_company(co, b, s, fx):
             eve.append(div0(e, mi.get("ebitda")) if (mi.get("ebitda") or 0) > 0 else None)
             fy.append(div0(mi.get("fcf"), mc))
         r["mh"] = {"d": wd, "pe": pe, "ps": ps, "pb": pb, "ev_ebitda": eve, "fcfy": fy}
+    # exercices seulement : certains dépôts étiquettent des cumuls trimestriels comme annuels (AMZN, CDNS…) ;
+    # on garde les dates du mois de clôture (celui où le CA annuel est publié)
+    if Y.get("y"):
+        from collections import Counter
+        mo = Counter(str(y)[4:6] for y, v in zip(Y["y"], Y.get("rev") or []) if v is not None) or Counter(str(y)[4:6] for y in Y["y"])
+        fm = mo.most_common(1)[0][0]
+        keep = [i for i, y in enumerate(Y["y"]) if str(y)[4:6] == fm or abs(int(str(y)[4:6]) - int(fm)) == 1 and str(y)[6:8] in ("01", "02", "03", "04", "05", "06") and False]
+        seen, keep2 = set(), []
+        for i in reversed(keep):
+            yy = str(Y["y"][i])[:4]
+            if yy not in seen:
+                seen.add(yy)
+                keep2.append(i)
+        keep2.sort()
+        if len(keep2) < len(Y["y"]):
+            Y = {k: ([v[i] for i in keep2] if isinstance(v, list) and len(v) == len(Y["y"]) else v) for k, v in Y.items()}
     r["H"], r["Y"] = H, Y
     return r
 
