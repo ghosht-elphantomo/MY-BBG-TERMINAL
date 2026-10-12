@@ -68,6 +68,8 @@ jobs:
           mkdir -p /tmp/site/data
           if git fetch -q --depth 1 origin raw; then git rev-parse FETCH_HEAD > /tmp/raw_sha; git archive FETCH_HEAD | tar -x -C /tmp/raw || true; fi
           rm -f /tmp/raw/.dirty
+          # bulletins officiels de la cote déjà lus (branche boc, écrite par le workflow « Bulletins officiels BRVM »)
+          mkdir -p /tmp/boc && if git fetch -q --depth 1 origin boc; then git archive FETCH_HEAD | tar -x -C /tmp/boc || true; fi
 
       - name: Cache des sources (miroirs CSV)
         uses: actions/cache@v4
@@ -124,7 +126,7 @@ jobs:
           git clone -q --depth 1 https://github.com/harzat/brvm-data-public.git /tmp/brvmsrc
           LIVE=""; if [ "${{ steps.mode.outputs.mode }}" != "eod" ] && [ -f /tmp/site/data/summary.json ]; then LIVE="--live"; fi
           python3 scripts/build_terminal.py --brvm-src /tmp/brvmsrc --out /tmp/site/data --session /tmp/state/brvm.json \
-            --extra /tmp/raw --fcf seed/fcf_brvm.json --quotes /tmp/site/data/quotes.json --cache /tmp/bcache $LIVE
+            --extra /tmp/raw --fcf seed/fcf_brvm.json --quotes /tmp/site/data/quotes.json --cache /tmp/bcache --boc /tmp/boc/boc_px $LIVE
 
       - name: "Publier les données brutes (branche raw, soir ou comptes SEC rafraîchis)"
         env:

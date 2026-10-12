@@ -9,7 +9,7 @@ Sources
 
 Usage: build_terminal.py --brvm-src DIR --out DIR [--session brvm.json] [--cache DIR]
 """
-import argparse, csv, datetime as dt, io, json, math, os, re, sys, time, urllib.request
+import argparse, collections, csv, datetime as dt, io, json, math, os, re, sys, time, urllib.request
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36"
 YN = "https://raw.githubusercontent.com/yennanliu/finance_data/main/data/prices/{}.csv"
@@ -209,6 +209,7 @@ def main():
     ap.add_argument("--fcf", default=None, help="history/fcf.json : flux de trésorerie BRVM lus dans les états financiers")
     ap.add_argument("--quotes", default=None, help="quotes.json du relevé (cours du jour appliqués à toutes les séries)")
     ap.add_argument("--live", action="store_true", help="passage de séance : séries existantes non réécrites, tous les calculs refaits")
+    ap.add_argument("--boc", default=None, help="dossier boc_px (branche boc) : tableaux des actions lus dans les bulletins officiels de la cote")
     a = ap.parse_args()
     QUOTES = {}
     if a.quotes and os.path.exists(a.quotes):
@@ -332,6 +333,43 @@ def main():
                 if rec.get("cfo") is not None:
                     pdf_cf.setdefault(t, {})[y] = {"cfo": rec["cfo"], "capex": rec.get("capex", 0), "fcf": rec.get("fcf", rec["cfo"] - (rec.get("capex") or 0)), "src": rec.get("src")}
     divs = json.load(open(os.path.join(src, "dividendes.json"), encoding="utf8"))["all"]
+    # bulletins officiels de la cote (BRVM) : contrôle et secours des cours et des dividendes
+    BOC = {}
+    if a.boc and os.path.isdir(a.boc):
+        cols = ("prev", "o", "c", "var", "vol", "val", "ref", "ytd", "div", "div_d", "yld", "per")
+        for fn in sorted(os.listdir(a.boc)):
+            if not re.match(r"^\d{4}\.json$", fn):
+                continue
+            for k, rows_ in json.load(open(os.path.join(a.boc, fn), encoding="utf8")).items():
+                for sym, v in rows_.items():
+                    BOC.setdefault(sym, {})[int(k)] = dict(zip(cols, v))
+        log("bulletins officiels :", len(BOC), "titres,", sum(len(v) for v in BOC.values()), "lignes")
+    boc_chk = {"n": 0, "diff": 0, "added": 0, "div_added": 0, "by": {}}
+    if BOC:  # dividendes payés lus dans les bulletins, ajoutés quand la base n'a rien à ±10 jours
+        have_pay = collections.defaultdict(list)
+        for x in divs:
+            for kk in ("date_paiement", "date_detachement"):
+                if x.get(kk) and x.get("ticker"):
+                    try:
+                        have_pay[x["ticker"]].append(dt.date.fromisoformat(x[kk][:10]))
+                    except ValueError:
+                        pass
+        for sym, days in BOC.items():
+            seen = set()
+            for k in sorted(days):
+                r = days[k]
+                if not r.get("div") or not r.get("div_d") or (r["div_d"], r["div"]) in seen:
+                    continue
+                seen.add((r["div_d"], r["div"]))
+                try:
+                    pd_ = dt.date.fromisoformat(r["div_d"])
+                except ValueError:
+                    continue
+                if pd_.year < 2008 or any(abs((pd_ - h).days) <= 10 for h in have_pay[sym]):
+                    continue
+                divs.append({"ticker": sym, "dividende": r["div"], "date_paiement": r["div_d"], "exercice": pd_.year - 1, "source": "BOC"})
+                have_pay[sym].append(pd_)
+                boc_chk["div_added"] += 1
     status = json.load(open(os.path.join(src, "trading_status.json"), encoding="utf8"))
     session = json.load(open(a.session, encoding="utf8")) if a.session and os.path.exists(a.session) else None
     sess_rows = {r["t"]: r for r in (session or {}).get("rows", [])}
@@ -351,6 +389,25 @@ def main():
             log("missing csv", t)
             continue
         rows = load_brvm_csv(p)
+        if BOC.get(t) and rows:  # contrôle des clôtures, puis séances manquantes après la fin de la base complétées par les bulletins
+            B_ = BOC[t]
+            ck = [(r[4], B_[r[0]]["c"]) for r in rows if r[0] in B_ and B_[r[0]].get("c")]
+            nd_ = sum(1 for x, y in ck if abs(x / y - 1) > .005)
+            boc_chk["n"] += len(ck)
+            boc_chk["diff"] += nd_
+            if ck:
+                boc_chk["by"][t] = [len(ck), nd_]
+            last_d = rows[-1][0]
+            for k in sorted(B_):
+                if k <= last_d:
+                    continue
+                r = B_[k]
+                c_ = r.get("c") or r.get("ref")
+                if not c_:
+                    continue
+                o_ = r.get("o") or c_
+                rows.append((k, o_, max(o_, c_), min(o_, c_), c_, int(r.get("vol") or 0), int(r.get("val") or 0)))
+                boc_chk["added"] += 1
         if t in sess_rows and sess_d and rows and sess_d >= rows[-1][0]:
             s = sess_rows[t]
             bar = (sess_d, s.get("o") or s["c"], max(s["c"], s.get("o") or s["c"]), min(s["c"], s.get("o") or s["c"]), s["c"], s.get("vol", 0), int((s.get("vol") or 0) * s["c"]))
@@ -545,7 +602,7 @@ def main():
     summ = {"asof": asof, "built": int(time.time()), "secs": secs, "sectors": sorted({s["grp"] for s in secs if s["mkt"] == "BRVM" and s["cls"] == "Equity"}),
             "session": {"asof": session.get("asof"), "label": session.get("session"), "capA": session.get("capA")} if session else None, "cty": CTY_NAME}
     for name, obj in (("summary", summ), ("weekly", wm), ("breadth", breadth), ("fundamentals", fmeta), ("dividends", dmeta), ("events", emeta),
-                      ("events_recent", emeta[:80])):
+                      ("events_recent", emeta[:80]), ("boc_check", {**boc_chk, "d": dt.date.today().isoformat()} if BOC else {"n": 0})):
         with open(os.path.join(out, name + ".json"), "w", encoding="utf8") as fh:
             json.dump(obj, fh, separators=(",", ":"), ensure_ascii=False)
     tot = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(out) for f in fs)
