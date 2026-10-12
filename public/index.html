@@ -35,18 +35,19 @@ a{color:var(--cyan)}
 
 /* ---------- ligne de commande ---------- */
 #app{display:flex;flex-direction:column;min-height:100%}
-.top{display:flex;align-items:stretch;background:#000;height:28px;position:sticky;top:env(safe-area-inset-top,0px);z-index:30;border-bottom:1px solid #06305c}
-.clm{width:10px;background:linear-gradient(135deg,#0d6fa0 0 50%,transparent 50%);flex:none}
-.cmd{flex:1;display:flex;align-items:center;position:relative;min-width:0;background:#000;border:1px solid #0a5cb0;box-shadow:inset 0 0 0 1px #032a52;margin:2px 4px 2px 2px}
-.cmd:focus-within{border-color:#1f86ff;box-shadow:inset 0 0 0 1px #0a4a8f,0 0 6px rgba(31,134,255,.35)}
+.top{display:flex;align-items:stretch;background:#000;height:28px;position:sticky;top:env(safe-area-inset-top,0px);z-index:30;border-bottom:1px solid #2a2a2a}
+.clm{width:10px;background:linear-gradient(135deg,#9a9a9a 0 50%,transparent 50%);flex:none}
+.cmd{flex:1;display:flex;align-items:center;position:relative;min-width:0;background:var(--org);border:0;margin:2px 4px 2px 2px}
+.cmd:focus-within{background:#ffb042}
 .cmd label{display:none}
-.cmd input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--white);font:400 14px var(--mono);text-transform:uppercase;letter-spacing:.02em;height:100%;padding:0 4px 0 2px;caret-color:#10bbff}
-.cmd input::placeholder{color:#3f7fc0;text-transform:none;font-size:12px}
-.cmd:before{content:'';width:10px;height:17px;margin-left:3px;flex:none;background:linear-gradient(90deg,#0f6fe0 0 3px,transparent 3px 4px,#1a7fff 4px);clip-path:polygon(0 0,100% 0,100% 100%,0 100%,0 70%,3px 50%,0 30%)}
+.cmd input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:#000;font:400 14px var(--mono);text-transform:uppercase;letter-spacing:.02em;height:100%;padding:0 4px 0 4px;caret-color:#000}
+.cmd input::placeholder{color:#6b3e00;text-transform:none;font-size:12px}
+.cmd:before{content:'';width:8px;height:16px;margin-left:3px;flex:none;background:#000;animation:blink 1.06s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
 .cmd:focus-within:before{display:none}
 .go{background:#3aba5d;color:#000;border:0;font:700 11.5px var(--mono);padding:0 12px;margin:2px;letter-spacing:.04em}
 .go:hover{background:#4fd673}
-.ac{position:absolute;left:-1px;right:-1px;top:100%;background:#000;border:1px solid #13324d;border-top:0;max-height:min(70vh,560px);overflow:auto;z-index:40;box-shadow:0 8px 20px rgba(0,0,0,.6)}
+.ac{position:absolute;left:0;right:0;top:100%;background:#000;border:1px solid #444;border-top:0;max-height:min(70vh,560px);overflow:auto;z-index:40;box-shadow:0 8px 20px rgba(0,0,0,.6)}
 .ac div{display:grid;grid-template-columns:150px 1fr 104px;gap:10px;padding:3px 8px;cursor:pointer;font-size:12.5px;align-items:baseline}
 .ac div b{color:var(--white);font-weight:700}
 .ac div span{color:var(--amber);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -365,7 +366,7 @@ i.dot{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:
     <i class="clm" aria-hidden="true"></i>
     <form class="cmd" id="cmdForm" autocomplete="off">
       <label for="cmd">Commande</label>
-      <input id="cmd" spellcheck="false" placeholder="Ticker + fonction placeholder="Ticker (SNTS, AAPL…) puis espace : ses fonctions · ou une fonction : FG, TOP, IMAP…"lt;GOplaceholder="Ticker (SNTS, AAPL…) puis espace : ses fonctions · ou une fonction : FG, TOP, IMAP…"gt; · ex. SNTS DES, AAPL GP, TOP" aria-label="Ligne de commande">
+      <input id="cmd" spellcheck="false" autocapitalize="characters" placeholder="Ticker + fonction &lt;GO&gt; · ex. SNTS DES, AAPL GP, TOP" aria-label="Ligne de commande">
       <button class="go" type="submit" title="Exécuter (Entrée)">GO</button>
       <div class="ac" id="ac" hidden></div>
     </form>
