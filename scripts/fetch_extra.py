@@ -1156,9 +1156,8 @@ def run_bochist(out):
     ip = os.path.join(d_dir, "_index.json")
     idx = json.load(open(ip, encoding="utf8")) if os.path.exists(ip) else {"done": [], "miss": []}
     done, miss, bad = set(idx["done"]), set(idx["miss"]), set(idx.get("bad", []))
-    if idx.get("v") != BOC_V:  # lecteur amélioré : les bulletins illisibles sont relus
-        miss -= bad
-        bad = set()
+    if idx.get("v") != BOC_V:  # lecteur amélioré : tous les jours sans résultat sont retentés
+        miss, bad = set(), set()
     years = {}
 
     def year(y):
