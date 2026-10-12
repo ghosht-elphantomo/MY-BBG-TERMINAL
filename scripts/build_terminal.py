@@ -462,12 +462,13 @@ def main():
     macro("US10Y", "USGG10YR Index", "Taux US 10 ans (%)", "Taux", "bond-yields-us-10y/main/data/monthly.csv", "Date", "Rate", "M", cls="Rate", ccy="%")
     # prix au comptant publiés par l'EIA (J-1) : Brent daté (physique), WTI Cushing, gaz Henry Hub. Les contrats à terme
     # (CO1, CL1, NG1 : ceux d'Investing, TradingView, Bloomberg) sont ajoutés par build_extra.ingest sous BRENT, WTI, NATGAS.
+    import build_extra
     fut_dir = os.path.join(a.extra, "futures") if a.extra else None
     for sid, sid_f, tk, name, path, nd_ in (("BRENTS", "BRENT", "EUCRBRDT Index", "Brent daté, prix au comptant (EIA, USD/baril)", "oil-prices/main/data/brent-daily.csv", 2),
                                             ("WTIS", "WTI", "USCRWTIC Index", "WTI Cushing, prix au comptant (EIA, USD/baril)", "oil-prices/main/data/wti-daily.csv", 2),
                                             ("NGS", "NATGAS", "NGUSHHUB Index", "Gaz Henry Hub, prix au comptant (EIA, USD/MMBtu)", "natural-gas/main/data/daily.csv", 3)):
         sp = macro(sid, tk, name, "Énergie", path, "Date", "Price", "D", nd=nd_)
-        if sp and not (fut_dir and os.path.exists(os.path.join(fut_dir, sid_f + ".json"))):
+        if sp and not (fut_dir and build_extra.futures_ok(os.path.join(fut_dir, sid_f + ".json"))):
             QUOTES.pop(sid_f, None)  # cours du contrat à terme : jamais greffé sur la série au comptant (ni ici, ni dans la page)
             if a.quotes and os.path.exists(a.quotes):
                 qj = json.load(open(a.quotes, encoding="utf8"))

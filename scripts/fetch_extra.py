@@ -2155,10 +2155,15 @@ def run_fut(out):
     for sid, sym in FUT_Y:
         p = os.path.join(out, "futures", sid + ".json")
         old = json.load(open(p, encoding="utf8")) if os.path.exists(p) else None
+        if old and len(old.get("d", [])) > 20:  # relevé précédent mensuel (range=max) : écarté
+            gaps = sorted((i2d(b_) - i2d(a_)).days for a_, b_ in zip(old["d"][-40:], old["d"][-39:]))
+            if gaps[len(gaps) // 2] > 5:
+                old = None
+        p1 = int(time.time()) - 2 * 366 * 86400 if old else 946684800  # 2000-01-01 : quotidien garanti avec period1/period2
         j, err = None, None
         for host in ("query1", "query2"):
             try:
-                j = json.loads(get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}?range={'2y' if old else 'max'}&interval=1d",
+                j = json.loads(get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}?period1={p1}&period2={int(time.time())}&interval=1d",
                                    tries=2, timeout=40, headers={"Referer": "https://finance.yahoo.com/", "Origin": "https://finance.yahoo.com"}))
                 break
             except Exception as e:  # noqa: BLE001
@@ -2180,6 +2185,9 @@ def run_fut(out):
                 o, h, lo, v = qd["open"][i] or c, qd["high"][i] or c, qd["low"][i] or c, qd["volume"][i] or 0
                 rows[d] = (round(o, 4), round(max(h, c, o), 4), round(min(lo, c, o), 4), round(c, 4), int(v))
             ks = sorted(rows)
+            gaps = sorted((i2d(b_) - i2d(a_)).days for a_, b_ in zip(ks[-60:], ks[-59:]))
+            if len(ks) < 250 or gaps[len(gaps) // 2] > 5:
+                raise ValueError(f"historique non quotidien ({len(ks)} points)")
             save(p, {"sym": sym, "src": "Yahoo Finance (contrat 1er mois en continu)", "d": ks, "o": [rows[k][0] for k in ks], "h": [rows[k][1] for k in ks],
                      "l": [rows[k][2] for k in ks], "c": [rows[k][3] for k in ks], "v": [rows[k][4] for k in ks]})
             note("fut")

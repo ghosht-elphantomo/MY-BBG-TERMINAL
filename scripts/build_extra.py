@@ -58,6 +58,16 @@ def phi(z):
 
 
 # ------------------------------------------------------------------ titres
+def futures_ok(path):
+    """Historique de contrat à terme exploitable : au moins 250 séances et pas de points mensuels."""
+    b = jload(path) if path and os.path.exists(path) else None
+    if not b or len(b.get("d", [])) < 250:
+        return None
+    d = b["d"][-60:]
+    gaps = sorted((dt.date(y // 10000, y // 100 % 100, y % 100) - dt.date(x // 10000, x // 100 % 100, x % 100)).days for x, y in zip(d, d[1:]))
+    return b if gaps[len(gaps) // 2] <= 5 else None
+
+
 def ingest(extra, add, have, log):
     """Ajoute ETF, indices, Nasdaq-100, CBOE et crypto. Renvoie les métadonnées utiles aux calculs."""
     info = {"ndx": set(), "screener": {}, "ndx_mcap": {}}
@@ -130,8 +140,8 @@ def ingest(extra, add, have, log):
                                 ("WTI", "CL1 Comdty", "Pétrole WTI, contrat à terme NYMEX 1er mois (USD/baril)", "Énergie", 2),
                                 ("NATGAS", "NG1 Comdty", "Gaz naturel Henry Hub, contrat à terme NYMEX 1er mois (USD/MMBtu)", "Énergie", 3),
                                 ("GOLD", "GC1 Comdty", "Or, contrat à terme COMEX 1er mois (USD/once)", "Métaux", 2)):
-        b = body("futures", sid)
-        if not b or len(b["d"]) < 250:
+        b = futures_ok(os.path.join(extra, "futures", sid + ".json"))
+        if not b:
             continue
         if sid in have:
             have.discard(sid)
