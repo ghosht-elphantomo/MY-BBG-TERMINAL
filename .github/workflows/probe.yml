@@ -4,7 +4,7 @@ name: Sonde des sources
 on:
   push:
     branches: [main]
-    paths: ["probe.txt"]
+    paths: ["probe.txt", "probe_urls.txt"]
   workflow_dispatch: {}
 
 permissions:
@@ -32,9 +32,24 @@ jobs:
                    https://news.google.com/rss/search?q=BRVM https://www.financialafrik.com/feed/; do
             echo "$(curl -s -o /dev/null -m 25 -A "$UA" -w '%{http_code} %{time_total}s %{size_download}o' "$u") $u" | tee -a /tmp/out/net.txt
           done
-      - name: Collecte partielle
+      - name: Pages brutes (probe_urls.txt)
         continue-on-error: true
-        run: timeout 1200 python3 scripts/fetch_extra.py --out /tmp/raw --only "$(head -1 probe.txt)" --site /tmp/raw
+        run: |
+          mkdir -p /tmp/out/urls
+          BUA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+          while IFS='|' read -r name url; do
+            [ -z "$name" ] && continue
+            EXTRA=(); case "$url" in *api.nasdaq.com*) EXTRA=(-H 'Origin: https://www.nasdaq.com' -H 'Referer: https://www.nasdaq.com/' -H 'Accept: application/json, text/plain, */*' --compressed);; esac
+            code=$(curl -sL -m 40 -A "$BUA" "${EXTRA[@]}" -H 'Accept-Language: fr-FR,fr;q=0.9,en;q=0.8' -o "/tmp/out/urls/$name" -w '%{http_code} %{size_download}' "$url")
+            echo "$code $name $url" | tee -a /tmp/out/urls/_status.txt
+            head -c 3000000 "/tmp/out/urls/$name" > /tmp/x && mv /tmp/x "/tmp/out/urls/$name"
+          done < probe_urls.txt
+      - name: Collecte partielle
+        if: ${{ hashFiles('probe.txt') != '' }}
+        continue-on-error: true
+        run: |
+          [ "$(head -1 probe.txt)" = "none" ] && exit 0
+          timeout 1200 python3 scripts/fetch_extra.py --out /tmp/raw --only "$(head -1 probe.txt)" --site /tmp/raw
       - name: Publier les rapports (branche probe)
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}

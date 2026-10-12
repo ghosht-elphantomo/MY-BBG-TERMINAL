@@ -25,8 +25,9 @@ on:
 permissions:
   contents: write
 
+# relevés de 15 min et base complète dans deux files séparées : un relevé en attente ne peut pas annuler la base du soir
 concurrency:
-  group: terminal
+  group: ${{ (github.event_name == 'schedule' && github.event.schedule != '35 22 * * 1-5') && 'terminal-live' || 'terminal-full' }}
   cancel-in-progress: false
 
 jobs:
@@ -55,11 +56,12 @@ jobs:
           mkdir -p /tmp/site /tmp/state /tmp/raw
           cp seed/brvm.json /tmp/state/brvm.json
           if git fetch -q --depth 1 origin site; then
+            git rev-parse FETCH_HEAD > /tmp/site_sha
             git archive FETCH_HEAD | tar -x -C /tmp/site || true
             if [ -f /tmp/site/data/session.json ]; then cp /tmp/site/data/session.json /tmp/state/brvm.json; fi
           fi
           mkdir -p /tmp/site/data
-          if git fetch -q --depth 1 origin raw; then git archive FETCH_HEAD | tar -x -C /tmp/raw || true; fi
+          if git fetch -q --depth 1 origin raw; then git rev-parse FETCH_HEAD > /tmp/raw_sha; git archive FETCH_HEAD | tar -x -C /tmp/raw || true; fi
           rm -f /tmp/raw/.dirty
 
       - name: Cache des sources (miroirs CSV)
@@ -115,17 +117,27 @@ jobs:
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd /tmp/raw
-          if [ "${{ steps.mode.outputs.mode }}" != "eod" ] && [ ! -f .dirty ]; then echo "Rien à publier"; exit 0; fi
-          rm -f .dirty
-          printf '{"git":{"deploymentEnabled":false}}\n' > vercel.json
-          rm -rf .git
+          MODE="${{ steps.mode.outputs.mode }}"
+          if [ "$MODE" != "eod" ] && [ ! -f /tmp/raw/.dirty ]; then echo "Rien à publier"; exit 0; fi
+          rm -f /tmp/raw/.dirty /tmp/raw/report_news-watch.json
+          printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/raw/vercel.json
+          URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          export GIT_DIR=/tmp/raw.git GIT_WORK_TREE=/tmp/raw
+          rm -rf "$GIT_DIR" /tmp/raw/.git
           git init -q -b raw
           git config user.name "fqt-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -qm "Brut $(date -u +'%d/%m/%Y %H:%M') UTC" || exit 0
-          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" raw
+          if [ "$MODE" != "eod" ]; then
+            # relevé : au-dessus de la version restaurée ; si une base complète a été publiée entre-temps, on n'y touche pas
+            git fetch -q --depth 1 "$URL" raw || exit 0
+            if [ "$(git rev-parse FETCH_HEAD)" != "$(cat /tmp/raw_sha 2>/dev/null)" ]; then echo "Branche raw republiée entre-temps : publication reportée"; exit 0; fi
+            git reset -q FETCH_HEAD
+            git add -A && git commit -qm "Brut (relevé) $(date -u +'%d/%m/%Y %H:%M') UTC" || exit 0
+            git push -q "$URL" HEAD:raw || echo "Branche raw modifiée entre-temps : publication reportée"
+          else
+            git add -A && git commit -qm "Brut $(date -u +'%d/%m/%Y %H:%M') UTC" || exit 0
+            git push -q -f "$URL" HEAD:raw
+          fi
 
       - name: Publier sur la branche site (déployée par Vercel)
         env:
@@ -143,10 +155,15 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # relevé de 15 min : nouveau commit au-dessus du précédent (seuls les fichiers modifiés partent) ; soir : historique remis à zéro
           ONTOP=0
-          if [ "$MODE" != "eod" ] && git fetch -q --depth 1 "$URL" site; then git reset -q FETCH_HEAD && ONTOP=1; fi
+          if [ "$MODE" != "eod" ] && git fetch -q --depth 1 "$URL" site; then
+            # une base complète publiée pendant ce relevé l'emporte : le relevé suivant repartira d'elle
+            if [ "$(git rev-parse FETCH_HEAD)" != "$(cat /tmp/site_sha 2>/dev/null)" ]; then echo "Branche site republiée entre-temps : relevé ignoré"; exit 0; fi
+            git reset -q FETCH_HEAD && ONTOP=1
+          fi
           git add -A
           git commit -qm "Données $(date -u +'%d/%m/%Y %H:%M') UTC" || { echo "Rien de nouveau"; exit 0; }
-          if [ "$ONTOP" = 1 ]; then git push -q "$URL" HEAD:site || git push -q -f "$URL" HEAD:site; else git push -q -f "$URL" HEAD:site; fi
+          if [ "$ONTOP" = 1 ]; then git push -q "$URL" HEAD:site || echo "Branche site modifiée entre-temps (base du soir) : ce relevé est ignoré, le suivant repartira de la nouvelle base"
+          else git push -q -f "$URL" HEAD:site; fi
 
       - name: Archiver la séance BRVM sur main (EOD)
         if: steps.mode.outputs.mode == 'eod'
