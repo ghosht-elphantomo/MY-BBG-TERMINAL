@@ -596,3 +596,4 @@ table.t.eqt td{line-height:24px}
 .alb{background:#870f1e;color:#fff;border:0;font:inherit;font-size:12px;padding:0 6px;margin-right:6px;cursor:pointer;height:18px}
 .t.wrp td.l:last-child{white-space:normal}
 .spb{background:#3a2a00;border:1px solid #ffa028;color:#ffd27a;padding:5px 8px;margin:0 0 4px;font-size:12.5px}.spb .tb{margin-left:8px}
+.t.cft td.l{max-width:240px;overflow:hidden;text-overflow:ellipsis}.cfl{color:var(--link)}
