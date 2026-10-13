@@ -432,7 +432,12 @@ async function initFeed() {
     if (!cur || (d.ts || 0) > (cur.ts || 0)) { Q.json['news.json'] = Promise.resolve(d); renderNews(); if (['TOP', 'CN'].includes(ST.fn)) render(); } }, () => { }); } catch (e) { }
 }
 async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.base + 'live.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null), fetch(Q.base + 'quotes.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)]);
-  if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews(); if (['MON', 'BRVM', 'IMAP', 'US', 'TOP'].includes(ST.fn) && !(ST.fn === 'TOP' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
+  /* nouveau relevé publié (toutes les 15 min) : toutes les données en cache sont relues, la fiche de chaque titre comprise */
+  if (!Q.gen && Q.live) Q.gen = Q.live.ts; const fresh = !!(l && l.ts && Q.gen && l.ts !== Q.gen);
+  if (fresh) { Q.gen = l.ts; Q.json = {}; try { const S = await fetch(Q.base + 'summary.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null); if (S && S.secs) { Q.sum = S; Q.json['summary.json'] = Promise.resolve(S); for (const s of S.secs) Q.by[s.id] = s; } } catch (e) { } }
+  if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews();
+  const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.id !== 'cmd';
+  if (!typing && (fresh || ['MON', 'BRVM', 'IMAP', 'US', 'TOP', 'BRIEF', 'WEIF'].includes(ST.fn)) && !(ST.fn === 'TOP' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
 let SYNC_RUN = null;
 function bindSync() { const b = $('syncBtn'); if (!b || !SYNC_RUN) return; b.hidden = false; b.onclick = () => SYNC_RUN(b); }
 async function initSync() {
