@@ -21,3 +21,4 @@ demander « reviens au point de restauration du … » ; le code de ce point est
 | 13/10/2026 19 h 05 | Avant le regroupement de BTMM, WIRP et WB dans RATES (onglets : marché monétaire, Fed, BONDS) | `e8b640d15f5b49ecd349d7bf9b130e84d7989d8c` | `a3023a41c82da4316dcf4b2b3b4a4f6bc1df15eb` |
 | 13/10/2026 22 h 25 | Avant : avis d'un même document réunis en une ligne, MONITOR sans colonnes cachées, ECO, fichier eco_lite, alias d'actualités | `6001f989dafe53d335df3a8e4ec351e585f7161d` | `b85bbf3cfdff19fe446bbdf2c6df7ec79b0d05ff` |
 | 13/10/2026 22 h 55 | Avant : capitalisations US unifiées (fractionnements, ADR), montants officiels BRVM, mises en page FA/RV | `0ff9e279d5788e2e595e56005a0a435def131710` | `efeeb31268e3bc8a1da51d956ee47deccf48f1e3` |
+| 13/10/2026 22 h 45 | Avant le déplacement des objectifs des analystes US de EVTS vers EA (doublon) | `a4add8b93210866cf80c9549d20f4b6a2ee99768` | `efeeb31268e3bc8a1da51d956ee47deccf48f1e3` |

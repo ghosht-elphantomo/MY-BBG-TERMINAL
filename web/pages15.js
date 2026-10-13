@@ -156,7 +156,8 @@ PAGES.TECH = async (m, alive) => {
 PAGES.EA = async (m, alive) => {
   setTitle('Earnings Analysis'); const E = await getJSON('ee.json').catch(() => null); if (!alive()) return;
   if (!E) { m.innerHTML = pn('Résultats', 'EA', '<div class="empty">Estimations en attente du relevé du soir.</div>'); return; }
-  const tab = tabState('EA', 'u'); setTabs([['u', 'À venir'], ['p', 'Publiés (60 jours)']], tab, k => { ST.tab.EA = k; render(); });
+  const tab = tabState('EA', 'u'); setTabs(FN_TABS.EA, tab, k => { ST.tab.EA = k; render(); });
+  if (tab === 't') return cfView(m, alive, 'u', 'EA');
   const us = t => { const x = String(t || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return x ? `${x[3]}-${x[1].padStart(2, '0')}-${x[2].padStart(2, '0')}` : null; };
   const today = new Date().toISOString().slice(0, 10), wd = d => new Date(d + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
   const st = ST.ea = ST.ea || { q: '' };
@@ -353,8 +354,8 @@ const CF_REP = ['États financiers', 'Rapport d\'activité', 'Rapport annuel', '
 const cfPer = ti => { const m = String(ti || '').match(/(1er|2(?:e|ème|eme)|3(?:e|ème|eme)|4(?:e|ème|eme)|premier|deuxième|troisième)\s+(trimestre|semestre)\s+(\d{4})|exercice\s+(\d{4})/i); if (!m) return ''; if (m[4]) return 'Exercice ' + m[4];
   const n = /^(1|premier)/i.test(m[1]) ? 1 : /^(2|deux)/i.test(m[1]) ? 2 : /^(3|trois)/i.test(m[1]) ? 3 : 4; return `${/tri/i.test(m[2]) ? 'T' : 'S'}${n} ${m[3]}`; };
 /* vue « suivi des sociétés », affichée comme onglet de EVTS (b = sociétés BRVM, u = sociétés US, a = agenda) */
-async function cfView(m, alive, tab) {
-  setTitle('Corporate Events · Company Filings');
+async function cfView(m, alive, tab, code = 'EVTS') {
+  setTitle(code === 'EA' ? 'Earnings Analysis · Analyst Price Targets' : 'Corporate Events · Company Filings');
   const [EV, DV, E] = await Promise.all([getJSON('events.json').catch(() => []), getJSON('dividends.json').catch(() => []), getJSON('ee.json').catch(() => null)]); if (!alive()) return;
   const today = new Date().toISOString().slice(0, 10), st = ST.cf = ST.cf || { q: '', sort: 'pub' }, q = st.q.toLowerCase();
   const ev = Array.isArray(EV) ? EV : [], dv = Array.isArray(DV) ? DV : [];
@@ -368,7 +369,7 @@ async function cfView(m, alive, tab) {
       const op = E_.filter(x => ['Fractionnement', 'Actions gratuites', 'Augmentation de capital avec droits', 'Avis sur une opération de capital'].includes(x.c) && (x.e || '') >= today)[0];
       const nd = dv.filter(x => x.t === s.id && ((x.det || '') >= today || (x.pay || '') >= today)).sort((a, b) => (a.det || a.pay).localeCompare(b.det || b.pay))[0];
       return { s, rep, ag, agL, op, nd }; }).sort((a, b) => ((b.rep || {}).d || '').localeCompare((a.rep || {}).d || ''));
-    m.innerHTML = tools + pn(`Suivi des sociétés cotées à la BRVM · ${R.length}`, 'EVTS', `<div class="tw" style="max-height:calc(100vh - 250px - var(--nwh, 90px))"><table class="t cft"><thead><tr><th class="l">Titre</th><th class="l">Société</th><th class="l">Dernière publication</th><th class="l">Période</th><th class="l">Date</th><th class="l">Prochaine AG</th><th class="l">Dernière AG</th><th class="l">Dividende à venir</th><th>Rdt</th><th class="l">Opération annoncée</th></tr></thead><tbody>
+    m.innerHTML = tools + pn(`Suivi des sociétés cotées à la BRVM · ${R.length}`, code, `<div class="tw" style="max-height:calc(100vh - 250px - var(--nwh, 90px))"><table class="t cft"><thead><tr><th class="l">Titre</th><th class="l">Société</th><th class="l">Dernière publication</th><th class="l">Période</th><th class="l">Date</th><th class="l">Prochaine AG</th><th class="l">Dernière AG</th><th class="l">Dividende à venir</th><th>Rdt</th><th class="l">Opération annoncée</th></tr></thead><tbody>
       ${R.map((r, i) => `<tr data-sec="${r.s.id}" data-to="CN" style="cursor:pointer"><td class="l"><span class="rn">${i + 1})</span><b class="wh">${r.s.id}</b></td><td class="l am">${esc(r.s.short || r.s.n)}</td>
         <td class="l">${r.rep ? `<a href="${esc(r.rep.u || '#')}" target="_blank" rel="noopener" class="cfl">${esc(r.rep.c)}</a>` : '<span class="dm">—</span>'}</td><td class="l">${r.rep ? cfPer(r.rep.ti) : ''}</td><td class="l dm">${r.rep ? fds(r.rep.d) : ''}</td>
         <td class="l">${r.ag ? `<b class="yl">${fds(r.ag.e)}</b>` : '<span class="dm">—</span>'}</td><td class="l dm">${r.agL ? fds(r.agL.e) : '—'}</td>
@@ -382,7 +383,7 @@ async function cfView(m, alive, tab) {
     const R = S_.map(s => { const x = E[s.id], tp = x.tp || {}, d = usD(x.ed), su = (x.sur || []).slice().sort((a, b) => (usD(b.d) || '').localeCompare(usD(a.d) || ''))[0]; const n = (tp.buy || 0) + (tp.hold || 0) + (tp.sell || 0);
       return { s, d: d && d >= today ? d : null, w: /after market/i.test(x.ed) ? 'après clôture' : /before market/i.test(x.ed) ? 'avant ouverture' : '', est: /estimated|algorithm/i.test(x.ed || ''), tp, n, up: tp.priceTarget && s.last ? tp.priceTarget / s.last - 1 : null, su }; })
       .sort((a, b) => st.sort === 'up' ? (b.up ?? -9) - (a.up ?? -9) : (a.d || '9').localeCompare(b.d || '9'));
-    m.innerHTML = tools + pn(`Suivi des sociétés US · ${R.length}`, 'EVTS', `<div class="tw" style="max-height:calc(100vh - 250px - var(--nwh, 90px))"><table class="t cft"><thead><tr><th class="l">Titre</th><th class="l">Société</th><th class="l" data-cs="d" style="cursor:pointer">Prochains résultats${st.sort !== 'up' ? ' ▲' : ''}</th><th class="l">Moment</th><th>Cours</th><th>Objectif moyen</th><th>Fourchette</th><th data-cs="up" style="cursor:pointer">Potentiel${st.sort === 'up' ? ' ▼' : ''}</th><th>Achat / Cons. / Vente</th><th>Dernière surprise</th></tr></thead><tbody>
+    m.innerHTML = tools + pn(`Objectifs de cours des analystes · actions US · ${R.length}`, code, `<div class="tw" style="max-height:calc(100vh - 250px - var(--nwh, 90px))"><table class="t cft"><thead><tr><th class="l">Titre</th><th class="l">Société</th><th class="l" data-cs="d" style="cursor:pointer">Prochains résultats${st.sort !== 'up' ? ' ▲' : ''}</th><th class="l">Moment</th><th>Cours</th><th>Objectif moyen</th><th>Fourchette</th><th data-cs="up" style="cursor:pointer">Potentiel${st.sort === 'up' ? ' ▼' : ''}</th><th>Achat / Cons. / Vente</th><th>Dernière surprise</th></tr></thead><tbody>
       ${R.map((r, i) => `<tr data-sec="${r.s.id}" data-to="ANR" style="cursor:pointer"><td class="l"><span class="rn">${i + 1})</span><b class="wh">${r.s.id}</b></td><td class="l am">${esc(r.s.short || r.s.n)}</td><td class="l">${r.d ? fds(r.d) + (r.est ? ' <i class="qd" title="date estimée">e</i>' : '') : '<span class="dm">—</span>'}</td><td class="l dm">${r.d ? r.w : ''}</td>
         <td class="wh">${num(r.s.last, 2)}</td><td>${r.tp.priceTarget ? num(r.tp.priceTarget, 2) : '—'}</td><td class="dm">${r.tp.lowPriceTarget ? num(r.tp.lowPriceTarget, 0) + ' – ' + num(r.tp.highPriceTarget, 0) : '—'}</td><td>${r.up == null ? '—' : (r.up > .75 || r.up < -.5 || (r.tp.lowPriceTarget && r.tp.highPriceTarget / r.tp.lowPriceTarget > 3)) ? `<span class="dm" title="écart inhabituel entre les objectifs publiés et le cours (objectifs dans une autre devise ou sur une autre base d’action possible) : à vérifier">${num(r.up * 100, 1)} % ?</span>` : pc(r.up, 1)}</td>
         <td>${r.n ? `<span class="up">${r.tp.buy}</span> / ${r.tp.hold} / <span class="dn">${r.tp.sell}</span>` : '—'}</td><td>${r.su ? `<span class="${cls(r.su.pct)}">${r.su.pct > 0 ? '+' : ''}${num(r.su.pct, 1)} %</span> <span class="dm">${esc(r.su.q || '')}</span>` : '—'}</td></tr>`).join('')}</tbody></table></div>`,
@@ -396,7 +397,7 @@ async function cfView(m, alive, tab) {
   if (E) for (const [id, x] of Object.entries(E)) { const d = usD(x.ed); if (d && d >= today && d <= end && Q.by[id]) A.push({ d, t: id, k: 'Résultats trimestriels', ti: `${(x.qr || [{}])[0].fiscalEnd || ''} · BPA attendu ${(x.qr || [{}])[0].consensusEPSForecast != null ? num((x.qr || [{}])[0].consensusEPSForecast, 2) : '—'}${/after market/i.test(x.ed) ? ' · après clôture' : /before market/i.test(x.ed) ? ' · avant ouverture' : ''}`, m: 'US' }); }
   const L = A.filter(a => !q || (a.t + ' ' + a.k + ' ' + a.ti).toLowerCase().includes(q)).sort((a, b) => a.d.localeCompare(b.d) || a.t.localeCompare(b.t));
   let cur = ''; const KC = { 'Assemblée générale': '#5fd0ea', 'Détachement du dividende': '#32c74c', 'Résultats trimestriels': '#f9a33a', 'Fractionnement': '#ff7ab2' };
-  m.innerHTML = tools + pn(`Agenda des sociétés · 60 prochains jours · ${L.length}`, 'EVTS', `<div class="tw" style="max-height:calc(100vh - 250px - var(--nwh, 90px))"><table class="t"><tbody>${L.map((a, i) => { const hd = a.d !== cur ? `<tr class="grp"><td class="l" colspan="5">${new Date(a.d + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })}</td></tr>` : ''; cur = a.d;
+  m.innerHTML = tools + pn(`Agenda des sociétés · 60 prochains jours · ${L.length}`, code, `<div class="tw" style="max-height:calc(100vh - 250px - var(--nwh, 90px))"><table class="t"><tbody>${L.map((a, i) => { const hd = a.d !== cur ? `<tr class="grp"><td class="l" colspan="5">${new Date(a.d + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })}</td></tr>` : ''; cur = a.d;
       return hd + `<tr data-sec="${a.t}" data-to="${a.m === 'US' ? 'EE' : 'CN'}" style="cursor:pointer"><td class="l"><span class="rn">${i + 1})</span><b class="wh">${a.t}</b></td><td class="l am">${esc((Q.by[a.t] || {}).short || (Q.by[a.t] || {}).n || '')}</td><td class="l"><b class="evb" style="background:${KC[a.k] || '#8a8a8a'}">${esc(a.k)}</b></td><td class="l">${a.u ? `<a href="${esc(a.u)}" target="_blank" rel="noopener" class="cfl">${esc(a.ti)}</a>` : esc(a.ti)}</td><td class="l dm">${a.m}</td></tr>`; }).join('') || '<tr><td class="l dm">Rien d’annoncé sur la période.</td></tr>'}</tbody></table></div>`,
     { np: true, lect: 'Assemblées et opérations sur le capital : date de l’avis officiel ; dividendes : date de détachement (il faut détenir le titre la veille) ; résultats US : date publiée (estimée quand l’historique sert de base).' });
   m.querySelectorAll('a.cfl').forEach(a => a.onclick = e => e.stopPropagation()); bindQ();
@@ -406,6 +407,7 @@ async function cfView(m, alive, tab) {
 /* ------------------------------------------------------------------ EVTS : avis officiels BRVM (vue principale) et, en option, suivi des sociétés */
 const EVTS_AVIS = PAGES.EVTS;
 PAGES.EVTS = async (m, alive) => {
+  if (!FN_TABS.EVTS.some(t => t[0] === ST.tab.EVTS)) ST.tab.EVTS = 'avis';
   const tab = tabState('EVTS', 'avis'); setTabs(FN_TABS.EVTS, tab, k => { ST.tab.EVTS = k; render(); });
   if (tab === 'avis') { setTitle('Corporate Events'); return EVTS_AVIS(m, alive); }
   return cfView(m, alive, tab);
