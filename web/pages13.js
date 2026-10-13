@@ -261,3 +261,30 @@ PAGES.EQS = async (m, alive) => {
     ddOpen(add, [{ h: 'Champs disponibles' }].concat(L.map((f, i) => ({ n: i + 1, code: f[2], l: esc(f[1]), run: () => { st.crit.push({ k: f[0], op: f[3] === 'p' || f[0] === 'fscore' || f[0] === 'altz' || f[3] === 'm' ? '>' : '<', v: { p: 10, x: 15, m: 1e9, n: 1 }[f[3]] }); save(); render(); } })))); };
   add.onfocus = showF; add.oninput = showF;
 };
+
+/* ------------------------------------------------------------------ CN : « Company News » du terminal (une liste chronologique numérotée) */
+PAGES.CN = async (m, alive) => {
+  const s = sec(ST.sec), brvm = isBRVM(s); setTitle('Company News');
+  const [N, EV, RP, DV, AN] = await Promise.all([getJSON('news.json').catch(() => ({ items: [] })), brvm ? getJSON('events.json').catch(() => []) : [], brvm ? getJSON('reports.json').catch(() => null) : null, brvm ? getJSON('dividends.json').catch(() => []) : [], getJSON('anomalies.json').catch(() => null)]); if (!alive()) return;
+  const al = aliasesOf(s).map(a => a.toLowerCase());
+  const its = (N.items || []).filter(x => (x.tk || []).includes(s.id) || (() => { const t = (x.ti + ' ' + (x.x || '')).toLowerCase(); return al.some(a => a === s.id.toLowerCase() ? new RegExp('\\b' + a + '\\b').test(t) : a.length > 3 && t.includes(a)); })());
+  const docs = RP ? Object.entries(RP.issuers || {}).filter(([, x]) => x.t === s.id).flatMap(([slug]) => (RP.docs || {})[slug] || []) : [];
+  const H = [];  // { ts (tri), d (aaaa-mm-jj), hm, cat, k, t, u, s, x }
+  for (const x of its) H.push({ ts: x.t * 1000, cat: 'N', k: x.ev && x.ev !== 'Marchés' ? x.ev : '', t: deent(x.ti), u: x.u, s: srcCode(x), x: deent(x.x || ''), hm: true });
+  for (const e of EV.filter(x => x.t === s.id)) H.push({ ts: Date.parse(e.d + 'T12:00:00Z'), cat: 'A', k: e.c || 'Avis', t: e.ti, u: e.u, s: '' });
+  for (const d of docs) if (d.d) H.push({ ts: Date.parse(i2s(+d.d) + 'T12:00:00Z'), cat: 'P', k: /etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Rapport d’activité' : 'Publication', t: d.ti, u: d.u, s: '' });
+  for (const x of DV.filter(x => x.t === s.id && x.dps)) if (x.det) H.push({ ts: Date.parse(x.det + 'T12:00:00Z'), cat: 'D', k: 'Dividende', t: `Détachement du dividende de l’exercice ${x.ex} : ${num(x.dps, 2)} FCFA net`, s: '' });
+  for (const a of ((AN && AN.by && AN.by[s.id]) || []).filter(a => a.d)) H.push({ ts: Date.parse(i2s(a.d) + 'T12:00:00Z'), cat: 'X', k: 'Anomalie · ' + a.k, t: a.m, s: 'FQT' });
+  H.sort((a, b) => b.ts - a.ts);
+  const CAT = [['ALL', 'Tout'], ['N', 'Actualités'], ...(brvm ? [['A', 'Avis officiels'], ['P', 'Publications de la société'], ['D', 'Dividendes']] : []), ['X', 'Anomalies']];
+  const st = ST.cn2 = ST.cn2 || { c: 'ALL', q: '' }; if (!CAT.some(c => c[0] === st.c)) st.c = 'ALL';
+  const q = st.q.toLowerCase(), L = H.filter(h => (st.c === 'ALL' || h.cat === st.c) && (!q || (h.t + ' ' + h.k).toLowerCase().includes(q)));
+  const today = new Date().toISOString().slice(0, 10), when = h => { const d = new Date(h.ts); return h.hm && d.toISOString().slice(0, 10) === today ? d.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', year: '2-digit' }); };
+  const col = h => h.cat === 'X' ? 'var(--dn)' : EV_COL[h.k] || (h.cat === 'A' ? '#5fd0ea' : h.cat === 'P' ? '#f9a33a' : h.cat === 'D' ? '#2fd26a' : '#8a8a8a');
+  m.innerHTML = `<div class="tools ttb"><span class="tnar"><input id="cnQ" value="${esc(st.q)}" placeholder="&lt;Filtrer&gt;"><b>⌕</b></span>${CAT.map(([k, l]) => `<button class="tb alt ${st.c === k ? 'on' : ''}" data-cc="${k}">${l} (${k === 'ALL' ? H.length : H.filter(h => h.cat === k).length})</button>`).join('')}<span class="gsp"></span><span class="dm">heure GMT (Abidjan) · mise à jour toutes les 15 min</span></div>
+    ${pn(`${esc(ykey(s))} · ${esc(s.short || s.n)} · ${L.length} éléments`, 'CN', `<div class="tw" style="max-height:calc(100vh - 280px - var(--nwh, 90px))">${L.slice(0, 400).map((h, i) => `<div class="tn cnr" data-n="${i + 1}" data-u="${esc(h.u || '')}" title="${esc(h.x || '')}"><span class="no">${i + 1})</span><span class="h">${h.k ? `<b class="evb" style="background:${col(h)}">${esc(h.k.split(' · ')[0])}</b>` : ''}${esc(h.t || '')}</span><span class="s">${esc(h.s || '')}</span><span class="t">${when(h)}</span></div>`).join('') || '<div class="empty">Aucun élément pour ce filtre.</div>'}</div>`,
+      { np: true, lect: `Réunit les articles qui citent la société (« ${al.map(esc).join(' », « ')} »)${brvm ? ', ses avis officiels, ses publications et ses détachements de dividendes' : ''} et les anomalies statistiques détectées (ANOM). Clic : ouvre l’article ou le document. Fil général : TOP.` })}`;
+  m.querySelectorAll('[data-cc]').forEach(b => b.onclick = () => { st.c = b.dataset.cc; render(); });
+  m.querySelectorAll('.cnr[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
+  $('cnQ').onkeydown = e => { if (e.key === 'Enter') { st.q = e.target.value; render(); } };
+};
