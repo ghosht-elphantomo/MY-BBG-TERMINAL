@@ -537,3 +537,5 @@ table.t.hp td:first-child{color:var(--amber)}
 @media (max-width:900px){.tpg{grid-template-columns:minmax(0,1fr)}.tn{grid-template-columns:28px minmax(0,1fr) 44px}.tn .s{display:none}}
 .t td i.qd{font-style:normal;color:#bdbdbd;font-size:10.5px;margin-left:2px;display:inline-block;width:7px;text-align:left}
 .mst{border:1px solid #1f1f1f;gap:4px}
+.t .gfi,.t .gfi0{display:inline-block;width:14px;margin-right:4px;cursor:pointer;vertical-align:-1px}.t .gfi:hover svg rect{stroke:#fff}
+table.t.acc tr.h2 th{background:#141414;color:#bdbdbd;font-size:11.5px;top:20px}

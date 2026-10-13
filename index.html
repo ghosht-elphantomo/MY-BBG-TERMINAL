@@ -545,6 +545,8 @@ table.t.hp td:first-child{color:var(--amber)}
 @media (max-width:900px){.tpg{grid-template-columns:minmax(0,1fr)}.tn{grid-template-columns:28px minmax(0,1fr) 44px}.tn .s{display:none}}
 .t td i.qd{font-style:normal;color:#bdbdbd;font-size:10.5px;margin-left:2px;display:inline-block;width:7px;text-align:left}
 .mst{border:1px solid #1f1f1f;gap:4px}
+.t .gfi,.t .gfi0{display:inline-block;width:14px;margin-right:4px;cursor:pointer;vertical-align:-1px}.t .gfi:hover svg rect{stroke:#fff}
+table.t.acc tr.h2 th{background:#141414;color:#bdbdbd;font-size:11.5px;top:20px}
 
 </style>
 </head><body>
@@ -2075,13 +2077,17 @@ function accountsTable(F, nY = 10, opts = {}) {
   const why = y => F.mkt === 'BRVM' ? (firstData && y < firstData ? `aucun compte disponible avant ${firstData}` : 'non publié') : 'absent des dépôts XBRL à la SEC';
   const cg = (k, n) => { const a = cols.map(y => { const i = ix(y); return i >= 0 ? Y[k][i] : null; }); return cagrA(a, n); };
   const srcOf = y => { const i = ix(y); return i >= 0 && Y.src ? Y.src[i] : null; };
-  const head = `<tr><th class="l">${U.lab}${F.mkt === 'US' ? ' · exercice clos' : ''}</th>${cols.map(y => { const sr = srcOf(y); return `<th title="${esc(sr || '')}">${y}${sr ? '<sup class="am">a</sup>' : ''}</th>`; }).join('')}${opts.cagr ? '<th>TCAM 3 a.</th><th>TCAM 5 a.</th><th>TCAM 10 a.</th>' : ''}</tr>`;
+  /* en-tête sur deux lignes comme FA : « FY 2024 » puis la date de clôture de l'exercice (quand la source la donne) */
+  const endOf = y => { const i = ix(y); return i >= 0 && F.mkt === 'US' && Y.y[i] > 99999 ? fd(Y.y[i]) : ''; };
+  const head = `<tr><th class="l">${U.lab}</th>${cols.map(y => { const sr = srcOf(y); return `<th title="${esc(sr || '')}">FY ${y}${sr ? '<sup class="am">a</sup>' : ''}</th>`; }).join('')}${opts.cagr ? '<th>TCAM 3 a.</th><th>TCAM 5 a.</th><th>TCAM 10 a.</th>' : ''}</tr>`
+    + (F.mkt === 'US' ? `<tr class="h2"><th class="l">12 mois clos le</th>${cols.map(y => `<th>${endOf(y)}</th>`).join('')}${opts.cagr ? '<th></th><th></th><th></th>' : ''}</tr>` : '');
   const body = rows.filter(([k]) => Y[k] && (!opts.only || opts.only.has(k))).map(([k, l, t, hl]) => {
     const vals = cols.map(y => { const i = ix(y); if (i < 0) return null; return t === 'g' ? gr(Y[k], i) : Y[k][i]; });
     if (vals.every(v => v == null) && t !== 'g') return '';
     const tds = vals.map((v, j) => { if (v == null) return `<td>${NDc(why(cols[j]))}</td>`; if (t === 'g') return `<td>${sgn(v, 1)}</td>`; return `<td class="${hl ? 'yl' : 'wh'}">${cellFmt(t, v, U)}</td>`; }).join('');
     const cc = opts.cagr && ['m', 'e'].includes(t) ? [3, 5, 10].map(n => `<td>${sgn(cg(k, n), 1)}</td>`).join('') : opts.cagr ? '<td></td><td></td><td></td>' : '';
-    return `<tr class="${t === 'g' ? 'sub' : ''}"><td class="l ${t === 'g' ? 'dm' : 'am'}">${t === 'g' ? '&nbsp;&nbsp;' + l : l}${t === 'p' || t === 'q' ? ' %' : ''}</td>${tds}${cc}</tr>`;
+    const gfk = t !== 'g' && typeof GF_M !== 'undefined' && GF_M.some(x => x[0] === k) ? k : null;
+    return `<tr class="${t === 'g' ? 'sub' : ''}"><td class="l ${t === 'g' ? 'dm' : 'am'}">${gfk ? `<i class="gfi" data-gf="${gfk}" title="Graphique de cette ligne (GF)">${GF_ICO}</i>` : '<i class="gfi0"></i>'}${t === 'g' ? '&nbsp;&nbsp;' + l : l}${t === 'p' || t === 'q' ? ' %' : ''}</td>${tds}${cc}</tr>`;
   }).join('');
   return `<div class="tw"><table class="t acc"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }
@@ -4293,6 +4299,10 @@ PAGES.MOST = async (m, alive) => {
   const bins = [-.1, -.05, -.03, -.02, -.01, 0, .01, .02, .03, .05, .1], cnt = new Array(bins.length + 1).fill(0); live.forEach(s => { let i = bins.findIndex(b => s.pct < b); if (i < 0) i = bins.length; cnt[i]++; });
   barChart($('moH'), { labels: ['<-10', '-10/-5', '-5/-3', '-3/-2', '-2/-1', '-1/0', '0/1', '1/2', '2/3', '3/5', '5/10', '>10'], values: cnt, fmt: v => num(v, 0), labelsOnBars: true, colors: cnt.map((_, i) => i < 6 ? '#ff433d' : '#32c74c'), padB: 22 });
 };
+
+/* FA : petite icône graphique devant chaque ligne (comme le terminal) → GF sur l'indicateur */
+const GF_ICO = '<svg width="11" height="9" viewBox="0 0 11 9"><rect x=".5" y=".5" width="10" height="8" fill="none" stroke="#8a8a8a"/><path d="M2 7V5M4.5 7V3M7 7V4.5M9 7V2" stroke="#ffa028" stroke-width="1.4"/></svg>';
+document.addEventListener('click', e => { const g = e.target.closest('[data-gf]'); if (!g) return; e.stopPropagation(); ST.gf = { k: g.dataset.gf, k2: '' }; go('GF', ST.sec); });
 
 </script>
 <script>

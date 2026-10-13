@@ -176,3 +176,7 @@ PAGES.MOST = async (m, alive) => {
   const bins = [-.1, -.05, -.03, -.02, -.01, 0, .01, .02, .03, .05, .1], cnt = new Array(bins.length + 1).fill(0); live.forEach(s => { let i = bins.findIndex(b => s.pct < b); if (i < 0) i = bins.length; cnt[i]++; });
   barChart($('moH'), { labels: ['<-10', '-10/-5', '-5/-3', '-3/-2', '-2/-1', '-1/0', '0/1', '1/2', '2/3', '3/5', '5/10', '>10'], values: cnt, fmt: v => num(v, 0), labelsOnBars: true, colors: cnt.map((_, i) => i < 6 ? '#ff433d' : '#32c74c'), padB: 22 });
 };
+
+/* FA : petite icône graphique devant chaque ligne (comme le terminal) → GF sur l'indicateur */
+const GF_ICO = '<svg width="11" height="9" viewBox="0 0 11 9"><rect x=".5" y=".5" width="10" height="8" fill="none" stroke="#8a8a8a"/><path d="M2 7V5M4.5 7V3M7 7V4.5M9 7V2" stroke="#ffa028" stroke-width="1.4"/></svg>';
+document.addEventListener('click', e => { const g = e.target.closest('[data-gf]'); if (!g) return; e.stopPropagation(); ST.gf = { k: g.dataset.gf, k2: '' }; go('GF', ST.sec); });

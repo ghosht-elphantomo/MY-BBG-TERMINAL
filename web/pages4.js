@@ -43,13 +43,17 @@ function accountsTable(F, nY = 10, opts = {}) {
   const why = y => F.mkt === 'BRVM' ? (firstData && y < firstData ? `aucun compte disponible avant ${firstData}` : 'non publié') : 'absent des dépôts XBRL à la SEC';
   const cg = (k, n) => { const a = cols.map(y => { const i = ix(y); return i >= 0 ? Y[k][i] : null; }); return cagrA(a, n); };
   const srcOf = y => { const i = ix(y); return i >= 0 && Y.src ? Y.src[i] : null; };
-  const head = `<tr><th class="l">${U.lab}${F.mkt === 'US' ? ' · exercice clos' : ''}</th>${cols.map(y => { const sr = srcOf(y); return `<th title="${esc(sr || '')}">${y}${sr ? '<sup class="am">a</sup>' : ''}</th>`; }).join('')}${opts.cagr ? '<th>TCAM 3 a.</th><th>TCAM 5 a.</th><th>TCAM 10 a.</th>' : ''}</tr>`;
+  /* en-tête sur deux lignes comme FA : « FY 2024 » puis la date de clôture de l'exercice (quand la source la donne) */
+  const endOf = y => { const i = ix(y); return i >= 0 && F.mkt === 'US' && Y.y[i] > 99999 ? fd(Y.y[i]) : ''; };
+  const head = `<tr><th class="l">${U.lab}</th>${cols.map(y => { const sr = srcOf(y); return `<th title="${esc(sr || '')}">FY ${y}${sr ? '<sup class="am">a</sup>' : ''}</th>`; }).join('')}${opts.cagr ? '<th>TCAM 3 a.</th><th>TCAM 5 a.</th><th>TCAM 10 a.</th>' : ''}</tr>`
+    + (F.mkt === 'US' ? `<tr class="h2"><th class="l">12 mois clos le</th>${cols.map(y => `<th>${endOf(y)}</th>`).join('')}${opts.cagr ? '<th></th><th></th><th></th>' : ''}</tr>` : '');
   const body = rows.filter(([k]) => Y[k] && (!opts.only || opts.only.has(k))).map(([k, l, t, hl]) => {
     const vals = cols.map(y => { const i = ix(y); if (i < 0) return null; return t === 'g' ? gr(Y[k], i) : Y[k][i]; });
     if (vals.every(v => v == null) && t !== 'g') return '';
     const tds = vals.map((v, j) => { if (v == null) return `<td>${NDc(why(cols[j]))}</td>`; if (t === 'g') return `<td>${sgn(v, 1)}</td>`; return `<td class="${hl ? 'yl' : 'wh'}">${cellFmt(t, v, U)}</td>`; }).join('');
     const cc = opts.cagr && ['m', 'e'].includes(t) ? [3, 5, 10].map(n => `<td>${sgn(cg(k, n), 1)}</td>`).join('') : opts.cagr ? '<td></td><td></td><td></td>' : '';
-    return `<tr class="${t === 'g' ? 'sub' : ''}"><td class="l ${t === 'g' ? 'dm' : 'am'}">${t === 'g' ? '&nbsp;&nbsp;' + l : l}${t === 'p' || t === 'q' ? ' %' : ''}</td>${tds}${cc}</tr>`;
+    const gfk = t !== 'g' && typeof GF_M !== 'undefined' && GF_M.some(x => x[0] === k) ? k : null;
+    return `<tr class="${t === 'g' ? 'sub' : ''}"><td class="l ${t === 'g' ? 'dm' : 'am'}">${gfk ? `<i class="gfi" data-gf="${gfk}" title="Graphique de cette ligne (GF)">${GF_ICO}</i>` : '<i class="gfi0"></i>'}${t === 'g' ? '&nbsp;&nbsp;' + l : l}${t === 'p' || t === 'q' ? ' %' : ''}</td>${tds}${cc}</tr>`;
   }).join('');
   return `<div class="tw"><table class="t acc"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }
