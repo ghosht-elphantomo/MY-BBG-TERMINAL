@@ -230,7 +230,7 @@ PAGES.GF = async (m, alive) => {
 /* ------------------------------------------------------------------ MENU : menu des fonctions façon Bloomberg (fil d'Ariane, deux colonnes numérotées) */
 PAGES.MENU = async (m, alive) => {
   const s = sec(ST.sec); setTitle('Security Menu'); let n = 0;
-  const cat = s.cls === 'Index' ? 'Indices' : s.typ === 'ETF' ? 'Fonds (ETF)' : s.cls === 'Equity' ? 'Actions' : s.cls === 'Crypto' ? 'Crypto-actifs' : s.cls === 'Comdty' ? 'Matières premières' : s.cls === 'Curncy' ? 'Devises' : 'Marchés';
+  const cat = s.cls === 'Index' ? 'Indices' : s.typ === 'ETF' ? 'Fonds (ETF)' : s.cls === 'Equity' ? 'Actions cotées' : s.cls === 'Crypto' ? 'Crypto-actifs' : s.cls === 'Comdty' ? 'Matières premières' : s.cls === 'Curncy' ? 'Devises' : 'Marchés';
   const blk = ([g, codes]) => { const its = codes.filter(c => FN[c]).map(c => { n++; const why = avail(c, s); return `<div class="bm-it${why ? ' off' : ''}" ${why ? '' : `data-fn="${c}"`} data-n="${n}" title="${esc(FN[c][0] + ' — ' + (why ? 'non disponible : ' + why : FN[c][3]))}"><span class="ar">${why ? '' : '⬈'}</span><span class="no">${n})</span><b>${c}</b><span class="nm">${esc(FN[c][4])}</span></div>`; }).join('');
     return `<div class="bm-g"><div class="bm-h">${esc(g)} <span>›</span></div>${its}</div>`; };
   /* répartition par nombre de lignes (en-tête + fonctions), pas par nombre de groupes */
