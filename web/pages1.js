@@ -2,7 +2,8 @@
 'use strict';
 const codeAttr = code => { const w = String(code || '').trim().split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
 /* dividende par action : marqué « a » quand il a été ajusté d'un fractionnement (montant publié en infobulle) */
-const adjMark = x => x && x.adj ? `<i class="qd" title="montant publié : ${num(x.dps0, 2)} par action ancienne ; ajusté du fractionnement (1 → ${num(x.adj, 0)})">a</i>` : '';
+const adjMark = x => (x && x.adj ? `<i class="qd" title="montant publié : ${num(x.dps0, 2)} par action ancienne ; ajusté du fractionnement (1 → ${num(x.adj, 0)})">a</i>` : '')
+  + (x && x.cal ? '<i class="qd" title="montant du calendrier des dividendes de la BRVM (net ou brut selon la société) : l’avis officiel détaille le net">c</i>' : '');
 const pn = (title, code, body, o = {}) => `<div class="pn" ${o.id ? `id="${o.id}"` : ''} ${o.style ? `style="${o.style}"` : ''}><div class="pt">${title}${o.sel ? `<span class="sel">${o.sel}</span>` : ''}<span class="code"${codeAttr(code)}>${code || ''}</span></div>${o.tools ? `<div class="tools">${o.tools}</div>` : ''}<div class="pb ${o.np ? 'np' : ''}">${body}</div>${o.lect ? `<div class="lect">${o.lect}</div>` : ''}</div>`;
 const cvb = (id, h) => `<div class="cv" id="${id}" style="height:${h}px"></div>`;
 const rangeBar = s => { if (!(s.hi52 > s.lo52)) return ''; const f = U.clamp((s.last - s.lo52) / (s.hi52 - s.lo52), 0, 1); return `<span class="rng" title="${px(s, s.lo52)} – ${px(s, s.hi52)}"><i style="left:${(f * 68).toFixed(0)}px"></i></span>`; };

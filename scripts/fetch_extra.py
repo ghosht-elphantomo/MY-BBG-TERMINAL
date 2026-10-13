@@ -2608,7 +2608,7 @@ def run_avis(site_data):
                 det, pay = g("field-date-ex-dividende")["d"], g("field-date-de-paiement-esv")["d"]
                 if soc and u and (dps or det or pay):
                     recs.append({"k": key, "soc": soc, "c": cat, "u": u, "d": pub(u) or det, "e": det or pay, "ex": int(ex) if ex else None, "dps": dps, "det": det, "pay": pay,
-                                 "ti": f"{soc} : dividende de l’exercice {ex or '—'}" + (f" · {dps:g} FCFA net" if dps else "") + (f" · détachement le {det[8:]}/{det[5:7]}/{det[:4]}" if det else "") + (f" · paiement le {pay[8:]}/{pay[5:7]}/{pay[:4]}" if pay else "")})
+                                 "ti": f"{soc} : dividende de l’exercice {ex or '—'}" + (f" · {dps:g} FCFA par action" if dps else "") + (f" · détachement le {det[8:]}/{det[5:7]}/{det[:4]}" if det else "") + (f" · paiement le {pay[8:]}/{pay[5:7]}/{pay[:4]}" if pay else "")})
             elif key == "frac":
                 soc, par = g("field-emetteur-esv")["t"], g("field-parite-esv")["t"]
                 u = (g("field-avis-dividende-esv")["u"] or g("field-communique-esv")["u"] or [None])[0]

@@ -411,7 +411,8 @@ def main():
             if any((r.get("ex") and x.get("exercice") == r["ex"] and abs((x.get("dividende") or 0) - r["dps"]) < 0.5)
                    or near(x.get("date_detachement"), r.get("det")) or near(x.get("date_paiement"), r.get("pay")) for x in have[r["t"]]):
                 continue
-            nx = {"ticker": r["t"], "dividende": r["dps"], "exercice": r.get("ex"), "date_annonce": r.get("d"), "date_detachement": r.get("det"), "date_paiement": r.get("pay"), "source": "BRVM"}
+            # montant de la colonne du calendrier brvm.org : net pour certaines sociétés, brut pour d'autres (l'avis PDF précise le net) -> signalé
+            nx = {"ticker": r["t"], "dividende": r["dps"], "exercice": r.get("ex"), "date_annonce": r.get("d"), "date_detachement": r.get("det"), "date_paiement": r.get("pay"), "source": "BRVM", "cal": 1}
             divs.append(nx)
             have[r["t"]].append(nx)
             av_chk["div"] += 1
@@ -814,7 +815,8 @@ def main():
                  "series": {s: v["series"][s] for s in keep if v.get("series", {}).get(s)}}
              for k, v in fund.items() if k != "_meta"}
     dmeta = [{"t": x.get("ticker"), "ex": x.get("exercice"), "dps": x.get("dividende"), "ann": x.get("date_annonce"), "det": x.get("date_detachement"),
-              "pay": x.get("date_paiement"), "src": x.get("source"), **({"dps0": x["dividende_publie"], "adj": x["ajust"]} if x.get("ajust") else {})} for x in divs if x.get("ticker")]
+              "pay": x.get("date_paiement"), "src": x.get("source"), **({"dps0": x["dividende_publie"], "adj": x["ajust"]} if x.get("ajust") else {}),
+              **({"cal": 1} if x.get("cal") else {})} for x in divs if x.get("ticker")]
     if split_log:
         log("fractionnements :", "; ".join(split_log[:40]))
     ev = json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"]
