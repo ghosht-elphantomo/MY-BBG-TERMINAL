@@ -3751,15 +3751,13 @@ const IDX_FR = { '.SPX': 'S&P 500', '.DJI': 'Dow Jones Industrial', '.IXIC': 'Na
   '.NSEI': 'Nifty 50 (Inde)', '.AXJO': 'S&P/ASX 200 (Australie)', '.STI': 'Straits Times (Singapour)', '.KLSE': 'FTSE Bursa KLCI (Malaisie)', '.VIX': 'VIX (volatilité S&P 500)' };
 PAGES.WEI = async (m, alive) => {
   const W = await WMKT(); if (!alive()) return; setTitle('World Equity Indices');
+  if (!W || !W.idx) { m.innerHTML = pn('Indices mondiaux', 'WEI', '<div class="empty">Cotations mondiales en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const tab = tabState('WEI', 'tbl'), wo = ST.weio = ST.weio || { mov: false, vol: true };
-  if (tab !== 'fut' && (!W || !W.idx)) { m.innerHTML = pn('Indices mondiaux', 'WEI', '<div class="empty">Cotations mondiales en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   /* rangée de réglages comme le terminal : vue « Standard ▾ », cases Movers / Volatilité */
-  /* vue « Contrats à terme » = écran WEIF (indication d'ouverture, écart au comptant) affiché dans WEI */
-  const ctl = `<div class="tools weic"><select class="ofld" id="weV">${[['tbl', 'Standard'], ['bar', 'Variations du jour'], ['rng', 'Position sur 52 semaines'], ['fut', 'Contrats à terme (WEIF)']].map(([k, l]) => `<option value="${k}" ${tab === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
-    ${tab === 'fut' ? '<span class="gsp"></span><span class="tlab">1re échéance</span><span class="wh">indication d’ouverture et écart au comptant</span>' : `<label class="gck"><input type="checkbox" id="weM" ${wo.mov ? 'checked' : ''}><i></i>Mouvements (classés par variation)</label><label class="gck"><input type="checkbox" id="weVo" ${wo.vol ? 'checked' : ''}><i></i>Volatilité</label>
-    <span class="gsp"></span><span class="tlab">% depuis janv.</span><span class="wh">devise locale et USD</span>`}</div>`;
-  const bindCtl = () => { $('weV').onchange = e => { ST.tab.WEI = e.target.value; render(); }; const cm = $('weM'), cv = $('weVo'); if (cm) cm.onchange = e => { wo.mov = e.target.checked; render(); }; if (cv) cv.onchange = e => { wo.vol = e.target.checked; render(); }; };
-  if (tab === 'fut') { await PAGES.WEIF(m, alive); if (!alive()) return; m.insertAdjacentHTML('afterbegin', ctl); bindCtl(); return; }
+  const ctl = `<div class="tools weic"><select class="ofld" id="weV">${[['tbl', 'Standard'], ['bar', 'Variations du jour'], ['rng', 'Position sur 52 semaines']].map(([k, l]) => `<option value="${k}" ${tab === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <label class="gck"><input type="checkbox" id="weM" ${wo.mov ? 'checked' : ''}><i></i>Mouvements (classés par variation)</label><label class="gck"><input type="checkbox" id="weVo" ${wo.vol ? 'checked' : ''}><i></i>Volatilité</label>
+    <span class="gsp"></span><span class="tlab">% depuis janv.</span><span class="wh">devise locale et USD</span></div>`;
+  const bindCtl = () => { $('weV').onchange = e => { ST.tab.WEI = e.target.value; render(); }; $('weM').onchange = e => { wo.mov = e.target.checked; render(); }; $('weVo').onchange = e => { wo.vol = e.target.checked; render(); }; };
   const brvm = ['BRVMC', 'BRVM30', 'BRVMPR'].map(id => Q.by[id]).filter(Boolean).map(s => ({ g: 'MEA', s: s.id, n: s.n, last: s.last, chg: s.prev ? s.last - s.prev : null, pct: s.pct, t: i2s(s.dt), hi52: s.hi52, lo52: s.lo52, ytd: s.ytd, loc: true }));
   const YB = W.yb && W.yb.v || {}; W.idx.forEach(r => { if (r.ytd == null && YB[r.s] && r.last) r.ytd = r.last / YB[r.s] - 1; });
   const rows = W.idx.concat(brvm), REG = [['AM', 'Amériques'], ['EU', 'Europe'], ['MEA', 'Moyen-Orient et Afrique'], ['AS', 'Asie-Pacifique']].concat(wo.vol ? [['VOL', 'Volatilité']] : []);
@@ -5223,7 +5221,7 @@ const FN = {
   DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique', 'Dividend Calendar'],
   EVTS: ['Événements des sociétés', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers ; en option : suivi des sociétés BRVM et US, agenda des sociétés', 'Corporate Events'],
   WEIF: ['Contrats à terme sur indices', 'mkt', 'Marchés', 'S&P 500, Nasdaq-100, Dow Jones, Russell 2000, VIX, FTSE 100, Nikkei : indication d’ouverture et écart au comptant', 'World Equity Index Futures'],
-  WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines ; en option : contrats à terme sur indices (WEIF)', 'World Equity Indices'],
+  WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines', 'World Equity Indices'],
   COMMO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
   BTMM: ['Trésor et marché monétaire US', 'mkt', 'Taux', 'Taux directeurs (Fed, BCE, BCEAO), SOFR, bons et emprunts du Trésor, contrats à terme, pentes, inflation anticipée', 'Treasury & Money Markets'],
   RATES: ['Taux et anticipations Fed', 'mkt', 'Taux', 'Contrats Fed funds : taux implicite par mois, probabilité de baisse ou de hausse aux prochaines réunions ; en option : taux souverains mondiaux (courbe US, 10 ans, UEMOA)', 'World Interest Rate Probability'],
@@ -5619,7 +5617,7 @@ function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hi
 /* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
 /* ---------- mise à jour silencieuse du terminal : quand une nouvelle version est en ligne, la page se recharge d'elle-même
    au premier moment calme (onglet en arrière-plan, retour sur l'onglet, ou une minute sans action), en gardant l'écran et ses onglets ---------- */
-const APP_V = '58f3719aed26';
+const APP_V = '51e8738807e7';
 let APP_NEW = false, APP_ACT = Date.now();
 function appReload() { try { sessionStorage.setItem('fqt_tabs', JSON.stringify(ST.tab)); } catch (e) { } location.reload(); }
 function appMaybe(now) { if (!APP_NEW) return; const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value; if (document.hidden || now || (!typing && Date.now() - APP_ACT > 60000)) appReload(); }
@@ -5646,7 +5644,7 @@ async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.ba
   if (fresh) { Q.gen = l.ts; Q.json = {}; try { const S = await fetch(Q.base + 'summary.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null); if (S && S.secs) { Q.sum = S; Q.json['summary.json'] = Promise.resolve(S); for (const s of S.secs) Q.by[s.id] = s; } } catch (e) { } }
   if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews();
   const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.id !== 'cmd';
-  if (!typing && (fresh || ['MONITOR', 'BRVM', 'IMAP', 'US', 'NEWS', 'BRIEF', 'WEIF'].includes(ST.fn) || (ST.fn === 'WEI' && ST.tab.WEI === 'fut')) && !(ST.fn === 'NEWS' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
+  if (!typing && (fresh || ['MONITOR', 'BRVM', 'IMAP', 'US', 'NEWS', 'BRIEF', 'WEIF'].includes(ST.fn)) && !(ST.fn === 'NEWS' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
 let SYNC_RUN = null;
 function bindSync() { const b = $('syncBtn'); if (!b || !SYNC_RUN) return; b.hidden = false; b.onclick = () => SYNC_RUN(b); }
 async function initSync() {
