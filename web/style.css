@@ -509,3 +509,4 @@ table.t.hp td:first-child{color:var(--amber)}
 .bt1{border:1px solid #1f1f1f;gap:4px}
 .kv2.bst{font-size:13px}.kv2.bst span,.kv2.bst b{padding:3px 0;border-bottom:1px solid #141414}
 @media (max-width:900px){.hpg{grid-template-columns:minmax(0,1fr)}.dvk{grid-template-columns:minmax(0,auto) minmax(0,1fr)}}
+.t td .rn{display:inline-block;min-width:26px;color:#bdbdbd;text-align:right;margin-right:6px}

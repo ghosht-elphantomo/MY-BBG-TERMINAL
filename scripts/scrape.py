@@ -467,6 +467,36 @@ WORLD = {
 }
 
 
+# symboles Yahoo des mêmes indices / contrats / devises : clôture de fin d'année précédente (base du « depuis janvier »)
+WORLD_YH = {".SPX": "^GSPC", ".DJI": "^DJI", ".IXIC": "^IXIC", ".RUT": "^RUT", ".GSPTSE": "^GSPTSE", ".MXX": "^MXX", ".BVSP": "^BVSP", ".MERV": "^MERV",
+            ".STOXX50E": "^STOXX50E", ".FTSE": "^FTSE", ".GDAXI": "^GDAXI", ".FCHI": "^FCHI", ".FTMIB": "FTSEMIB.MI", ".IBEX": "^IBEX", ".AEX": "^AEX", ".SSMI": "^SSMI",
+            ".OMXS30": "^OMX", ".TA35": "TA35.TA", ".EGX30": "^CASE30", ".N225": "^N225", ".HSI": "^HSI", ".SSEC": "000001.SS", ".SZI": "399001.SZ", ".KS11": "^KS11",
+            ".TWII": "^TWII", ".NSEI": "^NSEI", ".AXJO": "^AXJO", ".STI": "^STI", ".KLSE": "^KLSE", ".VIX": "^VIX",
+            "@GC.1": "GC=F", "@SI.1": "SI=F", "@HG.1": "HG=F", "@PL.1": "PL=F", "@PA.1": "PA=F", "@CC.1": "CC=F", "@KC.1": "KC=F", "@CT.1": "CT=F", "@SB.1": "SB=F",
+            "@W.1": "ZW=F", "@C.1": "ZC=F", "@S.1": "ZS=F", "@SM.1": "ZM=F", "@LC.1": "LE=F",
+            ".DXY": "DX-Y.NYB", "EUR=": "EURUSD=X", "GBP=": "GBPUSD=X", "JPY=": "JPY=X", "CHF=": "CHF=X", "CNY=": "CNY=X", "XOF=": "XOF=X", "NGN=": "NGN=X", "GHS=": "GHS=X", "ZAR=": "ZAR=X"}
+
+
+def year_bases(prev, budget=60):
+    """Clôture de la dernière séance de l'année précédente pour chaque symbole (Yahoo, une fois par an, reprise si incomplète)."""
+    y = dt.date.today().year
+    yb = prev if prev and prev.get("y") == y else {"y": y, "v": {}}
+    t0 = time.time()
+    a = int(dt.datetime(y - 1, 12, 10, tzinfo=dt.timezone.utc).timestamp()); b = int(dt.datetime(y, 1, 1, tzinfo=dt.timezone.utc).timestamp())
+    for cs, ys in WORLD_YH.items():
+        if cs in yb["v"] or time.time() - t0 > budget:
+            continue
+        try:
+            j = json.loads(get(f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(ys)}?period1={a}&period2={b}&interval=1d", tries=1, timeout=12))
+            r = j["chart"]["result"][0]; cl = [c for c in r["indicators"]["quote"][0]["close"] if c]
+            if cl:
+                yb["v"][cs] = round(cl[-1], 6)
+        except Exception:  # noqa: BLE001
+            pass
+        time.sleep(0.2)
+    return yb
+
+
 def world_board(out_data):
     syms = [s_ for v in WORLD.values() for _, s_ in v]
     by = {}
@@ -490,6 +520,10 @@ def world_board(out_data):
     out = {"ts": int(time.time()), "src": "CNBC (bourses, ICE, CME ; différé)"}
     for k, v in WORLD.items():
         out[k] = [rec(g, s_) for g, s_ in v if s_ in by]
+    try:
+        out["yb"] = year_bases((load("world_mkt.json", folder=out_data) or {}).get("yb"))
+    except Exception as e:  # noqa: BLE001
+        fail("world_yb", e)
     if out["idx"]:
         dump(out, os.path.join(out_data, "world_mkt.json"))
 
