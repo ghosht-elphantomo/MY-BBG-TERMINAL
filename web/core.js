@@ -406,7 +406,7 @@ async function render() {
 }
 /* rangée de touches comme la barre du terminal : GO, F1-F4 (gris), touches vertes du clavier Bloomberg, puis les fonctions de marché */
 const BBG_KEYS = [['F1', 'Aide (HELP)', () => go('HELP')], ['F2', 'Govt : obligations (SRCH)', () => go('SRCH')], ['F3', 'Equity : marché BRVM', () => go('BRVM')], ['F4', 'Index : indices mondiaux (WEI)', () => go('WEI')]];
-const BBG_GREEN = [['MONITOR', 'Moniteur de marchés (Market Monitor)', () => go('MONITOR')], ['PRINT', 'Imprimer l’écran', () => window.print()], ['HELP', 'Aide', () => go('HELP')], ['SEARCH', 'Rechercher un titre ou une fonction', () => $('cmd').focus()],
+const BBG_GREEN = [['MONITOR', 'Moniteur de marchés (Market Monitor)', () => go('MONITOR')], ['PRINT', 'Imprimer l’écran', () => window.print()], ['SEARCH', 'Rechercher un titre ou une fonction', () => $('cmd').focus()],
   ['QUOTE', 'Description du titre actif (DES)', () => go('DES', ST.sec)], ['NEWS', 'Actualités (Top News)', () => go('NEWS')], ['MENU', 'Menu des fonctions du titre', () => go('MENU', ST.sec)],
   ['PG BACK', 'Écran précédent', () => histGo(-1)], ['PG FWD', 'Écran suivant', () => histGo(1)]];
 function renderKeys() { const f = $('fkeys');

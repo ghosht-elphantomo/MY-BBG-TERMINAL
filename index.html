@@ -5591,7 +5591,7 @@ async function render() {
 }
 /* rangée de touches comme la barre du terminal : GO, F1-F4 (gris), touches vertes du clavier Bloomberg, puis les fonctions de marché */
 const BBG_KEYS = [['F1', 'Aide (HELP)', () => go('HELP')], ['F2', 'Govt : obligations (SRCH)', () => go('SRCH')], ['F3', 'Equity : marché BRVM', () => go('BRVM')], ['F4', 'Index : indices mondiaux (WEI)', () => go('WEI')]];
-const BBG_GREEN = [['MONITOR', 'Moniteur de marchés (Market Monitor)', () => go('MONITOR')], ['PRINT', 'Imprimer l’écran', () => window.print()], ['HELP', 'Aide', () => go('HELP')], ['SEARCH', 'Rechercher un titre ou une fonction', () => $('cmd').focus()],
+const BBG_GREEN = [['MONITOR', 'Moniteur de marchés (Market Monitor)', () => go('MONITOR')], ['PRINT', 'Imprimer l’écran', () => window.print()], ['SEARCH', 'Rechercher un titre ou une fonction', () => $('cmd').focus()],
   ['QUOTE', 'Description du titre actif (DES)', () => go('DES', ST.sec)], ['NEWS', 'Actualités (Top News)', () => go('NEWS')], ['MENU', 'Menu des fonctions du titre', () => go('MENU', ST.sec)],
   ['PG BACK', 'Écran précédent', () => histGo(-1)], ['PG FWD', 'Écran suivant', () => histGo(1)]];
 function renderKeys() { const f = $('fkeys');
@@ -5617,7 +5617,7 @@ function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hi
 /* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
 /* ---------- mise à jour silencieuse du terminal : quand une nouvelle version est en ligne, la page se recharge d'elle-même
    au premier moment calme (onglet en arrière-plan, retour sur l'onglet, ou une minute sans action), en gardant l'écran et ses onglets ---------- */
-const APP_V = 'f2af70f08599';
+const APP_V = '51e8738807e7';
 let APP_NEW = false, APP_ACT = Date.now();
 function appReload() { try { sessionStorage.setItem('fqt_tabs', JSON.stringify(ST.tab)); } catch (e) { } location.reload(); }
 function appMaybe(now) { if (!APP_NEW) return; const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value; if (document.hidden || now || (!typing && Date.now() - APP_ACT > 60000)) appReload(); }
