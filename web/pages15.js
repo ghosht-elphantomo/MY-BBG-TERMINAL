@@ -175,3 +175,49 @@ PAGES.EA = async (m, alive) => {
   }
   const q = $('eaQ'); if (q) q.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); st.q = q.value.trim(); render(); } };
 };
+
+/* ------------------------------------------------------------------ Alertes personnelles (onglet de ALRT) : seuils de cours, de variation,
+   de RSI, de moyenne mobile, de plus haut / bas 52 semaines, de rendement ; vérifiées à chaque relevé, enregistrées dans ce navigateur */
+const MA_K = 'fqt_alerts_v1';
+const maLoad = () => { try { const a = JSON.parse(localStorage.getItem(MA_K) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
+const maSave = A => { try { localStorage.setItem(MA_K, JSON.stringify(A)); } catch (e) { /* stockage indisponible */ } };
+const MA_T = {
+  pxu: ['Cours ≥', s => s.last, (v, t) => v >= t, true], pxd: ['Cours ≤', s => s.last, (v, t) => v <= t, true],
+  up: ['Hausse du jour ≥ (%)', s => s.pct != null ? s.pct * 100 : null, (v, t) => v >= t, true], dn: ['Baisse du jour ≥ (%)', s => s.pct != null ? -s.pct * 100 : null, (v, t) => v >= t, true],
+  rsiu: ['RSI 14 ≥', s => s.rsi, (v, t) => v >= t, true], rsid: ['RSI 14 ≤', s => s.rsi, (v, t) => v <= t, true],
+  mau: ['Cours au-dessus de la MM 200', s => s.sma200 ? (s.last / s.sma200 - 1) * 100 : null, v => v > 0, false], mad: ['Cours sous la MM 200', s => s.sma200 ? (s.last / s.sma200 - 1) * 100 : null, v => v < 0, false],
+  hi: ['Nouveau plus haut 52 semaines', s => s.hi52 ? (s.last / s.hi52 - 1) * 100 : null, v => v >= -1e-9, false], lo: ['Nouveau plus bas 52 semaines', s => s.lo52 ? (s.last / s.lo52 - 1) * 100 : null, v => v <= 1e-9, false],
+  yld: ['Rendement du dividende ≥ (%)', s => s.yld != null ? s.yld * 100 : null, (v, t) => v >= t, true],
+};
+function maCheck(notify = true) {
+  if (!Q.sum || !Q.by) return; const A = maLoad(); let ch = false, fired = [];
+  for (const a of A) { const s = Q.by[a.id], T = MA_T[a.k]; if (!s || !T || a.hit) continue; const v = T[1](s); if (v == null || !isFinite(v)) continue; if (T[2](v, a.v)) { a.hit = Date.now(); a.hv = v; ch = true; fired.push(a); } }
+  if (ch) maSave(A);
+  if (notify && fired.length && typeof Notification !== 'undefined' && Notification.permission === 'granted') for (const a of fired) { try { new Notification(`Alerte ${a.id}`, { body: `${MA_T[a.k][0]}${MA_T[a.k][3] ? ' ' + num(a.v, 2) : ''} · ${px(Q.by[a.id], Q.by[a.id].last)}` }); } catch (e) { /* notifications refusées */ } }
+  const n = A.filter(a => a.hit && !a.seen).length, b = document.getElementById('alB'); if (b) { b.hidden = !n; b.textContent = `🔔 ${n}`; b.title = `${n} alerte(s) déclenchée(s)`; }
+}
+setInterval(() => maCheck(true), 60000); setTimeout(() => maCheck(false), 4000);
+document.addEventListener('click', e => { if (e.target && e.target.id === 'alB') { ST.tab.ALRT = 'mine'; go('ALRT'); } });
+const ALRT_OLD = PAGES.ALRT;
+PAGES.ALRT = async (m, alive) => {
+  const tab = tabState('ALRT', 'sys'); setTabs([['sys', 'Alertes fondamentales'], ['mine', 'Mes alertes']], tab, k => { ST.tab.ALRT = k; render(); });
+  if (tab !== 'mine') return ALRT_OLD(m, alive);
+  setTitle('Alert Monitor · Mes alertes'); maCheck(false); const A = maLoad(); A.forEach(a => { if (a.hit) a.seen = true; }); maSave(A); maCheck(false);
+  const st = ST.ma = ST.ma || { k: 'pxu' };
+  m.innerHTML = `<div class="tools ttb"><span class="tlab">Titre</span><input class="ofld" id="maT" placeholder="SNTS, AAPL…" autocomplete="off" style="width:140px"><span class="tlab">Condition</span><select class="ofld" id="maK">${Object.entries(MA_T).map(([k, t]) => `<option value="${k}" ${st.k === k ? 'selected' : ''}>${t[0]}</option>`).join('')}</select>
+      <span class="tlab">Seuil</span><input class="ofld" id="maV" style="width:90px" ${MA_T[st.k][3] ? '' : 'disabled placeholder="—"'}><button class="tb on" id="maA">Ajouter l’alerte</button><span class="gsp"></span>
+      ${typeof Notification !== 'undefined' && Notification.permission !== 'granted' ? '<button class="tb" id="maN">Activer les notifications du navigateur</button>' : '<span class="dm">notifications du navigateur actives</span>'}</div>
+    ${pn(`Mes alertes · ${A.length}`, 'ALRT', A.length ? `<table class="t"><thead><tr><th class="l">Titre</th><th class="l">Nom</th><th class="l">Condition</th><th>Seuil</th><th>Valeur actuelle</th><th>Cours</th><th class="l">État</th><th></th></tr></thead><tbody>${A.map((a, i) => { const s = Q.by[a.id], T = MA_T[a.k]; const v = s && T ? T[1](s) : null;
+        return `<tr data-sec="${esc(a.id)}" data-to="GP" style="cursor:pointer"><td class="l"><span class="rn">${i + 1})</span><b class="wh">${esc(a.id)}</b></td><td class="l am">${esc(s ? s.short || s.n : '—')}</td><td class="l">${T ? T[0] : '—'}</td><td>${T && T[3] ? num(a.v, 2) : '—'}</td><td>${v != null ? num(v, 2) + (['up', 'dn', 'mau', 'mad', 'hi', 'lo', 'yld'].includes(a.k) ? ' %' : '') : '—'}</td><td class="wh">${s ? px(s, s.last) : '—'}</td>
+          <td class="l">${a.hit ? `<span class="dn">déclenchée</span> <span class="dm">${new Date(a.hit).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>` : '<span class="up">armée</span>'}</td>
+          <td class="l">${a.hit ? `<span class="pdx" data-mre="${i}" title="réarmer">↻</span>` : ''} <span class="pdx" data-mdel="${i}" title="supprimer">✕</span></td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">Aucune alerte. Choisissez un titre, une condition et un seuil.</div>',
+      { np: true, lect: 'Les alertes sont vérifiées à chaque relevé (toutes les 15 minutes) tant que le terminal est ouvert dans ce navigateur ; une alerte déclenchée allume la cloche en haut à droite et, si vous l’avez permis, envoie une notification. ↻ pour la réarmer. Clic sur une ligne : graphique du titre.' })}`;
+  const T = $('maT'); T.oninput = () => { const L = searchSecs(T.value).slice(0, 10); if (!L.length) { ddClose(); return; } ddOpen(T, L.map(s => ({ code: s.id, l: esc(s.short || s.n), run: () => { T.value = s.id; $('maV').focus(); } }))); };
+  $('maK').onchange = e => { st.k = e.target.value; render(); };
+  const add = () => { const s = Q.by[T.value.trim().toUpperCase()] || searchSecs(T.value)[0], v = parseFloat(String($('maV').value).replace(/\s/g, '').replace(',', '.')); if (!s || (MA_T[st.k][3] && !isFinite(v))) { T.focus(); return; }
+    const B = maLoad(); B.push({ id: s.id, k: st.k, v: MA_T[st.k][3] ? v : null, t: Date.now() }); maSave(B); maCheck(false); render(); };
+  $('maA').onclick = add; $('maV').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); add(); } };
+  const nb = $('maN'); if (nb) nb.onclick = () => Notification.requestPermission().then(() => render());
+  m.querySelectorAll('[data-mdel]').forEach(b => b.onclick = e => { e.stopPropagation(); const B = maLoad(); B.splice(+b.dataset.mdel, 1); maSave(B); maCheck(false); render(); });
+  m.querySelectorAll('[data-mre]').forEach(b => b.onclick = e => { e.stopPropagation(); const B = maLoad(), a = B[+b.dataset.mre]; if (a) { a.hit = null; a.seen = false; a.hv = null; } maSave(B); render(); });
+};

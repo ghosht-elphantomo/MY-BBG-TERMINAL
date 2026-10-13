@@ -324,8 +324,9 @@ function renderTbar() {
     <button class="dd" data-dd="1" id="ddSec" title="Titre actif"><span>${esc(s ? (s.short || s.n).toUpperCase() + ' ' + ykey(s).split(' ').pop() : '—')}</span></button>
     <button class="dd" data-dd="1" id="ddFn" title="Fonction"><span>${ST.fn}</span></button>
     <button class="dd rel" data-dd="1" id="ddRel" title="Fonctions associées"><span>Menu des fonctions associées</span></button>
-    <span class="sp"></span><div class="feed" id="feed"><i></i><span id="feedTxt">—</span><button id="syncBtn" hidden title="Récupérer tout de suite le dernier relevé">SYNC</button></div><div class="clocks" id="clocks"></div><button class="qh" id="qh" title="Aide sur cette fonction">?</button>`;
+    <span class="sp"></span><div class="feed" id="feed"><i></i><span id="feedTxt">—</span><button id="syncBtn" hidden title="Récupérer tout de suite le dernier relevé">SYNC</button></div><div class="clocks" id="clocks"></div><button class="alb" id="alB" hidden></button><button class="qh" id="qh" title="Aide sur cette fonction">?</button>`;
   $('hb').onclick = () => histGo(-1); $('hf').onclick = () => histGo(1); bindSync();
+  if (typeof maCheck === 'function') maCheck(false);
   $('qh').onclick = e => ddOpen(e.currentTarget, [{ h: `${ST.fn} · ${FN[ST.fn][4]}` }, { l: esc(FN[ST.fn][3]) }, { h: '' }, { code: 'HELP', l: 'Toutes les fonctions et la syntaxe des commandes', run: () => go('HELP') }]);
   $('ddSec').onclick = e => { const seen = []; for (let i = ST.hist.length - 1; i >= 0 && seen.length < 12; i--) { const id = ST.hist[i][1]; if (id && Q.by[id] && !seen.includes(id)) seen.push(id); }
     ddOpen(e.currentTarget, [{ h: 'Titres récents' }].concat(seen.map((id, i) => ({ n: i + 1, code: id, l: esc(Q.by[id].n), run: () => go(isSec ? ST.fn : 'MENU', id) })), [{ h: 'Autre titre' }, { l: 'Taper un ticker dans la ligne de commande…', run: () => $('cmd').focus() }])); };
