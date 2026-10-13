@@ -383,7 +383,7 @@ def main():
                     SPL[x["ticker"]].append((e_, k_))
     except Exception as e:  # noqa: BLE001
         log("fractionnements illisibles :", e)
-    split_log, force_write = [], set()
+    split_log, force_write, PX_DATE = [], set(), {}
 
     def split_factor(t, date_int, upto):
         """Produit des fractionnements effectifs après `date_int` (et au plus tard à `upto`)."""
@@ -393,18 +393,22 @@ def main():
                 f_ *= k_
         return f_
     today_i = int(os.environ.get("FQT_TODAY") or dt.date.today().strftime("%Y%m%d"))
-    for x in divs:  # dividendes historiques publiés par action ancienne
-        t = x.get("ticker")
-        if not t or t not in SPL or not x.get("dividende"):
-            continue
-        ds_ = x.get("date_detachement") or x.get("date_paiement") or (f"{int(x['exercice']) + 1}-06-30" if x.get("exercice") else None)
-        if not ds_:
-            continue
-        f_ = split_factor(t, di(ds_[:10]), today_i)
-        if f_ != 1.0:
-            x["dividende_publie"] = x["dividende"]
-            x["dividende"] = round(x["dividende"] / f_, 4)
-            x["ajust"] = f_
+
+    def adj_divs(tk, only=None):
+        """Dividendes publiés par action ancienne ramenés sur la base actuelle (tous les fractionnements, ou seulement `only`)."""
+        for x in divs:
+            if x.get("ticker") != tk or not x.get("dividende"):
+                continue
+            ds_ = x.get("date_detachement") or x.get("date_paiement") or (f"{int(x['exercice']) + 1}-06-30" if x.get("exercice") else None)
+            if not ds_:
+                continue
+            d0 = di(ds_[:10])
+            f_ = (only[1] if d0 < only[0] <= today_i else 1.0) if only else split_factor(tk, d0, today_i)
+            if f_ != 1.0:
+                x.setdefault("dividende_publie", x["dividende"])
+                x["dividende"] = round(x["dividende"] / f_, 4)
+                x["ajust"] = round((x.get("ajust") or 1.0) * f_, 6)
+
     status = json.load(open(os.path.join(src, "trading_status.json"), encoding="utf8"))
     session = json.load(open(a.session, encoding="utf8")) if a.session and os.path.exists(a.session) else None
     sess_rows = {r["t"]: r for r in (session or {}).get("rows", [])}
@@ -452,10 +456,41 @@ def main():
         f = fund.get(t, {})
         shares = f.get("nb_titres")
         bnpa_, dfund_ = f.get("bnpa"), f.get("dividende")
+        # fractionnement ou regroupement absent de la base d'avis : sur la BRVM la variation d'une séance est bornée (±7,5 %),
+        # un écart égal à un rapport usuel (2, 5, 10…) et confirmé par les deux séances suivantes ne peut être qu'une opération sur titres
+        STD_ = [2, 3, 4, 5, 10, 20, 25, 40, 50, 64, 100]
+        i2d = lambda x: dt.date(x // 10000, x // 100 % 100, x % 100)  # noqa: E731
+
+        def jump_at(e0, k0):  # le cours saute-t-il du rapport k0 à la date e0 ?
+            j0 = next((j for j, r in enumerate(rows) if r[0] >= e0), None)
+            return bool(j0 and rows[j0 - 1][4] and rows[j0][4] and abs(math.log((rows[j0 - 1][4] / rows[j0][4]) / k0)) < math.log(1.4))
+        for i_ in range(1, len(rows) - 1):
+            a_, b_ = rows[i_ - 1][4], rows[i_][4]
+            if not a_ or not b_ or 0.6 < a_ / b_ < 1.65:
+                continue
+            r_ = a_ / b_
+            k_ = next((float(k) for k in STD_ if abs(math.log(r_ / k)) < math.log(1.12)), None) or next((1.0 / k for k in STD_ if abs(math.log(r_ * k)) < math.log(1.12)), None)
+            if not k_ or not (rows[i_ + 1][4] and abs(rows[i_ + 1][4] / b_ - 1) < .25):
+                continue  # confirmé par la séance suivante (une erreur de saisie isolée est ignorée)
+            e_ = rows[i_][0]
+            near = [(e0, k0) for e0, k0 in SPL.get(t, []) if abs((i2d(e0) - i2d(e_)).days) < 400 and abs(k0 - k_) < 1e-6]
+            if any(abs((i2d(e0) - i2d(e_)).days) < 45 for e0, _ in near):
+                continue  # même opération que l'avis
+            if near and not jump_at(near[0][0], near[0][1]):
+                # la source des cours a appliqué l'opération à une autre date que l'avis : les cours sont ajustés à la date du saut,
+                # les dividendes et données par action restent rattachés à la date d'effet de l'avis
+                PX_DATE[(t, near[0][0])] = e_
+                split_log.append(f"{t} {e_} x{k_:g} : saut de cours rattaché à l'avis du {near[0][0]}")
+            else:
+                SPL[t].append((e_, k_))
+                split_log.append(f"{t} {e_} x{k_:g} : opération détectée sur les cours (sans avis dans la base)")
+        if t in SPL:
+            adj_divs(t)
         for e_, k_ in sorted(SPL.get(t, [])):
             if e_ > rows[-1][0]:
                 continue  # pas encore effectif
-            i_ = next((j for j, r in enumerate(rows) if r[0] >= e_), None)
+            ep_ = PX_DATE.get((t, e_), e_)
+            i_ = next((j for j, r in enumerate(rows) if r[0] >= ep_), None)
             if i_ and rows[i_ - 1][4] and rows[i_][4] and abs(math.log((rows[i_ - 1][4] / rows[i_][4]) / k_)) < math.log(1.4):
                 rows = [(r[0], r[1] / k_, r[2] / k_, r[3] / k_, r[4] / k_, int(round(r[5] * k_)), r[6]) if j < i_ else r for j, r in enumerate(rows)]
                 split_log.append(f"{t} {e_} x{k_:g} : cours antérieurs ajustés")
