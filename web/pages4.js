@@ -6,6 +6,9 @@ const P1 = (v, d = 1) => v == null || !isFinite(v) ? '—' : num(v * 100, d) + '
 const NDc = (why = '') => `<span class="dm" title="${esc(why)}">n.d.</span>`;
 const yLab = d => String(Math.floor(d / 10000));
 const isBRVM = s => s && s.mkt === 'BRVM';
+/* montant échangé du jour : officiel (bulletin de la cote BRVM) ou estimation volume × cours, signalée « ≈ » */
+const valEst = s => !!s && (s.mkt !== 'BRVM' || !!s.vde);
+const valTxt = (s, v) => v ? `${valEst(s) ? '<span class="dm" title="Estimation : volume × cours. BRVM : le montant officiel paraît dans le bulletin de la cote du soir.">≈</span> ' : ''}${big(v)}` : '—';
 /* Unités des comptes : US en millions de dollars, BRVM en milliards de FCFA (sources en millions). */
 const unitOf = F => F.mkt === 'BRVM' ? { k: 1e-3, lab: 'Md FCFA', d: 1 } : { k: 1e-6, lab: 'M$', d: 0 };
 function gr(a, i) { const p = a[i - 1], c = a[i]; return p != null && c != null && p > 0 ? c / p - 1 : null; }

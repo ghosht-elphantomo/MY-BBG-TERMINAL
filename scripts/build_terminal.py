@@ -544,6 +544,19 @@ def main():
             s = sess_rows[t]
             bar = (sess_d, s.get("o") or s["c"], max(s["c"], s.get("o") or s["c"]), min(s["c"], s.get("o") or s["c"]), s["c"], s.get("vol", 0), int((s.get("vol") or 0) * s["c"]))
             rows = [r for r in rows if r[0] != sess_d] + [bar]
+        # volumes et montants échangés : ceux du bulletin officiel de la cote quand il existe (montant jugé lisible s'il est à ±30 % de volume × cours) ;
+        # sinon le montant du jour n'est qu'une estimation (volume × cours de clôture), signalée comme telle
+        val_est = bool(rows) and rows[-1][0] == sess_d and t in sess_rows
+        if BOC.get(t) and rows:
+            B_ = BOC[t]
+            for i_, r in enumerate(rows):
+                b_ = B_.get(r[0])
+                if b_ and b_.get("val") and b_.get("vol") and r[4] and 0.7 < b_["val"] / (b_["vol"] * r[4]) < 1.3:
+                    if (int(b_["vol"]), int(b_["val"])) != (r[5], r[6]):
+                        boc_chk["val_fix"] = boc_chk.get("val_fix", 0) + 1
+                    rows[i_] = tuple(r[:5]) + (int(b_["vol"]), int(b_["val"]))
+                    if r[0] == rows[-1][0]:
+                        val_est = False
         if len(rows) < 3:
             continue
         f = fund.get(t, {})
@@ -647,7 +660,7 @@ def main():
                 "dps_adj": ld.get("ajust"), "split": [[e_, k_] for e_, k_ in sorted(SPL.get(t, []))] or None,
                 "per": rnd(last / bnpa_, 2) if bnpa_ and bnpa_ > 0 else None,
                 "yld": rnd((ld.get("dividende") or 0) / last, 5) if ld.get("dividende") else None,
-                "susp": (status.get(t) or {}).get("statut") == "suspendue"}
+                "susp": (status.get(t) or {}).get("statut") == "suspendue", **({"vde": 1} if val_est else {})}
         add(meta, [r[0] for r in rows], [r[4] for r in rows], [r[1] for r in rows], [r[2] for r in rows], [r[3] for r in rows],
             [r[5] for r in rows], [r[6] for r in rows], nd=2)
     rep = json.load(open(os.path.join(src, "indices", "indices_report.json"), encoding="utf8"))

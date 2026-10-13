@@ -353,7 +353,7 @@ function renderSech() {
       <span class="p ${c}">${arr}${px(s, s.last)}</span><span class="${c}">${ch > 0 ? '+' : ''}${px(s, ch)}</span><span class="${c}">${s.pct != null ? (s.pct > 0 ? '+' : '') + num(s.pct * 100, 2) + '%' : ''}</span>${sp}${xt}
       ${s.susp ? '<span class="dn">COTATION SUSPENDUE</span>' : ''}</div>
     <div class="l2"><i class="bars"></i>${kv(s.live ? 'À' : 'Clôt.', s.live && tm ? tm : fd(s.dt), s.live ? ' ' + fd(s.dt).slice(0, 5) : '')}${kv('Vol', s.shd != null ? num(s.shd, 0) : null)}${kv('O', q.o ? px(s, q.o) : null)}${kv('H', q.h ? px(s, q.h) : null)}${kv('L', q.l ? px(s, q.l) : null)}
-      ${kv('Val', q.val ? big(q.val) : brvm && s.vday ? big(s.vday) : null)}${kv('Préc', px(s, s.prev))}${kv('52s', s.hi52 ? px(s, s.lo52) + ' – ' + px(s, s.hi52) : null)}${s.mcap ? kv('Capi', big(s.mcap), ' ' + (brvm ? 'XOF' : 'USD')) : ''}${s.per ? kv('PER', num(s.per, 1)) : ''}${s.yld ? kv('Rdt', num(s.yld * 100, 2) + '%') : ''}
+      ${kv('Val', brvm ? (s.vday || q.val ? valTxt(s, s.vday || q.val) : null) : q.val ? valTxt(s, q.val) : null)}${kv('Préc', px(s, s.prev))}${kv('52s', s.hi52 ? px(s, s.lo52) + ' – ' + px(s, s.hi52) : null)}${s.mcap ? kv('Capi', big(s.mcap), ' ' + (brvm ? 'XOF' : 'USD')) : ''}${s.per ? kv('PER', num(s.per, 1)) : ''}${s.yld ? kv('Rdt', num(s.yld * 100, 2) + '%') : ''}
       ${us && q.ms ? `<span class="ex">${esc(q.ms)}</span>` : ''}</div>`;
 }
 /* Bandeau d'actualités du bas : les 4 dernières dépêches, numérotées, avec source et heure. */
