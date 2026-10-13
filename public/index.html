@@ -5048,6 +5048,47 @@ PAGES.WIRP = async (m, alive) => {
     .set({ x: R.map(x => +x.r.exp.replace(/-/g, '')), series: [{ y: R.map(x => x.imp), color: '#5fd0ea', w: 2, label: 'Taux implicite', fmt: v => num(v, 3) + ' %' }] }, [0, R.length - 1]);
 };
 
+/* ------------------------------------------------------------------ BRIEF : synthèse du jour (BRVM, portefeuille, alertes, marchés mondiaux,
+   changes et matières, taux, agenda du jour, actualités) — une page de départ pour la séance */
+PAGES.BRIEF = async (m, alive) => {
+  setTitle('Daily Briefing'); const [W, C, N, DV, E] = await Promise.all([WMKT(), getJSON('calendar.json').catch(() => null), getJSON('news.json').catch(() => null), getJSON('dividends.json').catch(() => []), getJSON('ee.json').catch(() => null)]); if (!alive()) return;
+  const today = new Date().toISOString().slice(0, 10), wk = new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
+  const idx = Object.fromEntries(((W && W.idx) || []).map(r => [r.s, r])), cmd = Object.fromEntries(((W && W.cmd) || []).map(r => [r.s, r])), fx = Object.fromEntries(((W && W.fx) || []).map(r => [r.s, r])), rt = Object.fromEntries(((W && W.rt) || []).map(r => [r.s, r]));
+  const L = (lab, last, pct, d = 2, fn = '') => `<tr${fn ? ` data-fn="${fn}" style="cursor:pointer"` : ''}><td class="l am">${lab}</td><td class="wh">${last != null ? num(last, d) : '—'}</td><td>${pc(pct)}</td></tr>`;
+  const br = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity' && s.pct != null), up = br.filter(s => s.pct > 0).length, dn = br.filter(s => s.pct < 0).length, mv = br.slice().sort((a, b) => b.pct - a.pct);
+  const p1 = pn('1) BRVM', 'BRVM', `<table class="t"><tbody>${['BRVMC', 'BRVM30', 'BRVMPR'].map(id => Q.by[id]).filter(Boolean).map(s => `<tr data-sec="${s.id}" data-to="GP" style="cursor:pointer"><td class="l am">${esc(s.n)}</td><td class="wh">${num(s.last, 2)}</td><td>${pc(s.pct)}</td><td>${pc(s.ytd, 1)}</td></tr>`).join('')}
+      <tr class="sep2"><td class="l">Hausses / baisses</td><td class="wh" colspan="3"><span class="up">${up}</span> / <span class="dn">${dn}</span> · montant ${big(br.reduce((a, s) => a + (s.vday || 0), 0))} XOF</td></tr>
+      ${mv.slice(0, 3).concat(mv.slice(-3)).map(s => `<tr data-sec="${s.id}" data-to="GP" style="cursor:pointer"><td class="l"><b class="wh">${s.id}</b> <span class="am">${esc(s.short || s.n)}</span></td><td class="wh">${px(s, s.last)}</td><td>${pc(s.pct)}</td><td></td></tr>`).join('')}</tbody></table>`, { np: true });
+  const P = portLoad(); let p2 = '';
+  if (P.pos.length) { const UF = W && W.fx ? fxUsd(W) : { USD: { now: 1, d: 1 } }; const cv = (v, c, k = 'now') => c === P.base ? v : (c === 'XOF' && P.base === 'EUR') ? v / XOF_EUR : (c === 'EUR' && P.base === 'XOF') ? v * XOF_EUR : UF[c] && UF[P.base] ? v * UF[c][k] / UF[P.base][k] : null;
+    const R = P.pos.map(p => { const s = Q.by[p.id]; if (!s) return null; const v = cv(p.q * s.last, s.ccy), v0 = s.prev ? cv(p.q * s.prev, s.ccy, 'd') : null; return v != null ? { s, v, d: v0 != null ? v - v0 : 0 } : null; }).filter(Boolean);
+    const tot = R.reduce((a, r) => a + r.v, 0), dj = R.reduce((a, r) => a + r.d, 0), dec = P.base === 'XOF' ? 0 : 2; R.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+    p2 = pn('2) Votre portefeuille', 'PORT', `<div class="kv2"><span>Valeur</span><b class="wh">${num(tot, dec)} ${P.base}</b><span>Résultat du jour</span><b><span class="${cls(dj)}">${dj > 0 ? '+' : ''}${num(dj, dec)}</span> (${pc(tot - dj ? dj / (tot - dj) : null)})</b>${R.slice(0, 3).map(r => `<span>${r.s.id}</span><b><span class="${cls(r.d)}">${r.d > 0 ? '+' : ''}${num(r.d, dec)}</span></b>`).join('')}</div>`); }
+  else p2 = pn('2) Votre portefeuille', 'PORT', '<div class="dm" style="padding:6px">Aucune position enregistrée : PORT pour saisir vos titres.</div>');
+  const A = maLoad(), hit = A.filter(a => a.hit);
+  const p3 = pn(`3) Mes alertes · ${hit.length} déclenchée${hit.length > 1 ? 's' : ''} sur ${A.length}`, 'ALRT', hit.length ? `<table class="t"><tbody>${hit.slice(0, 6).map(a => `<tr data-sec="${esc(a.id)}" data-to="GP" style="cursor:pointer"><td class="l wh">${esc(a.id)}</td><td class="l">${MA_T[a.k] ? MA_T[a.k][0] : ''}${a.v != null ? ' ' + num(a.v, 2) : ''}</td><td class="dm">${new Date(a.hit).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</td></tr>`).join('')}</tbody></table>` : `<div class="dm" style="padding:6px">${A.length ? 'Aucune alerte déclenchée.' : 'Aucune alerte : ALRT, onglet « Mes alertes ».'}</div>`, { np: true });
+  const fut = [['@SP.1', 'S&P 500 (contrat)'], ['@ND.1', 'Nasdaq-100 (contrat)']].filter(x => cmd[x[0]]);
+  const p4 = pn('4) Marchés mondiaux', 'WEI', `<table class="t"><tbody>${fut.map(([k, l]) => L(l, cmd[k].last, cmd[k].pct, 2, 'WEIF')).join('')}${[['.SPX', 'S&P 500'], ['.IXIC', 'Nasdaq Composite'], ['.STOXX50E', 'Euro Stoxx 50'], ['.FCHI', 'CAC 40'], ['.GDAXI', 'DAX'], ['.FTSE', 'FTSE 100'], ['.N225', 'Nikkei 225'], ['.HSI', 'Hang Seng'], ['.VIX', 'VIX']].filter(x => idx[x[0]]).map(([k, l]) => L(l, idx[k].last, idx[k].pct, 2, 'WEI')).join('')}</tbody></table>`, { np: true });
+  const xo = fx['XOF='], eu = fx['EUR='];
+  const p5 = pn('5) Changes et matières premières', 'GLCO', `<table class="t"><tbody>${eu ? L('EUR / USD', eu.last, eu.pct, 4, 'WCRS') : ''}${eu ? L('USD / XOF (parité euro)', XOF_EUR / eu.last, eu.pct != null ? 1 / (1 + eu.pct) - 1 : null, 2, 'FX') : xo ? L('USD / XOF', xo.last, xo.pct, 2, 'FX') : ''}${fx['.DXY'] ? L('Indice dollar (DXY)', fx['.DXY'].last, fx['.DXY'].pct, 3, 'WCRS') : ''}
+      ${[['@CC.1', 'Cacao ($/t)'], ['@KC.1', 'Café arabica (¢/lb)'], ['@CT.1', 'Coton (¢/lb)'], ['@GC.1', 'Or ($/once)']].filter(x => cmd[x[0]]).map(([k, l]) => L(l, cmd[k].last, cmd[k].pct, 2, 'GLCO')).join('')}</tbody></table>`, { np: true });
+  const bpc = r => r && r.chg != null ? `<span class="${cls(r.chg)}">${r.chg > 0 ? '+' : ''}${num(r.chg * 100, 1)} pb</span>` : '—';
+  const ff = ((W && W.cmd) || []).filter(r => r.g === 'FF').sort((a, b) => String(a.exp).localeCompare(String(b.exp)));
+  const p6 = pn('6) Taux', 'BTMM', `<table class="t"><tbody>${[['US2Y', 'Trésor US 2 ans'], ['US10Y', 'Trésor US 10 ans'], ['DE10Y-DE', 'Allemagne 10 ans']].filter(x => rt[x[0]]).map(([k, l]) => `<tr data-fn="WB" style="cursor:pointer"><td class="l am">${l}</td><td class="wh">${num(rt[k].last, 3)} %</td><td>${bpc(rt[k])}</td></tr>`).join('')}
+      ${ff.length > 3 ? `<tr data-fn="WIRP" style="cursor:pointer"><td class="l am">Fed funds implicite (${new Date(ff[3].exp + 'T12:00:00Z').toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })})</td><td class="wh">${num(100 - ff[3].last, 3)} %</td><td class="dm">${num((100 - ff[3].last - (100 - ff[0].last)) * 100, 0)} pb vs 1er mois</td></tr>` : ''}</tbody></table>`, { np: true });
+  const ev = C && C.rows ? C.rows.map(r => Object.assign({ T: ecoDT(r.d) }, r)).filter(r => r.d.slice(0, 10) === today && r.i >= 0).sort((a, b) => a.d.localeCompare(b.d)) : [];
+  const er = E ? Object.entries(E).map(([id, x]) => { const mm = String(x.ed || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); const d = mm ? `${mm[3]}-${mm[1].padStart(2, '0')}-${mm[2].padStart(2, '0')}` : null; return d && d >= today && d <= wk && Q.by[id] ? { id, d, w: /after market/i.test(x.ed) ? 'après clôture' : /before market/i.test(x.ed) ? 'avant ouverture' : '' } : null; }).filter(Boolean).sort((a, b) => a.d.localeCompare(b.d)) : [];
+  const dv = (Array.isArray(DV) ? DV : []).filter(x => x.det && x.det >= today && x.det <= wk).sort((a, b) => a.det.localeCompare(b.det));
+  const p7 = pn('7) Agenda', 'ECO', `<table class="t"><tbody>${ev.slice(0, 10).map(r => `<tr data-fn="ECO" style="cursor:pointer"><td class="l dm">${r.T.hm}</td><td class="l">${flagSVG(r.c, 16, 10)} ${esc(r.t)}</td><td>${r.f != null ? '<span class="dm">prév.</span> ' + esc(String(r.f)) : ''}${r.a != null ? ' <b class="wh">' + esc(String(r.a)) + '</b>' : ''}</td></tr>`).join('') || '<tr><td class="l dm" colspan="3">Aucune publication importante aujourd’hui.</td></tr>'}
+      ${er.length ? `<tr class="grp"><td class="l" colspan="3">Résultats US des 7 prochains jours</td></tr>${er.slice(0, 8).map(r => `<tr data-sec="${r.id}" data-to="EE" style="cursor:pointer"><td class="l dm">${fds(r.d).slice(0, 5)}</td><td class="l"><b class="wh">${r.id}</b> <span class="am">${esc(Q.by[r.id].short || Q.by[r.id].n)}</span></td><td class="dm">${r.w}</td></tr>`).join('')}` : ''}
+      ${dv.length ? `<tr class="grp"><td class="l" colspan="3">Détachements de dividendes BRVM (7 jours)</td></tr>${dv.map(x => `<tr data-sec="${x.t}" data-to="DVD" style="cursor:pointer"><td class="l dm">${fds(x.det).slice(0, 5)}</td><td class="l"><b class="wh">${x.t}</b> ${num(x.dps, 2)} XOF net</td><td>${Q.by[x.t] ? num(x.dps / Q.by[x.t].last * 100, 2) + ' %' : ''}</td></tr>`).join('')}` : ''}</tbody></table>`, { np: true });
+  const it = (N && N.items ? N.items : []).slice().sort((a, b) => b.t - a.t).filter((x, i, a) => a.findIndex(y => y.ti === x.ti) === i).slice(0, 10);
+  const p8 = pn('8) À la une', 'TOP', `<div>${it.map((x, i) => `<div class="tn" data-u="${esc(x.u || '')}"><span class="no">${i + 1})</span><span class="h">${esc(x.ti)}</span><span class="s">${esc(x.s || '')}</span><span class="t">${new Date(x.t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' })}</span></div>`).join('')}</div>`, { np: true });
+  m.innerHTML = `<div class="grid c3"><div class="grid">${p1}${p2}${p3}</div><div class="grid">${p4}${p5}${p6}</div><div class="grid">${p7}${p8}</div></div>`;
+  m.querySelectorAll('[data-fn]').forEach(r => { if (r.tagName === 'TR') r.onclick = () => go(r.dataset.fn); });
+  m.querySelectorAll('.tn[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
+};
+
 </script>
 <script>
 /* ================= FQT — données, formats, ligne de commande, chrome Bloomberg, routeur ================= */
@@ -5060,6 +5101,7 @@ const ST = { fn: 'MON', sec: 'QQQ', gp: { range: '1A', type: 'bbg', ov: { sma50:
 /* Registre des fonctions : code -> [libellé, portée (sec = titre, mkt = marché), groupe, définition courte, titre Bloomberg]
    Les définitions suivent celles de l'autocomplétion Bloomberg (nom anglais de la fonction + ce qu'elle montre). */
 const FN = {
+  BRIEF: ['Synthèse du jour', 'mkt', 'Marchés', 'BRVM, portefeuille, alertes, marchés mondiaux, changes, matières, taux, agenda du jour et actualités sur une page', 'Daily Briefing'],
   MON: ['Moniteur de marchés', 'mkt', 'Marchés', 'Tous les titres suivis, signal SMA 200 de QQQ, séance BRVM, carte des capitalisations', 'Market Monitor'],
   BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs', 'BRVM Overview'],
   IMAP: ['Carte de chaleur', 'mkt', 'Marchés', 'BRVM, États-Unis, Europe, Royaume-Uni, Asie : surface = capitalisation, couleur = variation', 'Intraday Market Map'],
@@ -5130,7 +5172,7 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['MON', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'WIRP', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['BRIEF', 'MON', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'WIRP', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -5141,7 +5183,7 @@ const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: [
   BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECWB', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
   ECO: ['ECST', 'ECWB', 'WB', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'WB'], ECWB: ['ECO', 'ECST', 'WB', 'MACRO'],
-  WCRS: ['FXC', 'FX', 'WEI', 'WB'], BTMM: ['WIRP', 'WB', 'GC', 'ECWB', 'ECO'], PORT: ['EQS', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'TOP'], WIRP: ['BTMM', 'WB', 'ECO'], FXC: ['WCRS', 'FX', 'UEMOA'], FX: ['WCRS', 'FXC', 'UEMOA'] };
+  WCRS: ['FXC', 'FX', 'WEI', 'WB'], BTMM: ['WIRP', 'WB', 'GC', 'ECWB', 'ECO'], PORT: ['EQS', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'TOP'], BRIEF: ['MON', 'PORT', 'ECO', 'TOP'], WIRP: ['BTMM', 'WB', 'ECO'], FXC: ['WCRS', 'FX', 'UEMOA'], FX: ['WCRS', 'FXC', 'UEMOA'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
