@@ -182,10 +182,13 @@ function initCmd() {
       const fns = Object.keys(FN).filter(k => has(k) && k !== 'MENU' && L && (k.startsWith(L) || FN[k][0].toUpperCase().startsWith(L) || FN[k][4].toUpperCase().startsWith(L)))
         .map(k => ({ k: 'fn', id: k, a: k, b: `${esc(FN[k][4])} <i>— ${esc(FN[k][3])}</i>`, c: FN[k][1] === 'sec' ? 'fonction titre' : 'fonction', tt: FN[k][3] }));
       const ss = searchSecs(last).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: ykey(s), b: esc(s.n), c: s.mkt === 'BRVM' ? 'BRVM' : s.mkt === 'US' ? (s.typ === 'ETF' ? 'ETF US' : 'US') : s.cls }));
-      items = (ss.length && ss[0].id.toUpperCase() === L ? ss.concat(fns) : fns.concat(ss)).slice(0, 18);
+      /* sections comme l'autocomplétion du terminal : FONCTIONS puis TITRES (ou l'inverse si le texte est un ticker exact) */
+      const F = fns.slice(0, 8), T = ss.slice(0, 10), secFirst = ss.length && ss[0].id.toUpperCase() === L;
+      const blk = (lab, arr) => arr.length ? [{ k: 'h', a: lab }].concat(arr) : [];
+      items = secFirst ? blk('TITRES', T).concat(blk('FONCTIONS', F)) : blk('FONCTIONS', F).concat(blk('TITRES', T));
     }
     sel = Math.max(0, items.findIndex(it => it.k !== 'h' && !it.off)); ac.hidden = !items.length;
-    ac.innerHTML = items.map(row).join('') + (items.length && items.some(it => it.k === 'sec') ? '<p class="hint">Entrée : menu du titre · espace ou Tab : ses fonctions avec leur définition</p>' : items.some(it => it.k === 'sfn') ? '<p class="hint">↑ ↓ puis Entrée · ou tapez le code (ex. FA) · grisé = non disponible pour ce titre</p>' : '');
+    ac.innerHTML = (items.length ? '<p class="ahd"><i>&lt;FLÈCHE HAUT&gt; pour masquer</i><span>Autocomplétion</span></p>' : '') + items.map(row).join('') + (items.length && items.some(it => it.k === 'sec') ? '<p class="hint">Entrée : menu du titre · espace ou Tab : ses fonctions avec leur définition</p>' : items.some(it => it.k === 'sfn') ? '<p class="hint">↑ ↓ puis Entrée · ou tapez le code (ex. FA) · grisé = non disponible pour ce titre</p>' : '');
   };
   const pick = (i, tab) => { const it = items[i]; if (!it || it.k === 'h') return;
     if (it.k === 'sec' && tab) { inp.value = it.id + ' '; show(); return; }
@@ -195,6 +198,7 @@ function initCmd() {
     [...ac.querySelectorAll('[data-i]')].forEach(c => c.classList.toggle('on', +c.dataset.i === sel)); const d0 = ac.querySelector('div.on'); if (d0) d0.scrollIntoView({ block: 'nearest' }); };
   inp.addEventListener('input', show); inp.addEventListener('focus', () => { if (inp.value) show(); });
   inp.addEventListener('keydown', e => { if (ac.hidden) return;
+    if (e.key === 'ArrowUp' && sel === items.findIndex(it => it.k !== 'h' && !it.off)) { e.preventDefault(); ac.hidden = true; return; }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); step(e.key === 'ArrowDown' ? 1 : -1); }
     if (e.key === 'Tab') { e.preventDefault(); pick(sel, true); } if (e.key === 'Escape') { ac.hidden = true; } });
   ac.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); if (d) { e.preventDefault(); pick(+d.dataset.i); } });

@@ -47,15 +47,16 @@ a{color:var(--cyan)}
 .go{background:var(--fkey);color:#000;border:0;font:700 11.5px var(--mono);padding:0 12px;margin:2px;letter-spacing:.04em;border-radius:2px}
 .go:hover{background:#4fd673}
 .ac{position:absolute;left:0;right:0;top:100%;background:#000;border:1px solid #444;border-top:0;max-height:min(70vh,560px);overflow:auto;z-index:40;box-shadow:0 8px 20px rgba(0,0,0,.6)}
-.ac div{display:grid;grid-template-columns:150px 1fr 104px;gap:10px;padding:3px 8px;cursor:pointer;font-size:12.5px;align-items:baseline}
-.ac div b{color:var(--white);font-weight:700}
-.ac div span{color:var(--amber);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ac div span i{font-style:normal;color:var(--dim)}
+.ac div{display:grid;grid-template-columns:170px 1fr 104px;gap:10px;padding:2px 8px;cursor:pointer;font-size:13.5px;align-items:baseline}
+.ac div b{color:var(--white);font-weight:var(--fw)}
+.ac div span{color:var(--white);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ac div span i{font-style:italic;color:#d9d9d9}
 .ac div span:last-child{color:var(--dim);text-align:right;font-size:11.5px}
 .ac div.on,.ac div:hover{background:var(--sel)}
 .ac div.on span,.ac div:hover span{color:#fff}
 .ac div.off b,.ac div.off span{color:var(--dim2)}
-.ac .ach{display:block;margin:0;padding:2px 8px;background:var(--hdr);color:#fff;font-size:11.5px;cursor:default}
+.ac .ach{display:block;margin:0;padding:5px 8px 1px;background:#000;color:var(--amber);font-size:12px;letter-spacing:.06em;cursor:default}
+.ac .ahd{display:flex;justify-content:space-between;margin:0;padding:2px 8px;font-size:11.5px;color:#6f6f6f;border-bottom:1px solid #222}.ac .ahd i{margin-left:30%}.ac .ahd span{color:var(--link)}
 .ac .hint{margin:0;padding:4px 8px;color:var(--dim);font-size:11px;border-top:1px solid var(--line2)}
 
 /* ---------- barre d'outils (◀ ▶, titre, fonction, fonctions associées) ---------- */
