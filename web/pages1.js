@@ -228,7 +228,7 @@ PAGES.GP = async (m, alive) => {
     const I = Q.live.intraday, tt = I.t.map(t => { const d = new Date(t * 1000); return d.getUTCFullYear() * 1e8 + (d.getUTCMonth() + 1) * 1e6 + d.getUTCDate() * 1e4 + d.getUTCHours() * 100 + d.getUTCMinutes(); });
     const ny = t => new Date(t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' });
     chart = new TSChart($('gpCv'), { panes: [{ h: 3 }, { h: .8 }], grid: bbg ? 'dot' : null, xfmt: (v) => { const i = tt.indexOf(v); return i >= 0 ? ny(I.t[i]) : ''; } }); chart.intra = true;
-    chart.set({ x: tt, series: [bbg ? { type: 'area', y: I.c, color: '#ffffff', w: 1.3, grad: ['rgba(32,74,140,.95)', 'rgba(4,22,58,.92)'], label: 'QQQ 5 min (heure NY)' } : { type: 'candle', o: I.o, h: I.h, l: I.l, c: I.c, label: 'QQQ 5 min (heure NY)' }, { pane: 1, type: 'bar', y: I.v, colorFn: (v, i) => I.c[i] >= I.o[i] ? rgba(CL.up, .6) : rgba(CL.dn, .6), label: 'Vol' }] }, [0, tt.length - 1]);
+    chart.set({ x: tt, series: [bbg ? { type: 'area', y: I.c, color: '#ffffff', w: 1.3, grad: ['rgba(7,42,82,.97)', 'rgba(3,29,56,.97)'], label: 'QQQ 5 min (heure NY)' } : { type: 'candle', o: I.o, h: I.h, l: I.l, c: I.c, label: 'QQQ 5 min (heure NY)' }, { pane: 1, type: 'bar', y: I.v, colorFn: (v, i) => I.c[i] >= I.o[i] ? rgba(CL.up, .6) : rgba(CL.dn, .6), label: 'Vol' }] }, [0, tt.length - 1]);
     ['gpD0', 'gpD1'].forEach(id => { const e = $(id); if (e) e.disabled = true; });
   } else {
     if (g.cmp.length) {
@@ -239,7 +239,7 @@ PAGES.GP = async (m, alive) => {
         const b = al[i0] || al.find((v, i) => i >= i0 && v != null); ser.push({ y: al.map((v, i) => i < i0 || v == null || !b ? null : v / b - 1), color: colors[k % colors.length], label: cid + (F2 ? ' (' + ccyT + ')' : ''), fmt: fmtPctAxis }); }
     } else {
       if (g.type === 'candle' && !monthly && s.cls !== 'Curncy' && g.px === 'last') ser.push({ type: 'candle', o: S.o, h: S.h, l: S.l, c: S.c, label: s.id, fmt: fmtP });
-      else if (bbg) ser.push({ type: 'area', y: Y0, color: '#ffffff', w: 1.25, grad: ['rgba(34,78,146,.96)', 'rgba(3,20,54,.94)'], label: g.px === 'tr' ? 'Rendement total' : 'Dernier cours', fmt: fmtP });
+      else if (bbg) ser.push({ type: 'area', y: Y0, color: '#ffffff', w: 1.25, grad: ['rgba(7,42,82,.97)', 'rgba(3,29,56,.97)'], label: g.px === 'tr' ? 'Rendement total' : 'Dernier cours', fmt: fmtP });
       else ser.push({ type: g.type === 'area' ? 'area' : 'line', y: Y0, color: CL.white, label: s.id + (g.px === 'tr' ? ' (rendement total)' : ''), fmt: fmtP, fill: rgba(CL.white, .07) });
       MAS.forEach((v, j) => { if (v) ser.push({ y: Array.from(U.sma(Y0, +v)), color: MA_COL[j], w: 1.1, label: 'MM ' + v, fmt: fmtP }); });
       if (g.ov.boll) { const mm = U.sma(Y0, 20), sd = U.rollStd(Y0, 20), up = [], dn = []; for (let i = 0; i < n; i++) { const a = mm[i], v = sd[i]; up.push(isFinite(a) && isFinite(v) ? a + 2 * v : null); dn.push(isFinite(a) && isFinite(v) ? a - 2 * v : null); }
@@ -259,11 +259,11 @@ PAGES.GP = async (m, alive) => {
       if (!k) return; const lastV = Y0[o.i1];
       const rows = [['■', (g.px === 'tr' ? 'Rendement total' : 'Dernier cours') + (FXF ? ' (' + ccyT + ')' : ''), fmtP(lastV)], ['⊤', 'Plus haut le ' + dmyShort(S.x[hiI]), fmtP(hi)], ['+', 'Moyenne', num(sum / k, dec + 2)], ['⊥', 'Plus bas le ' + dmyShort(S.x[loI]), fmtP(lo)]];
       MAS.forEach((v, j) => { if (v) { const a = U.sma(Y0, +v)[o.i1]; rows.push(['─', 'MM ' + v, isFinite(a) ? fmtP(a) : '—', MA_COL[j]]); } });
-      x.font = '400 12px ' + MONO; x.textBaseline = 'middle'; const w1 = Math.max(...rows.map(r => x.measureText(r[1]).width)), w2 = Math.max(...rows.map(r => x.measureText(r[2]).width)), W = 26 + w1 + 14 + w2 + 10, H = rows.length * 16 + 6;
+      x.font = '460 12px ' + MONO; x.textBaseline = 'middle'; const w1 = Math.max(...rows.map(r => x.measureText(r[1]).width)), w2 = Math.max(...rows.map(r => x.measureText(r[2]).width)), W = 26 + w1 + 14 + w2 + 10, H = rows.length * 16 + 6;
       x.fillStyle = 'rgba(0,0,0,.82)'; x.fillRect(8, L.top + 6, W, H); x.strokeStyle = '#3d3d3d'; x.strokeRect(8.5, L.top + 6.5, W - 1, H - 1);
       rows.forEach((r, j) => { const yy = L.top + 14 + j * 16; x.fillStyle = r[3] || (j === 0 ? '#ffffff' : '#bfbfbf'); x.textAlign = 'center'; x.fillText(r[0], 20, yy); x.fillStyle = '#e6e6e6'; x.textAlign = 'left'; x.fillText(r[1], 30, yy); x.fillStyle = '#ffffff'; x.textAlign = 'right'; x.fillText(r[2], 30 + w1 + 14 + w2, yy); });
-      if (bbg) { const lv = Y0[n - 1], yy = L.Y(lv); if (yy >= L.top && yy <= L.bot) { x.fillStyle = '#ffffff'; x.fillRect(o.W + 1, yy - 8, 62, 16); x.fillStyle = '#000'; x.textAlign = 'left'; x.font = '400 11px ' + MONO; x.fillText(fmtP(lv), o.W + 4, yy); } }
-      if (bbg && o.layout[1] && g.volOn && hasVol) { const V = o.layout[1], vv = S.v[o.i1], txt = 'Volume ' + big(vv), t2 = 'Moy. mob. (15) ' + big(U.sma(S.v, 15)[o.i1]); x.font = '400 11.5px ' + MONO; const ww = Math.max(x.measureText(txt).width, x.measureText(t2).width) + 26;
+      if (bbg) { const lv = Y0[n - 1], yy = L.Y(lv); if (yy >= L.top && yy <= L.bot) { x.fillStyle = '#ffffff'; x.fillRect(o.W + 1, yy - 8, 62, 16); x.fillStyle = '#000'; x.textAlign = 'left'; x.font = '460 11px ' + MONO; x.fillText(fmtP(lv), o.W + 4, yy); } }
+      if (bbg && o.layout[1] && g.volOn && hasVol) { const V = o.layout[1], vv = S.v[o.i1], txt = 'Volume ' + big(vv), t2 = 'Moy. mob. (15) ' + big(U.sma(S.v, 15)[o.i1]); x.font = '460 11.5px ' + MONO; const ww = Math.max(x.measureText(txt).width, x.measureText(t2).width) + 26;
         x.fillStyle = 'rgba(0,0,0,.82)'; x.fillRect(8, V.top + 3, ww, 34); x.strokeStyle = '#3d3d3d'; x.strokeRect(8.5, V.top + 3.5, ww - 1, 33); x.textAlign = 'left'; x.fillStyle = 'rgba(215,215,215,.9)'; x.fillRect(14, V.top + 9, 7, 7); x.fillStyle = '#e6e6e6'; x.fillText(txt, 26, V.top + 13); x.fillStyle = '#ffd200'; x.fillRect(14, V.top + 26, 7, 2); x.fillStyle = '#e6e6e6'; x.fillText(t2, 26, V.top + 28); }
       /* marqueurs : petite étiquette carrée au pied du graphique principal, empilée si plusieurs le même jour */
       const stack = {}; for (const e of EV) { if (e.i < o.i0 || e.i > o.i1) continue; const px = Math.round(o.X(e.i)), lvl = stack[px] = (stack[px] || 0) + 1, yy = L.bot - 4 - lvl * 15;

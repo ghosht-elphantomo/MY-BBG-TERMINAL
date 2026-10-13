@@ -9,7 +9,7 @@ function gauge(host, v, sub) {
   x.lineWidth = 1; x.fillStyle = CL.dim; x.font = FNUM; x.textAlign = 'center'; for (const t of [0, 25, 50, 75, 100]) { const an = Math.PI + t / 100 * Math.PI; x.fillText(t, cx + Math.cos(an) * (R + 16), cy + Math.sin(an) * (R + 16) + 4); }
   if (v != null) { const an = Math.PI + v / 100 * Math.PI; x.strokeStyle = CL.white; x.lineWidth = 3; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(an) * (R - 6), cy + Math.sin(an) * (R - 6)); x.stroke(); x.lineWidth = 1; x.fillStyle = CL.white; x.beginPath(); x.arc(cx, cy, 5, 0, 7); x.fill(); }
   x.fillStyle = 'rgba(0,0,0,.88)'; x.fillRect(cx - 58, cy - R * .35 - 26, 116, 52);
-  x.fillStyle = fgCol(v); x.font = '700 28px ' + MONO; x.fillText(v == null ? '—' : Math.round(v), cx, cy - R * .35); x.font = '400 13px ' + MONO; x.fillText(fgLab(v).toUpperCase(), cx, cy - R * .35 + 20);
+  x.fillStyle = fgCol(v); x.font = '700 28px ' + MONO; x.fillText(v == null ? '—' : Math.round(v), cx, cy - R * .35); x.font = '460 13px ' + MONO; x.fillText(fgLab(v).toUpperCase(), cx, cy - R * .35 + 20);
   if (sub) { x.fillStyle = CL.dim; x.font = FUI; x.fillText(sub, cx, h - 6); }
 }
 const backAt = (d, v, days) => { const t = d[d.length - 1], tgt = (() => { const dt_ = new Date(Date.UTC(Math.floor(t / 10000), Math.floor(t / 100) % 100 - 1, t % 100) - days * 864e5); return dt_.getUTCFullYear() * 10000 + (dt_.getUTCMonth() + 1) * 100 + dt_.getUTCDate(); })();

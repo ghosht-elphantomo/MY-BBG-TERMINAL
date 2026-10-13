@@ -9,7 +9,7 @@ const xMul = v => v == null || !isFinite(v) ? null : num(v, 1) + 'x';
 function hiLo52(S) { const n = S.c.length, k0 = Math.max(0, n - 252); let hi = -Infinity, lo = Infinity, hiI = n - 1, loI = n - 1; for (let i = k0; i < n; i++) { if (S.h[i] > hi) { hi = S.h[i]; hiI = i; } if (S.l[i] < lo) { lo = S.l[i]; loI = i; } } return { hi, lo, hiD: S.x[hiI], loD: S.x[loI] }; }
 function ytdBase(S) { const y = Math.floor(S.x[S.x.length - 1] / 10000); let k = S.x.findIndex(d => Math.floor(d / 10000) === y); return k > 0 ? S.c[k - 1] : S.c[0]; }
 function miniBbg(host, S, n = 252) { const k = Math.max(0, S.x.length - n); const c = new TSChart(host, { panes: [{ h: 1, noLegend: true }], padR: 52, padB: 16, grid: 'dot', xticks: bbgTicks });
-  c.set({ x: S.x.slice(k), series: [{ type: 'area', y: S.c.slice(k), color: '#ffffff', w: 1.1, grad: ['rgba(34,78,146,.96)', 'rgba(3,20,54,.94)'] }] }); return c; }
+  c.set({ x: S.x.slice(k), series: [{ type: 'area', y: S.c.slice(k), color: '#ffffff', w: 1.1, grad: ['rgba(7,42,82,.97)', 'rgba(3,29,56,.97)'] }] }); return c; }
 const MON_EN = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
 const enDate = t => { const m = String(t || '').match(/([A-Z][a-z]{2}) (\d{1,2}), (\d{4})/); return m && MON_EN[m[1]] ? `${m[2].padStart(2, '0')}/${String(MON_EN[m[1]]).padStart(2, '0')}/${m[3]}` : (t || null); };
 const usDate = t => { const m = String(t || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m ? `${m[2].padStart(2, '0')}/${m[1].padStart(2, '0')}/${m[3]}` : null; };

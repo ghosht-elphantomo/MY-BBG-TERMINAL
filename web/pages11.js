@@ -247,5 +247,5 @@ PAGES.MENU = async (m, alive) => {
     ${pn('Aperçu', s.id, `<div class="kv2">${kv.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div><div class="cv" id="mnS" style="height:130px;margin-top:8px"></div>`, { lect: `${esc(s.n)}${s.grp ? ' · ' + esc(s.grp) : ''}` })}</div>`;
   $('bmX').onclick = () => histGo(-1);
   const S = await series(s.id); if (!alive()) return; const k = Math.max(0, S.c.length - 260);
-  new TSChart($('mnS'), { panes: [{ h: 1, noLegend: true }], padR: 50, padB: 16, grid: 'dot', xticks: bbgTicks }).set({ x: S.x.slice(k), series: [{ type: 'area', y: S.c.slice(k), color: '#ffffff', w: 1.1, grad: ['rgba(34,78,146,.96)', 'rgba(3,20,54,.94)'] }] });
+  new TSChart($('mnS'), { panes: [{ h: 1, noLegend: true }], padR: 50, padB: 16, grid: 'dot', xticks: bbgTicks }).set({ x: S.x.slice(k), series: [{ type: 'area', y: S.c.slice(k), color: '#ffffff', w: 1.1, grad: ['rgba(7,42,82,.97)', 'rgba(3,29,56,.97)'] }] });
 };

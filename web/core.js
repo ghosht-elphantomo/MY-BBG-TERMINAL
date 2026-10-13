@@ -204,6 +204,9 @@ function initCmd() {
       if (!typedSecFn && it && (!typedFn || it.a === w[0])) { pick(sel); return; } }
     ac.hidden = true; inp.value = ''; inp.blur(); runCmd(v); });
   inp.addEventListener('blur', () => setTimeout(() => { ac.hidden = true; }, 150));
+  /* touches jaunes du clavier Bloomberg : « SNTS » puis F8 (Equity) = « SNTS Equity <GO> » ; F1 = aide, F2 = obligations */
+  document.addEventListener('keydown', e => { const fk = { F1: 'HELP', F2: 'GOVT', F8: 'Equity', F9: 'Comdty', F10: 'Index' }[e.key]; if (!fk || e.metaKey || e.ctrlKey || e.altKey) return; e.preventDefault();
+    if (fk === 'HELP') { go('HELP'); return; } if (fk === 'GOVT') { go('SRCH'); return; } const v = $('cmd').value.trim(); if (v) { $('cmd').value = ''; runCmd(v); } else { $('cmd').focus(); toast('Tapez un ticker puis ' + e.key + ' (' + fk + ').'); } }, true);
   document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') { if (!$('ddm').hidden) { ddClose(); return; } if (document.body.classList.contains('maxi')) { toggleMaxi(false); return; } go(SECFN.has(ST.fn) && ST.fn !== 'MENU' ? 'MENU' : 'MON'); } });
 }
 
@@ -248,10 +251,10 @@ function exportPNG() { const c = $('main').querySelector('canvas'); if (!c) { to
 /* ---------- onglets de fenêtre (comme les onglets du terminal Bloomberg) : un écran par onglet, « + » pour en ouvrir un ---------- */
 const WT = (() => { try { const w = JSON.parse(localStorage.getItem('fqt_wtabs') || 'null'); if (w && Array.isArray(w.list) && w.list.length) return w; } catch (e) { } return { list: [{ fn: 'MON', sec: 'QQQ' }], cur: 0 }; })();
 function wtSave() { try { localStorage.setItem('fqt_wtabs', JSON.stringify({ list: WT.list.map(t => ({ fn: t.fn, sec: t.sec })), cur: WT.cur })); } catch (e) { } }
-function wtLabel(t) { const s = Q.by[t.sec]; return SECFN.has(t.fn) && s ? `${(s.short || s.n || s.id).toUpperCase()} ${ykey(s).split(' ').pop()} · ${t.fn}` : `${t.fn} · ${FN[t.fn] ? FN[t.fn][4] : ''}`; }
+function wtLabel(t) { const s = Q.by[t.sec]; return SECFN.has(t.fn) && s ? `${t.fn} ${(s.short || s.n || s.id).toUpperCase()} ${ykey(s).split(' ').pop()}` : `${t.fn} ${FN[t.fn] ? FN[t.fn][4] : ''}`; }
 function renderWtabs() {
   const w = $('wtabs'); if (!w) return;
-  w.innerHTML = WT.list.map((t, i) => `<div class="wt${i === WT.cur ? ' on' : ''}" data-wt="${i}" title="${esc(wtLabel(t))}"><span>${esc(wtLabel(t))}</span>${WT.list.length > 1 ? `<b class="wx" data-wx="${i}" title="Fermer">×</b>` : ''}</div>`).join('') +
+  w.innerHTML = WT.list.map((t, i) => `<div class="wt${i === WT.cur ? ' on' : ''}" data-wt="${i}" title="${esc(wtLabel(t))}"><span><b>${esc(t.fn)}</b> ${esc(wtLabel(t).slice(t.fn.length + 1))}</span>${WT.list.length > 1 ? `<b class="wx" data-wx="${i}" title="Fermer">×</b>` : ''}</div>`).join('') +
     `<button class="wplus" id="wplus" title="Nouvel onglet (puis tapez par exemple ORAC DES)">+</button><span class="wsp"></span><button class="wico" id="wsrch" title="Rechercher un titre ou une fonction">⌕</button><button class="wico" id="wmax" title="${document.body.classList.contains('maxi') ? 'Réduire' : 'Agrandir (plein écran)'}">${document.body.classList.contains('maxi') ? '⤡' : '⤢'}</button><span class="wopt">☰ Options</span>`;
   w.querySelectorAll('[data-wt]').forEach(el => el.onclick = e => { if (e.target.dataset.wx != null) return; wtSwitch(+el.dataset.wt); });
   w.querySelectorAll('[data-wx]').forEach(el => el.onclick = e => { e.stopPropagation(); wtClose(+el.dataset.wx); });
@@ -291,9 +294,10 @@ function renderTbar() {
   t.innerHTML = `<button class="nv" id="hb" title="Écran précédent" ${ST.hpos > 0 ? '' : 'disabled'}>◀</button><button class="nv" id="hf" title="Écran suivant" ${ST.hpos < ST.hist.length - 1 ? '' : 'disabled'}>▶</button>
     <button class="dd" data-dd="1" id="ddSec" title="Titre actif"><span>${esc(s ? (s.short || s.n).toUpperCase() + ' ' + ykey(s).split(' ').pop() : '—')}</span></button>
     <button class="dd" data-dd="1" id="ddFn" title="Fonction"><span>${ST.fn}</span></button>
-    <button class="dd" data-dd="1" id="ddRel" title="Fonctions associées"><span>Fonctions associées</span></button>
-    <span class="sp"></span><div class="feed" id="feed"><i></i><span id="feedTxt">—</span><button id="syncBtn" hidden title="Récupérer tout de suite le dernier relevé">SYNC</button></div><div class="clocks" id="clocks"></div>`;
+    <button class="dd rel" data-dd="1" id="ddRel" title="Fonctions associées"><span>Menu des fonctions associées</span></button>
+    <span class="sp"></span><div class="feed" id="feed"><i></i><span id="feedTxt">—</span><button id="syncBtn" hidden title="Récupérer tout de suite le dernier relevé">SYNC</button></div><div class="clocks" id="clocks"></div><button class="qh" id="qh" title="Aide sur cette fonction">?</button>`;
   $('hb').onclick = () => histGo(-1); $('hf').onclick = () => histGo(1); bindSync();
+  $('qh').onclick = e => ddOpen(e.currentTarget, [{ h: `${ST.fn} · ${FN[ST.fn][4]}` }, { l: esc(FN[ST.fn][3]) }, { h: '' }, { code: 'HELP', l: 'Toutes les fonctions et la syntaxe des commandes', run: () => go('HELP') }]);
   $('ddSec').onclick = e => { const seen = []; for (let i = ST.hist.length - 1; i >= 0 && seen.length < 12; i--) { const id = ST.hist[i][1]; if (id && Q.by[id] && !seen.includes(id)) seen.push(id); }
     ddOpen(e.currentTarget, [{ h: 'Titres récents' }].concat(seen.map((id, i) => ({ n: i + 1, code: id, l: esc(Q.by[id].n), run: () => go(isSec ? ST.fn : 'MENU', id) })), [{ h: 'Autre titre' }, { l: 'Taper un ticker dans la ligne de commande…', run: () => $('cmd').focus() }])); };
   $('ddFn').onclick = e => { const rows = []; let n = 0;
@@ -357,7 +361,16 @@ async function render() {
   try { await PAGES[ST.fn](m, () => seq === renderSeq); }
   catch (e) { console.error(e); if (seq === renderSeq) m.innerHTML = `<div class="empty">Impossible d'afficher cette fonction : ${esc(e.message)}</div>`; }
 }
-function renderKeys() { $('fkeys').innerHTML = MKT_KEYS.filter(has).map(k => `<button class="fk ${ST.fn === k ? 'on' : ''}" data-fn="${k}" title="${esc(FN[k][4] + ' — ' + FN[k][3])}"><b>${k}</b><span>${FN[k][0]}</span></button>`).join(''); }
+/* rangée de touches comme la barre du terminal : GO, F1-F4 (gris), touches vertes du clavier Bloomberg, puis les fonctions de marché */
+const BBG_KEYS = [['F1', 'Aide (HELP)', () => go('HELP')], ['F2', 'Govt : obligations (SRCH)', () => go('SRCH')], ['F3', 'Equity : marché BRVM', () => go('BRVM')], ['F4', 'Index : indices mondiaux (WEI)', () => go('WEI')]];
+const BBG_GREEN = [['PRINT', 'Imprimer l’écran', () => window.print()], ['HELP', 'Aide', () => go('HELP')], ['SEARCH', 'Rechercher un titre ou une fonction', () => $('cmd').focus()],
+  ['QUOTE', 'Description du titre actif (DES)', () => go('DES', ST.sec)], ['MONITOR', 'Moniteur de marchés (MON)', () => go('MON')], ['NEWS', 'Actualités (TOP)', () => go('TOP')], ['MENU', 'Menu des fonctions du titre', () => go('MENU', ST.sec)],
+  ['PG BACK', 'Écran précédent', () => histGo(-1)], ['PG FWD', 'Écran suivant', () => histGo(1)]];
+function renderKeys() { const f = $('fkeys');
+  f.innerHTML = `<button class="fk kgo" data-k="GO" title="Exécuter la commande">GO</button>${BBG_KEYS.map(([k, t]) => `<button class="fk kf" data-k="${k}" title="${esc(t)}">${k}</button>`).join('')}${BBG_GREEN.map(([k, t]) => `<button class="fk" data-k="${k}" title="${esc(t)}"><b>${k}</b></button>`).join('')}<button class="fk kw" data-k="CFG" title="Réglages">🔧</button><i class="fsep"></i>`
+    + MKT_KEYS.filter(has).map(k => `<button class="fk ${ST.fn === k ? 'on' : ''}" data-fn="${k}" title="${esc(FN[k][4] + ' — ' + FN[k][3])}"><b>${k}</b><span>${FN[k][0]}</span></button>`).join('');
+  f.querySelectorAll('[data-k]').forEach(b => b.onclick = e => { const k = b.dataset.k; if (k === 'GO') { const v = $('cmd').value.trim(); if (v) { $('cmd').value = ''; runCmd(v); } else $('cmd').focus(); return; }
+    if (k === 'CFG') { ddOpen(b, stdActs().find(a => a.n === 98).menu()); return; } const a = BBG_KEYS.concat(BBG_GREEN).find(x => x[0] === k); if (a) a[2](); }); }
 function renderSecbar() { renderSech(); }
 function renderStatus() {
   const L = Q.live && Q.live.qqq, ss = Q.sum.session;

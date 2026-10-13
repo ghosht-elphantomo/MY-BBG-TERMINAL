@@ -7,11 +7,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 W = lambda p: open(os.path.join(HERE, "web", p), encoding="utf8").read()
 import base64
 def css():
-    # police embarquée (DejaVu Sans Mono, sous-ensemble Latin + symboles) : aucune dépendance externe
+    # police embarquée (Noto Sans variable, sous-ensemble latin, droit + italique ; licence SIL OFL) : aucune dépendance externe
     c = W("style.css")
-    for w in ("400", "700"):
-        b = base64.b64encode(open(os.path.join(HERE, "web", "fonts", f"dvm-{w}.woff2"), "rb").read()).decode()
-        c = c.replace(f"url(fonts/dvm-{w}.woff2)", f"url(data:font/woff2;base64,{b})")
+    for f in ("ns-n", "ns-i"):
+        b = base64.b64encode(open(os.path.join(HERE, "web", "fonts", f"{f}.woff2"), "rb").read()).decode()
+        c = c.replace(f"url(fonts/{f}.woff2)", f"url(data:font/woff2;base64,{b})")
     return c
 _ico = base64.b64encode(open(os.path.join(HERE, "web", "icons", "favicon.svg"), "rb").read()).decode()
 HEAD = ('<title>FQT Terminal</title>\n'
@@ -39,7 +39,7 @@ else:
     os.makedirs(os.path.join(HERE, "public"), exist_ok=True)
     open(os.path.join(HERE, "public", "index.html"), "w", encoding="utf8").write(html)
     shutil.copy(os.path.join(HERE, "deploy", "robots.txt"), os.path.join(HERE, "public", "robots.txt"))
-    shutil.copy(os.path.join(HERE, "web", "fonts", "LICENSE-DejaVu.txt"), os.path.join(HERE, "public", "LICENSE-fonts.txt"))
+    shutil.copy(os.path.join(HERE, "web", "fonts", "LICENSE-NotoSans.txt"), os.path.join(HERE, "public", "LICENSE-fonts.txt"))
     for f in ("favicon.ico", "favicon.svg", "apple-touch-icon.png"):  # icône propre au terminal (sinon le navigateur garde une ancienne icône)
         shutil.copy(os.path.join(HERE, "web", "icons", f), os.path.join(HERE, "public", f))
     print("index.html", len(html))
