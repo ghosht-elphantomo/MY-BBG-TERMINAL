@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  deployments: write
 
 jobs:
   lien:
@@ -24,6 +25,8 @@ jobs:
 
       - name: Ouvrir le lien
         id: open
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           MIN="${{ inputs.minutes }}"; case "$MIN" in ''|*[!0-9]*) MIN=15;; esac; [ "$MIN" -lt 1 ] && MIN=1; [ "$MIN" -gt 60 ] && MIN=60
           T0=$(date +%s); echo "t0=$T0" >> "$GITHUB_OUTPUT"; echo "min=$MIN" >> "$GITHUB_OUTPUT"
@@ -40,12 +43,20 @@ jobs:
           # attend que le lien réponde vraiment (le nom du tunnel met quelques secondes à exister dans le DNS)
           OK=0; for i in $(seq 1 45); do c=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$URL/" || true); [ "$c" = "200" ] && { OK=1; break; }; sleep 2; done
           FIN=$(date -u -d "@$((T0 + MIN * 60))" +%H:%M)
+          # le lien s'affiche tout de suite dans GitHub (section « Deployments » du dépôt, bouton « View deployment »)
+          D="Lien valable ${MIN} min, jusqu'à ${FIN} UTC"
+          DEP=$(jq -n --arg d "$D" '{ref:"main",environment:"lien-temporaire",auto_merge:false,required_contexts:[],description:$d,transient_environment:true}' | gh api -X POST "repos/$GITHUB_REPOSITORY/deployments" --input - --jq .id)
+          jq -n --arg u "$URL" --arg d "$D" '{state:"success",environment_url:$u,description:$d}' | gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$DEP/statuses" --input - >/dev/null
+          echo "dep=$DEP" >> "$GITHUB_OUTPUT"
           echo "::notice title=Lien temporaire valable ${MIN} min (jusqu'à ${FIN} UTC)::${URL}"
           { echo "## Lien temporaire"; echo; echo "**${URL}**"; echo; echo "Valable ${MIN} minutes, jusqu'à ${FIN} UTC. Ensuite le lien ne mène plus nulle part."; [ "$OK" = 1 ] || echo "(le lien met parfois une minute à répondre)"; } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Garder le lien ouvert jusqu'à l'échéance, puis le fermer
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           END=$(( ${{ steps.open.outputs.t0 }} + ${{ steps.open.outputs.min }} * 60 )); NOW=$(date +%s)
           [ "$END" -gt "$NOW" ] && sleep $(( END - NOW ))
           pkill -f "cf tunnel" || true; pkill -f "http.server 8080" || true
+          DEP="${{ steps.open.outputs.dep }}"; [ -n "$DEP" ] && { jq -n '{state:"inactive",description:"Lien expiré"}' | gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$DEP/statuses" --input - >/dev/null || true; }
           echo "Lien expiré à $(date -u +%H:%M:%S) UTC."
