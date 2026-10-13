@@ -3,7 +3,7 @@
 const $ = id => document.getElementById(id);
 const Q = { base: 'data/', sum: null, by: {}, ser: {}, M: {}, json: {}, live: null, quotes: null };
 const ST = { fn: 'MON', sec: 'QQQ', gp: { range: '1A', type: 'bbg', ov: { sma50: false, sma200: false }, st: { vol: true }, log: false, cmp: [] }, corr: { u: 'BRVMW', win: 104, pair: null },
-  brvm: { sort: { k: 'mcap', dir: -1 }, sector: 'ALL' }, dvd: { sort: { k: 'yld', dir: -1 } }, ev: { cat: '', tk: '', q: '', page: 0 }, bt: null, qlab: {}, tab: {}, hist: [], hpos: -1, newsMin: false };
+  brvm: { sort: { k: 'mcap', dir: -1 }, sector: 'ALL' }, dvd: { sort: { k: 'yldc', dir: -1 } }, ev: { cat: '', tk: '', q: '', page: 0 }, bt: null, qlab: {}, tab: {}, hist: [], hpos: -1, newsMin: false };
 
 /* Registre des fonctions : code -> [libellé, portée (sec = titre, mkt = marché), groupe, définition courte, titre Bloomberg]
    Les définitions suivent celles de l'autocomplétion Bloomberg (nom anglais de la fonction + ce qu'elle montre). */

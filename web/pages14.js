@@ -117,6 +117,14 @@ PAGES.FXC = async (m, alive) => {
 
 /* ------------------------------------------------------------------ GC : écran « Graph Curves » — courbes, courbe de comparaison en pointillés,
    histogramme des variations en points de base sous le graphique, légende numérotée des courbes à droite */
+/* taux souverain (courbe après lissage la plus récente) d'un État de l'UEMOA à une maturité donnée, par code pays ISO */
+const UC_ISO = { CI: "Côte d'Ivoire", SN: 'Sénégal', BJ: 'Bénin', BF: 'Burkina', ML: 'Mali', NE: 'Niger', TG: 'Togo', GW: 'Guinée-Bissau' };
+function ucRate(UC, iso, t) {
+  if (!UC || !UC.curves || !UC_ISO[iso]) return null; const c0 = UC.curves[Object.keys(UC.curves).sort().pop()].c; let c = gcFind(c0, UC_ISO[iso]);
+  if (!c) { const k = Object.keys(c0).find(x => gcNorm(x).startsWith(gcNorm(UC_ISO[iso]))); c = k ? c0[k] : null; } if (!c) return null;
+  const P = c.map(p => [p[1], p[3]]).filter(p => p[1] != null).sort((a, b) => a[0] - b[0]); if (!P.length) return null; if (t <= P[0][0]) return P[0][1];
+  for (let i = 1; i < P.length; i++) if (t <= P[i][0]) { const [x0, y0] = P[i - 1], [x1, y1] = P[i]; return y0 + (y1 - y0) * (t - x0) / (x1 - x0); } return t <= P[P.length - 1][0] + .5 ? P[P.length - 1][1] : null;
+}
 const GC_OLD = PAGES.GC;
 /* points de base signés, sans « −0,0 » */
 const bpS = (v, d = 1) => { if (v == null || !isFinite(v)) return '<span class="dm">—</span>'; const r = +v.toFixed(d) || 0; return `<span class="${cls(r)}">${r > 0 ? '+' : ''}${num(r, d)}</span>`; };
