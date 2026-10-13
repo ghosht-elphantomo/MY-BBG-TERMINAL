@@ -11,3 +11,4 @@ demander « reviens au point de restauration du … » ; le code de ce point est
 | 13/10/2026 matin | Avant les modifications de la journée | `1fa9307b3358e3554d6164e1adc4cf6af01c866c` | — |
 | 13/10/2026 17 h 30 | Avant le retour du libellé « MAJ … GMT » | `f60e34a99b86a6f6d18820342759fb670e0f0551` | `d554488d00a08eddf059b1d486049934efd7c63f` |
 | 13/10/2026 17 h 45 | Avant le passage des fondamentaux BRVM aux sources officielles (bulletins, états financiers, brvm.org) | `2b02b603df86481d8f4102baeec5b25168380032` | `242be614e62156ba4fcd053e8768be382ce62545` |
+| 13/10/2026 18 h 00 | Avant le regroupement des écrans en double : CF dans EVTS, WCRS dans FX, WB dans RATES (ex-WIRP), EQS renommé SCREN | `b530ef2a350c393a128fc7e3f90dc7727a4769d7` | `18f930c6cd316d087e5daca558e507832edfa12a` |

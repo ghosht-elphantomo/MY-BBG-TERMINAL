@@ -1,4 +1,4 @@
-/* ================= FQT — fonctions de marché : FG, LIQ, PER, EQS, ALRT, TOP, ECWB, RRG, UEMOA, US ================= */
+/* ================= FQT — fonctions de marché : FG, LIQ, PER, SCREN, ALRT, TOP, ECWB, RRG, UEMOA, US ================= */
 
 const FG_BANDS = [[0, 25, 'Peur extrême', '#b3261e'], [25, 45, 'Peur', '#ff7043'], [45, 55, 'Neutre', '#9e9e9e'], [55, 75, 'Avidité', '#7cb342'], [75, 100, 'Avidité extrême', '#2e7d32']];
 const fgLab = v => v == null ? '—' : (FG_BANDS.find(b => v >= b[0] && v <= b[1]) || FG_BANDS[2])[2];
@@ -93,14 +93,14 @@ PAGES.PER = async (m, alive) => {
   barChart($('peD'), { labels: bins.slice(0, -1).map((b, i) => `${b}-${bins[i + 1]}`), values: hist, fmt: v => num(v, 0), pos: CL.cyan, labelsOnBars: true });
 };
 
-/* ------------------------------------------------------------------ EQS (screener) */
+/* ------------------------------------------------------------------ SCREN (screener, ex-EQS) */
 const EQ_COLS = [['id', 'Titre', 'l'], ['nm_', 'Société', 'l'], ['mkt', 'Marché', 'l'], ['mcap', 'Capi.', 'big'], ['pe', 'PER', 'x'], ['fpe', 'PER prév.', 'x'], ['ev_ebitda', 'VE/EBITDA', 'x'], ['pb', 'P/B', 'x'], ['fcfy', 'Rdt FCF', 'p'], ['dy', 'Rdt div.', 'p'],
   ['roe', 'ROE', 'p'], ['roic', 'ROIC', 'p'], ['fcfm', 'Marge FCF', 'p'], ['rev_g', 'Crois. CA', 'p'], ['fcf_g', 'Crois. FCF', 'p'], ['fcf_cagr3', 'TCAM FCF 3a', 'p'], ['eps_g', 'Crois. BPA', 'p'], ['nd_ebitda', 'DN/EBITDA', 'x'], ['payout', 'Distrib.', 'p'], ['fscore', 'Piotroski', 'i'], ['altz', 'Altman Z', 'x']];
 const EQ_PRESETS = { all: ['Tous', () => true], qual: ['Qualité', r => r.roic > .15 && r.fcfm > .1 && (r.nd_ebitda == null || r.nd_ebitda < 2)], val: ['Valeur', r => r.pe > 0 && r.pe < 12 && (r.fcfy == null || r.fcfy > .05)],
   fcfg: ['Croissance du FCF', r => r.fcf_g > .1 && (r.fcf_cagr3 == null || r.fcf_cagr3 > .08) && r.fcfm > 0], div: ['Dividende soutenable', r => r.dy > .05 && (r.payout == null || r.payout < .85) && (r.fpay == null || r.fpay < 1)],
   pio: ['Piotroski ≥ 7', r => r.fscore >= 7], magic: ['Formule magique (Greenblatt)', r => r.ey > 0 && r.roic > 0], r40: ['Règle des 40', r => r.r40 > .4] };
-PAGES.EQS = async (m, alive) => {
-  const IDX = await getJSON('fa_index.json').catch(() => null); if (!alive()) return; if (!IDX) { m.innerHTML = pn('Screener', 'EQS', '<div class="empty">Non calculé.</div>'); return; }
+PAGES.SCREN = async (m, alive) => {
+  const IDX = await getJSON('fa_index.json').catch(() => null); if (!alive()) return; if (!IDX) { m.innerHTML = pn('Screener', 'SCREN', '<div class="empty">Non calculé.</div>'); return; }
   const st = ST.eqs = ST.eqs || { mkt: 'ALL', pre: 'all', sort: { k: 'mcap', dir: -1 }, sec: 'ALL' };
   let rows = IDX.rows.filter(r => Q.by[r.id]).map(r => ({ ...r, nm_: Q.by[r.id].short || Q.by[r.id].n, sector: Q.by[r.id].sector || r.grp }));
   if (st.mkt !== 'ALL') rows = rows.filter(r => r.mkt === st.mkt); if (st.sec !== 'ALL') rows = rows.filter(r => r.sector === st.sec);
@@ -112,7 +112,7 @@ PAGES.EQS = async (m, alive) => {
   m.innerHTML = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Marché</span>${[['ALL', 'Tous'], ['US', 'États-Unis'], ['BRVM', 'BRVM']].map(([k, l]) => `<button class="tb ${st.mkt === k ? 'on' : ''}" data-m="${k}">${l}</button>`).join('')}
     <span class="tlab">Filtre</span>${Object.entries(EQ_PRESETS).map(([k, [l]]) => `<button class="tb ${st.pre === k ? 'on' : ''}" data-p="${k}">${l}</button>`).join('')}
     <span class="tlab">Secteur</span><select id="eqS"><option value="ALL">Tous</option>${secs_.map(x => `<option ${st.sec === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div>
-    ${pn(`Screener fondamental · ${rows.length} sociétés · ${EQ_PRESETS[st.pre][0]}`, 'EQS', `<div class="tw" style="max-height:70vh"><table class="t" id="eqT"><thead><tr>${st.pre === 'magic' ? '<th>Rang</th>' : ''}${EQ_COLS.map(([k, l, t]) => `<th class="${t === 'l' ? 'l' : ''}" data-k="${k}" style="cursor:pointer">${l}${st.sort.k === k ? (st.sort.dir < 0 ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead><tbody>
+    ${pn(`Screener fondamental · ${rows.length} sociétés · ${EQ_PRESETS[st.pre][0]}`, 'SCREN', `<div class="tw" style="max-height:70vh"><table class="t" id="eqT"><thead><tr>${st.pre === 'magic' ? '<th>Rang</th>' : ''}${EQ_COLS.map(([k, l, t]) => `<th class="${t === 'l' ? 'l' : ''}" data-k="${k}" style="cursor:pointer">${l}${st.sort.k === k ? (st.sort.dir < 0 ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead><tbody>
       ${rows.map(r => `<tr data-sec="${r.id}" data-to="FA">${st.pre === 'magic' ? `<td class="am">${r.mrank}</td>` : ''}${EQ_COLS.map(([k, , t]) => k === 'id' ? `<td class="l tk">${r.id}</td>` : t === 'l' ? `<td class="l ${k === 'nm_' ? 'nm' : 'dm'}">${esc(r[k] || '')}</td>` : `<td class="${k === 'fcfy' || k === 'fcf_g' ? 'yl' : ''}">${f(t, r[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`,
       { np: true, lect: `${{ all: 'Toutes les sociétés dont les comptes sont disponibles.', qual: 'ROIC &gt; 15 %, marge FCF &gt; 10 %, dette nette / EBITDA &lt; 2.', val: 'PER &lt; 12 et rendement FCF &gt; 5 %.', fcfg: 'FCF en hausse de plus de 10 % sur un an et TCAM 3 ans &gt; 8 %, marge FCF positive.', div: 'Rendement &gt; 5 %, distribution &lt; 85 % du bénéfice et dividende couvert par le FCF.', pio: 'Score de Piotroski d’au moins 7 critères sur 9.', magic: 'Classement de Greenblatt : somme des rangs du rendement des bénéfices (EBIT / VE) et du ROIC ; les meilleurs en haut.', r40: 'Croissance du CA + marge FCF &gt; 40 % (logiciels et croissance).' }[st.pre]} US : comptes SEC (12 mois glissants) ; BRVM : dernier exercice publié. Clic = analyse financière.` })}`;
   m.querySelectorAll('[data-m]').forEach(b => b.onclick = () => { st.mkt = b.dataset.m; st.sec = 'ALL'; render(); }); m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { st.pre = b.dataset.p; render(); });

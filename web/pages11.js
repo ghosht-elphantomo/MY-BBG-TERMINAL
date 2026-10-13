@@ -1,4 +1,4 @@
-/* ================= FQT — fonctions Bloomberg supplémentaires : WEI, GLCO, WB, MOST, MOV, MEMB, HVT, VAP, ANR, RELS, CACS, GF ================= */
+/* ================= FQT — fonctions Bloomberg supplémentaires : WEI, GLCO, taux mondiaux (RATES), MOST, MOV, MEMB, HVT, VAP, ANR, RELS, CACS, GF ================= */
 'use strict';
 const rangeBar3 = (v, lo, hi) => (v == null || lo == null || hi == null || hi <= lo) ? '' : `<span class="rgb" title="plus bas ${num(lo, 2)} · plus haut ${num(hi, 2)}"><i style="left:${U.clamp((v - lo) / (hi - lo) * 100, 0, 100).toFixed(1)}%"></i></span>`;
 const qTime = t => { if (!t) return '—'; if (String(t).length === 10) return String(t).slice(8, 10) + '/' + String(t).slice(5, 7); const d = new Date(t); if (isNaN(d)) return esc(t); return Date.now() - d < 20 * 3600e3 ? d.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit' }); };
@@ -74,23 +74,23 @@ PAGES.GLCO = async (m, alive) => {
   hbars($('glB'), L.map(r => (CMD_FR[r.s] || r.n).replace(/ \(.*\)$/, '')), L.map(r => r.pct * 100), v => (v > 0 ? '+' : '') + num(v, 2) + '%');
 };
 
-/* ------------------------------------------------------------------ WB : marchés obligataires mondiaux */
-PAGES.WB = async (m, alive) => {
+/* ------------------------------------------------------------------ taux souverains mondiaux (onglet 2 de RATES, ex-WB) */
+async function wbView(m, alive) {
   const [W, C] = await Promise.all([WMKT(), getJSON('umoa_curves.json').catch(() => null)]); if (!alive()) return; setTitle('World Bond Markets');
-  if (!W || !W.rt) { m.innerHTML = pn('Taux souverains', 'WB', '<div class="empty">Taux en attente du prochain relevé.</div>'); return; }
+  if (!W || !W.rt) { m.innerHTML = pn('Taux souverains', 'RATES', '<div class="empty">Taux en attente du prochain relevé.</div>'); return; }
   const us = W.rt.filter(r => r.g === 'US'), g10 = W.rt.filter(r => r.g === 'G'), mat = s_ => { const x = s_.match(/US(\d+)([MY])/); return x ? +x[1] / (x[2] === 'M' ? 12 : 1) : null; };
   const nmG = { 'DE10Y-DE': 'Allemagne', 'FR10Y-FR': 'France', 'GB10Y-GB': 'Royaume-Uni', 'IT10Y-IT': 'Italie', 'ES10Y-ES': 'Espagne', 'JP10Y-JP': 'Japon', 'CN10Y-CN': 'Chine' };
   const de = g10.find(r => r.s === 'DE10Y-DE');
   const bp = r => r.chg != null ? `<span class="${cls(r.chg)}">${r.chg > 0 ? '+' : ''}${num(r.chg * 100, 1)} pb</span>` : '—';
   let cur = null, uem = []; if (C && C.curves) { const ds = Object.keys(C.curves).sort(), c = C.curves[ds[ds.length - 1]]; cur = c; for (const [cty, pts] of Object.entries(c.c)) { const p = pts.find(q => q[1] === 10) || pts.filter(q => q[1] <= 10).slice(-1)[0]; if (p) uem.push([ctyName(cty), p[1], p[3]]); } }
-  m.innerHTML = `<div class="grid c2">${pn('Courbe des taux du Trésor américain', 'WB', cvb('wbU', 280), { lect: `Rendements des emprunts d’État américains (CNBC, différé), relevé à ${us.length ? qTime(us[us.length - 1].t) : '—'}. pb = points de base (0,01 %).` })}
-    ${pn('Trésor américain', 'WB', `<table class="t"><thead><tr><th class="l">Maturité</th><th>Rendement</th><th>Var.</th><th>Fourchette 52 s.</th></tr></thead><tbody>${us.map(r => `<tr><td class="l am">${(() => { const mm = String(r.s).match(/^US(\d+)([MY])$/); return mm ? `${mm[1]} ${mm[2] === 'M' ? 'mois' : +mm[1] > 1 ? 'ans' : 'an'}` : esc(r.n); })()}</td><td class="wh">${num(r.last, 3)} %</td><td>${bp(r)}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td></tr>`).join('')}
+  m.innerHTML = `<div class="grid c2">${pn('Courbe des taux du Trésor américain', 'RATES', cvb('wbU', 280), { lect: `Rendements des emprunts d’État américains (CNBC, différé), relevé à ${us.length ? qTime(us[us.length - 1].t) : '—'}. pb = points de base (0,01 %).` })}
+    ${pn('Trésor américain', 'RATES', `<table class="t"><thead><tr><th class="l">Maturité</th><th>Rendement</th><th>Var.</th><th>Fourchette 52 s.</th></tr></thead><tbody>${us.map(r => `<tr><td class="l am">${(() => { const mm = String(r.s).match(/^US(\d+)([MY])$/); return mm ? `${mm[1]} ${mm[2] === 'M' ? 'mois' : +mm[1] > 1 ? 'ans' : 'an'}` : esc(r.n); })()}</td><td class="wh">${num(r.last, 3)} %</td><td>${bp(r)}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td></tr>`).join('')}
       ${(() => { const a = us.find(r => r.s === 'US2Y'), b = us.find(r => r.s === 'US10Y'), c3 = us.find(r => r.s === 'US3M'); return (a && b ? `<tr class="sep2"><td class="l">Pente 10 ans − 2 ans</td><td class="wh">${num((b.last - a.last) * 100, 0)} pb</td><td></td><td></td></tr>` : '') + (c3 && b ? `<tr><td class="l">Pente 10 ans − 3 mois</td><td class="wh">${num((b.last - c3.last) * 100, 0)} pb</td><td></td><td></td></tr>` : ''); })()}</tbody></table>`, { np: true })}</div>
-    <div class="grid c2">${pn('Emprunts d’État à 10 ans', 'WB', `<table class="t"><thead><tr><th class="l">Pays</th><th>Rendement</th><th>Var.</th><th>Écart vs Allemagne</th><th>Fourchette 52 s.</th></tr></thead><tbody>${[us.find(r => r.s === 'US10Y')].filter(Boolean).concat(g10).map(r => `<tr><td class="l am">${esc(nmG[r.s] || 'États-Unis')}</td><td class="wh">${num(r.last, 3)} %</td><td>${bp(r)}</td><td>${de && r.s !== 'DE10Y-DE' ? num((r.last - de.last) * 100, 0) + ' pb' : '—'}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td></tr>`).join('')}</tbody></table>`, { np: true })}
+    <div class="grid c2">${pn('Emprunts d’État à 10 ans', 'RATES', `<table class="t"><thead><tr><th class="l">Pays</th><th>Rendement</th><th>Var.</th><th>Écart vs Allemagne</th><th>Fourchette 52 s.</th></tr></thead><tbody>${[us.find(r => r.s === 'US10Y')].filter(Boolean).concat(g10).map(r => `<tr><td class="l am">${esc(nmG[r.s] || 'États-Unis')}</td><td class="wh">${num(r.last, 3)} %</td><td>${bp(r)}</td><td>${de && r.s !== 'DE10Y-DE' ? num((r.last - de.last) * 100, 0) + ' pb' : '—'}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td></tr>`).join('')}</tbody></table>`, { np: true })}
     ${uem.length ? pn(`UEMOA : taux à 10 ans (courbes UMOA-Titres au ${esc(cur.asof || '')})`, 'GC', `<table class="t"><thead><tr><th class="l">État</th><th>Maturité</th><th>Taux</th><th>Écart vs Trésor US 10 ans</th></tr></thead><tbody>${uem.sort((a, b) => b[2] - a[2]).map(([c, mt, v]) => { const u10 = us.find(r => r.s === 'US10Y'); return `<tr data-fn="GC" style="cursor:pointer"><td class="l am">${esc(c)}</td><td>${mt} ans</td><td class="wh">${num(v * 100, 2)} %</td><td>${u10 ? num((v * 100 - u10.last) * 100, 0) + ' pb' : '—'}</td></tr>`; }).join('')}</tbody></table>`, { np: true, lect: 'Taux après lissage des courbes souveraines publiées par UMOA-Titres (marché régional, en FCFA). Détail : GC.' }) : ''}</div>`;
   const pts = us.map(r => [mat(r.s), r.last / 100]).filter(p => p[0]);
   if (pts.length) gcDraw($('wbU'), [{ lab: 'Trésor US', col: '#f9a33a', pts, w: 2 }]);
-};
+}
 
 /* ------------------------------------------------------------------ MOST : valeurs les plus actives, hausses, baisses */
 PAGES.MOST = async (m, alive) => {

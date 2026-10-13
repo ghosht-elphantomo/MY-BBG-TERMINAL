@@ -202,7 +202,7 @@ async function RV_COMPS(m, alive) {
   m.querySelectorAll('[data-rk]').forEach(th => th.onclick = () => { const k = th.dataset.rk; st.d = st.k === k ? -st.d : -1; st.k = k; render(); });
 }
 
-/* ------------------------------------------------------------------ EQS : « Equity Screening » du terminal (critères, correspondances, résultats) */
+/* ------------------------------------------------------------------ SCREN (ex-EQS) : « Equity Screening » du terminal (critères, correspondances, résultats) */
 const EQ_F = [ // clé, libellé, catégorie, type (p = %, x = multiple, m = montant, n = nombre), source (f = comptes, s = marché)
   ['mcap', 'Capitalisation boursière', 'Marché', 'm', 's'], ['liq', 'Échanges moyens par séance', 'Marché', 'm', 's'], ['pct', 'Variation du jour', 'Marché', 'p', 's'], ['ytd', 'Performance depuis janvier', 'Marché', 'p', 's'],
   ['r1y', 'Performance sur 1 an', 'Marché', 'p', 's'], ['vol', 'Volatilité sur 1 an', 'Marché', 'p', 's'], ['beta', 'Bêta', 'Marché', 'n', 's'], ['dd', 'Écart au plus haut historique', 'Marché', 'p', 's'], ['rsi', 'RSI 14', 'Marché', 'n', 's'],
@@ -213,7 +213,7 @@ const EQ_F = [ // clé, libellé, catégorie, type (p = %, x = multiple, m = mon
   ['nd_ebitda', 'Dette nette / EBITDA', 'Bilan', 'x', 'f'], ['de', 'Dette / capitaux propres', 'Bilan', 'x', 'f'], ['payout', 'Taux de distribution', 'Bilan', 'p', 'f'], ['fscore', 'Score de Piotroski', 'Bilan', 'n', 'f'], ['altz', 'Z d’Altman', 'Bilan', 'n', 'f']];
 const EQ_EX = [['Qualité', [['roic', '>', 15], ['fcfm', '>', 10], ['nd_ebitda', '<', 2]]], ['Valeur', [['pe', 'entre', 0, 12], ['fcfy', '>', 5]]], ['Dividende soutenable', [['dy', '>', 5], ['payout', '<', 80]]],
   ['Croissance', [['rev_g', '>', 15], ['eps_g', '>', 15]]], ['Momentum', [['ytd', '>', 20], ['r1y', '>', 30]]], ['Solidité financière', [['fscore', '>', 6], ['altz', '>', 3]]], ['Liquidité BRVM', [['liq', '>', 50000000]]]];
-PAGES.EQS = async (m, alive) => {
+PAGES.SCREN = async (m, alive) => {
   setTitle('Equity Screening'); const IDX = await getJSON('fa_index.json').catch(() => null); if (!alive()) return;
   const FI = Object.fromEntries(((IDX && IDX.rows) || []).map(r => [r.id, r]));
   const st = ST.eqs2 = ST.eqs2 || (() => { try { const x = JSON.parse(localStorage.getItem('fqt_eqs_cur') || 'null'); if (x && x.crit) return x; } catch (e) { } return { mkt: 'ALL', sec: 'ALL', cty: 'ALL', crit: [], view: 'b', sort: { k: 'mcap', d: -1 } }; })();
@@ -245,7 +245,7 @@ PAGES.EQS = async (m, alive) => {
         <div class="eqb"><button class="tb" id="eqClr">Tout effacer</button><button class="tb on" id="eqGo">Résultats (${R.length}) ▶</button></div></div></div>`;
   const cols = [['mcap', 'Capi.'], ...st.crit.map(c => c.k).filter((k, i, a) => a.indexOf(k) === i && k !== 'mcap').map(k => [k, F(k)[1]]), ...[['pe', 'PER'], ['roe', 'ROE'], ['dy', 'Rdt div.'], ['ytd', 'Depuis janv.']].filter(([k]) => !st.crit.some(c => c.k === k))];
   const rs = R.slice().sort((a, b) => { const A = st.sort.k === 'id' ? a.id : val(a, st.sort.k), B = st.sort.k === 'id' ? b.id : val(b, st.sort.k); if (A == null) return 1; if (B == null) return -1; return (typeof A === 'string' ? A.localeCompare(B) : A - B) * st.sort.d; });
-  const results = pn(`Résultats · ${R.length} titres${st.name ? ' · ' + esc(st.name) : ''}`, 'EQS', `<div class="tw" style="max-height:calc(100vh - 270px - var(--nwh, 90px))"><table class="t"><thead><tr><th class="l" data-sk="id" style="cursor:pointer">Titre</th><th class="l">Nom</th><th class="l">Marché</th><th class="l">Secteur</th>${cols.map(([k, l]) => `<th data-sk="${k}" style="cursor:pointer" class="${st.sort.k === k ? 'on' : ''}">${esc(l)}${st.sort.k === k ? (st.sort.d > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>
+  const results = pn(`Résultats · ${R.length} titres${st.name ? ' · ' + esc(st.name) : ''}`, 'SCREN', `<div class="tw" style="max-height:calc(100vh - 270px - var(--nwh, 90px))"><table class="t"><thead><tr><th class="l" data-sk="id" style="cursor:pointer">Titre</th><th class="l">Nom</th><th class="l">Marché</th><th class="l">Secteur</th>${cols.map(([k, l]) => `<th data-sk="${k}" style="cursor:pointer" class="${st.sort.k === k ? 'on' : ''}">${esc(l)}${st.sort.k === k ? (st.sort.d > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>
     ${rs.map((s, i) => `<tr data-sec="${s.id}" data-to="DES" style="cursor:pointer"><td class="l"><span class="rn">${i + 1})</span><b class="wh">${s.id}</b></td><td class="l am">${esc(s.short || s.n)}</td><td class="l dm">${s.mkt}</td><td class="l dm">${esc(s.grp || '')}</td>${cols.map(([k]) => { const v = val(s, k); return `<td>${v == null ? '<span class="dm">—</span>' : out(F(k), v)}</td>`; }).join('')}</tr>`).join('') || '<tr><td class="l dm" colspan="9">Aucun titre ne remplit tous les critères.</td></tr>'}</tbody></table></div>`,
     { np: true, lect: 'Ratios du dernier exercice publié ; données de marché du dernier relevé. Clic sur une ligne : fiche DES. Tri : cliquer un en-tête.', tools: `<button class="tb" id="eqBk">◀ Modifier les critères</button>` });
   m.innerHTML = st.view === 'r' ? results : builder;

@@ -23,26 +23,23 @@ const FN = {
   GC: ['Courbes souveraines', 'mkt', 'Taux', 'Courbes des taux des États de l’UEMOA (UMOA-Titres) et coupons à l’émission', 'Graph Curves'],
   BMAP: ['Carte du pétrole', 'mkt', 'Matières premières', 'Flux pétroliers mondiaux, détroits stratégiques, Brent et WTI, stocks US', 'Oil Flow Map'],
   MACRO: ['Macro & Or', 'mkt', 'Macro', 'Or depuis 1833, krachs, CAPE, inflation, pétrole, VIX', 'Macro & Gold'],
-  FX: ['Franc CFA', 'mkt', 'Macro', 'USD/XOF, EUR/USD, effet de change, simulateur', 'FX Monitor'],
-  WCRS: ['Classement des devises', 'mkt', 'Changes', '30 devises classées par variation contre la devise de référence : 1 jour, 1 semaine, depuis janvier', 'World Currency Ranker'],
+  FX: ['Franc CFA', 'mkt', 'Macro', 'USD/XOF, EUR/USD, effet de change, simulateur ; en option : classement mondial des devises', 'FX Monitor'],
   FXC: ['Changes croisés', 'mkt', 'Changes', 'Matrice des taux croisés : franc CFA, G10, Afrique, Asie, Amériques ; cours ou variation', 'Currency Rates Matrix'],
   CORR: ['Corrélations', 'mkt', 'Quant', 'Matrice BRVM × monde, paire au choix, ACP', 'Correlation Matrix'],
   RRG: ['Rotation (RRG)', 'mkt', 'Quant', 'Graphe de rotation relative : secteurs, facteurs, pays, BRVM', 'Relative Rotation Graph'],
   PER: ['Valorisation BRVM', 'mkt', 'Fondamentaux', 'PER du marché (BRVM officiel), PER prévisionnel des sources, historique', 'Market Valuation'],
   PORT: ['Portefeuille', 'mkt', 'Portefeuille', 'Vos positions BRVM et US : valeur, plus-values, risque (volatilité, VaR, bêta, contributions), performance, dividendes à venir', 'Portfolio & Risk Analytics'],
-  EQS: ['Screener', 'mkt', 'Fondamentaux', 'Filtrer US et BRVM par ratios : FCF, croissance, qualité, valorisation, score', 'Equity Screening'],
+  SCREN: ['Screener', 'mkt', 'Fondamentaux', 'Filtrer US et BRVM par ratios : FCF, croissance, qualité, valorisation, score', 'Equity Screening'],
   LIQ: ['Liquidité BRVM', 'mkt', 'Marchés', 'Montants échangés, jours cotés, Amihud, délai pour constituer une position', 'Market Liquidity'],
   EA: ['Publications de résultats', 'mkt', 'Fondamentaux', 'Calendrier des résultats US (date, consensus, dernière surprise) et résultats publiés (surprise, réaction du cours)', 'Earnings Analysis'],
   ALRT: ['Alertes', 'mkt', 'Fondamentaux', 'Marges, FCF, dette, révisions, seuils de valorisation, résultats à venir', 'Alert Monitor'],
   DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique', 'Dividend Calendar'],
-  CF: ['Suivi des sociétés', 'mkt', 'Actualités', 'BRVM : dernière publication, AG à venir, dividende annoncé, opérations ; US : date des résultats, objectifs de cours, consensus ; agenda à 60 jours', 'Company Filings & Events'],
-  EVTS: ['Avis BRVM', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers', 'Corporate Events'],
+  EVTS: ['Avis BRVM', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers ; en option : suivi des sociétés BRVM et US, agenda des sociétés', 'Corporate Events'],
   WEIF: ['Contrats à terme sur indices', 'mkt', 'Marchés', 'S&P 500, Nasdaq-100, Dow Jones, Russell 2000, VIX, FTSE 100, Nikkei : indication d’ouverture et écart au comptant', 'World Equity Index Futures'],
   WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines', 'World Equity Indices'],
   GLCO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
   BTMM: ['Trésor et marché monétaire US', 'mkt', 'Taux', 'Taux directeurs (Fed, BCE, BCEAO), SOFR, bons et emprunts du Trésor, contrats à terme, pentes, inflation anticipée', 'Treasury & Money Markets'],
-  WIRP: ['Anticipations de taux Fed', 'mkt', 'Taux', 'Contrats Fed funds : taux implicite par mois, probabilité de baisse ou de hausse aux prochaines réunions', 'World Interest Rate Probability'],
-  WB: ['Taux mondiaux', 'mkt', 'Taux', 'Courbe du Trésor américain, emprunts d’État à 10 ans, écarts, UEMOA à 10 ans', 'World Bond Markets'],
+  RATES: ['Taux et anticipations Fed', 'mkt', 'Taux', 'Contrats Fed funds : taux implicite par mois, probabilité de baisse ou de hausse aux prochaines réunions ; en option : taux souverains mondiaux (courbe US, 10 ans, UEMOA)', 'World Interest Rate Probability'],
   MOST: ['Plus actives', 'mkt', 'Marchés', 'Plus fortes hausses et baisses, valeurs les plus échangées, largeur du jour', 'Most Active Securities'],
   HELP: ['Aide', 'mkt', 'Aide', 'Fonctions, sources, raccourcis', 'Help'],
   MENU: ['Menu du titre', 'sec', 'Titre', 'Toutes les fonctions disponibles pour ce titre, classées par thème', 'Security Menu'],
@@ -80,18 +77,18 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['BRIEF', 'MON', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'WIRP', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'EA', 'CF', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['BRIEF', 'MON', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 /* Fonctions associées (menu « Fonctions associées » de la barre d'outils) */
 const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HS: ['COMP', 'CORR', 'BETA', 'GP'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
-  DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'EQS'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'EQS'],
-  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'TOP', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'EQS'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
-  BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECWB', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
+  DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'SCREN'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'SCREN'],
+  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'TOP', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
+  BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
-  ECO: ['ECST', 'ECWB', 'WB', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'WB'], ECWB: ['ECO', 'ECST', 'WB', 'MACRO'],
-  WCRS: ['FXC', 'FX', 'WEI', 'WB'], BTMM: ['WIRP', 'WB', 'GC', 'ECWB', 'ECO'], PORT: ['EQS', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'TOP'], BRIEF: ['MON', 'PORT', 'ECO', 'TOP'], CF: ['EVTS', 'EA', 'DIVC', 'CN'], WIRP: ['BTMM', 'WB', 'ECO'], FXC: ['WCRS', 'FX', 'UEMOA'], FX: ['WCRS', 'FXC', 'UEMOA'] };
+  ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'],
+  BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'TOP'], BRIEF: ['MON', 'PORT', 'ECO', 'TOP'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
@@ -163,7 +160,7 @@ function searchSecs(qs) {
 }
 function parseCmd(txt) {
   const toks = txt.trim().toUpperCase().replace(/<GO>|\bGO\b|EQUITY|INDEX|CURNCY|COMDTY/g, ' ').split(/\s+/).filter(Boolean);
-  let fn = null, s = null; for (const t of toks) { if (!fn && FN[t] && has(t)) { fn = t; continue; } if (t === 'AIDE') { fn = 'HELP'; continue; } if (!s) { const m = Q.by[t] || searchSecs(t)[0]; if (m) s = m.id; } }
+  let fn = null, s = null; for (const t0 of toks) { const t = !fn && FN_ALIAS[t0] ? fnAlias(t0) : t0; if (!fn && FN[t] && has(t)) { fn = t; continue; } if (t === 'AIDE') { fn = 'HELP'; continue; } if (!s) { const m = Q.by[t] || searchSecs(t)[0]; if (m) s = m.id; } }
   if (!s && toks.length > 1 && !fn) { const m = searchSecs(toks.join(' '))[0]; if (m) s = m.id; }
   return { fn, s };
 }
@@ -195,6 +192,7 @@ function initCmd() {
         .map(k => ({ k: 'fn', id: k, a: k, b: `${esc(FN[k][4])} <i>— ${esc(FN[k][3])}</i>`, c: FN[k][1] === 'sec' ? 'fonction titre' : 'fonction', tt: FN[k][3] }));
       const ss = searchSecs(last).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: ykey(s), b: esc(s.n), c: s.mkt === 'BRVM' ? 'BRVM' : s.mkt === 'US' ? (s.typ === 'ETF' ? 'ETF US' : 'US') : s.cls }));
       /* sections comme l'autocomplétion du terminal : FONCTIONS puis TITRES (ou l'inverse si le texte est un ticker exact) */
+      for (const [k, [f, t]] of Object.entries(FN_ALIAS)) if (L && k.startsWith(L) && has(f)) { const tl = t ? (PAGE_TABS[f] || {})[t] : null; fns.unshift({ k: 'fn', id: k, a: k, b: `${esc(FN[f][4])} <i>— ${tl ? `désormais dans ${f}, onglet « ${esc(tl)} »` : `s’appelle désormais ${f}`}</i>`, c: 'fonction', tt: FN[f][3] }); }
       const F = fns.slice(0, 8), T = ss.slice(0, 10), secFirst = ss.length && ss[0].id.toUpperCase() === L;
       const blk = (lab, arr) => arr.length ? [{ k: 'h', a: lab }].concat(arr) : [];
       items = secFirst ? blk('TITRES', T).concat(blk('FONCTIONS', F)) : blk('FONCTIONS', F).concat(blk('TITRES', T));
@@ -379,13 +377,18 @@ function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hi
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
+/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FX, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN */
+const PAGE_TABS = { EVTS: { b: 'Suivi des sociétés BRVM' }, FX: { w: 'Classement des devises' }, RATES: { f: 'Anticipations de la Fed', w: 'Taux souverains mondiaux' } };
+const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FX', 'w'], EQS: ['SCREN'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
+function fnAlias(f) { const a = FN_ALIAS[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }
 function go(fn, s, o = {}) {
+  fn = fnAlias(fn);
   if (fn && FN[fn]) ST.fn = fn; if (s && Q.by[s]) ST.sec = s;
   if (!o.nohist) { const cur = [ST.fn, ST.sec]; const last = ST.hist[ST.hpos]; if (!last || last[0] !== cur[0] || (SECFN.has(cur[0]) && last[1] !== cur[1])) { ST.hist = ST.hist.slice(0, ST.hpos + 1); ST.hist.push(cur); if (ST.hist.length > 60) ST.hist.shift(); ST.hpos = ST.hist.length - 1; } }
   try { history.replaceState(null, '', '#' + ST.fn + (SECFN.has(ST.fn) ? '~' + ST.sec : '')); } catch (e) { } ddClose(); wtSync(); render(); window.scrollTo(0, 0);
 }
 function histGo(d) { const k = ST.hpos + d; if (k < 0 || k >= ST.hist.length) return; ST.hpos = k; const [f, s] = ST.hist[k]; go(f, s, { nohist: true }); }
-function fromHash() { const h = decodeURIComponent(location.hash.slice(1)); if (!h) return; const [f, s] = h.split('~'); if (FN[f]) ST.fn = f; if (s && Q.by[s]) ST.sec = s; }
+function fromHash() { const h = decodeURIComponent(location.hash.slice(1)); if (!h) return; let [f, s] = h.split('~'); f = fnAlias(f); if (FN[f]) ST.fn = f; if (s && Q.by[s]) ST.sec = s; }
 async function render() {
   const seq = ++renderSeq; untip(); PG.acts = []; PG.title = null; $('ptabs').hidden = true; $('ptabs').innerHTML = '';
   renderKeys(); renderTbar(); renderSech(); renderRbar(); renderStatus(); feedState(); clocksTick();
