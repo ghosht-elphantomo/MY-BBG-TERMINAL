@@ -660,7 +660,8 @@ def main():
         if flt_off is not None:
             f["flottant"] = flt_off
         pso_ = "off" if bnpa_off else ("alt" if bnpa_ else None)
-        if bnpa_off:
+        # BNPA du bulletin = cours ÷ PER (PER arrondi à 2 décimales) : le BNPA publié par la société, s'il concorde à 1 % près, est gardé tel quel
+        if bnpa_off and not (bnpa_ and bnpa_ > 0 and abs(bnpa_ / bnpa_off - 1) < .01):
             bnpa_ = bnpa_off
         cty = "BF" if t.endswith("BF") else CTY.get(t[-1], "CI")
         ld = last_div.get(t, (None, {}))[1]
