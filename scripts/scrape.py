@@ -486,13 +486,16 @@ def year_bases(prev, budget=60):
     for cs, ys in WORLD_YH.items():
         if cs in yb["v"] or time.time() - t0 > budget:
             continue
-        try:
-            j = json.loads(get(f"https://query1.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(ys)}?period1={a}&period2={b}&interval=1d", tries=1, timeout=8))
-            r = j["chart"]["result"][0]; cl = [c for c in r["indicators"]["quote"][0]["close"] if c]
-            if cl:
-                yb["v"][cs] = round(cl[-1], 6)
-        except Exception:  # noqa: BLE001
-            pass
+        for host in ("query1", "query2"):
+            try:
+                j = json.loads(get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(ys)}?period1={a}&period2={b}&interval=1d", tries=1, timeout=8,
+                                   headers={"Referer": "https://finance.yahoo.com/", "Origin": "https://finance.yahoo.com"}))
+                r = j["chart"]["result"][0]; cl = [c for c in r["indicators"]["quote"][0]["close"] if c]
+                if cl:
+                    yb["v"][cs] = round(cl[-1], 6)
+                break
+            except Exception:  # noqa: BLE001
+                continue
         time.sleep(0.2)
     return yb
 
