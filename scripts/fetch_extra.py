@@ -112,6 +112,21 @@ WB = [  # indicateur, nom, unité
 
 
 # ---------------------------------------------------------------- outils
+HZ_MIRROR = os.environ.get("FQT_BRVM_MIRROR", "/tmp/raw/brvm_src")
+
+
+def harzat_json(name):
+    """Fichier de la base BRVM publique (harzat) ; à défaut, copie miroir gardée sur la branche raw."""
+    try:
+        return json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/" + name, timeout=60, tries=2))
+    except Exception:  # noqa: BLE001
+        p_ = os.path.join(HZ_MIRROR, name)
+        if os.path.exists(p_):
+            log("base BRVM externe injoignable, miroir utilisé :", name)
+            return json.load(open(p_, encoding="utf8"))
+        raise
+
+
 def log(*a):
     print("[extra]", *a, flush=True)
 
@@ -742,7 +757,7 @@ def run_sikah(out):
     path = os.path.join(out, "sika_hist.json")
     db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"t": {}, "miss": {}}
     try:
-        fund = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/fundamentals.json", timeout=60))
+        fund = harzat_json("fundamentals.json")
     except Exception as e:  # noqa: BLE001
         note("sikah", False, f"fundamentals: {e}")
         return
@@ -871,8 +886,8 @@ def run_pdffin(out, budget=600):
     path = os.path.join(out, "pdf_fin.json")
     db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"t": {}, "docs": {}}
     try:
-        evs = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/events.json", timeout=60))["events"]
-        fund = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/fundamentals.json", timeout=60))
+        evs = harzat_json("events.json")["events"]
+        fund = harzat_json("fundamentals.json")
     except Exception as e:  # noqa: BLE001
         note("pdffin", False, e)
         return
@@ -1279,7 +1294,7 @@ def run_probe(out):
     save(os.path.join(dd, "wayback_cdx.json"), cdx)
     # échantillon d'états financiers (texte extrait) pour l'analyseur des comptes sur 10 exercices
     try:
-        evs = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/events.json", timeout=60))["events"]
+        evs = harzat_json("events.json")["events"]
         picks = {}
         for e in evs:
             t, fy, u = e.get("ticker"), e.get("fiscal_year"), e.get("document_url") or ""
@@ -1678,7 +1693,7 @@ def run_prof(out):
     path = os.path.join(out, "profiles.json")
     db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {}
     try:
-        fund = json.loads(get("https://raw.githubusercontent.com/harzat/brvm-data-public/main/fundamentals.json", timeout=60))
+        fund = harzat_json("fundamentals.json")
     except Exception as e:  # noqa: BLE001
         note("prof", False, f"fundamentals: {e}")
         return

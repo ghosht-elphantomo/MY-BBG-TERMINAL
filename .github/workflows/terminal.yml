@@ -147,7 +147,15 @@ jobs:
 
       - name: Recalculer toute la base
         run: |
-          git clone -q --depth 1 https://github.com/harzat/brvm-data-public.git /tmp/brvmsrc
+          # base historique BRVM (dépôt public tiers) ; miroir gardé chaque soir sur la branche raw et utilisé si le dépôt devient injoignable
+          if timeout 180 git clone -q --depth 1 https://github.com/harzat/brvm-data-public.git /tmp/brvmsrc && [ -f /tmp/brvmsrc/actions.json ]; then
+            if [ "${{ steps.mode.outputs.mode }}" = "eod" ]; then rm -rf /tmp/raw/brvm_src && mkdir -p /tmp/raw/brvm_src && tar -C /tmp/brvmsrc --exclude=.git -cf - . | tar -x -C /tmp/raw/brvm_src; fi
+          elif [ -f /tmp/raw/brvm_src/actions.json ]; then
+            echo "::warning::Base BRVM externe injoignable : miroir de la branche raw utilisé (séances récentes complétées par les bulletins officiels et brvm.org)"
+            rm -rf /tmp/brvmsrc && cp -r /tmp/raw/brvm_src /tmp/brvmsrc
+          else
+            echo "::error::Base BRVM externe injoignable et aucun miroir disponible"; exit 1
+          fi
           LIVE=""; if [ "${{ steps.mode.outputs.mode }}" != "eod" ] && [ -f /tmp/site/data/summary.json ]; then LIVE="--live"; fi
           python3 scripts/build_terminal.py --brvm-src /tmp/brvmsrc --out /tmp/site/data --session /tmp/state/brvm.json \
             --extra /tmp/raw --fcf seed/fcf_brvm.json --quotes /tmp/site/data/quotes.json --cache /tmp/bcache --boc /tmp/boc/boc_px $LIVE
