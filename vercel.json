@@ -6,7 +6,8 @@
       "raw": false,
       "data": false,
       "probe": false,
-      "boc": false
+      "boc": false,
+      "site": false
     }
   },
   "rewrites": [
