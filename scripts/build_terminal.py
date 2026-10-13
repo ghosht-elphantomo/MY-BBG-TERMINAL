@@ -205,6 +205,9 @@ def _nm(x):
     return re.sub(r"[^a-z0-9]+", " ", x.replace("&", " ")).strip()
 
 
+AV_GENERIC = re.compile(r"^(avis|brvm|rappel|communique|annonce|bourse regionale)( |$)")
+
+
 def brvm_avis(items, ev_src, acts, out):
     """Avis lus directement sur brvm.org (secours de la base tierce) : rattachés à un titre par le nom de société tel que brvm.org l'écrit
     (noms appris de la base d'avis, du registre des titres et des pages des sociétés). Renvoie (avis, nombre de sociétés non rattachées)."""
@@ -213,7 +216,7 @@ def brvm_avis(items, ev_src, acts, out):
         t, ti = x.get("ticker"), x.get("title") or ""
         if t:
             for k in (x.get("issuer"), x.get("company"), ti.split(" : ")[0] if " : " in ti else None):
-                if k:
+                if k and not AV_GENERIC.match(_nm(k)):
                     m[_nm(k)][t] += 1
     for a_ in acts:
         for k in (a_.get("nom"), a_.get("nom_officiel"), a_.get("ticker")):
@@ -224,13 +227,14 @@ def brvm_avis(items, ev_src, acts, out):
         for x in (json.load(open(rp, encoding="utf8")).get("issuers") or {}).values():
             if x.get("t") and x.get("n"):
                 m[_nm(x["n"])][x["t"]] += 1
-    tick = {a_["ticker"] for a_ in acts}
+    tick = {a_["ticker"] for a_ in acts if a_.get("actif", True) is not False}  # titres radiés exclus
 
     def find(*names):
         for n in names:
             k = _nm(n)
-            if k and k in m:
-                return m[k].most_common(1)[0][0]
+            if k and k in m and not AV_GENERIC.match(k):
+                t_ = m[k].most_common(1)[0][0]
+                return t_ if t_ in tick else None  # actions cotées seulement (pas d'obligations, d'États ni de sociétés radiées)
         for n in names:  # ticker cité entre parenthèses, ex. « (BBGC) »
             x = re.search(r"\(([A-Z]{4,5})\)", n or "")
             if x and x.group(1) in tick:
@@ -803,6 +807,18 @@ def main():
     ev = json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"]
     emeta = [{"d": x.get("published_at") or x.get("event_at"), "e": x.get("event_at"), "t": x.get("ticker"), "c": x.get("category_label"),
               "ti": x.get("title"), "u": x.get("document_url")} for x in ev if (x.get("published_at") or x.get("event_at"))]
+    try:
+        avd = {}
+        for r in AV:
+            if r.get("k") == "div" and r.get("t"):
+                for k_ in (r.get("det"), r.get("pay"), r.get("d")):
+                    if k_:
+                        avd[(r["t"], k_)] = r["u"]
+        for x in emeta:
+            if x.get("u") and "brvm.org" not in x["u"] and x.get("t"):
+                x["u"] = avd.get((x["t"], x.get("e"))) or avd.get((x["t"], x.get("d"))) or x["u"]
+    except Exception as e:  # noqa: BLE001
+        log("liens d'avis :", e)
     known_u = {x["u"] for x in emeta if x.get("u")}
     known_k = {(x.get("t"), x.get("c"), x.get("d")) for x in emeta if x.get("t")}
     known_e = {(x.get("t"), x.get("e")) for x in emeta if x.get("t") and x.get("c") in ("Annonce dividende", "Paiement dividende", "Détachement dividende")}
@@ -816,10 +832,19 @@ def main():
             return False
         if r.get("t") and any((r["t"], r.get("c"), (d0 + dt.timedelta(days=k)).isoformat()) in known_k for k in range(-3, 4)):
             return True
+        if r.get("k") in ("frac", "capital") and r.get("t"):  # opérations déjà connues sous un autre avis (date d'effet à ±15 jours)
+            try:
+                e0 = dt.date.fromisoformat((r.get("e") or r["d"])[:10])
+                if any(x.get("t") == r["t"] and x.get("c") == r.get("c") and x.get("e") and abs((dt.date.fromisoformat(x["e"][:10]) - e0).days) <= 15 for x in emeta):
+                    return True
+            except ValueError:
+                pass
         return r.get("k") == "div" and r.get("t") and ((r["t"], r.get("det")) in known_e or (r["t"], r.get("pay")) in known_e)
+    AV_BOND = re.compile(r"%|\betat\b|emprunt|obligat|fctc|\btp[a-z]{2}\b|diaspora|souscription|sukuk|\bo\d{2,3}\b")
     for r in AV:  # avis brvm.org pas encore dans la base : ajoutés tels que publiés (date de publication ; date de l'AG quand elle a été lue dans la convocation)
         try:
-            if not r.get("d") or dup(r):
+            # même périmètre que la base : actions cotées, et avis de marché généraux (pas les obligations ni les États)
+            if not r.get("d") or (not r.get("t") and (r.get("k") != "marche" or AV_BOND.search(_nm(r.get("ti"))))) or dup(r):
                 continue
         except Exception:  # noqa: BLE001
             continue
