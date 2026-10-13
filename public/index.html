@@ -561,6 +561,7 @@ table.t.eqt td{line-height:24px}
 .eqx{cursor:pointer;color:#bdbdbd;font-weight:400}.eqx:hover{color:var(--dn)}
 .eqb{display:flex;justify-content:flex-end;gap:6px;padding:8px}
 @media (max-width:900px){.eqg{grid-template-columns:minmax(0,1fr)}}
+.weic{border:1px solid #1f1f1f;gap:6px}
 
 </style>
 </head><body>
@@ -3693,30 +3694,36 @@ const IDX_FR = { '.SPX': 'S&P 500', '.DJI': 'Dow Jones Industrial', '.IXIC': 'Na
 PAGES.WEI = async (m, alive) => {
   const W = await WMKT(); if (!alive()) return; setTitle('World Equity Indices');
   if (!W || !W.idx) { m.innerHTML = pn('Indices mondiaux', 'WEI', '<div class="empty">Cotations mondiales en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
-  const tab = tabState('WEI', 'tbl'); setTabs([['tbl', 'Tableau'], ['bar', 'Variations du jour'], ['rng', 'Position sur 52 semaines']], tab, k => { ST.tab.WEI = k; render(); });
+  const tab = tabState('WEI', 'tbl'), wo = ST.weio = ST.weio || { mov: false, vol: true };
+  /* rangée de réglages comme le terminal : vue « Standard ▾ », cases Movers / Volatilité */
+  const ctl = `<div class="tools weic"><select class="ofld" id="weV">${[['tbl', 'Standard'], ['bar', 'Variations du jour'], ['rng', 'Position sur 52 semaines']].map(([k, l]) => `<option value="${k}" ${tab === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <label class="gck"><input type="checkbox" id="weM" ${wo.mov ? 'checked' : ''}><i></i>Mouvements (classés par variation)</label><label class="gck"><input type="checkbox" id="weVo" ${wo.vol ? 'checked' : ''}><i></i>Volatilité</label>
+    <span class="gsp"></span><span class="tlab">% depuis janv.</span><span class="wh">devise locale et USD</span></div>`;
+  const bindCtl = () => { $('weV').onchange = e => { ST.tab.WEI = e.target.value; render(); }; $('weM').onchange = e => { wo.mov = e.target.checked; render(); }; $('weVo').onchange = e => { wo.vol = e.target.checked; render(); }; };
   const brvm = ['BRVMC', 'BRVM30', 'BRVMPR'].map(id => Q.by[id]).filter(Boolean).map(s => ({ g: 'MEA', s: s.id, n: s.n, last: s.last, chg: s.prev ? s.last - s.prev : null, pct: s.pct, t: i2s(s.dt), hi52: s.hi52, lo52: s.lo52, ytd: s.ytd, loc: true }));
   const YB = W.yb && W.yb.v || {}; W.idx.forEach(r => { if (r.ytd == null && YB[r.s] && r.last) r.ytd = r.last / YB[r.s] - 1; });
-  const rows = W.idx.concat(brvm), REG = [['AM', 'Amériques'], ['EU', 'Europe'], ['MEA', 'Moyen-Orient et Afrique'], ['AS', 'Asie-Pacifique'], ['VOL', 'Volatilité']];
+  const rows = W.idx.concat(brvm), REG = [['AM', 'Amériques'], ['EU', 'Europe'], ['MEA', 'Moyen-Orient et Afrique'], ['AS', 'Asie-Pacifique']].concat(wo.vol ? [['VOL', 'Volatilité']] : []);
   const nm = r => r.loc ? r.n : IDX_FR[r.s] || r.n;
   if (tab === 'bar') {
     const L = rows.filter(r => r.g !== 'VOL' && r.pct != null).sort((a, b) => b.pct - a.pct);
-    m.innerHTML = pn(`Indices mondiaux classés par variation du jour (${L.length})`, 'WEI', cvb('weB', Math.max(380, L.length * 17)), { lect: `Cotations différées, relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}. Les marchés d’Asie et d’Europe affichent leur dernière séance close.` });
-    hbars($('weB'), L.map(r => nm(r)), L.map(r => r.pct * 100), v => (v > 0 ? '+' : '') + num(v, 2) + '%'); return;
+    m.innerHTML = ctl + pn(`Indices mondiaux classés par variation du jour (${L.length})`, 'WEI', cvb('weB', Math.max(380, L.length * 17)), { lect: `Cotations différées, relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}. Les marchés d’Asie et d’Europe affichent leur dernière séance close.` });
+    bindCtl(); hbars($('weB'), L.map(r => nm(r)), L.map(r => r.pct * 100), v => (v > 0 ? '+' : '') + num(v, 2) + '%'); return;
   }
   /* % depuis janvier en dollars (colonne « %YtdCur » du terminal) : indices cotés en EUR, GBP, CHF, JPY, CNY, XOF */
   const FXR = Object.fromEntries((W.fx || []).map(r => [r.s, r.last])), IXC = { '.STOXX50E': 'EUR=', '.GDAXI': 'EUR=', '.FCHI': 'EUR=', '.FTMIB': 'EUR=', '.IBEX': 'EUR=', '.AEX': 'EUR=', '.FTSE': 'GBP=', '.SSMI': 'CHF=', '.N225': 'JPY=', '.SSEC': 'CNY=', '.SZI': 'CNY=', BRVMC: 'XOF=', BRVM30: 'XOF=', BRVMPR: 'XOF=' };
   const usdF = r => { const US = ['.SPX', '.DJI', '.IXIC', '.RUT']; if (US.includes(r.s)) return 1; const f = IXC[r.s]; if (!f || !FXR[f] || !YB[f]) return null; return ['EUR=', 'GBP='].includes(f) ? FXR[f] / YB[f] : YB[f] / FXR[f]; };
   const today = new Date().toISOString().slice(0, 10), stale = t => t && String(t).slice(0, 10) < today;
-  let rn = 0; const sec_ = ([g, lab], gi) => { const L = rows.filter(r => r.g === g); if (!L.length) return '';
+  let rn = 0; const sec_ = ([g, lab], gi) => { const L = rows.filter(r => r.g === g); if (wo.mov) L.sort((a, b) => (b.pct ?? -9) - (a.pct ?? -9)); if (!L.length) return '';
     return `<tr class="grp"><td class="l" colspan="8"><span class="rn">${gi + 1})</span>${lab}</td></tr>${L.map(r => { const f = r.ytd != null ? usdF(r) : null, yc = f != null ? (1 + r.ytd) * f - 1 : null;
       return `<tr ${r.loc ? `data-sec="${r.s}" data-to="GP" style="cursor:pointer"` : ''}><td class="l am"><span class="rn">${++rn})</span>${esc(nm(r).toUpperCase())}</td><td class="wh">${num(r.last, 2)}<i class="qd">${r.loc ? '' : 'd'}</i></td><td class="${cls(r.chg)}">${r.chg != null ? (r.chg > 0 ? '+' : '') + num(r.chg, 2) : '—'}</td><td>${pc(r.pct)}</td><td class="dm">${qTime(r.t)}<i class="qd">${stale(r.t) ? 'c' : ''}</i></td><td>${r.ytd != null ? pc(r.ytd) : '<span class="dm">—</span>'}</td><td>${yc != null ? pc(yc) : '<span class="dm">—</span>'}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td></tr>`; }).join('')}`; };
   if (tab === 'rng') {
     const L = rows.filter(r => r.hi52 && r.lo52 && r.hi52 > r.lo52 && r.g !== 'VOL').map(r => ({ r, p: (r.last - r.lo52) / (r.hi52 - r.lo52) })).sort((a, b) => b.p - a.p);
-    m.innerHTML = pn('Position dans la fourchette des 52 dernières semaines (0 % = plus bas, 100 % = plus haut)', 'WEI', cvb('weR', Math.max(380, L.length * 17)), { lect: 'Les indices en haut de la liste sont au voisinage de leur plus haut annuel.' });
-    hbars($('weR'), L.map(x => nm(x.r)), L.map(x => x.p * 100), v => num(v, 0) + ' %', 50); return;
+    m.innerHTML = ctl + pn('Position dans la fourchette des 52 dernières semaines (0 % = plus bas, 100 % = plus haut)', 'WEI', cvb('weR', Math.max(380, L.length * 17)), { lect: 'Les indices en haut de la liste sont au voisinage de leur plus haut annuel.' });
+    bindCtl(); hbars($('weR'), L.map(x => nm(x.r)), L.map(x => x.p * 100), v => num(v, 0) + ' %', 50); return;
   }
-  m.innerHTML = `${pn('Indices boursiers mondiaux', 'WEI', `<div class="tw"><table class="t wei"><thead><tr><th class="l">Indice</th><th>Valeur</th><th>Var. nette</th><th>Var. %</th><th>Heure</th><th>% depuis janv.</th><th>% janv. (USD)</th><th>Fourchette 52 s.</th></tr></thead><tbody>${REG.map(sec_).join('')}</tbody></table></div>`,
+  m.innerHTML = ctl + `${pn('Indices boursiers mondiaux', 'WEI', `<div class="tw"><table class="t wei"><thead><tr><th class="l">Indice</th><th>Valeur</th><th>Var. nette</th><th>Var. %</th><th>Heure</th><th>% depuis janv.</th><th>% janv. (USD)</th><th>Fourchette 52 s.</th></tr></thead><tbody>${REG.map(sec_).join('')}</tbody></table></div>`,
     { np: true, lect: `Cotations différées (bourses via CNBC), relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} ; BRVM : séance du jour. d = cotation différée ; heure GMT de la dernière cotation, c = clôture d’une séance précédente (date). « % depuis janv. » = dernier cours ÷ clôture de fin d’année précédente ; « (USD) » = même calcul converti en dollars.` })}`;
+  bindCtl();
 };
 /* barres horizontales (classements) */
 function hbars(host, labels, values, fmt, mid = 0) {
