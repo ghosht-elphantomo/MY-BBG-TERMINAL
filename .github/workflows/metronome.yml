@@ -1,0 +1,55 @@
+name: Métronome
+
+# Lance le relevé du terminal pile à :00, :15, :30 et :45 (UTC), jour et nuit.
+# La programmation « cron » de GitHub est retardée quand ses serveurs sont chargés (relevés espacés de 20 à 45 min) :
+# ce métronome tourne en continu sur un seul job (~5 h 40), déclenche terminal.yml (mode live) à chaque quart d'heure,
+# puis passe le relais à un nouveau métronome. Chien de garde : la programmation horaire le relance s'il s'est arrêté.
+# La programmation */15 de terminal.yml reste en secours ; elle s'efface d'elle-même quand le métronome vient de passer.
+on:
+  schedule:
+    - cron: "7 * * * *"            # chien de garde horaire
+  workflow_dispatch: {}
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - name: Un métronome tourne-t-il déjà ?
+        id: chk
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # autres métronomes en cours lancés il y a moins de 5 h (un métronome en fin de course passe le relais : on l'ignore)
+          n=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/metronome.yml/runs?status=in_progress&per_page=20" \
+                --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID and ((.run_started_at // .created_at) | fromdateiso8601) > (now - 18000))] | length" || echo 0)
+          echo "Autres métronomes actifs : ${n:-0}"
+          if [ "${n:-0}" -gt 0 ]; then echo "run=0" >> "$GITHUB_OUTPUT"; else echo "run=1" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Relevé à chaque quart d'heure
+        if: steps.chk.outputs.run == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          end=$(( $(date +%s) + 340 * 60 ))
+          while :; do
+            now=$(date +%s); next=$(( (now / 900 + 1) * 900 + 15 ))   # 15 s après :00, :15, :30, :45
+            [ "$next" -ge "$end" ] && break
+            sleep $(( next - now ))
+            for k in 1 2 3; do
+              if gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/terminal.yml/dispatches" -f ref=main -f "inputs[mode]=live" >/dev/null; then
+                echo "Relevé lancé à $(date -u +%H:%M:%S) UTC"; break
+              fi
+              echo "Nouvel essai ($k)"; sleep 20
+            done
+          done
+
+      - name: Passer le relais au métronome suivant
+        if: steps.chk.outputs.run == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/metronome.yml/dispatches" -f ref=main

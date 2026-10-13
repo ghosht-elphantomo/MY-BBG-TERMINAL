@@ -27,14 +27,38 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
-# relevés de 15 min et base complète dans deux files séparées : un relevé en attente ne peut pas annuler la base du soir
+# relevés de 15 min (programmés ou lancés par le métronome) et base complète dans deux files séparées :
+# un relevé en attente ne peut pas annuler la base du soir
 concurrency:
-  group: ${{ (github.event_name == 'schedule' && github.event.schedule != '35 22 * * 1-5') && 'terminal-live' || 'terminal-full' }}
+  group: ${{ ((github.event_name == 'schedule' && github.event.schedule != '35 22 * * 1-5') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'live')) && 'terminal-live' || 'terminal-full' }}
   cancel-in-progress: false
 
 jobs:
+  # Le métronome (metronome.yml) lance un relevé pile à chaque quart d'heure ; la programmation */15 reste en secours
+  # et s'efface si le métronome a lancé un relevé il y a moins de 12 minutes (pas de doublon).
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      go: ${{ steps.g.outputs.go }}
+    steps:
+      - id: g
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          go=1
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "${{ github.event.schedule }}" != "35 22 * * 1-5" ]; then
+            n=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/terminal.yml/runs?event=workflow_dispatch&per_page=5" \
+                  --jq '[.workflow_runs[] | select((.created_at | fromdateiso8601) > (now - 720))] | length' || echo 0)
+            if [ "${n:-0}" -gt 0 ]; then go=0; echo "Le métronome vient de lancer un relevé : relevé de secours inutile."; fi
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+
   refresh:
+    needs: gate
+    if: needs.gate.outputs.go == '1'
     runs-on: ubuntu-latest
     timeout-minutes: 95
     steps:
