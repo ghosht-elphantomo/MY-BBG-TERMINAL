@@ -360,7 +360,7 @@ async function renderNews() {
   p.querySelectorAll('[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
 }
 const hideSrc = x => /brvm|sika/i.test((x.s || '') + ' ' + (x.f || '') + ' ' + (x.u || ''));
-function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (hideSrc(x)) return '';
+function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hideSrc(x)) return '';
   const M = [['brvm', 'BRVM'], ['sika', 'SIKA'], ['sec.gov', 'SEC'], ['edgar', 'SEC'], ['reuters', 'RTRS'], ['bloomberg', 'BBG'], ['zonebourse', 'ZB'], ['boursorama', 'BOURSO'], ['les echos', 'ECHOS'], ['jeune afrique', 'JA'], ['financial afrik', 'FAFRIK'], ['financialafrik', 'FAFRIK'], ['agence ecofin', 'ECOFIN'], ['ecofin', 'ECOFIN'], ['bceao', 'BCEAO'], ['fed', 'FED'], ['cnbc', 'CNBC'], ['marketwatch', 'MW'], ['yahoo', 'YHOO'], ['nasdaq', 'NDAQ'], ['lefigaro', 'FIGARO'], ['le monde', 'MONDE'], ['abidjan', 'ABJ.NET'], ['apa', 'APA'], ['afp', 'AFP']];
   for (const [k, v] of M) if (s.includes(k)) return v; return (x.s || 'WEB').replace(/^www\./, '').split(/[ .]/)[0].toUpperCase().slice(0, 6); }
 
@@ -397,7 +397,7 @@ function renderSecbar() { renderSech(); }
 function renderStatus() {
   const L = Q.live && Q.live.qqq, ss = Q.sum.session;
   $('status').innerHTML = `<span>Données au <b>${fd(Q.sum.asof)}</b> · ${Q.sum.secs.length} titres · séance BRVM <b>${ss ? fds(ss.asof) : '—'}</b>${L ? ` · QQQ <b>${num(L.price, 2)}</b> (${L.state === 'REGULAR' ? 'séance' : L.state === 'PRE' ? 'pré-marché' : L.state === 'POST' ? 'après-bourse' : L.state === 'CLOSED' ? 'clôturé' : L.state}, ${new Date(L.time * 1000).toISOString().slice(11, 16)} UTC)` : ''}</span>
-    <span>Sources : BCEAO · UMOA-Titres · Nasdaq · SEC · FRED · CNBC · Yahoo Finance · TradingView · CBOE · CNN · EIA · AIE · Coinbase · Banque mondiale — outil d'analyse, pas un conseil en investissement</span>`;
+    <span>${ANON ? '' : 'Sources : BCEAO · UMOA-Titres · Nasdaq · SEC · FRED · CNBC · Yahoo Finance · TradingView · CBOE · CNN · EIA · AIE · Coinbase · Banque mondiale — '}outil d'analyse, pas un conseil en investissement</span>`;
 }
 let clocksTick = () => { };
 function clocks() { const z = [['ABJ', 'Africa/Abidjan'], ['PAR', 'Europe/Paris'], ['NY', 'America/New_York'], ['TYO', 'Asia/Tokyo']];
@@ -430,6 +430,14 @@ async function initSync() {
     finally { setTimeout(() => { b.disabled = false; b.textContent = 'SYNC'; }, 60000); } };
   bindSync();
 }
+
+/* ---------- mode anonyme (liens temporaires de démonstration) : les noms des fournisseurs de données disparaissent de l'écran ---------- */
+const ANON = typeof window !== 'undefined' && !!window.FQT_ANON;
+const ANON_RX = [/\b(?:Yahoo Finance|Yahoo|TradingView|Nasdaq(?: \/ Zacks| \(Zacks\))?|Zacks|SEC EDGAR|EDGAR|XBRL|SEC|FRED|Réserve fédérale de St\. Louis|CBOE|CNN|CNBC|EIA|AIE|IEA|Coinbase|Banque mondiale|World Bank|UMOA-Titres|Energy Institute|Our World in Data|OWID|Natural Earth|world-atlas|SikaFinance|Sika ?Finance|RichBourse|MarketScreener|Investing\.com|GitHub|Vercel|jsDelivr|ICE, CME, NYMEX, COMEX via CNBC|bourses via CNBC)\b/g];
+function anonText(t) { let o = t.replace(/\b(?:Sources?|Calendrier|Consensus publié par|Cotations différées)\s*(?::|\()[^.]*?(?:\.(?=\s|$)|$)/g, ''); for (const rx of ANON_RX) o = o.replace(rx, ''); return o.replace(/\b(Sources?|Calendrier|Données|Consensus publié par)\s*:?\s*(?:[,·;/()]\s*|\s(et|via|ou)\s)*(?=[.;)]|$)/g, '').replace(/\(\s*[,;·/]*\s*\)/g, '').replace(/\s+([,.;])/g, '$1').replace(/([,·;/])\s*(?=[,·;/.)])/g, '').replace(/ {2,}/g, ' '); }
+function anonNode(root) { if (!ANON || !root) return; const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const L = []; while (w.nextNode()) L.push(w.currentNode); for (const n of L) { const v = anonText(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
+  root.querySelectorAll && root.querySelectorAll('[title]').forEach(e => { const v = anonText(e.title); if (v !== e.title) e.title = v; }); }
+if (ANON) { document.documentElement.classList.add('anon'); new MutationObserver(ms => { for (const m of ms) for (const n of m.addedNodes) { if (n.nodeType === 1) anonNode(n); else if (n.nodeType === 3) { const v = anonText(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; } } }).observe(document.documentElement, { childList: true, subtree: true }); }
 
 /* ---------- démarrage ---------- */
 async function boot() {

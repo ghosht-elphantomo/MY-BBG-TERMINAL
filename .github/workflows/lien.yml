@@ -31,11 +31,21 @@ jobs:
           MIN="${{ inputs.minutes }}"; case "$MIN" in ''|*[!0-9]*) MIN=15;; esac; [ "$MIN" -lt 1 ] && MIN=1; [ "$MIN" -gt 60 ] && MIN=60
           T0=$(date +%s); echo "t0=$T0" >> "$GITHUB_OUTPUT"; echo "min=$MIN" >> "$GITHUB_OUTPUT"
           # copie du site (page seule, sans le relais de données ni la configuration d'hébergement) + données du moment
-          mkdir -p /tmp/www && cp -r public/. /tmp/www/
-          git fetch -q --depth 1 origin data && git archive FETCH_HEAD data | tar -x -C /tmp/www
-          nohup python3 -m http.server 8080 --bind 127.0.0.1 --directory /tmp/www > /tmp/http.log 2>&1 &
+          mkdir -p /tmp/www && cp public/index.html public/favicon.* public/apple-touch-icon.png /tmp/www/
+          # mode anonyme : aucun nom de fournisseur de données à l'écran ni dans les fichiers servis
+          sed -i 's#<head>#<head><script>window.FQT_ANON=1</script>#' /tmp/www/index.html
+          printf 'User-agent: *\nDisallow: /\n' > /tmp/www/robots.txt
+          git fetch -q --depth 1 origin data && git archive FETCH_HEAD data | tar -x -C /tmp/www && python3 scripts/anon_data.py /tmp/www/data
+          cat > /tmp/srv.py <<'PY'
+          import http.server, functools
+          class H(http.server.SimpleHTTPRequestHandler):
+              server_version = "web"; sys_version = ""
+              def log_message(self, *a): pass
+          http.server.ThreadingHTTPServer(("127.0.0.1", 8080), functools.partial(H, directory="/tmp/www")).serve_forever()
+          PY
+          nohup python3 /tmp/srv.py > /tmp/http.log 2>&1 &
           # données rafraîchies toutes les 4 minutes pendant la durée du lien
-          nohup bash -c 'while sleep 240; do git fetch -q --depth 1 origin data && git archive FETCH_HEAD data | tar -x -C /tmp/www; done' > /dev/null 2>&1 &
+          nohup bash -c 'while sleep 240; do rm -rf /tmp/wnext && mkdir -p /tmp/wnext && git fetch -q --depth 1 origin data && git archive FETCH_HEAD data | tar -x -C /tmp/wnext && python3 scripts/anon_data.py /tmp/wnext/data && cp -r /tmp/wnext/data/. /tmp/www/data/; done' > /dev/null 2>&1 &
           curl -sSL -o /tmp/cf https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 && chmod +x /tmp/cf
           nohup /tmp/cf tunnel --no-autoupdate --url http://127.0.0.1:8080 > /tmp/cf.log 2>&1 &
           URL=""; for i in $(seq 1 60); do URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf.log | head -1); [ -n "$URL" ] && break; sleep 2; done
@@ -57,6 +67,6 @@ jobs:
         run: |
           END=$(( ${{ steps.open.outputs.t0 }} + ${{ steps.open.outputs.min }} * 60 )); NOW=$(date +%s)
           [ "$END" -gt "$NOW" ] && sleep $(( END - NOW ))
-          pkill -f "cf tunnel" || true; pkill -f "http.server 8080" || true
+          pkill -f "cf tunnel" || true; pkill -f "/tmp/srv.py" || true
           DEP="${{ steps.open.outputs.dep }}"; [ -n "$DEP" ] && { jq -n '{state:"inactive",description:"Lien expiré"}' | gh api -X POST "repos/$GITHUB_REPOSITORY/deployments/$DEP/statuses" --input - >/dev/null || true; }
           echo "Lien expiré à $(date -u +%H:%M:%S) UTC."
