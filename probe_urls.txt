@@ -1,1 +1,5 @@
-cnbc_ff.json|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=%40FF.1%7C%40FF.2%7C%40FF.3%7C%40FF.4%7C%40FF.5%7C%40FF.6%7C%40FF.7%7C%40FF.8%7C%40FF.9%7C%40FF.10%7C%40FF.11%7C%40FF.12%7C%40FF.13%7C%40DAX.1%7C%40STXE.1%7C%40FCE.1%7C%40RTYS.1%7C%40TFS.1%7C%40ES.1%7C%40NQ.1%7C%40YM.1%7C%40MME.1%7C%40XAF.1&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
+prod_index.html|https://mybbgterminal.vercel.app/
+prod_live.json|https://mybbgterminal.vercel.app/data/live.json
+prod_world.json|https://mybbgterminal.vercel.app/data/world_mkt.json
+prod_summary.json|https://mybbgterminal.vercel.app/data/summary.json
+prod_session.json|https://mybbgterminal.vercel.app/data/session.json
