@@ -83,6 +83,15 @@ FRED = [  # id, nom, groupe, unité
     ("RECPROUSM156N", "Probabilité de récession (lissée)", "Activité", "%"),
     ("SP500", "S&P 500", "Marchés", "pts"), ("NASDAQCOM", "Nasdaq Composite (depuis 1971)", "Marchés", "pts"),
     ("DCOILWTICO", "Pétrole WTI", "Marchés", "$"), ("DEXUSEU", "Dollar par euro", "Change", "$"),
+    # marché monétaire (écran BTMM)
+    ("DFEDTARU", "Fed : borne haute de la fourchette cible", "Monétaire", "%"), ("DFEDTARL", "Fed : borne basse de la fourchette cible", "Monétaire", "%"),
+    ("IORB", "Rémunération des réserves (IORB)", "Monétaire", "%"), ("DPCREDIT", "Taux d'escompte (crédit primaire)", "Monétaire", "%"),
+    ("DPRIME", "Taux de base bancaire (prime rate)", "Monétaire", "%"), ("SOFR", "SOFR (pension au jour le jour garantie)", "Monétaire", "%"),
+    ("OBFR", "Taux de financement au jour le jour (OBFR)", "Monétaire", "%"), ("DTB4WK", "Bon du Trésor 4 semaines (escompte)", "Monétaire", "%"),
+    ("DTB3", "Bon du Trésor 13 semaines (escompte)", "Monétaire", "%"), ("DTB6", "Bon du Trésor 26 semaines (escompte)", "Monétaire", "%"),
+    ("DTB1YR", "Bon du Trésor 52 semaines (escompte)", "Monétaire", "%"), ("DCPF3M", "Billets de trésorerie financiers AA 3 mois", "Monétaire", "%"),
+    ("DCPN3M", "Billets de trésorerie non financiers AA 3 mois", "Monétaire", "%"), ("ECBDFR", "BCE : taux de la facilité de dépôt", "Monétaire", "%"),
+    ("ECBMRRFR", "BCE : taux des opérations principales de refinancement", "Monétaire", "%"),
 ]
 CBOE = ["VIX", "VIX9D", "VIX3M", "VVIX", "SKEW"]
 CRYPTO = [("BTC", "BTC-USD", "2015-07-20"), ("ETH", "ETH-USD", "2016-05-18"), ("SOL", "SOL-USD", "2021-06-01")]

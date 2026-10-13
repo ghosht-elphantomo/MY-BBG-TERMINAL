@@ -35,6 +35,7 @@ const FN = {
   EVTS: ['Avis BRVM', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers', 'Corporate Events'],
   WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines', 'World Equity Indices'],
   GLCO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
+  BTMM: ['Trésor et marché monétaire US', 'mkt', 'Taux', 'Taux directeurs (Fed, BCE, BCEAO), SOFR, bons et emprunts du Trésor, contrats à terme, pentes, inflation anticipée', 'Treasury & Money Markets'],
   WB: ['Taux mondiaux', 'mkt', 'Taux', 'Courbe du Trésor américain, emprunts d’État à 10 ans, écarts, UEMOA à 10 ans', 'World Bond Markets'],
   MOST: ['Plus actives', 'mkt', 'Marchés', 'Plus fortes hausses et baisses, valeurs les plus échangées, largeur du jour', 'Most Active Securities'],
   HELP: ['Aide', 'mkt', 'Aide', 'Fonctions, sources, raccourcis', 'Help'],
@@ -71,7 +72,7 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['MON', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['MON', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TRA', 'COMP', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -82,7 +83,7 @@ const REL = { GP: ['HP', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], HP: ['GP', 'TRA
   BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECWB', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
   ECO: ['ECST', 'ECWB', 'WB', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'WB'], ECWB: ['ECO', 'ECST', 'WB', 'MACRO'],
-  WCRS: ['FXC', 'FX', 'WEI', 'WB'], FXC: ['WCRS', 'FX', 'UEMOA'], FX: ['WCRS', 'FXC', 'UEMOA'] };
+  WCRS: ['FXC', 'FX', 'WEI', 'WB'], BTMM: ['WB', 'GC', 'ECWB', 'ECO'], FXC: ['WCRS', 'FX', 'UEMOA'], FX: ['WCRS', 'FXC', 'UEMOA'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
