@@ -129,6 +129,7 @@ main{flex:1;padding:4px;display:grid;gap:4px;align-content:start;min-width:0}
 .grid{display:grid;gap:4px;min-width:0}
 .c2{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}
 .c2b{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.c2r{grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)}
 .c3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .c4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .side{grid-template-columns:minmax(0,1fr) 370px}
@@ -248,7 +249,7 @@ table.t{width:100%;border-collapse:collapse;font-size:12.5px}
 .ddm .dh{background:var(--hdr);color:#fff;font-size:12px;padding:1px 8px}
 
 @media (max-width:1100px){
-  .c2,.c2b,.c3,.side,.bt{grid-template-columns:minmax(0,1fr)}
+  .c2,.c2b,.c2r,.c3,.side,.bt{grid-template-columns:minmax(0,1fr)}
   .c4{grid-template-columns:repeat(2,minmax(0,1fr))}
   .clocks{display:none}
 }
@@ -352,3 +353,31 @@ i.dot{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:
 .bmap{position:relative;width:100%;background:#000}
 .bmap canvas{display:block;width:100%}
 .nw.s{grid-template-columns:80px 1fr;gap:6px}.nw.s .c{display:none}.nw.s .d{font-size:11px}
+.rgb{display:inline-block;position:relative;width:84px;height:6px;background:linear-gradient(90deg,#5a1a1a,#3a3a3a 50%,#1a4d2a);vertical-align:middle;border-radius:1px}
+.rgb i{position:absolute;top:-3px;width:3px;height:12px;background:#fff;margin-left:-1px}
+.t tr.grp td{background:#26292d;color:var(--white);font-weight:700;letter-spacing:.02em}
+.t tr.hl td{background:rgba(249,163,58,.08)}
+/* onglets de fenêtre façon terminal Bloomberg */
+.wtabs{display:flex;align-items:flex-end;gap:2px;height:30px;background:#2a2c2f;padding:0 6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;border-bottom:1px solid #000}
+.wtabs::-webkit-scrollbar{display:none}
+.wt{display:flex;align-items:center;gap:8px;max-width:270px;min-width:120px;height:25px;padding:0 8px 0 12px;background:#1b1c1e;color:#b9b9b9;font:400 12.5px var(--mono);cursor:pointer;border-radius:3px 3px 0 0;flex:none;border:1px solid #3a3c40;border-bottom:0}
+.wt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.wt.on{background:#3c3f43;color:#fff}
+.wt .wx{font-weight:400;color:#bbb;font-size:15px;line-height:1;padding:0 2px}
+.wt .wx:hover{color:#fff;background:#666}
+.wplus{flex:none;height:25px;width:28px;background:transparent;border:0;color:#fff;font:400 20px var(--mono);cursor:pointer;line-height:1}
+.wplus:hover{background:#3c3f43}
+.wopt{margin-left:auto;align-self:center;color:#ddd;font:400 12px var(--mono);cursor:pointer;flex:none;padding:0 6px}
+.nonews #nwp{display:none!important}
+@media(max-width:700px){.wt{min-width:90px;max-width:170px;font-size:11px}.wopt{display:none}}
+/* menu des fonctions façon Bloomberg */
+.bmenu{background:#262626;border:1px solid #4a4a4a;padding:8px 14px 6px;color:#fff;font-family:var(--mono)}
+.bm-top{text-align:right;color:#fff;font-size:14px}.bm-cancel{cursor:pointer}.bm-cancel:hover{color:var(--amber)}
+.bm-crumb{font-size:15px;margin:10px 0 14px;color:#fff}.bm-crumb a{color:#4da3ff;cursor:pointer;text-decoration:none}.bm-crumb a:hover{text-decoration:underline}.bm-crumb i{font-style:italic;color:#fff}.bm-crumb .hm{color:#4da3ff}
+.bm-cols{display:grid;grid-template-columns:1fr 1fr;gap:6px 40px}
+.bm-g{margin-bottom:14px}.bm-h{font-size:15px;color:#fff;margin:0 0 4px 30px}.bm-h span{color:#ccc}
+.bm-it{display:grid;grid-template-columns:22px 34px 58px 1fr;align-items:center;height:24px;font-size:14.5px;cursor:pointer}
+.bm-it:hover{background:#3a3a3a}.bm-it .ar{color:#ddd;font-size:13px}.bm-it .no{color:#aaa;text-align:right;padding-right:6px;font-size:12.5px}.bm-it b{font-weight:400;color:#fff}.bm-it .nm{color:var(--amber)}
+.bm-it.off{cursor:default;opacity:.38}.bm-it.off:hover{background:none}
+.bm-foot{display:flex;justify-content:space-between;color:#9a9a9a;font-size:13px;border-top:1px solid #3a3a3a;padding-top:6px;margin-top:2px}
+@media(max-width:700px){.bm-cols{grid-template-columns:1fr}.bm-it{font-size:13px}}

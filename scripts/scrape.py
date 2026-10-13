@@ -452,6 +452,48 @@ def oil_board(out_data):
         dump(out, os.path.join(out_data, "oil.json"))
 
 
+# marchés mondiaux (CNBC, différé) : indices, matières premières, changes, taux souverains — fonctions WEI, GLCO, WB
+WORLD = {
+    "idx": [("AM", ".SPX"), ("AM", ".DJI"), ("AM", ".IXIC"), ("AM", ".RUT"), ("AM", ".GSPTSE"), ("AM", ".MXX"), ("AM", ".BVSP"), ("AM", ".MERV"),
+            ("EU", ".STOXX50E"), ("EU", ".FTSE"), ("EU", ".GDAXI"), ("EU", ".FCHI"), ("EU", ".FTMIB"), ("EU", ".IBEX"), ("EU", ".AEX"), ("EU", ".SSMI"), ("EU", ".OMXS30"),
+            ("MEA", ".TA35"), ("MEA", ".EGX30"),
+            ("AS", ".N225"), ("AS", ".HSI"), ("AS", ".SSEC"), ("AS", ".SZI"), ("AS", ".KS11"), ("AS", ".TWII"), ("AS", ".NSEI"), ("AS", ".AXJO"), ("AS", ".STI"), ("AS", ".KLSE"),
+            ("VOL", ".VIX")],
+    "cmd": [("MET", "@GC.1"), ("MET", "@SI.1"), ("MET", "@HG.1"), ("MET", "@PL.1"), ("MET", "@PA.1"),
+            ("AGR", "@CC.1"), ("AGR", "@KC.1"), ("AGR", "@CT.1"), ("AGR", "@SB.1"), ("AGR", "@W.1"), ("AGR", "@C.1"), ("AGR", "@S.1"), ("AGR", "@SM.1"), ("AGR", "@LC.1")],
+    "fx": [("FX", ".DXY"), ("FX", "EUR="), ("FX", "GBP="), ("FX", "JPY="), ("FX", "CHF="), ("FX", "CNY="), ("FX", "XOF="), ("FX", "NGN="), ("FX", "GHS="), ("FX", "ZAR=")],
+    "rt": [("US", "US1M"), ("US", "US3M"), ("US", "US6M"), ("US", "US1Y"), ("US", "US2Y"), ("US", "US5Y"), ("US", "US7Y"), ("US", "US10Y"), ("US", "US20Y"), ("US", "US30Y"),
+           ("G", "DE10Y-DE"), ("G", "FR10Y-FR"), ("G", "GB10Y-GB"), ("G", "IT10Y-IT"), ("G", "ES10Y-ES"), ("G", "JP10Y-JP"), ("G", "CN10Y-CN")],
+}
+
+
+def world_board(out_data):
+    syms = [s_ for v in WORLD.values() for _, s_ in v]
+    by = {}
+    try:
+        for i in range(0, len(syms), 20):
+            u = ("https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=" + urllib.parse.quote("|".join(syms[i:i + 20]))
+                 + "&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json")
+            for r in json.loads(get(u, tries=2))["FormattedQuoteResult"]["FormattedQuote"]:
+                if r.get("symbol") and r.get("last") and str(r.get("code")) == "0":
+                    by[r["symbol"]] = r
+    except Exception as e:  # noqa: BLE001
+        fail("cnbc_world", e)
+        if not by:
+            return
+    def rec(g, s_):
+        r = by[s_]
+        return {"g": g, "s": s_, "n": (r.get("name") or "").strip(), "last": _fnum(str(r.get("last")).replace("%", "")), "chg": _fnum(r.get("change")),
+                "pct": (_fnum(r.get("change_pct")) or 0) / 100 if r.get("change_pct") not in (None, "UNCH") else 0.0, "prev": _fnum(r.get("previous_day_closing")),
+                "t": r.get("last_time"), "cty": r.get("countryCode"), "hi52": _fnum(r.get("yrhiprice")), "lo52": _fnum(r.get("yrloprice")),
+                "exp": r.get("expiration_date"), "open": _fnum(r.get("open")), "hi": _fnum(r.get("high")), "lo": _fnum(r.get("low")), "y": "%" in str(r.get("last"))}
+    out = {"ts": int(time.time()), "src": "CNBC (bourses, ICE, CME ; différé)"}
+    for k, v in WORLD.items():
+        out[k] = [rec(g, s_) for g, s_ in v if s_ in by]
+    if out["idx"]:
+        dump(out, os.path.join(out_data, "world_mkt.json"))
+
+
 def us_batch(out_data):
     """Cours différés de tous les titres US du terminal (actions, ETF, indices) : Nasdaq, par paquets de 25 d'une même classe ;
     pré-marché et après-bourse des actions et ETF quand la séance étendue est ouverte."""
@@ -593,6 +635,7 @@ def main():
         fail("us_batch", e)
     now = int(time.time())
     oil_board(out_data)
+    world_board(out_data)
     dump({"ts": now, "qqq": live, "intraday": intraday, "errors": ERRORS}, os.path.join(out_data, "live.json"))
     dump({"ts": now, "asof": brvm.get("asof") if brvm else None, "q": q}, os.path.join(out_data, "quotes.json"))
     if brvm:
