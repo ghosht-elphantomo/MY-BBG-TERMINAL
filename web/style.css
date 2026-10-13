@@ -536,3 +536,4 @@ table.t.hp td:first-child{color:var(--amber)}
 .fw:hover{background:#1d3557}
 @media (max-width:900px){.tpg{grid-template-columns:minmax(0,1fr)}.tn{grid-template-columns:28px minmax(0,1fr) 44px}.tn .s{display:none}}
 .t td i.qd{font-style:normal;color:#bdbdbd;font-size:10.5px;margin-left:2px;display:inline-block;width:7px;text-align:left}
+.mst{border:1px solid #1f1f1f;gap:4px}
