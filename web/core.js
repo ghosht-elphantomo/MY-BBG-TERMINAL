@@ -212,7 +212,7 @@ function initCmd() {
 
 /* ---------- menus déroulants ---------- */
 function ddOpen(anchor, rows) {
-  const d = $('ddm'); d.innerHTML = rows.map((r, i) => r.h ? `<div class="dh">${esc(r.h)}</div>` : `<div class="di${r.code ? '' : ' nc'}${r.off ? ' off' : ''}" data-di="${i}" title="${esc(r.tt || '')}"><em>${r.n != null ? r.n + ')' : ''}</em>${r.code ? `<b>${esc(r.code)}</b>` : ''}<span>${r.l}</span></div>`).join('');
+  const d = $('ddm'); d.innerHTML = rows.map((r, i) => r.h ? `<div class="dh">${esc(r.h)}</div>` : `<div class="di${r.code ? '' : ' nc'}${r.off ? ' off' : ''}${r.on ? ' on' : ''}" data-di="${i}" title="${esc(r.tt || '')}"><em>${r.n != null ? r.n + ')' : ''}</em>${r.code ? `<b>${esc(r.code)}</b>` : ''}<span>${r.l}</span></div>`).join('');
   d.hidden = false; const a = anchor.getBoundingClientRect(); const w = d.getBoundingClientRect().width;
   d.style.left = Math.max(4, Math.min(window.innerWidth - w - 4, a.left)) + 'px'; d.style.top = (a.bottom + 1) + 'px';
   d.onclick = e => { const x = e.target.closest('[data-di]'); if (!x) return; const r = rows[+x.dataset.di]; ddClose(); if (r && r.run && !r.off) r.run(); };
@@ -283,11 +283,29 @@ function renderRbar() {
   const used = new Set(PG.acts.map(a => a.n)), labs = new Set(PG.acts.map(a => a.l)), std = [];
   for (const a of stdActs()) { if (labs.has(a.l)) continue; let k = a.n; while (used.has(k)) k++; used.add(k); std.push(Object.assign({}, a, { n: k })); }
   const acts = PG.acts.concat(std).sort((a, b) => a.n - b.n);
-  b.innerHTML = (isSec ? `<span class="ob">${esc(ykey(s))}</span>` : `<span class="ret">&lt;Menu&gt; pour revenir</span>`) +
+  b.innerHTML = (isSec ? `<span class="ob" id="obT" title="Changer de titre en gardant la fonction ${ST.fn} : cliquez, tapez le ticker, Entrée">${esc(ykey(s))}</span>` : `<span class="ret">&lt;Menu&gt; pour revenir</span>`) +
     acts.map((a, i) => `<button class="ab${a.menu ? ' mn' : ''}${a.on ? ' on' : ''}" data-n="${a.n}" data-dd="1" data-ai="${i}"><em>${a.n})</em> ${esc(a.l)}</button>`).join('') +
     `<span class="rt">${esc(PG.title || FN[ST.fn][4] || FN[ST.fn][0])}</span>`;
   b.querySelectorAll('[data-ai]').forEach(x => x.onclick = () => { const a = acts[+x.dataset.ai]; if (a.menu) ddOpen(x, a.menu()); else if (a.run) a.run(); });
   b.querySelector('.ret') && (b.querySelector('.ret').onclick = () => go(SECFN.has(ST.fn) ? 'MENU' : 'MON'));
+  if ($('obT')) $('obT').onclick = obEdit;
+}
+/* case orange du titre (comme le champ ambre du terminal) : on y tape un autre ticker, Entrée = même fonction sur ce titre */
+function obEdit() {
+  const ob = $('obT'); if (!ob || ob.querySelector('input')) return; const fn = ST.fn, old = ob.textContent;
+  ob.innerHTML = `<input id="obI" value="${esc(old)}" spellcheck="false" autocomplete="off" aria-label="Changer de titre">`; const inp = $('obI'); inp.focus(); inp.select();
+  let list = [], sel = 0;
+  const show = () => { const v = inp.value.trim(); list = v && v !== old ? searchSecs(v.replace(/\b(EQUITY|INDEX|CURNCY|COMDTY)\b/gi, '').trim()).slice(0, 10) : [];
+    if (!list.length) { ddClose(); return; } sel = Math.min(sel, list.length - 1);
+    ddOpen(ob, [{ h: `Ouvrir ${fn} pour…` }].concat(list.map((x, i) => { const why = SECFN.has(fn) && fn !== 'MENU' ? avail(fn, x) : null;
+      return { n: i + 1, code: ykey(x), l: esc(x.n) + (why ? ' <i class="dm">(' + esc(fn) + ' non disponible)</i>' : ''), on: i === sel, run: () => pick(x) }; }))); };
+  let done = false; const pick = x => { done = true; ddClose(); if (x) go(fn, x.id); else { ob.textContent = old; toast('Titre introuvable.'); } };
+  const restore = () => { ddClose(); ob.textContent = old; };
+  inp.oninput = () => { sel = 0; show(); };
+  inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); const v = inp.value.trim().toUpperCase().split(/\s+/)[0]; pick(list[sel] || exactSec(v) || searchSecs(v)[0]); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); restore(); }
+    else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + list.length) % Math.max(1, list.length); show(); } };
+  inp.onblur = () => setTimeout(() => { if (!done && document.activeElement !== inp && $('obI')) restore(); }, 450);
 }
 function renderTbar() {
   const t = $('tbar'), s = sec(ST.sec), isSec = SECFN.has(ST.fn);
