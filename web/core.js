@@ -47,6 +47,7 @@ const FN = {
   RELS: ['Titres liés', 'sec', 'Description', 'Obligations de l’émetteur, indices, sociétés du même secteur', 'Related Securities'],
   CACS: ['Opérations sur titres', 'sec', 'Description', 'Dividendes, assemblées, opérations sur le capital, à venir et passées', 'Corporate Action Calendar'],
   GP: ['Graphique', 'sec', 'Cours', 'Ligne style Bloomberg, bougies, moyennes mobiles, volume, RSI, MACD, comparaison', 'Line Chart'],
+  TECH: ['Analyse technique', 'sec', 'Cours', 'Moyennes mobiles, RSI, MACD, stochastique, Bollinger, ATR, pivots, synthèse des signaux', 'Technical Analysis'],
   HVT: ['Volatilité historique', 'sec', 'Cours', 'Volatilité sur 10 à 260 séances, Parkinson, centiles, volatilité glissante', 'Historical Volatility Table'],
   VAP: ['Volume par prix', 'sec', 'Cours', 'Échanges par niveau de cours, prix le plus échangé, zone de valeur, VWAP', 'Volume at Price'],
   GF: ['Graphique des fondamentaux', 'sec', 'Fondamentaux', 'Chiffre d’affaires, résultat, BPA, FCF, dette par exercice, PER historique', 'Graph Fundamentals'],
@@ -74,11 +75,11 @@ const FN = {
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
 const MKT_KEYS = ['MON', 'PORT', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
-const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TRA', 'COMP', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
+const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 /* Fonctions associées (menu « Fonctions associées » de la barre d'outils) */
-const REL = { GP: ['HP', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
+const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'EQS'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'EQS'],
   MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'TOP', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'EQS'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
   BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECWB', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
@@ -98,7 +99,7 @@ function avail(code, s) {
   if (code === 'HDS') return eq && (brvm || s.mkt === 'US') ? null : eq ? 'actionnariat non publié pour ce marché' : 'réservé aux actions';
   if (code === 'SCOR' || code === 'PEER') return eq && (brvm || s.fa) ? null : 'réservé aux actions dont les comptes sont disponibles';
   if (code === 'LQA') return s.cls === 'Equity' && s.f === 'D' ? null : 'réservé aux actions et ETF';
-  if (code === 'TRA' || code === 'HVT' || code === 'VAP') return s.f === 'D' ? null : 'série mensuelle';
+  if (code === 'TRA' || code === 'HVT' || code === 'VAP' || code === 'TECH') return s.f === 'D' ? null : 'série mensuelle';
   if (code === 'ANR') return s.mkt === 'US' && eq ? null : brvm ? 'aucune recommandation d’analystes publiée pour la BRVM' : 'réservé aux actions US';
   if (code === 'GF') return eq && (brvm || s.fa) ? null : 'réservé aux actions dont les comptes sont disponibles';
   if (code === 'CACS') return s.cls === 'Equity' ? null : 'réservé aux actions et ETF';

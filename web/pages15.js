@@ -102,3 +102,45 @@ PAGES.PORT = async (m, alive) => {
     ${pn('Prochains détachements et paiements de vos titres', 'DIVC', up.length ? `<table class="t"><thead><tr><th class="l">Titre</th><th>Dividende</th><th>Détachement</th><th>Paiement</th><th>Montant pour vous</th></tr></thead><tbody>${up.map(x => { const p = P.pos.find(q => q.id === x.t), s = Q.by[x.t]; return `<tr><td class="l wh">${esc(x.t)}</td><td>${num(x.dps, 2)}</td><td>${x.det ? fds(x.det) : '—'}</td><td>${x.pay ? fds(x.pay) : '—'}</td><td class="wh">${s ? mny(conv(p.q * x.dps, s.ccy)) + ' ' + cur : '—'}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">Aucun détachement annoncé pour vos titres.</div>', { np: true })}</div>`;
   bind();
 };
+
+/* ------------------------------------------------------------------ TECH : analyse technique (tendance, oscillateurs, volatilité, niveaux) —
+   indicateurs calculés sur les cours quotidiens publiés ; signaux descriptifs, pas une recommandation */
+PAGES.TECH = async (m, alive) => {
+  const s = sec(ST.sec); setTitle('Technical Analysis'); const S = await series(s.id).catch(() => null); if (!alive()) return;
+  if (!S || S.c.length < 60 || s.f !== 'D') { m.innerHTML = pn('Analyse technique', 'TECH', '<div class="empty">Historique quotidien insuffisant pour ce titre.</div>'); return; }
+  const c = S.c, h = S.h, l = S.l, n = c.length, L = n - 1, last = c[L], P = v => px(s, v);
+  const sm = k => U.sma(c, k), M20 = sm(20), M50 = sm(50), M100 = sm(100), M200 = sm(200), R = U.rsi(c, 14);
+  const e12 = U.ema(c, 12), e26 = U.ema(c, 26), macd = c.map((_, i) => e12[i] - e26[i]), sig = U.ema(macd.map(v => isFinite(v) ? v : NaN), 9, 26), hist = macd.map((v, i) => v - sig[i]);
+  const sd20 = (() => { const o = new Float64Array(n).fill(NaN); for (let i = 19; i < n; i++) { let a = 0, b = 0; for (let j = i - 19; j <= i; j++) { a += c[j]; b += c[j] * c[j]; } const mm = a / 20; o[i] = Math.sqrt(Math.max(0, b / 20 - mm * mm)); } return o; })();
+  const bu = M20.map((v, i) => v + 2 * sd20[i]), bl = M20.map((v, i) => v - 2 * sd20[i]), pB = (last - bl[L]) / (bu[L] - bl[L]);
+  const tr = c.map((v, i) => i ? Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])) : h[i] - l[i]), atr = U.mean(tr.slice(-14));
+  const hh14 = Math.max(...h.slice(-14)), ll14 = Math.min(...l.slice(-14)), stK = hh14 > ll14 ? (last - ll14) / (hh14 - ll14) * 100 : null;
+  const kS = []; for (let i = L - 2; i <= L; i++) { const H = Math.max(...h.slice(i - 13, i + 1)), Lo = Math.min(...l.slice(i - 13, i + 1)); kS.push(H > Lo ? (c[i] - Lo) / (H - Lo) * 100 : null); } const stD = kS.every(v => v != null) ? U.mean(kS) : null;
+  const roc = k => n > k && c[L - k] ? last / c[L - k] - 1 : null;
+  const lr = c.slice(-61).map((v, i, a) => i ? Math.log(v / a[i - 1]) : 0).slice(1), vol20 = U.std(lr.slice(-20)) * Math.sqrt(252), vol60 = U.std(lr) * Math.sqrt(252);
+  const cross = (a, b) => { for (let i = L; i > Math.max(1, L - 750); i--) if (isFinite(a[i]) && isFinite(b[i]) && isFinite(a[i - 1]) && isFinite(b[i - 1]) && Math.sign(a[i] - b[i]) !== Math.sign(a[i - 1] - b[i - 1])) return { i, up: a[i] > b[i] }; return null; };
+  const gx = cross(M50, M200), mx = cross(macd, sig);
+  const k52 = Math.max(0, n - 252), hi52 = Math.max(...h.slice(k52)), lo52 = Math.min(...l.slice(k52)), hi20 = Math.max(...h.slice(-20)), lo20 = Math.min(...l.slice(-20));
+  /* pivots classiques sur la dernière séance close */
+  /* pivots hebdomadaires : plus haut, plus bas et clôture des 5 dernières séances (plus parlants que la seule veille sur les titres peu échangés) */
+  const hW = Math.max(...h.slice(-5)), lW = Math.min(...l.slice(-5)), PP = (hW + lW + last) / 3, R1 = 2 * PP - lW, S1 = 2 * PP - hW, R2 = PP + (hW - lW), S2 = PP - (hW - lW);
+  const sigs = [['Cours au-dessus de la MM 200', last > M200[L]], ['MM 50 au-dessus de la MM 200', M50[L] > M200[L]], ['Cours au-dessus de la MM 50', last > M50[L]], ['MACD au-dessus de son signal', macd[L] > sig[L]], ['RSI au-dessus de 50', R[L] > 50], ['Rendement 3 mois positif', roc(63) > 0], ['Rendement 12 mois positif', roc(252) > 0]].filter(x => x[1] != null && (typeof x[1] === 'boolean'));
+  const nUp = sigs.filter(x => x[1]).length;
+  const row = (a, b, c2 = '') => `<tr><td class="l am">${a}</td><td class="wh">${b}</td><td class="l">${c2}</td></tr>`, yn = (v, a, b) => v ? `<span class="up">${a}</span>` : `<span class="dn">${b}</span>`, dd = i => fd(S.x[i]);
+  const ecart = v => isFinite(v) ? pc(last / v - 1) : '—';
+  m.innerHTML = `<div class="grid c4 tch">${pn('1) Tendance', 'TECH', `<table class="t"><tbody>${row('Cours', P(last) + ' ' + esc(s.ccy), fd(S.x[L]))}${[['MM 20', M20], ['MM 50', M50], ['MM 100', M100], ['MM 200', M200]].map(([a, A]) => row(a, isFinite(A[L]) ? P(A[L]) : '—', isFinite(A[L]) ? `${ecart(A[L])} ${yn(last > A[L], '▲', '▼')}` : '')).join('')}
+        ${row('Croisement MM 50 / MM 200', gx ? (gx.up ? '<span class="up">haussier</span>' : '<span class="dn">baissier</span>') : '—', gx ? 'le ' + dd(gx.i) : 'aucun sur 3 ans')}</tbody></table>`, { np: true })}
+    ${pn('2) Oscillateurs', 'TECH', `<table class="t"><tbody>${row('RSI 14', num(R[L], 1), R[L] > 70 ? '<span class="dn">surachat (> 70)</span>' : R[L] < 30 ? '<span class="up">survente (< 30)</span>' : 'zone neutre')}${row('MACD (12, 26)', num(macd[L], 3), `signal ${num(sig[L], 3)}`)}${row('Histogramme MACD', `<span class="${cls(hist[L])}">${num(hist[L], 3)}</span>`, mx ? `${mx.up ? '<span class="up">▲</span>' : '<span class="dn">▼</span>'} ${dd(mx.i).slice(0, 5)}` : '')}
+        ${row('Stochastique %K / %D (14, 3)', stK != null ? `${num(stK, 1)} / ${stD != null ? num(stD, 1) : '—'}` : '—', stK > 80 ? 'zone haute' : stK < 20 ? 'zone basse' : '')}${row('Williams %R (14)', stK != null ? num(stK - 100, 1) : '—', '')}
+        ${[['1 mois', 21], ['3 mois', 63], ['6 mois', 126], ['12 mois', 252]].map(([a, d]) => row('Variation ' + a, pc(roc(d)), '')).join('')}</tbody></table>`, { np: true })}
+    ${pn('3) Volatilité', 'TECH', `<table class="t"><tbody>${row('ATR 14 séances', P(atr), num(atr / last * 100, 2) + ' %')}${row('Bandes de Bollinger (20, 2)', `${P(bl[L])} – ${P(bu[L])}`, `l. ${num((bu[L] - bl[L]) / M20[L] * 100, 1)} %`)}${row('Position dans les bandes (%B)', num(pB * 100, 0) + ' %', pB > 1 ? 'au-dessus de la bande haute' : pB < 0 ? 'sous la bande basse' : '')}
+        ${row('Volatilité 20 séances (ann.)', num(vol20 * 100, 1) + ' %', '')}${row('Volatilité 60 séances (ann.)', num(vol60 * 100, 1) + ' %', '')}${row('Position sur 52 semaines', num((last - lo52) / (hi52 - lo52) * 100, 0) + ' %', '')}</tbody></table>`, { np: true })}
+    ${pn('4) Niveaux', 'TECH', `<table class="t"><tbody>${row('Résistance 2 (R2)', P(R2), ecart(R2))}${row('Résistance 1 (R1)', P(R1), ecart(R1))}${row('Pivot', P(PP), ecart(PP))}${row('Support 1 (S1)', P(S1), ecart(S1))}${row('Support 2 (S2)', P(S2), ecart(S2))}${row('Plus haut / bas 20 séances', `${P(hi20)} / ${P(lo20)}`, '')}${row('Plus haut / bas 52 semaines', `${P(hi52)} / ${P(lo52)}`, '')}</tbody></table>`, { np: true, lect: `Pivots hebdomadaires : plus haut, plus bas et dernier cours des 5 séances jusqu’au ${fd(S.x[L])}.` })}</div>
+    <div class="grid side">${pn(`${esc(ykey(s))} · cours, MM 50 / MM 200, Bollinger ; RSI ; MACD (1 an)`, 'TECH', cvb('teG', 420), { np: true })}
+      ${pn(`Synthèse : ${nUp} ${nUp > 1 ? 'signaux haussiers' : 'signal haussier'} sur ${sigs.length}`, 'TECH', `<table class="t"><tbody>${sigs.map(([a, v]) => `<tr><td class="l am">${a}</td><td>${v ? '<span class="up">oui</span>' : '<span class="dn">non</span>'}</td></tr>`).join('')}</tbody></table><div class="tsc"><i style="width:${(nUp / sigs.length * 100).toFixed(0)}%"></i></div>`, { np: true, lect: 'Lecture descriptive de la tendance à partir des cours publiés : ce n’est pas une recommandation d’achat ou de vente. Sur les titres peu échangés, plus haut et plus bas égalent souvent la clôture : ATR et stochastique sont alors moins parlants.' })}</div>`;
+  const k0 = Math.max(0, n - 260), sl = a => Array.from(a).slice(k0).map(v => isFinite(v) ? v : null);
+  new TSChart($('teG'), { panes: [{ h: 2.2 }, { h: .8, fixed: [0, 100], refs: [{ v: 70, color: CL.dn }, { v: 30, color: CL.up }], title: 'RSI 14' }, { h: .9, title: 'MACD' }], grid: 'dot', xticks: bbgTicks })
+    .set({ x: S.x.slice(k0), series: [{ y: sl(c), color: '#ffffff', w: 1.4, label: s.id, fmt: v => P(v) }, { y: sl(M50), color: '#f9a33a', w: 1.1, label: 'MM 50', fmt: v => P(v) }, { y: sl(M200), color: '#ff3d4d', w: 1.1, label: 'MM 200', fmt: v => P(v) },
+      { y: sl(bu), color: 'rgba(95,208,234,.55)', w: 1, label: 'Bollinger haute', fmt: v => P(v) }, { y: sl(bl), color: 'rgba(95,208,234,.55)', w: 1, label: 'Bollinger basse', fmt: v => P(v) },
+      { pane: 1, y: sl(R), color: '#b69cff', w: 1.2, label: 'RSI', fmt: v => num(v, 1) }, { pane: 2, type: 'bar', y: sl(hist), colorFn: v => v >= 0 ? CL.up : CL.dn, label: 'Histogramme', fmt: v => num(v, 3) }, { pane: 2, y: sl(macd), color: '#5fd0ea', w: 1.1, label: 'MACD', fmt: v => num(v, 3) }, { pane: 2, y: sl(sig), color: '#f9a33a', w: 1, label: 'Signal', fmt: v => num(v, 3) }] }, [0, n - 1 - k0]);
+};

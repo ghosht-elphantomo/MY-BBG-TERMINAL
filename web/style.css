@@ -591,3 +591,5 @@ table.t.eqt td{line-height:24px}
 .pdx{cursor:pointer;color:#8a8a8a;padding:0 3px}
 .pdx:hover{color:var(--amber)}
 #ptImp textarea{background:#000;color:var(--white);border:1px solid #444;font:inherit}
+.tsc{height:8px;margin:6px 8px;background:#3a0d12}.tsc i{display:block;height:100%;background:var(--up)}
+.tch .t td.l:last-child{white-space:normal;color:#bdbdbd}.tch .t td{padding:1px 5px}
