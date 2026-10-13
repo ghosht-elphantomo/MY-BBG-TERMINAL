@@ -597,6 +597,7 @@ def world_board(out_data):
     out["hs"] = seen; out["hst"] = int(time.time()) if need_seed else hst
     if out["idx"]:
         dump(out, os.path.join(out_data, "world_mkt.json"))
+    return out
 
 
 def us_batch(out_data):
@@ -740,7 +741,22 @@ def main():
         fail("us_batch", e)
     now = int(time.time())
     oil_board(out_data)
-    world_board(out_data)
+    wb = None
+    try:
+        wb = world_board(out_data)
+    except Exception as e:  # noqa: BLE001
+        fail("world_board", e)
+    # changes du jour pour les séries EURUSD, USDXOF (parité fixe 655,957 FCFA pour 1 euro) et USDTWD
+    fxr = {r["s"]: r for r in ((wb or {}).get("fx") or [])}
+    eu, tw = fxr.get("EUR="), fxr.get("TWD=")
+    if eu and eu.get("last"):
+        d_ = str(eu.get("t") or "")[:10] or dt.date.today().isoformat()
+        pe = eu.get("prev") or (eu["last"] / (1 + eu["pct"]) if eu.get("pct") is not None else None)
+        q["EURUSD"] = {"last": round(eu["last"], 5), "pct": round(eu["last"] / pe - 1, 6) if pe else None, "prev": round(pe, 5) if pe else None, "d": d_, "src": "CNBC"}
+        q["USDXOF"] = {"last": round(655.957 / eu["last"], 3), "pct": round(pe / eu["last"] - 1, 6) if pe else None, "prev": round(655.957 / pe, 3) if pe else None, "d": d_, "src": "parité"}
+    if tw and tw.get("last"):
+        pt = tw.get("prev")
+        q["USDTWD"] = {"last": tw["last"], "pct": round(tw["last"] / pt - 1, 6) if pt else None, "prev": pt, "d": str(tw.get("t") or "")[:10] or dt.date.today().isoformat(), "src": "CNBC"}
     dump({"ts": now, "qqq": live, "intraday": intraday, "errors": ERRORS}, os.path.join(out_data, "live.json"))
     dump({"ts": now, "asof": brvm.get("asof") if brvm else None, "q": q}, os.path.join(out_data, "quotes.json"))
     if brvm:
