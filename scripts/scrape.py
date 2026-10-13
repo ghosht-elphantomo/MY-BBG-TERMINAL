@@ -37,16 +37,25 @@ def fail(key, e):
     log(key, "failed:", ERRORS[key])
 
 
+YH_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+
+
 def get(url, tries=3, timeout=30, headers=None):
     err = None
     for k in range(tries):
         try:
-            h = {"User-Agent": UA, "Accept": "application/json,text/html,*/*;q=0.8",
-                 "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"}
+            if "finance.yahoo.com" in url:  # mêmes en-têtes que la collecte du soir (acceptés par Yahoo, qui renvoie 429 sinon)
+                h = {"User-Agent": YH_UA, "Accept": "*/*", "Accept-Language": "en-US,en;q=0.9", "Accept-Encoding": "gzip"}
+            else:
+                h = {"User-Agent": UA, "Accept": "application/json,text/html,*/*;q=0.8", "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8"}
             h.update(headers or {})
             req = urllib.request.Request(url, headers=h)
             with urllib.request.urlopen(req, timeout=timeout) as r:
-                return r.read()
+                b = r.read()
+                if r.headers.get("Content-Encoding") == "gzip" or b[:2] == b"\x1f\x8b":
+                    import gzip
+                    b = gzip.decompress(b)
+                return b
         except Exception as e:  # noqa: BLE001
             err = e
             time.sleep(2 + 4 * k)
@@ -529,7 +538,8 @@ def world_board(out_data):
     prev_yb = prevf.get("yb")
     out["yb"] = prev_yb if prev_yb and prev_yb.get("y") == dt.date.today().year else {"y": dt.date.today().year, "v": {}}
     H = prevf.get("h") or {}; seen = prevf.get("hs") or {}
-    need_seed = [cs for cs in WORLD_YH if cs in by and time.time() - (seen.get(cs) or 0) > 20 * 3600]
+    hst = prevf.get("hst") or 0  # dernier essai d'historique : au plus toutes les 2 h si la source refuse
+    need_seed = [cs for cs in WORLD_YH if cs in by and time.time() - (seen.get(cs) or 0) > 20 * 3600] if time.time() - hst > 2 * 3600 else []
     need_yb = len(out["yb"]["v"]) < len(WORLD_YH) and time.time() - (out["yb"].get("try") or 0) > 3 * 3600
     if need_seed or need_yb:
         import threading
@@ -578,7 +588,7 @@ def world_board(out_data):
                 if older and h[older[-1]]:
                     pc = h[older[-1]]; r["prev"] = pc; r["chg"] = round(last - pc, 6); r["pct"] = round(last / pc - 1, 6); r["cs"] = older[-1]
     out["h"] = {cs: dict(sorted(v.items())[-12:]) for cs, v in H.items()}
-    out["hs"] = seen
+    out["hs"] = seen; out["hst"] = int(time.time()) if need_seed else hst
     if out["idx"]:
         dump(out, os.path.join(out_data, "world_mkt.json"))
 
