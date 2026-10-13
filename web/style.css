@@ -493,3 +493,19 @@ svg.rel{vertical-align:middle}
 .tbar .dd.rel:after{content:'≫';font-size:12px}
 .tbar .qh{flex:none;background:#ffd200;color:#000;border:0;width:22px;height:19px;font-weight:700;margin-left:6px;border-radius:2px}
 .tbar .qh:hover{background:#ffe45a}
+/* ---- HP : blocs de colonnes + synthèse ---- */
+.hpt{border:1px solid #1f1f1f;gap:4px}
+.hpg{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:4px}
+.hpb{display:grid;gap:6px;background:#000;border:1px solid #1f1f1f;padding:2px;align-content:start}
+table.t.hp td{line-height:17px}
+table.t.hp td:first-child{color:var(--amber)}
+.hps{background:#000;border:1px solid #1f1f1f;padding:6px 8px;display:flex;flex-direction:column;gap:8px}
+.hpn{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:auto}
+.hpn .tb:disabled{opacity:.35;cursor:default}
+/* ---- DVD : bandeau de synthèse sur trois colonnes ---- */
+.dvk{display:grid;grid-template-columns:repeat(3,minmax(0,auto) minmax(0,1fr));gap:3px 14px;font-size:13px}
+.dvk span{color:var(--amber)}.dvk b{color:#fff;font-weight:var(--fw);text-align:left}
+/* ---- BETA : statistiques de la régression ---- */
+.bt1{border:1px solid #1f1f1f;gap:4px}
+.kv2.bst{font-size:13px}.kv2.bst span,.kv2.bst b{padding:3px 0;border-bottom:1px solid #141414}
+@media (max-width:900px){.hpg{grid-template-columns:minmax(0,1fr)}.dvk{grid-template-columns:minmax(0,auto) minmax(0,1fr)}}
