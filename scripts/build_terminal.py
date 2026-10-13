@@ -514,16 +514,42 @@ def main():
                         if v_ is not None and di(f"{int(y_) + 1}-04-30") < e_:
                             ser_[key_][y_] = v_ / k_
                 split_log.append(f"{t} {e_} x{k_:g} : BNPA et dividende par action ajustés")
-            if shares and (f.get("provenance_champs") or {}).get("nb_titres") == "fichier_initial" and e_ >= 20250101:
+            if shares and not (sess_rows.get(t) or {}).get("sh") and (f.get("provenance_champs") or {}).get("nb_titres") == "fichier_initial" and e_ >= 20250101:
                 shares = shares * k_
                 f["nb_titres"] = shares
                 split_log.append(f"{t} {e_} x{k_:g} : nombre de titres ajusté")
+        # données officielles de la BRVM, prioritaires sur les sites tiers :
+        # nombre de titres et capitalisation flottante (page « Capitalisations » de brvm.org), PER et dividende du bulletin officiel de la cote
+        so_ = sess_rows.get(t) or {}
+        flt_off = None
+        if so_.get("sh"):
+            shares = float(so_["sh"])
+            if so_.get("capf") and so_.get("capg"):
+                flt_off = round(so_["capf"] / so_["capg"] * 100, 2)
+        bnpa_off = None
+        if BOC.get(t):
+            for kb in sorted(BOC[t], reverse=True)[:10]:  # dernier PER publié (le bulletin du jour peut manquer)
+                rb = BOC[t][kb]
+                cb = rb.get("c") or rb.get("ref")
+                if rb.get("per") and rb["per"] > 0 and cb:
+                    f_split = split_factor(t, kb, rows[-1][0])  # cours du bulletin antérieur à un fractionnement
+                    bnpa_off = cb / rb["per"] / f_split
+                    break
+        if bnpa_off and bnpa_ and bnpa_ > 0 and abs(math.log(bnpa_ / bnpa_off)) > math.log(1.25):
+            split_log.append(f"{t} : BNPA de la fiche ({bnpa_:g}) écarté, base officielle {bnpa_off:.2f}")
+        if so_.get("sh"):
+            f["nb_titres"] = shares
+        if flt_off is not None:
+            f["flottant"] = flt_off
+        pso_ = "off" if bnpa_off else ("alt" if bnpa_ else None)
+        if bnpa_off:
+            bnpa_ = bnpa_off
         cty = "BF" if t.endswith("BF") else CTY.get(t[-1], "CI")
         ld = last_div.get(t, (None, {}))[1]
         last = rows[-1][4]
         meta = {"id": t, "tk": f"{t} BC", "n": act.get("nom_officiel") or act.get("nom"), "short": act.get("nom"), "cls": "Equity", "typ": "Equity",
                 "mkt": "BRVM", "grp": act.get("secteur"), "ccy": "XOF", "bench": "BRVMC", "cty": cty, "bank": bool(act.get("banque")),
-                "shares": shares, "float": f.get("flottant"), "mcap": rnd(shares * last, 0) if shares else None,
+                "shares": shares, "float": flt_off if flt_off is not None else f.get("flottant"), "mcap": rnd(shares * last, 0) if shares else None, "pso": pso_,
                 "bnpa": rnd(bnpa_, 2) if bnpa_ else bnpa_, "dps": ld.get("dividende") or dfund_, "dps_ex": ld.get("exercice"), "dps_pay": ld.get("date_paiement"),
                 "dps_adj": ld.get("ajust"), "split": [[e_, k_] for e_, k_ in sorted(SPL.get(t, []))] or None,
                 "per": rnd(last / bnpa_, 2) if bnpa_ and bnpa_ > 0 else None,

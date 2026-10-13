@@ -257,6 +257,19 @@ def scrape_brvm(prev):
             out.append({"t": t, "vol": int(vol or 0), "prev": pv, "o": op if op else None, "c": cl, "vj": var})
     if len(out) < 40:
         raise ValueError(f"only {len(out)} BRVM rows parsed")
+    # nombre de titres et capitalisations publiés par la BRVM (page « Capitalisations ») : base officielle des calculs par action
+    caps = {r["t"]: {k: r[k] for k in ("sh", "capf", "capg") if r.get(k)} for r in (prev or {}).get("rows", []) if r.get("sh")}
+    try:
+        crows, _ = parse(get("https://www.brvm.org/fr/capitalisations/0").decode("utf8", "replace"))
+        for r in crows:
+            if len(r) >= 6 and re.fullmatch(r"[A-Z]{3,6}", r[0].strip()):
+                sh_, capf_, capg_ = num(r[2]), num(r[4]), num(r[5])
+                if sh_ and sh_ > 0:
+                    caps[r[0].strip()] = {"sh": int(sh_), "capf": capf_ or 0, "capg": capg_ or 0}
+    except Exception as e:  # noqa: BLE001
+        fail("brvm_caps", e)
+    for r in out:
+        r.update(caps.get(r["t"], {}))
     today = dt.date.today()
     ds = [d for d in fr_dates(text) if today - dt.timedelta(days=10) <= d <= today]
     sess = min(ds) if ds else today
