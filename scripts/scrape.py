@@ -523,23 +523,62 @@ def world_board(out_data):
     out = {"ts": int(time.time()), "src": "CNBC (bourses, ICE, CME ; différé)"}
     for k, v in WORLD.items():
         out[k] = [rec(g, s_) for g, s_ in v if s_ in by]
-    # bases de début d'année : relevées dans un fil à part, plafonné à 60 s (un serveur lent ne doit jamais bloquer le relevé)
-    prev_yb = (load("world_mkt.json", folder=out_data) or {}).get("yb")
+    # Historique quotidien (Yahoo, 1 mois, au plus une fois par jour et par symbole) et bases de début d'année, relevés dans un fil
+    # à part plafonné à 60 s : un serveur lent ne doit jamais bloquer le relevé de 15 min.
+    prevf = load("world_mkt.json", folder=out_data) or {}
+    prev_yb = prevf.get("yb")
     out["yb"] = prev_yb if prev_yb and prev_yb.get("y") == dt.date.today().year else {"y": dt.date.today().year, "v": {}}
-    if len(out["yb"]["v"]) < len(WORLD_YH) and time.time() - (out["yb"].get("try") or 0) > 3 * 3600:  # au plus un essai toutes les 3 h
-        out["yb"]["try"] = int(time.time())
+    H = prevf.get("h") or {}; seen = prevf.get("hs") or {}
+    need_seed = [cs for cs in WORLD_YH if cs in by and time.time() - (seen.get(cs) or 0) > 20 * 3600]
+    need_yb = len(out["yb"]["v"]) < len(WORLD_YH) and time.time() - (out["yb"].get("try") or 0) > 3 * 3600
+    if need_seed or need_yb:
         import threading
-        box = {}
+        box = {"h": {}, "seen": {}}
         def _job():
-            try:
-                box["yb"] = year_bases(json.loads(json.dumps(out["yb"])), budget=40)
-            except Exception as e:  # noqa: BLE001
-                box["err"] = e
+            t0 = time.time()
+            for cs in need_seed:
+                if time.time() - t0 > 35:
+                    break
+                for host in ("query1", "query2"):
+                    try:
+                        j = json.loads(get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(WORLD_YH[cs])}?range=1mo&interval=1d", tries=1, timeout=8,
+                                           headers={"Referer": "https://finance.yahoo.com/", "Origin": "https://finance.yahoo.com"}))
+                        r = j["chart"]["result"][0]; off = (r.get("meta") or {}).get("gmtoffset") or 0
+                        box["h"][cs] = {dt.datetime.fromtimestamp(t + off, dt.timezone.utc).date().isoformat(): round(c, 6)
+                                        for t, c in zip(r.get("timestamp") or [], r["indicators"]["quote"][0]["close"]) if c}
+                        box["seen"][cs] = int(time.time())
+                        break
+                    except Exception:  # noqa: BLE001
+                        continue
+            if need_yb:
+                try:
+                    box["yb"] = year_bases(json.loads(json.dumps(out["yb"])), budget=max(5, 50 - (time.time() - t0)))
+                except Exception as e:  # noqa: BLE001
+                    box["err"] = e
         th = threading.Thread(target=_job, daemon=True); th.start(); th.join(60)
-        if "yb" in box:
-            box["yb"]["try"] = out["yb"]["try"]; out["yb"] = box["yb"]
-        else:
-            fail("world_yb", box.get("err") or TimeoutError("bases de début d'année : délai dépassé"))
+        for cs, d in list(box["h"].items()):
+            H.setdefault(cs, {}).update(d)
+        seen.update(box["seen"])
+        if need_yb:
+            out["yb"]["try"] = int(time.time())
+            if "yb" in box:
+                box["yb"]["try"] = out["yb"]["try"]; out["yb"] = box["yb"]
+            else:
+                fail("world_yb", box.get("err") or TimeoutError("bases de début d'année : délai dépassé"))
+    # variation de la dernière séance pour les places fermées : CNBC remet parfois la variation à zéro (« UNCH ») avant la
+    # séance suivante ; on la recalcule alors contre la clôture de la séance précédente (historique quotidien ci-dessus).
+    for k in ("idx", "cmd", "fx"):
+        for r in out.get(k, []):
+            cs, last, d = r["s"], r.get("last"), str(r.get("t") or "")[:10]
+            if not last or not re.match(r"\d{4}-\d{2}-\d{2}$", d):
+                continue
+            h = H.setdefault(cs, {}); h[d] = last
+            if (not r.get("chg")) or (r.get("prev") and abs(r["prev"] - last) < 1e-9):
+                older = sorted(x for x in h if x < d)
+                if older and h[older[-1]]:
+                    pc = h[older[-1]]; r["prev"] = pc; r["chg"] = round(last - pc, 6); r["pct"] = round(last / pc - 1, 6); r["cs"] = older[-1]
+    out["h"] = {cs: dict(sorted(v.items())[-12:]) for cs, v in H.items()}
+    out["hs"] = seen
     if out["idx"]:
         dump(out, os.path.join(out_data, "world_mkt.json"))
 

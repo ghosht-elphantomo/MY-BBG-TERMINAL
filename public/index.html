@@ -3722,7 +3722,7 @@ PAGES.WEI = async (m, alive) => {
     bindCtl(); hbars($('weR'), L.map(x => nm(x.r)), L.map(x => x.p * 100), v => num(v, 0) + ' %', 50); return;
   }
   m.innerHTML = ctl + `${pn('Indices boursiers mondiaux', 'WEI', `<div class="tw"><table class="t wei"><thead><tr><th class="l">Indice</th><th>Valeur</th><th>Var. nette</th><th>Var. %</th><th>Heure</th><th>% depuis janv.</th><th>% janv. (USD)</th><th>Fourchette 52 s.</th></tr></thead><tbody>${REG.map(sec_).join('')}</tbody></table></div>`,
-    { np: true, lect: `Cotations différées (bourses via CNBC), relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} ; BRVM : séance du jour. d = cotation différée ; heure GMT de la dernière cotation, c = clôture d’une séance précédente (date). « % depuis janv. » = dernier cours ÷ clôture de fin d’année précédente ; « (USD) » = même calcul converti en dollars.` })}`;
+    { np: true, lect: `Cotations différées (bourses via CNBC), relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} ; BRVM : séance du jour. d = cotation différée ; heure GMT de la dernière cotation, c = clôture d’une séance précédente (date) : la variation affichée est alors celle de cette séance, calculée contre la clôture d’avant. « % depuis janv. » = dernier cours ÷ clôture de fin d’année précédente ; « (USD) » = même calcul converti en dollars.` })}`;
   bindCtl();
 };
 /* barres horizontales (classements) */
