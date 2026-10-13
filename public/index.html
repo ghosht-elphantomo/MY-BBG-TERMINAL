@@ -518,6 +518,29 @@ table.t.hp td:first-child{color:var(--amber)}
 .kv2.bst{font-size:13px}.kv2.bst span,.kv2.bst b{padding:3px 0;border-bottom:1px solid #141414}
 @media (max-width:900px){.hpg{grid-template-columns:minmax(0,1fr)}.dvk{grid-template-columns:minmax(0,auto) minmax(0,1fr)}}
 .t td .rn{display:inline-block;min-width:26px;color:#bdbdbd;text-align:right;margin-right:6px}
+/* ---- TOP façon « Top News » ---- */
+.ttb{border:1px solid #1f1f1f;gap:4px}
+.tnar{display:inline-flex;align-items:center;background:var(--org);height:20px;margin-right:4px}
+.tnar input{background:transparent!important;border:0;width:170px!important;color:#000;text-transform:none!important}
+.tnar input::placeholder{color:#6b3e00}
+.tnar b{color:#000;padding:0 5px}
+.tpg{grid-template-columns:minmax(0,1fr) 380px}
+.tpl{padding-bottom:4px}
+.tsh{background:#000;color:#fff;padding:4px 8px 2px;font-size:13px;display:flex;align-items:baseline;gap:8px}
+.tsh .mo{color:#bdbdbd;font-size:12px;cursor:pointer}.tsh .mo:hover{color:var(--amber)}
+.tsh .pgr{color:#bdbdbd;font-size:12px}.tsh .pgr b{cursor:pointer;color:#fff;font-weight:400;padding:0 3px;background:#333}
+.tn{display:grid;grid-template-columns:34px minmax(0,1fr) 62px 50px;gap:6px;align-items:baseline;padding:1px 8px;cursor:pointer;font-size:13.5px;line-height:19px}
+.tn:hover{background:#1d3557}
+.tn .no{color:#cfcfcf;text-align:right;font-size:12.5px}
+.tn .h{color:var(--amber);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tn .s,.tn .t{color:#fff;text-align:right;font-size:12.5px}
+.tn .tg{font-weight:var(--fw);font-size:11px;background:#333;color:#fff;padding:0 3px;margin-left:2px}
+.tn .evb{margin-right:5px}
+.tch{color:#cfcfcf;font-size:12px;padding:0 8px 2px}
+.fw{color:var(--amber);padding:3px 8px;font-size:12.5px;line-height:1.35;cursor:pointer;border-top:1px solid #141414}
+.fw:hover{background:#1d3557}
+@media (max-width:900px){.tpg{grid-template-columns:minmax(0,1fr)}.tn{grid-template-columns:28px minmax(0,1fr) 44px}.tn .s{display:none}}
+.t td i.qd{font-style:normal;color:#bdbdbd;font-size:10.5px;margin-left:2px;display:inline-block;width:7px;text-align:left}
 
 </style>
 </head><body>
@@ -3655,15 +3678,20 @@ PAGES.WEI = async (m, alive) => {
     m.innerHTML = pn(`Indices mondiaux classés par variation du jour (${L.length})`, 'WEI', cvb('weB', Math.max(380, L.length * 17)), { lect: `Cotations différées, relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}. Les marchés d’Asie et d’Europe affichent leur dernière séance close.` });
     hbars($('weB'), L.map(r => nm(r)), L.map(r => r.pct * 100), v => (v > 0 ? '+' : '') + num(v, 2) + '%'); return;
   }
-  let rn = 0; const sec_ = ([g, lab]) => { const L = rows.filter(r => r.g === g); if (!L.length) return '';
-    return `<tr class="grp"><td class="l" colspan="8">${lab}</td></tr>${L.map(r => `<tr ${r.loc ? `data-sec="${r.s}" data-to="GP" style="cursor:pointer"` : ''}><td class="l am"><span class="rn">${++rn})</span>${esc(nm(r))}</td><td class="wh">${num(r.last, 2)}</td><td class="${cls(r.chg)}">${r.chg != null ? (r.chg > 0 ? '+' : '') + num(r.chg, 2) : '—'}</td><td>${pc(r.pct)}</td><td class="dm">${qTime(r.t)}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td><td>${r.hi52 ? pc(r.last / r.hi52 - 1, 1) : '—'}</td><td>${r.ytd != null ? pc(r.ytd, 1) : '<span class="dm">—</span>'}</td></tr>`).join('')}`; };
+  /* % depuis janvier en dollars (colonne « %YtdCur » du terminal) : indices cotés en EUR, GBP, CHF, JPY, CNY, XOF */
+  const FXR = Object.fromEntries((W.fx || []).map(r => [r.s, r.last])), IXC = { '.STOXX50E': 'EUR=', '.GDAXI': 'EUR=', '.FCHI': 'EUR=', '.FTMIB': 'EUR=', '.IBEX': 'EUR=', '.AEX': 'EUR=', '.FTSE': 'GBP=', '.SSMI': 'CHF=', '.N225': 'JPY=', '.SSEC': 'CNY=', '.SZI': 'CNY=', BRVMC: 'XOF=', BRVM30: 'XOF=', BRVMPR: 'XOF=' };
+  const usdF = r => { const US = ['.SPX', '.DJI', '.IXIC', '.RUT']; if (US.includes(r.s)) return 1; const f = IXC[r.s]; if (!f || !FXR[f] || !YB[f]) return null; return ['EUR=', 'GBP='].includes(f) ? FXR[f] / YB[f] : YB[f] / FXR[f]; };
+  const today = new Date().toISOString().slice(0, 10), stale = t => t && String(t).slice(0, 10) < today;
+  let rn = 0; const sec_ = ([g, lab], gi) => { const L = rows.filter(r => r.g === g); if (!L.length) return '';
+    return `<tr class="grp"><td class="l" colspan="8"><span class="rn">${gi + 1})</span>${lab}</td></tr>${L.map(r => { const f = r.ytd != null ? usdF(r) : null, yc = f != null ? (1 + r.ytd) * f - 1 : null;
+      return `<tr ${r.loc ? `data-sec="${r.s}" data-to="GP" style="cursor:pointer"` : ''}><td class="l am"><span class="rn">${++rn})</span>${esc(nm(r).toUpperCase())}</td><td class="wh">${num(r.last, 2)}<i class="qd">${r.loc ? '' : 'd'}</i></td><td class="${cls(r.chg)}">${r.chg != null ? (r.chg > 0 ? '+' : '') + num(r.chg, 2) : '—'}</td><td>${pc(r.pct)}</td><td class="dm">${qTime(r.t)}<i class="qd">${stale(r.t) ? 'c' : ''}</i></td><td>${r.ytd != null ? pc(r.ytd) : '<span class="dm">—</span>'}</td><td>${yc != null ? pc(yc) : '<span class="dm">—</span>'}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td></tr>`; }).join('')}`; };
   if (tab === 'rng') {
     const L = rows.filter(r => r.hi52 && r.lo52 && r.hi52 > r.lo52 && r.g !== 'VOL').map(r => ({ r, p: (r.last - r.lo52) / (r.hi52 - r.lo52) })).sort((a, b) => b.p - a.p);
     m.innerHTML = pn('Position dans la fourchette des 52 dernières semaines (0 % = plus bas, 100 % = plus haut)', 'WEI', cvb('weR', Math.max(380, L.length * 17)), { lect: 'Les indices en haut de la liste sont au voisinage de leur plus haut annuel.' });
     hbars($('weR'), L.map(x => nm(x.r)), L.map(x => x.p * 100), v => num(v, 0) + ' %', 50); return;
   }
-  m.innerHTML = `${pn('Indices boursiers mondiaux', 'WEI', `<div class="tw"><table class="t wei"><thead><tr><th class="l">Indice</th><th>Valeur</th><th>Var. nette</th><th>Var. %</th><th>Heure GMT</th><th>Fourchette 52 s.</th><th>vs plus haut</th><th>Depuis janv.</th></tr></thead><tbody>${REG.map(sec_).join('')}</tbody></table></div>`,
-    { np: true, lect: `Cotations différées (bourses via CNBC), relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} ; BRVM : séance du jour. Heure = dernière cotation (date si la séance n’est pas celle du jour). « Depuis janv. » = dernier cours ÷ clôture de la dernière séance de l’année précédente.` })}`;
+  m.innerHTML = `${pn('Indices boursiers mondiaux', 'WEI', `<div class="tw"><table class="t wei"><thead><tr><th class="l">Indice</th><th>Valeur</th><th>Var. nette</th><th>Var. %</th><th>Heure</th><th>% depuis janv.</th><th>% janv. (USD)</th><th>Fourchette 52 s.</th></tr></thead><tbody>${REG.map(sec_).join('')}</tbody></table></div>`,
+    { np: true, lect: `Cotations différées (bourses via CNBC), relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} ; BRVM : séance du jour. d = cotation différée ; heure GMT de la dernière cotation, c = clôture d’une séance précédente (date). « % depuis janv. » = dernier cours ÷ clôture de fin d’année précédente ; « (USD) » = même calcul converti en dollars.` })}`;
 };
 /* barres horizontales (classements) */
 function hbars(host, labels, values, fmt, mid = 0) {
@@ -4196,6 +4224,53 @@ PAGES.BETA = async (m, alive) => {
   if (o) scatter($('btS'), { pts: P.map(([y, x]) => [x, y]), line: [o.a, o.b], color: rgba(CL.cyan, .7), lineColor: CL.amber, fx: v => num(v, 1) + ' %', fy: v => num(v, 1) + ' %', xlab: `${st.bench} (%)`, ylab: `${s.id} (%) · y = ${num(o.b, 3)} x ${o.a >= 0 ? '+' : '−'} ${num(Math.abs(o.a), 3)}` });
 };
 
+/* ------------------------------------------------------------------ TOP : « Top News » du terminal (sections numérotées, colonne de droite) */
+const TOP_PAGES = [['HOME', 'À la une', null], ['AF', 'Afrique, UEMOA et BRVM', x => ['Afrique', 'UEMOA', 'BRVM'].includes(x.c)], ['MKT', 'Marchés', x => x.c === 'Marchés'], ['TECH', 'Tech US', x => x.c === 'Tech US'],
+  ['CMD', 'Matières premières', x => x.c === 'Matières premières' || x.ev === 'Matières premières'], ['CB', 'Banques centrales et macro', x => x.c === 'Banques centrales' || ['Banques centrales', 'Macro'].includes(x.ev)],
+  ['CO', 'Sociétés citées', x => (x.tk || []).length], ['ERN', 'Résultats et analystes', x => ['Résultats', 'Analystes'].includes(x.ev)]];
+PAGES.TOP = async (m, alive) => {
+  const N = await getJSON('news.json').catch(() => null); if (!alive()) return; setTitle('Top News');
+  const st = ST.top2 = ST.top2 || { pg: 'HOME', q: '', off: {} };
+  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Top News', 'TOP', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
+  const q = st.q.trim().toLowerCase(), seenT = new Set(), all = N.items.filter(x => { const k = deent(x.ti || '').toLowerCase().replace(/[^a-z0-9àâçéèêëîïôûùüÿœ]+/g, ' ').trim().slice(0, 70); if (!k || seenT.has(k)) return false; seenT.add(k); return true; })
+    .filter(x => !q || (x.ti + ' ' + (x.x || '') + ' ' + (x.s || '') + ' ' + (x.tk || []).join(' ')).toLowerCase().includes(q));
+  const hm = t => new Date(t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' });
+  const day = t => new Date(t * 1000).toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit' }), today = day(Date.now() / 1000);
+  let n = 0; const used = new Set();
+  const row = x => { n++; used.add(x.u); const tk = (x.tk || []).filter(t => Q.by[t]).slice(0, 3);
+    return `<div class="tn" data-n="${n}" data-u="${esc(x.u || '')}"><span class="no">${n})</span><span class="h">${evBadge(x.ev && x.ev !== 'Marchés' ? x.ev : '')}${esc(deent(x.ti))}${tk.map(t => ` <b class="tg" data-sec="${t}" data-to="CN">${t}</b>`).join('')}</span><span class="s">${esc(srcCode(x)) || '—'}</span><span class="t">${day(x.t) === today ? hm(x.t) : day(x.t)}</span></div>`; };
+  const sect = (key, title, list, per) => { const off = st.off[key] || 0, np = Math.max(1, Math.ceil(list.length / per)), pg = list.slice(off * per, off * per + per);
+    return `<div class="ts"><div class="tsh">${title}${np > 1 ? ` <span class="pgr"><b data-sk="${key}" data-d="-1">◀</b> ${off + 1} sur ${np} <b data-sk="${key}" data-d="1">▶</b></span>` : ''} <span class="mo" data-pg="${key}">Plus »</span></div>${pg.map(row).join('') || '<div class="dm" style="padding:2px 8px">—</div>'}</div>`; };
+  let left = '';
+  if (st.pg === 'HOME') {
+    const pick = (f, k) => all.filter(x => !used.has(x.u) && f(x)).slice(0, k);
+    const top = pick(x => x.ev && !['Marchés'].includes(x.ev) || (x.tk || []).length, 4); left += sect('T', 'Dépêches sélectionnées', top, 4);
+    left += sect('AF', 'Afrique, UEMOA et BRVM', all.filter(x => !used.has(x.u) && TOP_PAGES[1][2](x)), 8);
+    left += sect('MKT', 'Marchés', all.filter(x => !used.has(x.u) && TOP_PAGES[2][2](x)), 8);
+    left += sect('CO', 'Sociétés', all.filter(x => !used.has(x.u) && (x.tk || []).length), 6);
+  } else { const P = TOP_PAGES.find(p => p[0] === st.pg); left += sect(st.pg, P[1], all.filter(P[2]), 28); }
+  /* colonne de droite : graphique de l'heure (QQQ en séance, sinon BRVM Composite) et « First Word » (dépêches brèves) */
+  const fw = all.filter(x => !used.has(x.u) && (x.c === 'Marchés' || x.ev === 'Macro')).slice(0, 9);
+  const intra = Q.live && Q.live.intraday && Q.live.intraday.t && Q.live.intraday.t.length > 10;
+  m.innerHTML = `<div class="tools ttb"><span class="tnar"><input id="tpQ" value="${esc(st.q)}" placeholder="&lt;Filtrer&gt;"><b>⌕</b></span><button class="tb ${st.pause ? 'on' : ''}" id="tpP">‖ ${st.pause ? 'En pause' : 'Pause'}</button>
+      ${TOP_PAGES.map(([k, l]) => `<button class="tb alt ${st.pg === k ? 'on' : ''}" data-pg="${k}">${l}</button>`).join('')}<span class="gsp"></span><span class="dm">${all.length} dépêches · heure GMT (Abidjan) · relevé ${hm(N.ts)}</span></div>
+    <div class="grid tpg"><div class="pn tpl">${left}</div>
+      <div class="grid" style="align-content:start"><div class="pn"><div class="tsh">Graphique de l’heure <span class="mo" data-fn="${intra ? 'GP' : 'GP'}" data-s="${intra ? 'QQQ' : 'BRVMC'}">Plus »</span></div><div class="tch">${intra ? 'QQQ · séance du jour, 5 minutes (heure de New York)' : 'BRVM Composite · 3 mois'}</div>${cvb('tpC', 190)}</div>
+        <div class="pn"><div class="tsh">First Word <span class="mo" data-pg="MKT">Plus »</span></div>${fw.map(x => `<div class="fw" data-u="${esc(x.u || '')}">${esc(deent(x.ti))} <span class="dm">[${hm(x.t)}]</span></div>`).join('') || '<div class="dm" style="padding:4px 8px">—</div>'}</div></div></div>`;
+  setActs([{ n: 1, l: 'Toutes les dépêches', run: () => { st.pg = 'HOME'; st.q = ''; render(); } }, { n: 2, l: 'Pages', menu: () => [{ h: 'Pages d’actualités' }].concat(TOP_PAGES.map(([k, l], i) => ({ n: i + 1, l: (st.pg === k ? '● ' : '') + l, run: () => { st.pg = k; render(); } }))) },
+    { n: 3, l: 'Recherche', run: () => $('tpQ').focus() }]);
+  m.querySelectorAll('[data-u]').forEach(r => r.onclick = e => { if (e.target.closest('[data-sec]')) return; if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
+  m.querySelectorAll('[data-pg]').forEach(b => b.onclick = () => { st.pg = b.dataset.pg === 'T' ? 'HOME' : b.dataset.pg; st.off = {}; render(); });
+  m.querySelectorAll('[data-sk]').forEach(b => b.onclick = () => { const k = b.dataset.sk; st.off[k] = Math.max(0, (st.off[k] || 0) + +b.dataset.d); render(); });
+  $('tpP').onclick = () => { st.pause = !st.pause; render(); };
+  $('tpQ').onkeydown = e => { if (e.key === 'Enter') { st.q = e.target.value; st.off = {}; render(); } };
+  if (intra) { const I = Q.live.intraday, tt = I.t.map(t => { const d = new Date(t * 1000); return d.getUTCFullYear() * 1e8 + (d.getUTCMonth() + 1) * 1e6 + d.getUTCDate() * 1e4 + d.getUTCHours() * 100 + d.getUTCMinutes(); });
+    const ny = t => new Date(t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' });
+    new TSChart($('tpC'), { panes: [{ h: 1, noLegend: true, fmt: v => num(v, 2) }], padR: 56, grid: 'dot', xfmt: v => { const i = tt.indexOf(v); return i >= 0 ? ny(I.t[i]) : ''; } }).set({ x: tt, series: [{ type: 'area', y: I.c, color: '#ffffff', w: 1.1, grad: ['rgba(7,42,82,.97)', 'rgba(3,29,56,.97)'] }] }, [0, tt.length - 1]); }
+  else { const S = await series('BRVMC').catch(() => null); if (!alive() || !S) return; const k = Math.max(0, S.x.length - 63);
+    new TSChart($('tpC'), { panes: [{ h: 1, noLegend: true, fmt: v => num(v, 1) }], padR: 56, grid: 'dot', xticks: bbgTicks }).set({ x: S.x.slice(k), series: [{ type: 'area', y: S.c.slice(k), color: '#ffffff', w: 1.1, grad: ['rgba(7,42,82,.97)', 'rgba(3,29,56,.97)'] }] }); }
+};
+
 </script>
 <script>
 /* ================= FQT — données, formats, ligne de commande, chrome Bloomberg, routeur ================= */
@@ -4597,7 +4672,7 @@ async function initFeed() {
     if (!cur || (d.ts || 0) > (cur.ts || 0)) { Q.json['news.json'] = Promise.resolve(d); renderNews(); if (['TOP', 'CN'].includes(ST.fn)) render(); } }, () => { }); } catch (e) { }
 }
 async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.base + 'live.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null), fetch(Q.base + 'quotes.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)]);
-  if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews(); if (['MON', 'BRVM', 'IMAP', 'US', 'TOP'].includes(ST.fn)) render(); } catch (e) { } }
+  if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews(); if (['MON', 'BRVM', 'IMAP', 'US', 'TOP'].includes(ST.fn) && !(ST.fn === 'TOP' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
 let SYNC_RUN = null;
 function bindSync() { const b = $('syncBtn'); if (!b || !SYNC_RUN) return; b.hidden = false; b.onclick = () => SYNC_RUN(b); }
 async function initSync() {

@@ -110,3 +110,50 @@ PAGES.BETA = async (m, alive) => {
   $('btB').onchange = e => { st.bench = e.target.value; render(); }; $('btF').onchange = e => { st.f = e.target.value; render(); }; m.querySelectorAll('[data-rg]').forEach(x => x.onclick = () => { st.rg = x.dataset.rg; render(); });
   if (o) scatter($('btS'), { pts: P.map(([y, x]) => [x, y]), line: [o.a, o.b], color: rgba(CL.cyan, .7), lineColor: CL.amber, fx: v => num(v, 1) + ' %', fy: v => num(v, 1) + ' %', xlab: `${st.bench} (%)`, ylab: `${s.id} (%) · y = ${num(o.b, 3)} x ${o.a >= 0 ? '+' : '−'} ${num(Math.abs(o.a), 3)}` });
 };
+
+/* ------------------------------------------------------------------ TOP : « Top News » du terminal (sections numérotées, colonne de droite) */
+const TOP_PAGES = [['HOME', 'À la une', null], ['AF', 'Afrique, UEMOA et BRVM', x => ['Afrique', 'UEMOA', 'BRVM'].includes(x.c)], ['MKT', 'Marchés', x => x.c === 'Marchés'], ['TECH', 'Tech US', x => x.c === 'Tech US'],
+  ['CMD', 'Matières premières', x => x.c === 'Matières premières' || x.ev === 'Matières premières'], ['CB', 'Banques centrales et macro', x => x.c === 'Banques centrales' || ['Banques centrales', 'Macro'].includes(x.ev)],
+  ['CO', 'Sociétés citées', x => (x.tk || []).length], ['ERN', 'Résultats et analystes', x => ['Résultats', 'Analystes'].includes(x.ev)]];
+PAGES.TOP = async (m, alive) => {
+  const N = await getJSON('news.json').catch(() => null); if (!alive()) return; setTitle('Top News');
+  const st = ST.top2 = ST.top2 || { pg: 'HOME', q: '', off: {} };
+  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Top News', 'TOP', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
+  const q = st.q.trim().toLowerCase(), seenT = new Set(), all = N.items.filter(x => { const k = deent(x.ti || '').toLowerCase().replace(/[^a-z0-9àâçéèêëîïôûùüÿœ]+/g, ' ').trim().slice(0, 70); if (!k || seenT.has(k)) return false; seenT.add(k); return true; })
+    .filter(x => !q || (x.ti + ' ' + (x.x || '') + ' ' + (x.s || '') + ' ' + (x.tk || []).join(' ')).toLowerCase().includes(q));
+  const hm = t => new Date(t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' });
+  const day = t => new Date(t * 1000).toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit' }), today = day(Date.now() / 1000);
+  let n = 0; const used = new Set();
+  const row = x => { n++; used.add(x.u); const tk = (x.tk || []).filter(t => Q.by[t]).slice(0, 3);
+    return `<div class="tn" data-n="${n}" data-u="${esc(x.u || '')}"><span class="no">${n})</span><span class="h">${evBadge(x.ev && x.ev !== 'Marchés' ? x.ev : '')}${esc(deent(x.ti))}${tk.map(t => ` <b class="tg" data-sec="${t}" data-to="CN">${t}</b>`).join('')}</span><span class="s">${esc(srcCode(x)) || '—'}</span><span class="t">${day(x.t) === today ? hm(x.t) : day(x.t)}</span></div>`; };
+  const sect = (key, title, list, per) => { const off = st.off[key] || 0, np = Math.max(1, Math.ceil(list.length / per)), pg = list.slice(off * per, off * per + per);
+    return `<div class="ts"><div class="tsh">${title}${np > 1 ? ` <span class="pgr"><b data-sk="${key}" data-d="-1">◀</b> ${off + 1} sur ${np} <b data-sk="${key}" data-d="1">▶</b></span>` : ''} <span class="mo" data-pg="${key}">Plus »</span></div>${pg.map(row).join('') || '<div class="dm" style="padding:2px 8px">—</div>'}</div>`; };
+  let left = '';
+  if (st.pg === 'HOME') {
+    const pick = (f, k) => all.filter(x => !used.has(x.u) && f(x)).slice(0, k);
+    const top = pick(x => x.ev && !['Marchés'].includes(x.ev) || (x.tk || []).length, 4); left += sect('T', 'Dépêches sélectionnées', top, 4);
+    left += sect('AF', 'Afrique, UEMOA et BRVM', all.filter(x => !used.has(x.u) && TOP_PAGES[1][2](x)), 8);
+    left += sect('MKT', 'Marchés', all.filter(x => !used.has(x.u) && TOP_PAGES[2][2](x)), 8);
+    left += sect('CO', 'Sociétés', all.filter(x => !used.has(x.u) && (x.tk || []).length), 6);
+  } else { const P = TOP_PAGES.find(p => p[0] === st.pg); left += sect(st.pg, P[1], all.filter(P[2]), 28); }
+  /* colonne de droite : graphique de l'heure (QQQ en séance, sinon BRVM Composite) et « First Word » (dépêches brèves) */
+  const fw = all.filter(x => !used.has(x.u) && (x.c === 'Marchés' || x.ev === 'Macro')).slice(0, 9);
+  const intra = Q.live && Q.live.intraday && Q.live.intraday.t && Q.live.intraday.t.length > 10;
+  m.innerHTML = `<div class="tools ttb"><span class="tnar"><input id="tpQ" value="${esc(st.q)}" placeholder="&lt;Filtrer&gt;"><b>⌕</b></span><button class="tb ${st.pause ? 'on' : ''}" id="tpP">‖ ${st.pause ? 'En pause' : 'Pause'}</button>
+      ${TOP_PAGES.map(([k, l]) => `<button class="tb alt ${st.pg === k ? 'on' : ''}" data-pg="${k}">${l}</button>`).join('')}<span class="gsp"></span><span class="dm">${all.length} dépêches · heure GMT (Abidjan) · relevé ${hm(N.ts)}</span></div>
+    <div class="grid tpg"><div class="pn tpl">${left}</div>
+      <div class="grid" style="align-content:start"><div class="pn"><div class="tsh">Graphique de l’heure <span class="mo" data-fn="${intra ? 'GP' : 'GP'}" data-s="${intra ? 'QQQ' : 'BRVMC'}">Plus »</span></div><div class="tch">${intra ? 'QQQ · séance du jour, 5 minutes (heure de New York)' : 'BRVM Composite · 3 mois'}</div>${cvb('tpC', 190)}</div>
+        <div class="pn"><div class="tsh">First Word <span class="mo" data-pg="MKT">Plus »</span></div>${fw.map(x => `<div class="fw" data-u="${esc(x.u || '')}">${esc(deent(x.ti))} <span class="dm">[${hm(x.t)}]</span></div>`).join('') || '<div class="dm" style="padding:4px 8px">—</div>'}</div></div></div>`;
+  setActs([{ n: 1, l: 'Toutes les dépêches', run: () => { st.pg = 'HOME'; st.q = ''; render(); } }, { n: 2, l: 'Pages', menu: () => [{ h: 'Pages d’actualités' }].concat(TOP_PAGES.map(([k, l], i) => ({ n: i + 1, l: (st.pg === k ? '● ' : '') + l, run: () => { st.pg = k; render(); } }))) },
+    { n: 3, l: 'Recherche', run: () => $('tpQ').focus() }]);
+  m.querySelectorAll('[data-u]').forEach(r => r.onclick = e => { if (e.target.closest('[data-sec]')) return; if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
+  m.querySelectorAll('[data-pg]').forEach(b => b.onclick = () => { st.pg = b.dataset.pg === 'T' ? 'HOME' : b.dataset.pg; st.off = {}; render(); });
+  m.querySelectorAll('[data-sk]').forEach(b => b.onclick = () => { const k = b.dataset.sk; st.off[k] = Math.max(0, (st.off[k] || 0) + +b.dataset.d); render(); });
+  $('tpP').onclick = () => { st.pause = !st.pause; render(); };
+  $('tpQ').onkeydown = e => { if (e.key === 'Enter') { st.q = e.target.value; st.off = {}; render(); } };
+  if (intra) { const I = Q.live.intraday, tt = I.t.map(t => { const d = new Date(t * 1000); return d.getUTCFullYear() * 1e8 + (d.getUTCMonth() + 1) * 1e6 + d.getUTCDate() * 1e4 + d.getUTCHours() * 100 + d.getUTCMinutes(); });
+    const ny = t => new Date(t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' });
+    new TSChart($('tpC'), { panes: [{ h: 1, noLegend: true, fmt: v => num(v, 2) }], padR: 56, grid: 'dot', xfmt: v => { const i = tt.indexOf(v); return i >= 0 ? ny(I.t[i]) : ''; } }).set({ x: tt, series: [{ type: 'area', y: I.c, color: '#ffffff', w: 1.1, grad: ['rgba(7,42,82,.97)', 'rgba(3,29,56,.97)'] }] }, [0, tt.length - 1]); }
+  else { const S = await series('BRVMC').catch(() => null); if (!alive() || !S) return; const k = Math.max(0, S.x.length - 63);
+    new TSChart($('tpC'), { panes: [{ h: 1, noLegend: true, fmt: v => num(v, 1) }], padR: 56, grid: 'dot', xticks: bbgTicks }).set({ x: S.x.slice(k), series: [{ type: 'area', y: S.c.slice(k), color: '#ffffff', w: 1.1, grad: ['rgba(7,42,82,.97)', 'rgba(3,29,56,.97)'] }] }); }
+};
