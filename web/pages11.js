@@ -4,6 +4,8 @@ const rangeBar3 = (v, lo, hi) => (v == null || lo == null || hi == null || hi <=
 const qTime = t => { if (!t) return '—'; if (String(t).length === 10) return String(t).slice(8, 10) + '/' + String(t).slice(5, 7); const d = new Date(t); if (isNaN(d)) return esc(t); return Date.now() - d < 20 * 3600e3 ? d.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit' }); };
 const ctr = n => (n || '').match(/\(([^)]+)\)\s*$/) ? (n.match(/\(([^)]+)\)\s*$/)[1]) : '';
 const WMKT = () => getJSON('world_mkt.json').catch(() => null);
+/* paires cotées « devise / USD » (dollars pour une unité) ; toutes les autres sont cotées « USD / devise » */
+const FX_INV = new Set(['EUR=', 'GBP=', 'AUD=', 'NZD=']);
 
 /* ------------------------------------------------------------------ WEI : indices boursiers mondiaux */
 const IDX_FR = { '.SPX': 'S&P 500', '.DJI': 'Dow Jones Industrial', '.IXIC': 'Nasdaq Composite', '.RUT': 'Russell 2000', '.GSPTSE': 'S&P/TSX (Canada)', '.MXX': 'S&P/BMV IPC (Mexique)', '.BVSP': 'Bovespa (Brésil)', '.MERV': 'Merval (Argentine)',
@@ -29,8 +31,9 @@ PAGES.WEI = async (m, alive) => {
     bindCtl(); hbars($('weB'), L.map(r => nm(r)), L.map(r => r.pct * 100), v => (v > 0 ? '+' : '') + num(v, 2) + '%'); return;
   }
   /* % depuis janvier en dollars (colonne « %YtdCur » du terminal) : indices cotés en EUR, GBP, CHF, JPY, CNY, XOF */
-  const FXR = Object.fromEntries((W.fx || []).map(r => [r.s, r.last])), IXC = { '.STOXX50E': 'EUR=', '.GDAXI': 'EUR=', '.FCHI': 'EUR=', '.FTMIB': 'EUR=', '.IBEX': 'EUR=', '.AEX': 'EUR=', '.FTSE': 'GBP=', '.SSMI': 'CHF=', '.N225': 'JPY=', '.SSEC': 'CNY=', '.SZI': 'CNY=', BRVMC: 'XOF=', BRVM30: 'XOF=', BRVMPR: 'XOF=' };
-  const usdF = r => { const US = ['.SPX', '.DJI', '.IXIC', '.RUT']; if (US.includes(r.s)) return 1; const f = IXC[r.s]; if (!f || !FXR[f] || !YB[f]) return null; return ['EUR=', 'GBP='].includes(f) ? FXR[f] / YB[f] : YB[f] / FXR[f]; };
+  const FXR = Object.fromEntries((W.fx || []).map(r => [r.s, r.last])), IXC = { '.STOXX50E': 'EUR=', '.GDAXI': 'EUR=', '.FCHI': 'EUR=', '.FTMIB': 'EUR=', '.IBEX': 'EUR=', '.AEX': 'EUR=', '.FTSE': 'GBP=', '.SSMI': 'CHF=', '.N225': 'JPY=', '.SSEC': 'CNY=', '.SZI': 'CNY=', BRVMC: 'XOF=', BRVM30: 'XOF=', BRVMPR: 'XOF=',
+    '.GSPTSE': 'CAD=', '.MXX': 'MXN=', '.BVSP': 'BRL=', '.MERV': 'ARS=', '.OMXS30': 'SEK=', '.TA35': 'ILS=', '.EGX30': 'EGP=', '.HSI': 'HKD=', '.KS11': 'KRW=', '.TWII': 'TWD=', '.NSEI': 'INR=', '.AXJO': 'AUD=', '.STI': 'SGD=', '.KLSE': 'MYR=' };
+  const usdF = r => { const US = ['.SPX', '.DJI', '.IXIC', '.RUT']; if (US.includes(r.s)) return 1; const f = IXC[r.s]; if (!f || !FXR[f] || !YB[f]) return null; return FX_INV.has(f) ? FXR[f] / YB[f] : YB[f] / FXR[f]; };
   const today = new Date().toISOString().slice(0, 10), stale = t => t && String(t).slice(0, 10) < today;
   let rn = 0; const sec_ = ([g, lab], gi) => { const L = rows.filter(r => r.g === g); if (wo.mov) L.sort((a, b) => (b.pct ?? -9) - (a.pct ?? -9)); if (!L.length) return '';
     return `<tr class="grp"><td class="l" colspan="8"><span class="rn">${gi + 1})</span>${lab}</td></tr>${L.map(r => { const f = r.ytd != null ? usdF(r) : null, yc = f != null ? (1 + r.ytd) * f - 1 : null;

@@ -470,7 +470,9 @@ WORLD = {
             ("VOL", ".VIX")],
     "cmd": [("MET", "@GC.1"), ("MET", "@SI.1"), ("MET", "@HG.1"), ("MET", "@PL.1"), ("MET", "@PA.1"),
             ("AGR", "@CC.1"), ("AGR", "@KC.1"), ("AGR", "@CT.1"), ("AGR", "@SB.1"), ("AGR", "@W.1"), ("AGR", "@C.1"), ("AGR", "@S.1"), ("AGR", "@SM.1"), ("AGR", "@LC.1")],
-    "fx": [("FX", ".DXY"), ("FX", "EUR="), ("FX", "GBP="), ("FX", "JPY="), ("FX", "CHF="), ("FX", "CNY="), ("FX", "XOF="), ("FX", "NGN="), ("FX", "GHS="), ("FX", "ZAR=")],
+    "fx": [("FX", ".DXY"), ("FX", "EUR="), ("FX", "GBP="), ("FX", "JPY="), ("FX", "CHF="), ("FX", "CNY="), ("FX", "XOF="), ("FX", "NGN="), ("FX", "GHS="), ("FX", "ZAR="),
+           ("FX", "CAD="), ("FX", "AUD="), ("FX", "NZD="), ("FX", "SEK="), ("FX", "NOK="), ("FX", "DKK="), ("FX", "MXN="), ("FX", "BRL="), ("FX", "ARS="), ("FX", "ILS="),
+           ("FX", "EGP="), ("FX", "MAD="), ("FX", "KES="), ("FX", "HKD="), ("FX", "KRW="), ("FX", "TWD="), ("FX", "INR="), ("FX", "SGD="), ("FX", "MYR="), ("FX", "TRY=")],
     "rt": [("US", "US1M"), ("US", "US3M"), ("US", "US6M"), ("US", "US1Y"), ("US", "US2Y"), ("US", "US5Y"), ("US", "US7Y"), ("US", "US10Y"), ("US", "US20Y"), ("US", "US30Y"),
            ("G", "DE10Y-DE"), ("G", "FR10Y-FR"), ("G", "GB10Y-GB"), ("G", "IT10Y-IT"), ("G", "ES10Y-ES"), ("G", "JP10Y-JP"), ("G", "CN10Y-CN")],
 }
@@ -483,7 +485,9 @@ WORLD_YH = {".SPX": "^GSPC", ".DJI": "^DJI", ".IXIC": "^IXIC", ".RUT": "^RUT", "
             ".TWII": "^TWII", ".NSEI": "^NSEI", ".AXJO": "^AXJO", ".STI": "^STI", ".KLSE": "^KLSE", ".VIX": "^VIX",
             "@GC.1": "GC=F", "@SI.1": "SI=F", "@HG.1": "HG=F", "@PL.1": "PL=F", "@PA.1": "PA=F", "@CC.1": "CC=F", "@KC.1": "KC=F", "@CT.1": "CT=F", "@SB.1": "SB=F",
             "@W.1": "ZW=F", "@C.1": "ZC=F", "@S.1": "ZS=F", "@SM.1": "ZM=F", "@LC.1": "LE=F",
-            ".DXY": "DX-Y.NYB", "EUR=": "EURUSD=X", "GBP=": "GBPUSD=X", "JPY=": "JPY=X", "CHF=": "CHF=X", "CNY=": "CNY=X", "XOF=": "XOF=X", "NGN=": "NGN=X", "GHS=": "GHS=X", "ZAR=": "ZAR=X"}
+            ".DXY": "DX-Y.NYB", "EUR=": "EURUSD=X", "GBP=": "GBPUSD=X", "JPY=": "JPY=X", "CHF=": "CHF=X", "CNY=": "CNY=X", "XOF=": "XOF=X", "NGN=": "NGN=X", "GHS=": "GHS=X", "ZAR=": "ZAR=X",
+            "CAD=": "CAD=X", "AUD=": "AUDUSD=X", "NZD=": "NZDUSD=X", "SEK=": "SEK=X", "NOK=": "NOK=X", "DKK=": "DKK=X", "MXN=": "MXN=X", "BRL=": "BRL=X", "ARS=": "ARS=X",
+            "ILS=": "ILS=X", "EGP=": "EGP=X", "MAD=": "MAD=X", "KES=": "KES=X", "HKD=": "HKD=X", "KRW=": "KRW=X", "TWD=": "TWD=X", "INR=": "INR=X", "SGD=": "SGD=X", "MYR=": "MYR=X", "TRY=": "TRY=X"}
 
 
 def year_bases(prev, budget=60):

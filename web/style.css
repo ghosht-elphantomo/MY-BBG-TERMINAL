@@ -556,3 +556,17 @@ table.t.eqt td{line-height:24px}
 .weic{border:1px solid #1f1f1f;gap:6px}
 .anon .nw .src,.anon .nw .c{visibility:hidden}
 .tn.cnr .h .evb{margin-right:6px}
+/* WCRS : barre d'appréciation centrée sur zéro */
+.t.wcr td.wcb{position:relative;width:34%;min-width:180px;padding:0 6px}
+.t.wcr td.wcb .z{position:absolute;left:50%;top:2px;bottom:2px;border-left:1px solid #5a5a5a}
+.t.wcr td.wcb i{position:absolute;top:4px;bottom:4px;display:block}
+.t.wcr td.wcb i.p{left:50%;background:#32c74c}
+.t.wcr td.wcb i.n{right:50%;background:#ff433d}
+.t.wcr tr[data-fxc]{cursor:pointer}
+.t.wcr .flg,.t.fxm .flg{vertical-align:-2px}
+/* FXC : matrice des changes croisés */
+.t.fxm th.c{text-align:center;line-height:1.25;cursor:pointer;color:var(--amber)}
+.t.fxm td{text-align:right;border-left:1px solid #262626}
+.t.fxm td.l{cursor:pointer;white-space:nowrap}
+.t.fxm td.dg{text-align:center;color:#555;background:#141414}
+.t.fxm .hx{background:#0b2a4d!important}
