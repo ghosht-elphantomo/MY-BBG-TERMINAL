@@ -14,13 +14,15 @@ const IDX_FR = { '.SPX': 'S&P 500', '.DJI': 'Dow Jones Industrial', '.IXIC': 'Na
   '.NSEI': 'Nifty 50 (Inde)', '.AXJO': 'S&P/ASX 200 (Australie)', '.STI': 'Straits Times (Singapour)', '.KLSE': 'FTSE Bursa KLCI (Malaisie)', '.VIX': 'VIX (volatilité S&P 500)' };
 PAGES.WEI = async (m, alive) => {
   const W = await WMKT(); if (!alive()) return; setTitle('World Equity Indices');
-  if (!W || !W.idx) { m.innerHTML = pn('Indices mondiaux', 'WEI', '<div class="empty">Cotations mondiales en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const tab = tabState('WEI', 'tbl'), wo = ST.weio = ST.weio || { mov: false, vol: true };
+  if (tab !== 'fut' && (!W || !W.idx)) { m.innerHTML = pn('Indices mondiaux', 'WEI', '<div class="empty">Cotations mondiales en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   /* rangée de réglages comme le terminal : vue « Standard ▾ », cases Movers / Volatilité */
-  const ctl = `<div class="tools weic"><select class="ofld" id="weV">${[['tbl', 'Standard'], ['bar', 'Variations du jour'], ['rng', 'Position sur 52 semaines']].map(([k, l]) => `<option value="${k}" ${tab === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
-    <label class="gck"><input type="checkbox" id="weM" ${wo.mov ? 'checked' : ''}><i></i>Mouvements (classés par variation)</label><label class="gck"><input type="checkbox" id="weVo" ${wo.vol ? 'checked' : ''}><i></i>Volatilité</label>
-    <span class="gsp"></span><span class="tlab">% depuis janv.</span><span class="wh">devise locale et USD</span></div>`;
-  const bindCtl = () => { $('weV').onchange = e => { ST.tab.WEI = e.target.value; render(); }; $('weM').onchange = e => { wo.mov = e.target.checked; render(); }; $('weVo').onchange = e => { wo.vol = e.target.checked; render(); }; };
+  /* vue « Contrats à terme » = écran WEIF (indication d'ouverture, écart au comptant) affiché dans WEI */
+  const ctl = `<div class="tools weic"><select class="ofld" id="weV">${[['tbl', 'Standard'], ['bar', 'Variations du jour'], ['rng', 'Position sur 52 semaines'], ['fut', 'Contrats à terme (WEIF)']].map(([k, l]) => `<option value="${k}" ${tab === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    ${tab === 'fut' ? '<span class="gsp"></span><span class="tlab">1re échéance</span><span class="wh">indication d’ouverture et écart au comptant</span>' : `<label class="gck"><input type="checkbox" id="weM" ${wo.mov ? 'checked' : ''}><i></i>Mouvements (classés par variation)</label><label class="gck"><input type="checkbox" id="weVo" ${wo.vol ? 'checked' : ''}><i></i>Volatilité</label>
+    <span class="gsp"></span><span class="tlab">% depuis janv.</span><span class="wh">devise locale et USD</span>`}</div>`;
+  const bindCtl = () => { $('weV').onchange = e => { ST.tab.WEI = e.target.value; render(); }; const cm = $('weM'), cv = $('weVo'); if (cm) cm.onchange = e => { wo.mov = e.target.checked; render(); }; if (cv) cv.onchange = e => { wo.vol = e.target.checked; render(); }; };
+  if (tab === 'fut') { await PAGES.WEIF(m, alive); if (!alive()) return; m.insertAdjacentHTML('afterbegin', ctl); bindCtl(); return; }
   const brvm = ['BRVMC', 'BRVM30', 'BRVMPR'].map(id => Q.by[id]).filter(Boolean).map(s => ({ g: 'MEA', s: s.id, n: s.n, last: s.last, chg: s.prev ? s.last - s.prev : null, pct: s.pct, t: i2s(s.dt), hi52: s.hi52, lo52: s.lo52, ytd: s.ytd, loc: true }));
   const YB = W.yb && W.yb.v || {}; W.idx.forEach(r => { if (r.ytd == null && YB[r.s] && r.last) r.ytd = r.last / YB[r.s] - 1; });
   const rows = W.idx.concat(brvm), REG = [['AM', 'Amériques'], ['EU', 'Europe'], ['MEA', 'Moyen-Orient et Afrique'], ['AS', 'Asie-Pacifique']].concat(wo.vol ? [['VOL', 'Volatilité']] : []);

@@ -36,7 +36,7 @@ const FN = {
   DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique', 'Dividend Calendar'],
   EVTS: ['Événements des sociétés', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers ; en option : suivi des sociétés BRVM et US, agenda des sociétés', 'Corporate Events'],
   WEIF: ['Contrats à terme sur indices', 'mkt', 'Marchés', 'S&P 500, Nasdaq-100, Dow Jones, Russell 2000, VIX, FTSE 100, Nikkei : indication d’ouverture et écart au comptant', 'World Equity Index Futures'],
-  WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines', 'World Equity Indices'],
+  WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines ; en option : contrats à terme sur indices (WEIF)', 'World Equity Indices'],
   COMMO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
   BTMM: ['Trésor et marché monétaire US', 'mkt', 'Taux', 'Taux directeurs (Fed, BCE, BCEAO), SOFR, bons et emprunts du Trésor, contrats à terme, pentes, inflation anticipée', 'Treasury & Money Markets'],
   RATES: ['Taux et anticipations Fed', 'mkt', 'Taux', 'Contrats Fed funds : taux implicite par mois, probabilité de baisse ou de hausse aux prochaines réunions ; en option : taux souverains mondiaux (courbe US, 10 ans, UEMOA)', 'World Interest Rate Probability'],
@@ -459,7 +459,7 @@ async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.ba
   if (fresh) { Q.gen = l.ts; Q.json = {}; try { const S = await fetch(Q.base + 'summary.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null); if (S && S.secs) { Q.sum = S; Q.json['summary.json'] = Promise.resolve(S); for (const s of S.secs) Q.by[s.id] = s; } } catch (e) { } }
   if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews();
   const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.id !== 'cmd';
-  if (!typing && (fresh || ['MONITOR', 'BRVM', 'IMAP', 'US', 'NEWS', 'BRIEF', 'WEIF'].includes(ST.fn)) && !(ST.fn === 'NEWS' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
+  if (!typing && (fresh || ['MONITOR', 'BRVM', 'IMAP', 'US', 'NEWS', 'BRIEF', 'WEIF'].includes(ST.fn) || (ST.fn === 'WEI' && ST.tab.WEI === 'fut')) && !(ST.fn === 'NEWS' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
 let SYNC_RUN = null;
 function bindSync() { const b = $('syncBtn'); if (!b || !SYNC_RUN) return; b.hidden = false; b.onclick = () => SYNC_RUN(b); }
 async function initSync() {
