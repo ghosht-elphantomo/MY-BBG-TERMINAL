@@ -2094,7 +2094,8 @@ PAGES.CORR = async (m, alive) => {
 <script>
 /* ================= FQT — fonctions d'un titre : FA, RV, WACC, DVD, DDM, COMP, BETA, HP, CN ================= */
 
-const faJSON = id => getJSON('fa/' + id.replace('.', '_') + '.json');
+/* comptes publiés : seulement pour les actions (ni ETF, ni indice, ni Taïwan, dont les comptes ne sont pas collectés) */
+const faJSON = id => { const s = Q.by[id]; if (s && (s.cls !== 'Equity' || s.typ === 'ETF' || s.mkt === 'TW' || (s.mkt === 'US' && !s.fa))) return Promise.reject(new Error('comptes non collectés')); return getJSON('fa/' + id.replace('.', '_') + '.json'); };
 const P1 = (v, d = 1) => v == null || !isFinite(v) ? '—' : num(v * 100, d) + ' %';
 const NDc = (why = '') => `<span class="dm" title="${esc(why)}">n.d.</span>`;
 const yLab = d => String(Math.floor(d / 10000));
