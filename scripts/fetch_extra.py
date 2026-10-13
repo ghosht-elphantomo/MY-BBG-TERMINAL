@@ -2119,6 +2119,37 @@ def run_obl(out, site_data=None):
 
 
 # ---------------------------------------------------------------- capitalisations mondiales (companiesmarketcap.com, CSV)
+CAL_CTY = "US,EU,GB,JP,CN,DE,FR,IT,ES,CA,AU,CH,IN,BR,ZA,NG,GH,CI,SN,KE,MA,EG"
+
+
+def run_cal(out, site_data=None):
+    """Calendrier économique (fonction ECO) : publications macro de 22 pays et zones, du jour J-10 à J+24, avec
+    prévision (consensus), réel et précédent tels que publiés par le calendrier économique de TradingView.
+    Rafraîchi à chaque passage de 15 min : les chiffres « réel » apparaissent dès leur publication."""
+    t0 = dt.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    a, b = t0 - dt.timedelta(days=10), t0 + dt.timedelta(days=24)
+    u = ("https://economic-calendar.tradingview.com/events?from=" + a.strftime("%Y-%m-%dT00:00:00.000Z") + "&to=" + b.strftime("%Y-%m-%dT00:00:00.000Z")
+         + "&countries=" + CAL_CTY)
+    j = json.loads(get(u, tries=2, timeout=40, headers={"Origin": "https://www.tradingview.com", "Referer": "https://www.tradingview.com/", "Accept": "application/json, text/plain, */*"}))
+    rows = []
+    for x in j.get("result") or []:
+        if not x.get("date") or not x.get("title"):
+            continue
+        r = {"d": x["date"][:16], "c": x.get("country"), "i": x.get("importance", -1), "t": x["title"].strip()}
+        for k_src, k in (("indicator", "ind"), ("category", "cat"), ("period", "p"), ("actual", "a"), ("forecast", "f"), ("previous", "pr"), ("unit", "u"), ("scale", "sc"), ("source", "src"), ("currency", "cur")):
+            v = x.get(k_src)
+            if v not in (None, ""):
+                r[k] = v
+        rows.append(r)
+    if len(rows) < 30:
+        raise RuntimeError(f"calendrier trop court ({len(rows)} lignes)")
+    rows.sort(key=lambda r: (r["d"], -r["i"], r["c"], r["t"]))
+    res = {"ts": int(time.time()), "from": a.strftime("%Y-%m-%d"), "to": b.strftime("%Y-%m-%d"), "src": "TradingView (calendrier économique)", "rows": rows}
+    save(os.path.join(site_data or out, "calendar.json"), res)
+    note("calendar")
+    log(f"calendrier : {len(rows)} événements")
+
+
 def run_cmc(out, site_data=None):
     """Toutes les sociétés cotées classées par capitalisation (USD) avec pays ; variation calculée contre le relevé du soir précédent."""
     path = os.path.join(out, "cmc_eod.json")
@@ -2480,7 +2511,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     only = set(a.only.split(",")) if a.only else set()
     t0 = time.time()
-    steps = [("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
+    steps = [("cal", lambda: run_cal(a.out, a.site)), ("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),

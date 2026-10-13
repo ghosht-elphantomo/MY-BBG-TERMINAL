@@ -390,6 +390,98 @@ i.dot{display:inline-block;width:8px;height:8px;margin-right:5px;vertical-align:
 .bm-foot{display:flex;justify-content:space-between;color:#9a9a9a;font-size:13px;border-top:1px solid #3a3a3a;padding-top:6px;margin-top:2px}
 @media(max-width:700px){.bm-cols{grid-template-columns:1fr}.bm-it{font-size:13px}}
 
+/* ---- fenêtre agrandie (⤢) ---- */
+.wsp{flex:1}
+.wico{background:none;border:0;color:#cfcfcf;font-size:15px;padding:0 7px;height:24px;line-height:24px;align-self:center}
+.wico:hover{color:#fff;background:#3a3c40}
+body.maxi .fkeys,body.maxi .nwp,body.maxi .status{display:none}
+body.maxi main{padding:2px}
+/* ---- GP façon Bloomberg ---- */
+.gpr,.gpr2{gap:4px}
+.gpr2 .tb{padding:1px 7px}
+.gck{display:inline-flex;align-items:center;gap:5px;color:#e6e6e6;font-size:12.5px;margin-left:8px;cursor:pointer;user-select:none}
+.gck input{display:none}
+.gck i{width:11px;height:11px;border:1px solid #9a9a9a;background:#111;display:inline-block;position:relative}
+.gck input:checked+i{background:#e6e6e6;box-shadow:inset 0 0 0 2px #111}
+.gpen{color:#bbb;cursor:pointer;margin-left:2px}
+.gpen:hover{color:var(--org)}
+.gmas .ma{width:38px!important;margin-left:2px}
+.ofld.dk{background:#2b2b2b;color:#e6e6e6}
+.gico{display:inline-flex;gap:1px;margin-left:4px}
+.tb.ico{padding:1px 5px;line-height:0;height:20px}
+.tb.ico svg{vertical-align:middle}
+.gsp{flex:1}
+.tb.gdd{background:#1e1e1e;color:#e6e6e6}
+.tb.gdd:hover{background:#3d3d3d}
+.tools input.gadd{width:168px;text-transform:uppercase}
+.tb.gmx{background:#1e1e1e}
+.tb.gmx{font-size:14px;padding:0 7px}
+.gpcw{position:relative}
+.gpbar{position:absolute;left:50%;top:3px;transform:translateX(-50%);z-index:2;display:flex;gap:14px;font-size:11.5px;color:#9a9a9a;background:rgba(20,20,20,.85);padding:0 10px;border:1px solid #2a2a2a}
+.gpbar span{cursor:pointer}
+.gpbar span:hover{color:#fff}
+.gpm{position:relative}
+.gpsug{display:flex;gap:0;background:#141414;border-top:1px solid #2a2a2a;font-size:12.5px;line-height:22px;white-space:nowrap;overflow:hidden}
+.gpsug .gl{color:var(--org);padding:0 14px;border-right:1px solid #2a2a2a}
+.gpsug .gi{padding:0 14px;color:#e6e6e6;cursor:pointer;border-right:1px solid #2a2a2a;overflow:hidden;text-overflow:ellipsis}
+.gpsug .gi b{color:#fff;margin-right:8px}
+.gpsug .gi:hover{background:#262626}
+/* ---- ECO : calendrier économique ---- */
+.ecot,.ecot2{border:1px solid #1f1f1f;gap:4px}
+.eclk{color:#fff;font-size:14px;margin-left:14px;letter-spacing:.5px}
+.erad{display:inline-flex;align-items:center;gap:4px;color:var(--amber);margin-right:8px;cursor:pointer}
+.erad input{display:none}
+.erad i{width:11px;height:11px;border-radius:50%;border:1px solid #888;background:#111;display:inline-block}
+.erad input:checked+i{background:#3d8bff;border-color:#3d8bff;box-shadow:inset 0 0 0 2px #111}
+table.eco td{height:22px}
+table.eco td.no{color:#bbb;text-align:right;width:34px}
+table.eco td.fl{width:26px;padding-right:0}
+table.eco td.cc{color:#e6e6e6;width:24px}
+table.eco td.ev{color:#fff}
+table.eco td.b{font-weight:600}
+table.eco tr.fut td{background:#1b1b1b}
+table.eco tr.fut td.ev{color:#e6e6e6}
+table.eco tr.nx td{border-top:2px solid var(--org)}
+table.eco tr{cursor:pointer}
+table.eco tr:hover td{background:#26324a}
+svg.flg{vertical-align:middle;border:1px solid #333}
+svg.rel{vertical-align:middle}
+.ecw{display:grid;gap:2px;background:#000}
+.ecd{background:#0b0b0b;min-height:300px}
+.ecd.td{background:#101a2a}
+.ecdh{background:#2b2b2b;color:var(--amber);padding:2px 6px;text-transform:capitalize}
+.ecx{display:grid;grid-template-columns:40px 18px 16px 1fr auto;gap:4px;align-items:center;padding:2px 4px;border-bottom:1px solid #161616;cursor:pointer;font-size:12px}
+.ecx.fut{background:#161616}
+.ecx .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e6e6e6}
+.ecx:hover{background:#26324a}
+/* ---- ECST : statistiques économiques ---- */
+.ecst{grid-template-columns:300px minmax(0,1fr)}
+.ectr{padding:2px 0}
+.ecg{padding:2px 8px;color:#e6e6e6;cursor:pointer;display:flex;align-items:center;gap:6px}
+.ecg:hover{background:#1e2a3e}
+.ecg.on{background:#1d3557;color:#fff}
+.ecg .nf{display:inline-block;width:16px;height:10px;border:1px solid #333;background:#222}
+.ech,.ecr{display:grid;grid-template-columns:minmax(0,1fr) 140px 76px repeat(4,108px);gap:6px;align-items:center;padding:1px 8px}
+.ech{background:#1a1a1a;color:#bbb;font-size:12px;border-bottom:1px solid #2a2a2a}
+.ech span:nth-child(n+4){text-align:right}
+.ecn .ecnh{color:#5fb0ff;padding:3px 8px;cursor:pointer;background:#050a12;border-bottom:1px solid #111}
+.ecn .ecnh b{color:#9a9a9a;font-weight:400;margin-right:4px}
+.ecr{cursor:pointer;border-bottom:1px solid #111;line-height:17px}
+.ecr:hover{background:#1e2a3e}
+.ecr.on{background:#26324a}
+.ecr .nm{color:var(--amber);padding-left:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ecr .tk{color:#e6e6e6;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ecr .u{font-size:11.5px}
+.ecr .v{text-align:right;color:#cfcfcf;display:flex;flex-direction:column;line-height:14px}
+.ecr .v small{color:#777;font-size:10px}
+@media (max-width:900px){.ecst{grid-template-columns:minmax(0,1fr)}.ech,.ecr{grid-template-columns:minmax(0,1fr) 90px repeat(2,90px)}.ech span:nth-child(3),.ecr .u,.ech span:nth-child(n+6),.ecr .v:nth-child(n+6){display:none}}
+.ectn{border-top:1px solid #222;margin-top:4px}
+.ectnh{color:#bbb;padding:4px 8px;font-size:12px;background:#111}
+.ecti{padding:2px 8px;color:var(--amber);cursor:pointer;font-size:12.5px}
+.ecti b{color:#9a9a9a;font-weight:400;margin-right:4px}
+.ecti:hover{background:#1e2a3e}
+.ecti.on{color:#fff;background:#1d3557}
+
 </style>
 </head><body>
 <div id="app">
@@ -1184,50 +1276,121 @@ function aggOHLC(S, per, tr) {
 }
 const dmy = d => fmtD(d); const dmyShort = d => fmtD(d).slice(0, 6) + fmtD(d).slice(8);
 function parseDMY(t) { const m = String(t || '').trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/); if (!m) return null; let y = +m[3]; if (y < 100) y += 2000; return y * 10000 + (+m[2]) * 100 + (+m[1]); }
+/* conversion de devise (champ « Devise » du GP) : facteurs alignés sur les dates, XOF ↔ EUR à la parité fixe de 655,957 */
+const XOF_EUR = 655.957, FX_SER = { XOF: 'USDXOF', EUR: 'EURUSD', TWD: 'USDTWD' };
+const FX_OK = s => s && ['XOF', 'USD', 'EUR', 'TWD'].includes(s.ccy) && !['Rate'].includes(s.cls) && !/%/.test(s.ccy || '');
+async function fxFactor(from, to, xs) {
+  if (!from || !to || from === to) return null;
+  if (from === 'XOF' && to === 'EUR') return xs.map(() => 1 / XOF_EUR); if (from === 'EUR' && to === 'XOF') return xs.map(() => XOF_EUR);
+  const al = async id => { if (!Q.by[id]) return null; const F = await series(id).catch(() => null); if (!F) return null; const mp = new Map(F.x.map((d, i) => [d, F.c[i]])); let lv = null, j = 0; const out = [];
+    for (const d of xs) { while (j < F.x.length && F.x[j] <= d) { lv = F.c[j]; j++; } out.push(mp.has(d) ? mp.get(d) : lv); } return out; };
+  /* dollars par unité de devise, date par date */
+  const usdPer = async c => { if (c === 'USD') return xs.map(() => 1);
+    if (c === 'XOF') { const u = await al('USDXOF'); if (u) return u.map(v => v ? 1 / v : null); const e = await al('EURUSD'); return e ? e.map(v => v ? v / XOF_EUR : null) : null; }
+    if (c === 'EUR') { const e = await al('EURUSD'); if (e) return e; const u = await al('USDXOF'); return u ? u.map(v => v ? XOF_EUR / v : null) : null; }
+    if (c === 'TWD') { const t = await al('USDTWD'); return t ? t.map(v => v ? 1 / v : null) : null; } return null; };
+  const a = await usdPer(from), b = await usdPer(to); if (!a || !b) return null; return a.map((v, i) => v != null && b[i] ? v / b[i] : null);
+}
+const fxApply = (arr, f) => f ? arr.map((v, i) => v == null || f[i] == null ? null : v * f[i]) : arr;
+
+/* icônes de type de graphique (barre d'outils GP) */
+const GP_ICO = { bbg: '<svg width="16" height="12" viewBox="0 0 16 12"><path d="M0 11 L4 6 L7 8 L11 2 L16 5 L16 12 L0 12Z" fill="#2e5a9c"/><path d="M0 11 L4 6 L7 8 L11 2 L16 5" stroke="#fff" fill="none" stroke-width="1.2"/></svg>',
+  line: '<svg width="16" height="12" viewBox="0 0 16 12"><path d="M0 10 L4 5 L7 7 L11 1 L16 4" stroke="#fff" fill="none" stroke-width="1.3"/></svg>',
+  area: '<svg width="16" height="12" viewBox="0 0 16 12"><path d="M0 10 L4 5 L7 7 L11 1 L16 4 L16 12 L0 12Z" fill="#666"/><path d="M0 10 L4 5 L7 7 L11 1 L16 4" stroke="#fff" fill="none" stroke-width="1.1"/></svg>',
+  candle: '<svg width="16" height="12" viewBox="0 0 16 12"><path d="M3 0V12M8 2V10M13 1V11" stroke="#bbb"/><rect x="1.5" y="3" width="3" height="6" fill="#2fd26a"/><rect x="6.5" y="4" width="3" height="4" fill="#ff3d4d"/><rect x="11.5" y="2" width="3" height="7" fill="#2fd26a"/></svg>' };
+const GP_EVC = { D: ['#2fd26a', 'Dividende'], R: ['#f9a33a', 'Résultats / états financiers'], A: ['#b48cff', 'Assemblée générale'], S: ['#5fd0ea', 'Fractionnement'] };
+
 PAGES.GP = async (m, alive) => {
-  const s = sec(ST.sec), g = ST.gp; g.ma = g.ma || ['', '', '']; g.per = g.per || 'D'; g.px = g.px || 'last'; if (g.volOn == null) g.volOn = true;
-  const S0 = await series(ST.sec); if (!alive()) return;
+  const s = sec(ST.sec), g = ST.gp; g.ma = g.ma || ['', '', '']; g.per = g.per || 'D'; g.px = g.px || 'last'; if (g.volOn == null) g.volOn = true; if (g.ev == null) g.ev = true;
+  if (g.ccySec !== s.id) { g.ccySec = s.id; g.ccy = ''; }
+  const S0r = await series(ST.sec); if (!alive()) return;
   const intra = ST.sec === 'QQQ' && Q.live && Q.live.intraday && Q.live.intraday.t && Q.live.intraday.t.length > 10;
-  const monthly = S0.f === 'M'; if (monthly) g.per = 'D';
+  const monthly = S0r.f === 'M'; if (monthly) g.per = 'D';
   const ranges = monthly ? ['5A', '10A', '20A', '50A', 'MAX'] : ['1M', '3M', '6M', 'YTD', '1A', '3A', '5A', '10A', 'MAX'];
   if (!ranges.includes(g.range) && !(intra && g.range === '1J')) g.range = monthly ? '20A' : '1A';
   if (g.range === '1J' && !intra) g.range = '1A';
-  let TR = null; if (g.px === 'tr') { TR = await trSeries(s, S0); if (!alive()) return; if (!TR) { g.px = 'last'; toast('Pas de dividende recensé pour ce titre : rendement total = cours.'); } }
+  let TR = null; if (g.px === 'tr') { TR = await trSeries(s, S0r); if (!alive()) return; if (!TR) { g.px = 'last'; toast('Pas de dividende recensé pour ce titre : rendement total = cours.'); } }
+  /* devise d'affichage */
+  const ccyL = s.ccy || '', ccyOpts = FX_OK(s) ? [...new Set([ccyL, 'USD', 'EUR', 'XOF'])] : [ccyL]; if (!ccyOpts.includes(g.ccy)) g.ccy = '';
+  const ccyT = g.ccy || ccyL; let FXF = null;
+  if (g.ccy && g.ccy !== ccyL) { FXF = await fxFactor(ccyL, g.ccy, S0r.x); if (!alive()) return; if (!FXF) { g.ccy = ''; toast('Conversion indisponible : cours de change manquant.'); } }
+  const S0 = FXF ? Object.assign({}, S0r, { o: fxApply(S0r.o, FXF), h: fxApply(S0r.h, FXF), l: fxApply(S0r.l, FXF), c: fxApply(S0r.c, FXF) }) : S0r; if (TR && FXF) TR = fxApply(TR, FXF);
   const S = aggOHLC(S0, g.per, TR), n = S.x.length, Y0 = g.px === 'tr' && S.tr ? S.tr : S.c;
   const bbg = g.type === 'bbg', hasVol = S0.v.slice(-260).filter(v => v > 0).length > 120;
-  const fmtP = v => px(s, v), ccy = s.ccy === 'USD' ? 'USD' : s.ccy;
+  const dec = FXF ? (g.ccy === 'XOF' ? 0 : 2) : pxd(s), fmtP = v => num(v, dec);
+  const MA_DEF = ['50', '200', '']; const maOn = !!g.maOn; const MAS = maOn ? g.ma.map((v, j) => v || (g.ma.every(x => !x) ? MA_DEF[j] : '')) : ['', '', ''];
   setTitle(g.cmp.length ? 'Comparative Returns' : g.type === 'candle' ? 'Candle Chart' : g.type === 'area' ? 'Mountain Chart' : 'Line Chart');
   const peers = secsWhere(x => x.id !== s.id && x.mkt === s.mkt && x.cls === s.cls && x.grp === s.grp && !legacy(x)).sort((a, b) => (b.liq || 0) - (a.liq || 0)).slice(0, 6);
   const bench = s.bench && Q.by[s.bench] && s.bench !== s.id ? s.bench : null;
-  setActs([{ n: 95, l: 'Comparer', menu: () => [{ h: 'Ajouter à la comparaison' }].concat(bench ? [{ code: bench, l: 'Indice de référence · ' + esc(Q.by[bench].n), run: () => { if (!g.cmp.includes(bench)) g.cmp.push(bench); render(); } }] : [],
+  const editMenu = () => [{ h: 'Style du graphique' }, ...[['bbg', 'Bloomberg (aire bleue, ligne blanche)'], ['line', 'Ligne'], ['area', 'Aire'], ['candle', 'Bougies']].map(([k, l]) => ({ l: (g.type === k ? '● ' : '○ ') + l, run: () => { g.type = k; render(); } })),
+    { h: 'Affichage' }, { l: (g.log ? '● ' : '○ ') + 'Échelle logarithmique', run: () => { g.log = !g.log; render(); } }, { l: (g.volOn ? '● ' : '○ ') + 'Volume', run: () => { g.volOn = !g.volOn; render(); } },
+    { l: (g.maOn ? '● ' : '○ ') + 'Moyennes mobiles', run: () => { g.maOn = !g.maOn; render(); } }, { l: (g.ev ? '● ' : '○ ') + 'Événements clés (dividendes, résultats, AG)', run: () => { g.ev = !g.ev; render(); } },
+    { l: (g.tbl ? '● ' : '○ ') + 'Tableau des cours', run: () => { g.tbl = !g.tbl; render(); } }, { l: document.body.classList.contains('maxi') ? 'Réduire la fenêtre' : 'Agrandir la fenêtre (plein écran)', run: () => toggleMaxi() }];
+  const relMenu = () => [{ h: 'Études' }, ...[['o', 'boll', 'Bandes de Bollinger (20, 2σ)'], ['s', 'rsi', 'RSI (14)'], ['s', 'macd', 'MACD (12, 26, 9)'], ['s', 'dd', 'Drawdown depuis le plus haut']].map(([t, k, l]) => ({ l: ((t === 'o' ? g.ov[k] : g.st[k]) ? '● ' : '○ ') + l, run: () => { if (t === 'o') g.ov[k] = !g.ov[k]; else g.st[k] = !g.st[k]; render(); } })),
+    { h: 'Données' }, { l: (g.px === 'tr' ? '● ' : '○ ') + 'Rendement total (dividendes réinvestis)', run: () => { g.px = g.px === 'tr' ? 'last' : 'tr'; render(); } }, { l: (g.maOn ? '● ' : '○ ') + 'Moyennes mobiles', run: () => { g.maOn = !g.maOn; render(); } },
+    hasVol ? { l: (g.volOn ? '● ' : '○ ') + 'Volume', run: () => { g.volOn = !g.volOn; render(); } } : null, { l: (g.ev ? '● ' : '○ ') + 'Événements clés', run: () => { g.ev = !g.ev; render(); } },
+    bench ? { h: 'Comparer' } : null, bench ? { code: bench, l: 'Indice de référence · ' + esc(Q.by[bench].n), run: () => { if (!g.cmp.includes(bench)) g.cmp.push(bench); render(); } } : null].filter(Boolean);
+  const suggest = () => [{ h: 'Graphiques suggérés' },
+    { l: 'Cours et moyennes mobiles 50 / 200 séances (1 an)', run: () => { Object.assign(g, { type: 'bbg', range: '1A', per: 'D', px: 'last', maOn: true, ma: ['50', '200', ''], cmp: [] }); render(); } },
+    s.cls !== 'Curncy' && !monthly ? { l: 'Bougies quotidiennes (6 mois)', run: () => { Object.assign(g, { type: 'candle', range: '6M', per: 'D', px: 'last', cmp: [] }); render(); } } : null,
+    { l: 'Rendement total, dividendes réinvestis (5 ans)', run: () => { Object.assign(g, { type: 'bbg', range: '5A', px: 'tr', cmp: [] }); render(); } },
+    bench ? { l: 'Performance comparée à ' + esc(Q.by[bench].n) + ' (1 an)', run: () => { Object.assign(g, { range: '1A', cmp: [bench] }); render(); } } : null,
+    { l: 'Historique complet, échelle logarithmique, mensuel', run: () => { Object.assign(g, { type: 'bbg', range: 'MAX', per: monthly ? 'D' : 'M', log: true, cmp: [] }); render(); } },
+    { l: 'Cours, RSI et MACD (1 an)', run: () => { Object.assign(g, { type: 'line', range: '1A', per: 'D', cmp: [] }); g.st.rsi = true; g.st.macd = true; render(); } },
+    { h: 'Autres fonctions graphiques' }, ...['HVT', 'VAP', 'SEAS', 'COMP', 'TRA'].filter(c => FN[c] && !avail(c, s)).map(c => ({ code: c, l: esc(FN[c][4]), run: () => go(c, s.id) }))].filter(Boolean);
+  setActs([{ n: 94, l: 'Graphiques suggérés', menu: suggest },
+    { n: 95, l: 'Comparer', menu: () => [{ h: 'Ajouter à la comparaison' }].concat(bench ? [{ code: bench, l: 'Indice de référence · ' + esc(Q.by[bench].n), run: () => { if (!g.cmp.includes(bench)) g.cmp.push(bench); render(); } }] : [],
       peers.map(p => ({ code: p.id, l: esc(p.short || p.n), run: () => { if (!g.cmp.includes(p.id)) g.cmp.push(p.id); render(); } })),
-      [{ l: 'Autre titre : taper son code dans le champ Comparer', run: () => { const i = $('cmpIn'); if (i) i.focus(); } }], g.cmp.length ? [{ l: 'Effacer les comparaisons', run: () => { g.cmp = []; render(); } }] : []) },
-    { n: 97, l: 'Édition', menu: () => [{ h: 'Style du graphique' }, ...[['bbg', 'Bloomberg (aire bleue, ligne blanche)'], ['line', 'Ligne'], ['area', 'Aire'], ['candle', 'Bougies']].map(([k, l]) => ({ l: (g.type === k ? '● ' : '○ ') + l, run: () => { g.type = k; render(); } })),
-      { h: 'Affichage' }, { l: (g.log ? '● ' : '○ ') + 'Échelle logarithmique', run: () => { g.log = !g.log; render(); } }, { l: (g.volOn ? '● ' : '○ ') + 'Volume', run: () => { g.volOn = !g.volOn; render(); } }] }]);
-  const tb = (k, l, on) => `<button class="tb ${on ? 'on' : ''}" data-gp="${k}">${l}</button>`;
+      [{ l: 'Autre titre : taper son code dans « Ajouter des données »', run: () => { const i = $('cmpIn'); if (i) i.focus(); } }], g.cmp.length ? [{ l: 'Effacer les comparaisons', run: () => { g.cmp = []; render(); } }] : []) },
+    { n: 97, l: 'Édition', menu: editMenu }]);
+  const tb = (k, l, on, t) => `<button class="tb ${on ? 'on' : ''}" data-gp="${k}"${t ? ` title="${esc(t)}"` : ''}>${l}</button>`;
+  const ck = (id, on, l, t) => `<label class="gck" title="${esc(t || '')}"><input type="checkbox" id="${id}" ${on ? 'checked' : ''}><i></i>${l}</label>`;
   const row1 = `<div class="tools gpr"><input class="ofld dt" id="gpD0" title="Début (jj/mm/aaaa)"><span class="cal">▦</span><span class="dm">–</span><input class="ofld dt" id="gpD1" title="Fin (jj/mm/aaaa)"><span class="cal">▦</span>
-      <select class="ofld" id="gpPx"><option value="last" ${g.px === 'last' ? 'selected' : ''}>Dernier cours</option><option value="tr" ${g.px === 'tr' ? 'selected' : ''}>Rendement total (div. réinvestis)</option></select>
-      <span class="tlab">Moy. mob.</span>${g.ma.map((v, i) => `<input class="ofld ma" data-ma="${i}" value="${esc(v)}" placeholder="—" title="Période de la moyenne mobile (ex. 50)">`).join('')}
-      ${hasVol ? `<select class="ofld" id="gpVol"><option value="1" ${g.volOn ? 'selected' : ''}>Volume</option><option value="0" ${g.volOn ? '' : 'selected'}>Sans volume</option></select>` : ''}<span class="tlab" style="margin-left:auto">${esc(ccy)}</span></div>`;
-  const row2 = `<div class="tools">${(intra ? ['1J'] : []).concat(ranges).map(r => tb('r:' + r, r === '1J' ? '1J 5MIN' : r === 'MAX' ? 'Max' : r, g.range === r)).join('')}
-      ${!monthly ? `<select class="ofld" id="gpPer" style="margin-left:4px"><option value="D" ${g.per === 'D' ? 'selected' : ''}>Quotidien</option><option value="W" ${g.per === 'W' ? 'selected' : ''}>Hebdomadaire</option><option value="M" ${g.per === 'M' ? 'selected' : ''}>Mensuel</option></select>` : ''}<span class="tsep"></span>
-      ${[['bbg', 'Bloomberg'], ['line', 'Ligne'], ['area', 'Aire']].concat(s.cls !== 'Curncy' && !monthly ? [['candle', 'Bougies']] : []).map(([k, l]) => `<button class="tb alt ${g.type === k ? 'on' : ''}" data-gp="t:${k}">${l}</button>`).join('')}<span class="tsep"></span>
-      ${[['boll', 'Bollinger']].map(([k, l]) => `<button class="tb alt ${g.ov[k] ? 'on' : ''}" data-gp="o:${k}">${l}</button>`).join('')}${[['rsi', 'RSI'], ['macd', 'MACD'], ['dd', 'Drawdown']].map(([k, l]) => `<button class="tb alt ${g.st[k] ? 'on' : ''}" data-gp="s:${k}">${l}</button>`).join('')}
-      <button class="tb alt ${g.log ? 'on' : ''}" data-gp="log">Log</button><span class="tlab">Comparer</span><input id="cmpIn" placeholder="NVDA, BRVMC…">${g.cmp.map(c => `<button class="tb alt on" data-gp="x:${c}" title="Retirer">${c} ✕</button>`).join('')}</div>`;
-  m.innerHTML = `<div class="grid side">
-    <div class="pn">${row1}${row2}<div class="cv" id="gpCv" style="height:max(360px, calc(100vh - 246px - var(--nwh, 90px)))"></div></div>
-    <div class="grid" style="align-content:start">${pn('Statistiques', '', '<div class="kv2" id="gpKv"></div>')}<div id="gpSide"></div></div></div>`;
+      <select class="ofld" id="gpPx" title="Donnée tracée"><option value="last" ${g.px === 'last' ? 'selected' : ''}>Dernier cours</option><option value="tr" ${g.px === 'tr' ? 'selected' : ''}>Rendement total</option></select>
+      <select class="ofld" id="gpCcy" title="Devise d'affichage" ${ccyOpts.length < 2 ? 'disabled' : ''}>${ccyOpts.map(c => `<option value="${c === ccyL ? '' : c}" ${(g.ccy || ccyL) === c ? 'selected' : ''}>${c === ccyL ? 'Devise locale' + (c ? ' (' + c + ')' : '') : c}</option>`).join('')}</select>
+      ${ck('gpMaOn', maOn, 'Moy. mobiles', 'Moyennes mobiles (50 et 200 séances par défaut)')}${maOn ? `<span class="gmas">${g.ma.map((v, i) => `<input class="ofld ma" data-ma="${i}" value="${esc(v || (g.ma.every(x => !x) ? MA_DEF[i] : ''))}" placeholder="—" title="Période de la moyenne mobile ${i + 1}">`).join('')}</span>` : `<span class="gpen" id="gpMaEd" title="Choisir les périodes">✎</span>`}
+      ${ck('gpEv', g.ev, 'Événements clés', 'Dividendes (D), résultats, états financiers et rapports d’activité (R), assemblées générales (A)')}<span class="gsp"></span><button class="tb gmx" id="gpMx" title="${document.body.classList.contains('maxi') ? 'Réduire' : 'Agrandir (plein écran)'}">${document.body.classList.contains('maxi') ? '⤡ Réduire' : '⤢ Agrandir'}</button></div>`;
+  const row2 = `<div class="tools gpr2">${(intra ? ['1J'] : []).concat(ranges).map(r => tb('r:' + r, r === '1J' ? '1J 5MIN' : r === 'MAX' ? 'Max' : r, g.range === r)).join('')}
+      ${!monthly ? `<select class="ofld dk" id="gpPer"><option value="D" ${g.per === 'D' ? 'selected' : ''}>Quotidien</option><option value="W" ${g.per === 'W' ? 'selected' : ''}>Hebdomadaire</option><option value="M" ${g.per === 'M' ? 'selected' : ''}>Mensuel</option></select>` : ''}
+      <span class="gico">${['bbg', 'line', 'area'].concat(s.cls !== 'Curncy' && !monthly ? ['candle'] : []).map(k => `<button class="tb ico ${g.type === k ? 'on' : ''}" data-gp="t:${k}" title="${{ bbg: 'Montagne Bloomberg', line: 'Ligne', area: 'Aire', candle: 'Bougies' }[k]}">${GP_ICO[k]}</button>`).join('')}</span>
+      <button class="tb ${g.tbl ? 'on' : ''}" id="gpTb" title="Tableau des cours de la période affichée">Tableau</button>
+      <span class="gsp"></span><button class="tb gdd" id="gpRel" title="Études et données liées">+ Données liées ▾</button><input id="cmpIn" class="gadd" placeholder="Ajouter des données" title="Comparer : tapez un code (ex. BRVMC, NVDA) puis Entrée">${g.cmp.map(c => `<button class="tb alt on" data-gp="x:${c}" title="Retirer">${c} ✕</button>`).join('')}
+      <button class="tb gdd" id="gpEd" title="Modifier le graphique">« Modifier ⚙</button></div>`;
+  const sugg = (s.cls === 'Index' ? ['MEMB', 'MOV', 'HVT'] : s.cls === 'Equity' ? ['HVT', 'VAP', 'DVD'] : s.cls === 'Comdty' ? ['HVT', 'SEAS', 'BMAP'] : ['HVT', 'SEAS', 'CORR']).filter(c => FN[c] && (FN[c][1] === 'mkt' || !avail(c, s))).slice(0, 2);
+  const sugBar = `<div class="gpsug"><span class="gl">Fonctions suggérées</span>${sugg.map(c => `<span class="gi" data-fn="${c}"><b>${c}</b>${esc(FN[c][3] || FN[c][4])}</span>`).join('')}</div>`;
+  const showSide = !document.body.classList.contains('maxi') || g.tbl;
+  m.innerHTML = `<div class="grid ${showSide ? 'side' : ''} gpg">
+    <div class="pn gpm">${row1}${row2}<div class="gpcw"><div class="gpbar"><span id="gpZ" title="Zoom avant sur le centre (molette : zoom libre)">⌕ Zoom</span><span id="gpRs" title="Revenir à la période choisie (double-clic)">⟲ Vue initiale</span></div><div class="cv" id="gpCv" style="height:420px"></div></div>${sugBar}</div>
+    ${showSide ? `<div class="grid gpside" style="align-content:start">${g.tbl ? pn('Tableau des cours', 'GP', '<div class="tw" id="gpTbl" style="max-height:calc(100vh - 230px)"></div>', { np: true, sel: esc(ccyT) }) : `${pn('Statistiques', '', '<div class="kv2" id="gpKv"></div>')}<div id="gpSide"></div>`}</div>` : ''}</div>`;
+  /* hauteur : le graphique remplit la fenêtre (bandeau d'actualités déduit sauf en plein écran) */
+  const fit = () => { const cv = $('gpCv'); if (!cv) return; const top = cv.getBoundingClientRect().top, nw = document.body.classList.contains('maxi') || PREF.nonews ? 0 : ($('nwp') ? $('nwp').offsetHeight : 0), sg = m.querySelector('.gpsug');
+    cv.style.height = Math.max(340, Math.floor(window.innerHeight - top - nw - (sg ? sg.offsetHeight : 0) - 10)) + 'px'; };
+  fit(); window.onresize = () => { if (ST.fn === 'GP') fit(); };
   const inp = $('cmpIn'); inp.onkeydown = e => { if (e.key === 'Enter') { const r = searchSecs(inp.value)[0]; if (r && r.id !== ST.sec && !g.cmp.includes(r.id)) { g.cmp.push(r.id); render(); } else if (!r) toast('Titre introuvable.'); } };
   m.querySelectorAll('[data-gp]').forEach(b => b.onclick = () => { const [k, v] = b.dataset.gp.split(':');
     if (k === 'r') { g.range = v; if (v === '1J' || chart.intra || g.cmp.length) render(); else chart.setView(...rangeView(v)); m.querySelectorAll('[data-gp^="r:"]').forEach(x => x.classList.toggle('on', x === b)); return; }
-    if (k === 't') g.type = v; if (k === 'o') g.ov[v] = !g.ov[v]; if (k === 's') g.st[v] = !g.st[v]; if (k === 'log') g.log = !g.log; if (k === 'x') g.cmp = g.cmp.filter(c => c !== v); render(); });
-  $('gpPx').onchange = e => { g.px = e.target.value; render(); }; if ($('gpPer')) $('gpPer').onchange = e => { g.per = e.target.value; render(); }; if ($('gpVol')) $('gpVol').onchange = e => { g.volOn = e.target.value === '1'; render(); };
-  m.querySelectorAll('[data-ma]').forEach(el => el.onchange = () => { const v = el.value.trim(); g.ma[+el.dataset.ma] = /^\d{1,3}$/.test(v) && +v > 1 ? v : ''; render(); });
+    if (k === 't') g.type = v; if (k === 'x') g.cmp = g.cmp.filter(c => c !== v); render(); });
+  $('gpPx').onchange = e => { g.px = e.target.value; render(); }; $('gpCcy').onchange = e => { g.ccy = e.target.value; render(); }; if ($('gpPer')) $('gpPer').onchange = e => { g.per = e.target.value; render(); };
+  $('gpMaOn').onchange = e => { g.maOn = e.target.checked; render(); }; if ($('gpMaEd')) $('gpMaEd').onclick = () => { g.maOn = true; render(); }; $('gpEv').onchange = e => { g.ev = e.target.checked; render(); };
+  $('gpTb').onclick = () => { g.tbl = !g.tbl; render(); }; $('gpRel').onclick = e => ddOpen(e.currentTarget, relMenu()); $('gpEd').onclick = e => ddOpen(e.currentTarget, editMenu()); $('gpMx').onclick = () => toggleMaxi();
+  m.querySelectorAll('[data-ma]').forEach(el => el.onchange = () => { const v = el.value.trim(); g.ma = [...m.querySelectorAll('[data-ma]')].map(x => /^\d{1,3}$/.test(x.value.trim()) && +x.value.trim() > 1 ? x.value.trim() : ''); if (g.ma.every(x => !x)) g.maOn = false; render(); });
   const rangeView = r => { const last = S.x[n - 1], y = Math.floor(last / 10000); const back = { '1M': 100, '3M': 300, '6M': 600, '1A': 10000, '3A': 30000, '5A': 50000, '10A': 100000, '20A': 200000, '50A': 500000 }[r];
     let from = r === 'YTD' ? y * 10000 + 101 : r === 'MAX' ? 0 : last - back; let i0 = S.x.findIndex(d => d >= from); if (i0 < 0) i0 = 0; return [Math.min(i0, Math.max(0, n - 5)), n - 1]; };
-  const setDates = (i0, i1) => { const a = $('gpD0'), b = $('gpD1'); if (a && document.activeElement !== a) a.value = dmy(S.x[Math.max(0, i0)]); if (b && document.activeElement !== b) b.value = dmy(S.x[Math.min(n - 1, i1)]); };
+  /* tableau des cours de la période affichée (comme « Table » du GP) */
+  let tblRaf = 0; const fillTbl = (i0, i1) => { const t = $('gpTbl'); if (!t) return; cancelAnimationFrame(tblRaf); tblRaf = requestAnimationFrame(() => { const rows = []; for (let i = i1; i >= Math.max(i0, i1 - 600); i--) { const p = Y0[i], q = i > 0 ? Y0[i - 1] : null, ch = p != null && q ? p - q : null;
+      rows.push(`<tr><td class="l">${fd(S.x[i])}</td><td class="wh">${fmtP(p)}</td><td class="${cls(ch)}">${ch != null ? (ch > 0 ? '+' : '') + fmtP(ch) : '—'}</td><td>${ch != null ? pc(ch / q) : '—'}</td>${hasVol ? `<td>${S.v[i] ? big(S.v[i]) : '—'}</td>` : ''}</tr>`); }
+    t.innerHTML = `<table class="t"><thead><tr><th class="l">Date</th><th>${g.px === 'tr' ? 'Rdt total' : 'Dernier'}</th><th>Var.</th><th>Var. %</th>${hasVol ? '<th>Volume</th>' : ''}</tr></thead><tbody>${rows.join('')}</tbody></table>`; }); };
+  const setDates = (i0, i1) => { const a = $('gpD0'), b = $('gpD1'); if (a && document.activeElement !== a) a.value = dmy(S.x[Math.max(0, i0)]); if (b && document.activeElement !== b) b.value = dmy(S.x[Math.min(n - 1, i1)]); if (g.tbl) fillTbl(i0, i1); };
   const panes = [{ h: 3, log: g.log && !g.cmp.length, fmt: g.cmp.length ? fmtPctAxis : null, noLegend: bbg && !g.cmp.length }]; const ser = []; let pi = 0; let chart;
   const MA_COL = ['#ffd200', '#ff5fd2', '#5fd0ea'];
+  /* événements clés : dividendes (date de détachement), résultats / états financiers et AG (BRVM), dividendes versés (US) */
+  const EV = []; if (g.ev && !g.cmp.length && !(g.range === '1J' && intra)) {
+    const at = d => { let lo = 0, hi = n - 1; if (d > S.x[hi] || d < S.x[0]) return -1; while (lo < hi) { const mid = (lo + hi) >> 1; if (S.x[mid] < d) lo = mid + 1; else hi = mid; } return lo; };
+    if (isBRVM(s) && s.cls === 'Equity') { const [DV, EVS] = await Promise.all([getJSON('dividends.json').catch(() => []), getJSON('events.json').catch(() => [])]); if (!alive()) return;
+      for (const x of DV) if (x.t === s.id && x.dps && (x.det || x.pay)) { const i = at(s2i((x.det || x.pay).slice(0, 10))); if (i >= 0) EV.push({ i, k: 'D', t: `Dividende ${x.ex ? 'de l’exercice ' + x.ex : ''} : ${num(FXF ? x.dps * (FXF[S0.x.indexOf(S.x[i])] || 0) : x.dps, FXF ? 2 : 0)} ${ccyT}${x.det ? ' · détachement ' + fds(x.det) : ''}` }); }
+      const seen = new Set(); for (const e of EVS) { if (e.t !== s.id || !e.d) continue; const k = /États financiers|Résultats financiers|Rapport des commissaires|Rapport d'activité|Rapport annuel/.test(e.c) ? 'R' : /^Assemblée générale$/.test(e.c) ? 'A' : /Fractionnement/.test(e.c) ? 'S' : null; if (!k) continue;
+        const i = at(s2i(e.d.slice(0, 10))); if (i < 0 || seen.has(k + i)) continue; seen.add(k + i); EV.push({ i, k, t: `${GP_EVC[k][1]} · ${fds(e.d)} : ${e.ti || ''}` }); } }
+    else if (S0r.div && S0r.div.some(v => v)) { for (let j = 0; j < S0r.x.length; j++) if (S0r.div[j]) { const i = at(S0r.x[j]); if (i >= 0) EV.push({ i, k: 'D', t: `Dividende de ${num(S0r.div[j] * (FXF ? FXF[j] || 0 : 1), 4)} ${ccyT} par action · ${fd(S0r.x[j])}` }); } } }
   if (g.range === '1J' && intra) {
     const I = Q.live.intraday, tt = I.t.map(t => { const d = new Date(t * 1000); return d.getUTCFullYear() * 1e8 + (d.getUTCMonth() + 1) * 1e6 + d.getUTCDate() * 1e4 + d.getUTCHours() * 100 + d.getUTCMinutes(); });
     const ny = t => new Date(t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit' });
@@ -1236,15 +1399,16 @@ PAGES.GP = async (m, alive) => {
     ['gpD0', 'gpD1'].forEach(id => { const e = $(id); if (e) e.disabled = true; });
   } else {
     if (g.cmp.length) {
-      const [i0] = rangeView(g.range), base = Y0[i0]; ser.push({ y: Y0.map((v, i) => i < i0 ? null : v / base - 1), color: CL.white, w: 1.6, label: s.id, fmt: fmtPctAxis });
+      const [i0] = rangeView(g.range), base = Y0[i0]; ser.push({ y: Y0.map((v, i) => i < i0 || v == null ? null : v / base - 1), color: CL.white, w: 1.6, label: s.id + (FXF ? ' (' + ccyT + ')' : ''), fmt: fmtPctAxis });
       const colors = [CL.amber, CL.cyan, CL.violet, CL.pink, CL.teal];
-      for (const [k, cid] of g.cmp.entries()) { const C = await series(cid); if (!alive()) return; const mp = new Map(C.x.map((d, i) => [d, C.c[i]])); let lv = null; const al = S.x.map(d => { if (mp.has(d)) lv = mp.get(d); else if (C.f === 'M') { const mk = Math.floor(d / 100) * 100 + 1; if (mp.has(mk)) lv = mp.get(mk); } return lv; });
-        const b = al[i0] || al.find((v, i) => i >= i0 && v != null); ser.push({ y: al.map((v, i) => i < i0 || v == null || !b ? null : v / b - 1), color: colors[k % colors.length], label: cid, fmt: fmtPctAxis }); }
+      for (const [k, cid] of g.cmp.entries()) { const C = await series(cid); if (!alive()) return; const cs = Q.by[cid]; const F2 = FXF && FX_OK(cs) && cs.ccy !== ccyT ? await fxFactor(cs.ccy, ccyT, C.x) : null; if (!alive()) return; const Cc = F2 ? fxApply(C.c, F2) : C.c;
+        const mp = new Map(C.x.map((d, i) => [d, Cc[i]])); let lv = null; const al = S.x.map(d => { if (mp.has(d)) lv = mp.get(d); else if (C.f === 'M') { const mk = Math.floor(d / 100) * 100 + 1; if (mp.has(mk)) lv = mp.get(mk); } return lv; });
+        const b = al[i0] || al.find((v, i) => i >= i0 && v != null); ser.push({ y: al.map((v, i) => i < i0 || v == null || !b ? null : v / b - 1), color: colors[k % colors.length], label: cid + (F2 ? ' (' + ccyT + ')' : ''), fmt: fmtPctAxis }); }
     } else {
       if (g.type === 'candle' && !monthly && s.cls !== 'Curncy' && g.px === 'last') ser.push({ type: 'candle', o: S.o, h: S.h, l: S.l, c: S.c, label: s.id, fmt: fmtP });
       else if (bbg) ser.push({ type: 'area', y: Y0, color: '#ffffff', w: 1.25, grad: ['rgba(34,78,146,.96)', 'rgba(3,20,54,.94)'], label: g.px === 'tr' ? 'Rendement total' : 'Dernier cours', fmt: fmtP });
       else ser.push({ type: g.type === 'area' ? 'area' : 'line', y: Y0, color: CL.white, label: s.id + (g.px === 'tr' ? ' (rendement total)' : ''), fmt: fmtP, fill: rgba(CL.white, .07) });
-      g.ma.forEach((v, j) => { if (v) ser.push({ y: Array.from(U.sma(Y0, +v)), color: MA_COL[j], w: 1.1, label: 'MM ' + v, fmt: fmtP }); });
+      MAS.forEach((v, j) => { if (v) ser.push({ y: Array.from(U.sma(Y0, +v)), color: MA_COL[j], w: 1.1, label: 'MM ' + v, fmt: fmtP }); });
       if (g.ov.boll) { const mm = U.sma(Y0, 20), sd = U.rollStd(Y0, 20), up = [], dn = []; for (let i = 0; i < n; i++) { const a = mm[i], v = sd[i]; up.push(isFinite(a) && isFinite(v) ? a + 2 * v : null); dn.push(isFinite(a) && isFinite(v) ? a - 2 * v : null); }
         ser.push({ type: 'band', y1: up, y2: dn, fill: rgba(CL.violet, .1), noScale: true }, { y: up, color: rgba(CL.violet, .7), w: 1, noScale: true }, { y: dn, color: rgba(CL.violet, .7), w: 1, noScale: true }); }
     }
@@ -1254,39 +1418,48 @@ PAGES.GP = async (m, alive) => {
     if (g.st.rsi) { pi++; panes.push({ h: .8, fixed: [0, 100], refs: [{ v: 70, color: CL.dn }, { v: 30, color: CL.up }], title: 'RSI 14' }); ser.push({ pane: pi, y: Array.from(U.rsi(S.c, 14)), color: CL.amber, label: 'RSI', fmt: v => num(v, 1) }); }
     if (g.st.macd) { pi++; const e12 = U.ema(S.c, 12), e26 = U.ema(S.c, 26), mac = S.c.map((_, i) => e12[i] - e26[i]), sig = U.ema(mac, 9); panes.push({ h: .8, title: 'MACD 12-26-9', refs: [{ v: 0, color: CL.dim2, dash: [] }] });
       ser.push({ pane: pi, type: 'bar', y: mac.map((v, i) => v - sig[i]), colorFn: v => v >= 0 ? rgba(CL.up, .6) : rgba(CL.dn, .6), label: 'Hist' }, { pane: pi, y: mac, color: CL.cyan, w: 1, label: 'MACD' }, { pane: pi, y: Array.from(sig), color: CL.amber, w: 1, label: 'Signal' }); }
-    if (g.st.dd) { pi++; let pk = -Infinity; const dd = Y0.map(v => { pk = Math.max(pk, v); return v / pk - 1; }); panes.push({ h: .8, fmt: fmtPctAxis, title: 'DRAWDOWN DEPUIS LE PLUS HAUT', max: 0 }); ser.push({ pane: pi, type: 'area', y: dd, color: CL.dn, fill: rgba(CL.dn, .2), label: 'DD', fmt: fmtPctAxis, base: 0 }); }
-    /* cartouche Bloomberg : Dernier, plus haut (date), moyenne, plus bas (date) sur la période affichée ; étiquette blanche du dernier cours sur l'axe */
-    const after = (x, o) => { if (g.cmp.length) return; const L = o.layout[0]; let hi = -Infinity, lo = Infinity, hiI = o.i0, loI = o.i0, sum = 0, k = 0;
+    if (g.st.dd) { pi++; let pk = -Infinity; const dd = Y0.map(v => { if (v != null) pk = Math.max(pk, v); return v == null ? null : v / pk - 1; }); panes.push({ h: .8, fmt: fmtPctAxis, title: 'DRAWDOWN DEPUIS LE PLUS HAUT', max: 0 }); ser.push({ pane: pi, type: 'area', y: dd, color: CL.dn, fill: rgba(CL.dn, .2), label: 'DD', fmt: fmtPctAxis, base: 0 }); }
+    /* cartouche Bloomberg : Dernier, plus haut (date), moyenne, plus bas (date) sur la période affichée ; étiquette blanche du dernier cours sur l'axe ; marqueurs d'événements */
+    let EVPOS = [];
+    const after = (x, o) => { EVPOS = []; if (g.cmp.length) return; const L = o.layout[0]; let hi = -Infinity, lo = Infinity, hiI = o.i0, loI = o.i0, sum = 0, k = 0;
       for (let i = o.i0; i <= o.i1; i++) { const v = Y0[i]; if (v == null || !isFinite(v)) continue; if (v > hi) { hi = v; hiI = i; } if (v < lo) { lo = v; loI = i; } sum += v; k++; }
       if (!k) return; const lastV = Y0[o.i1];
-      const rows = [['■', g.px === 'tr' ? 'Rendement total' : 'Dernier cours', fmtP(lastV)], ['⊤', 'Plus haut le ' + dmyShort(S.x[hiI]), fmtP(hi)], ['+', 'Moyenne', num(sum / k, pxd(s) + 2)], ['⊥', 'Plus bas le ' + dmyShort(S.x[loI]), fmtP(lo)]];
-      g.ma.forEach((v, j) => { if (v) { const a = U.sma(Y0, +v)[o.i1]; rows.push(['─', 'MM ' + v, isFinite(a) ? fmtP(a) : '—', MA_COL[j]]); } });
+      const rows = [['■', (g.px === 'tr' ? 'Rendement total' : 'Dernier cours') + (FXF ? ' (' + ccyT + ')' : ''), fmtP(lastV)], ['⊤', 'Plus haut le ' + dmyShort(S.x[hiI]), fmtP(hi)], ['+', 'Moyenne', num(sum / k, dec + 2)], ['⊥', 'Plus bas le ' + dmyShort(S.x[loI]), fmtP(lo)]];
+      MAS.forEach((v, j) => { if (v) { const a = U.sma(Y0, +v)[o.i1]; rows.push(['─', 'MM ' + v, isFinite(a) ? fmtP(a) : '—', MA_COL[j]]); } });
       x.font = '400 12px ' + MONO; x.textBaseline = 'middle'; const w1 = Math.max(...rows.map(r => x.measureText(r[1]).width)), w2 = Math.max(...rows.map(r => x.measureText(r[2]).width)), W = 26 + w1 + 14 + w2 + 10, H = rows.length * 16 + 6;
       x.fillStyle = 'rgba(0,0,0,.82)'; x.fillRect(8, L.top + 6, W, H); x.strokeStyle = '#3d3d3d'; x.strokeRect(8.5, L.top + 6.5, W - 1, H - 1);
       rows.forEach((r, j) => { const yy = L.top + 14 + j * 16; x.fillStyle = r[3] || (j === 0 ? '#ffffff' : '#bfbfbf'); x.textAlign = 'center'; x.fillText(r[0], 20, yy); x.fillStyle = '#e6e6e6'; x.textAlign = 'left'; x.fillText(r[1], 30, yy); x.fillStyle = '#ffffff'; x.textAlign = 'right'; x.fillText(r[2], 30 + w1 + 14 + w2, yy); });
       if (bbg) { const lv = Y0[n - 1], yy = L.Y(lv); if (yy >= L.top && yy <= L.bot) { x.fillStyle = '#ffffff'; x.fillRect(o.W + 1, yy - 8, 62, 16); x.fillStyle = '#000'; x.textAlign = 'left'; x.font = '400 11px ' + MONO; x.fillText(fmtP(lv), o.W + 4, yy); } }
       if (bbg && o.layout[1] && g.volOn && hasVol) { const V = o.layout[1], vv = S.v[o.i1], txt = 'Volume ' + big(vv), t2 = 'Moy. mob. (15) ' + big(U.sma(S.v, 15)[o.i1]); x.font = '400 11.5px ' + MONO; const ww = Math.max(x.measureText(txt).width, x.measureText(t2).width) + 26;
-        x.fillStyle = 'rgba(0,0,0,.82)'; x.fillRect(8, V.top + 3, ww, 34); x.strokeStyle = '#3d3d3d'; x.strokeRect(8.5, V.top + 3.5, ww - 1, 33); x.textAlign = 'left'; x.fillStyle = 'rgba(215,215,215,.9)'; x.fillRect(14, V.top + 9, 7, 7); x.fillStyle = '#e6e6e6'; x.fillText(txt, 26, V.top + 13); x.fillStyle = '#ffd200'; x.fillRect(14, V.top + 26, 7, 2); x.fillStyle = '#e6e6e6'; x.fillText(t2, 26, V.top + 28); } };
+        x.fillStyle = 'rgba(0,0,0,.82)'; x.fillRect(8, V.top + 3, ww, 34); x.strokeStyle = '#3d3d3d'; x.strokeRect(8.5, V.top + 3.5, ww - 1, 33); x.textAlign = 'left'; x.fillStyle = 'rgba(215,215,215,.9)'; x.fillRect(14, V.top + 9, 7, 7); x.fillStyle = '#e6e6e6'; x.fillText(txt, 26, V.top + 13); x.fillStyle = '#ffd200'; x.fillRect(14, V.top + 26, 7, 2); x.fillStyle = '#e6e6e6'; x.fillText(t2, 26, V.top + 28); }
+      /* marqueurs : petite étiquette carrée au pied du graphique principal, empilée si plusieurs le même jour */
+      const stack = {}; for (const e of EV) { if (e.i < o.i0 || e.i > o.i1) continue; const px = Math.round(o.X(e.i)), lvl = stack[px] = (stack[px] || 0) + 1, yy = L.bot - 4 - lvl * 15;
+        x.fillStyle = 'rgba(0,0,0,.85)'; x.fillRect(px - 6, yy, 13, 13); x.strokeStyle = GP_EVC[e.k][0]; x.strokeRect(px - 5.5, yy + .5, 12, 12); x.fillStyle = GP_EVC[e.k][0]; x.font = '700 10px ' + MONO; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(e.k, px + .5, yy + 7); EVPOS.push({ x: px, y: yy, e }); } };
     chart = new TSChart($('gpCv'), { panes, grid: bbg ? 'dot' : null, xticks: bbg ? bbgTicks : null, padR: 66, after, onView: setDates });
     chart.set({ x: S.x, series: ser }, rangeView(g.range));
+    const cvEl = $('gpCv'); cvEl.addEventListener('mousemove', e => { if (!EVPOS.length) return; const r = cvEl.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top; const hit = EVPOS.filter(p => Math.abs(p.x - mx) <= 7 && my >= p.y - 1 && my <= p.y + 14);
+      if (hit.length) tip(e, hit.map(h => `<b style="color:${GP_EVC[h.e.k][0]}">${h.e.k}</b> ${esc(h.e.t)}`).join('<br>')); else untip(); });
+    cvEl.addEventListener('mouseleave', untip);
     const dateIn = () => { const d0 = parseDMY($('gpD0').value), d1 = parseDMY($('gpD1').value); if (!d0 || !d1 || d1 <= d0) { toast('Dates au format jj/mm/aaaa, la fin après le début.'); return; }
       let i0 = S.x.findIndex(d => d >= d0), i1 = S.x.length - 1; for (let i = n - 1; i >= 0; i--) if (S.x[i] <= d1) { i1 = i; break; } if (i0 < 0) i0 = 0; if (i1 - i0 < 3) { toast('Période trop courte.'); return; }
       chart.setView(i0, i1); m.querySelectorAll('[data-gp^="r:"]').forEach(x => x.classList.remove('on')); };
     ['gpD0', 'gpD1'].forEach(id => $(id).onkeydown = e => { if (e.key === 'Enter') dateIn(); }); ['gpD0', 'gpD1'].forEach(id => $(id).onchange = dateIn);
+    $('gpRs').onclick = () => { chart.setView(...rangeView(g.range)); }; $('gpZ').onclick = () => { const a = chart.v0, b = chart.v1, mid = (a + b) / 2, half = (b - a) / 4; chart.setView(Math.round(mid - half), Math.round(mid + half)); };
   }
-  // statistiques
-  const c = S0.c, nn = c.length, lr = []; for (let i = Math.max(1, nn - 252); i < nn; i++) lr.push(Math.log(c[i] / c[i - 1]));
+  if (g.tbl || !$('gpKv')) return;
+  // statistiques (en devise locale)
+  const c = S0r.c, nn = c.length, lr = []; for (let i = Math.max(1, nn - 252); i < nn; i++) lr.push(Math.log(c[i] / c[i - 1]));
   const best = Math.max(...lr), worst = Math.min(...lr), upd = lr.filter(x => x > 0).length / lr.length; const M = !monthly && nn > 210 ? await market(ST.sec) : null; if (!alive()) return;
-  let atr = null; if (!monthly && nn > 20) { let a = 0; for (let i = nn - 14; i < nn; i++) a += Math.max(S0.h[i] - S0.l[i], Math.abs(S0.h[i] - c[i - 1]), Math.abs(S0.l[i] - c[i - 1])); atr = a / 14 / c[nn - 1]; }
-  const v3 = S0.v.slice(-63).reduce((a, b) => a + b, 0) / 63;
+  let atr = null; if (!monthly && nn > 20) { let a = 0; for (let i = nn - 14; i < nn; i++) a += Math.max(S0r.h[i] - S0r.l[i], Math.abs(S0r.h[i] - c[i - 1]), Math.abs(S0r.l[i] - c[i - 1])); atr = a / 14 / c[nn - 1]; }
+  const v3 = S0r.v.slice(-63).reduce((a, b) => a + b, 0) / 63;
   $('gpKv').innerHTML = `<span>Dernier</span><b>${px(s, c[nn - 1])} ${s.ccy}</b><span>Variation</span><b>${pc(s.pct)}</b>
-    ${!monthly ? `<span>Ouv. / haut / bas</span><b>${px(s, S0.o[nn - 1])} / ${px(s, S0.h[nn - 1])} / ${px(s, S0.l[nn - 1])}</b>` : ''}
+    ${!monthly ? `<span>Ouv. / haut / bas</span><b>${px(s, S0r.o[nn - 1])} / ${px(s, S0r.h[nn - 1])} / ${px(s, S0r.l[nn - 1])}</b>` : ''}
     <span class="h">Performances</span>${!monthly ? `<span>1 semaine</span><b>${pc(s.r1w, 2)}</b>` : ''}<span>1 mois</span><b>${pc(s.r1m, 2)}</b><span>3 mois</span><b>${pc(s.r3m, 2)}</b><span>Depuis le 1er janv.</span><b>${pc(s.ytd, 2)}</b><span>1 an</span><b>${pc(s.r1y, 2)}</b><span>3 ans</span><b>${pc(s.r3y, 1)}</b>
     <span class="h">Risque (1 an)</span><span>Volatilité annualisée</span><b>${num(s.vol * 100, 1)}%</b>${atr ? `<span>ATR 14 / cours</span><b>${num(atr * 100, 2)}%</b>` : ''}<span>Meilleure / pire ${monthly ? 'mois' : 'séance'}</span><b>${sgn(Math.exp(best) - 1, 1)} / ${sgn(Math.exp(worst) - 1, 1)}</b>
     <span>${monthly ? 'Mois' : 'Séances'} en hausse</span><b>${num(upd * 100, 0)}%</b><span>Écart au record</span><b>${pc(s.dd, 1)}</b>${s.beta != null ? `<span>Bêta / corr. ${s.bench}</span><b>${num(s.beta, 2)} / ${num(s.corr, 2)}</b>` : ''}
     ${M ? `<span class="h">Technique</span><span>MM50 · écart</span><b>${px(s, M.sma50[nn - 1])} · ${pc(c[nn - 1] / M.sma50[nn - 1] - 1, 1)}</b><span>MM200 · écart</span><b>${px(s, M.sma200[nn - 1])} · ${pc(c[nn - 1] / M.sma200[nn - 1] - 1, 1)}</b><span>RSI 14</span><b>${num(M.rsi14[nn - 1], 1)}</b>` : ''}
     <span>Plage 52 semaines</span><b>${px(s, s.lo52)} – ${px(s, s.hi52)}</b>${v3 > 0 && hasVol ? `<span>Volume moyen 3 mois</span><b>${big(v3)}</b>` : ''}${s.liq ? `<span>Échanges moyens / j</span><b>${big(s.liq)} ${s.ccy}</b>` : ''}
-    <span class="h">Historique</span><span>Première donnée</span><b>${fd(S0.x[0])}</b><span>Observations</span><b>${num(nn, 0)}</b>`;
+    <span class="h">Historique</span><span>Première donnée</span><b>${fd(S0r.x[0])}</b><span>Observations</span><b>${num(nn, 0)}</b>`;
   const side = $('gpSide');
   if (s.mkt === 'BRVM' && s.cls === 'Equity') {
     const [dv, ev] = await Promise.all([getJSON('dividends.json'), getJSON('events.json')]); if (!alive()) return;
@@ -2154,7 +2327,7 @@ PAGES.CN = async (m, alive) => {
 
 </script>
 <script>
-/* ================= FQT — fonctions de marché : FG, LIQ, PER, EQS, ALRT, TOP, ECO, RRG, UEMOA, US ================= */
+/* ================= FQT — fonctions de marché : FG, LIQ, PER, EQS, ALRT, TOP, ECWB, RRG, UEMOA, US ================= */
 
 const FG_BANDS = [[0, 25, 'Peur extrême', '#b3261e'], [25, 45, 'Peur', '#ff7043'], [45, 55, 'Neutre', '#9e9e9e'], [55, 75, 'Avidité', '#7cb342'], [75, 100, 'Avidité extrême', '#2e7d32']];
 const fgLab = v => v == null ? '—' : (FG_BANDS.find(b => v >= b[0] && v <= b[1]) || FG_BANDS[2])[2];
@@ -2326,19 +2499,19 @@ PAGES.TOP = async (m, alive) => {
   m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { st.c = b.dataset.c; render(); }); $('tpF').onsubmit = e => { e.preventDefault(); st.q = $('tpQ').value.trim(); render(); };
 };
 
-/* ------------------------------------------------------------------ ECO (FRED) */
-PAGES.ECO = async (m, alive) => {
-  const E = await getJSON('eco.json').catch(() => null); if (!alive()) return; if (!E) { m.innerHTML = pn('Macro US', 'ECO', '<div class="empty">Données FRED en attente de la collecte du soir.</div>'); return; }
+/* ------------------------------------------------------------------ ECWB : indicateurs US (FRED), ancien ECO */
+PAGES.ECWB = async (m, alive) => {
+  const E = await getJSON('eco.json').catch(() => null); if (!alive()) return; if (!E) { m.innerHTML = pn('Macro US', 'ECWB', '<div class="empty">Données FRED en attente de la collecte du soir.</div>'); return; }
   const st = ST.eco = ST.eco || { sel: 'T10Y2Y', g: 'ALL', cmp: 1 }; const meta = E.meta, groups = [...new Set(meta.map(x => x.g))];
   const M = id => meta.find(x => x.id === id); if (!M(st.sel)) st.sel = meta[0].id;
   const tiles = meta.filter(x => st.g === 'ALL' || x.g === st.g).map(x => { const ch = x.y1 != null ? x.last - x.y1 : null, isPct = ['%', 'pts'].includes(x.u);
     return `<div class="tile ${st.sel === x.id ? 'on' : ''}" data-id="${x.id}"><div class="tn">${esc(x.n)}</div><div class="tv">${num(x.last, Math.abs(x.last) >= 1000 ? 0 : 2)} <small>${esc(x.u)}</small></div><div class="tc">${ch == null ? '' : `1 an : ${isPct ? sgn(ch, 2, ' pt', 1) : sgn(x.y1 ? x.last / x.y1 - 1 : null, 1)}`} <span class="dm">· ${fd(x.dl)}</span></div><div class="ts" id="sp_${x.id}"></div></div>`; }).join('');
   const C = E.curve; const cmpLab = { 1: '1 mois', 12: '1 an', 24: '2 ans' };
   m.innerHTML = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Thème</span><button class="tb ${st.g === 'ALL' ? 'on' : ''}" data-g="ALL">Tout</button>${groups.map(g => `<button class="tb ${st.g === g ? 'on' : ''}" data-g="${esc(g)}">${esc(g)}</button>`).join('')}<span class="tlab">Source : FRED (Réserve fédérale de St. Louis) · zones grises = récessions NBER</span></div>
-    <div class="grid c2">${pn(`${esc(M(st.sel).n)} (${esc(M(st.sel).u)})`, 'ECO', cvb('ecB', 300), { sel: M(st.sel).id })}
-    ${C ? pn('Courbe des taux du Trésor US', 'ECO', `<div class="tools">${[1, 12, 24].map(k => `<button class="tb ${st.cmp === k ? 'on' : ''}" data-cmp="${k}">contre il y a ${cmpLab[k]}</button>`).join('')}</div>${cvb('ecC', 250)}`, { lect: '<span id="ecCl"></span>' }) : ''}</div>
+    <div class="grid c2">${pn(`${esc(M(st.sel).n)} (${esc(M(st.sel).u)})`, 'ECWB', cvb('ecB', 300), { sel: M(st.sel).id })}
+    ${C ? pn('Courbe des taux du Trésor US', 'ECWB', `<div class="tools">${[1, 12, 24].map(k => `<button class="tb ${st.cmp === k ? 'on' : ''}" data-cmp="${k}">contre il y a ${cmpLab[k]}</button>`).join('')}</div>${cvb('ecC', 250)}`, { lect: '<span id="ecCl"></span>' }) : ''}</div>
     <div class="tiles">${tiles}</div>
-    ${C ? pn('Courbe des taux depuis 1990 (mensuel) : chaque colonne est une courbe', 'ECO', cvb('ecH', 210), { lect: 'Couleur = niveau du taux (bleu bas, rouge haut). Les bandes où les échéances courtes sont plus « chaudes » que les longues sont des inversions de courbe, qui ont précédé les récessions de 1990, 2001, 2008 et 2020.' }) : ''}`;
+    ${C ? pn('Courbe des taux depuis 1990 (mensuel) : chaque colonne est une courbe', 'ECWB', cvb('ecH', 210), { lect: 'Couleur = niveau du taux (bleu bas, rouge haut). Les bandes où les échéances courtes sont plus « chaudes » que les longues sont des inversions de courbe, qui ont précédé les récessions de 1990, 2001, 2008 et 2020.' }) : ''}`;
   m.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { st.g = b.dataset.g; render(); }); m.querySelectorAll('[data-cmp]').forEach(b => b.onclick = () => { st.cmp = +b.dataset.cmp; render(); });
   m.querySelectorAll('.tile').forEach(t => t.onclick = () => { st.sel = t.dataset.id; render(); });
   const shade = (x, o) => { if (!E.rec) return; const { X, layout, i0, i1 } = o; const D = o.D; x.fillStyle = 'rgba(255,255,255,.07)'; for (const [a, b] of E.rec) { let ia = D.findIndex(d => d >= a), ib = D.findIndex(d => d >= b); if (ia < 0) continue; if (ib < 0) ib = D.length - 1; if (ib < i0 || ia > i1) continue; const xa = X(Math.max(ia, i0)), xb = X(Math.min(ib, i1)); for (const l of layout) x.fillRect(xa, l.top, Math.max(1, xb - xa), l.bot - l.top); } };
@@ -3664,6 +3837,204 @@ PAGES.MENU = async (m, alive) => {
 
 </script>
 <script>
+/* ================= FQT — ECO (calendrier économique façon Bloomberg) et ECST (statistiques économiques mondiales) ================= */
+
+/* ---------- drapeaux simplifiés en SVG (aucune ressource externe) ---------- */
+const FLAG_N = { US: 'États-Unis', EU: 'Zone euro', GB: 'Royaume-Uni', JP: 'Japon', CN: 'Chine', DE: 'Allemagne', FR: 'France', IT: 'Italie', ES: 'Espagne', CA: 'Canada', AU: 'Australie', CH: 'Suisse', IN: 'Inde', BR: 'Brésil',
+  ZA: 'Afrique du Sud', NG: 'Nigeria', GH: 'Ghana', CI: 'Côte d’Ivoire', SN: 'Sénégal', KE: 'Kenya', MA: 'Maroc', EG: 'Égypte' };
+function flagSVG(c, w = 22, h = 14) {
+  const v3 = (a, b, d) => `<rect width="7.34" height="14" fill="${a}"/><rect x="7.33" width="7.34" height="14" fill="${b}"/><rect x="14.66" width="7.34" height="14" fill="${d}"/>`;
+  const h3 = (a, b, d) => `<rect width="22" height="4.67" fill="${a}"/><rect y="4.66" width="22" height="4.68" fill="${b}"/><rect y="9.33" width="22" height="4.67" fill="${d}"/>`;
+  const star = (cx, cy, r, col) => { let p = ''; for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, rr = k % 2 ? r * .42 : r; p += `${(cx + rr * Math.cos(a)).toFixed(2)},${(cy + rr * Math.sin(a)).toFixed(2)} `; } return `<polygon points="${p}" fill="${col}"/>`; };
+  const uj = (W, H) => `<rect width="${W}" height="${H}" fill="#012169"/><path d="M0 0L${W} ${H}M${W} 0L0 ${H}" stroke="#fff" stroke-width="${H / 4.7}"/><path d="M0 0L${W} ${H}M${W} 0L0 ${H}" stroke="#c8102e" stroke-width="${H / 14}"/><path d="M${W / 2} 0V${H}M0 ${H / 2}H${W}" stroke="#fff" stroke-width="${H / 3.2}"/><path d="M${W / 2} 0V${H}M0 ${H / 2}H${W}" stroke="#c8102e" stroke-width="${H / 5.6}"/>`;
+  let b = '';
+  switch (c) {
+    case 'US': b = '<rect width="22" height="14" fill="#fff"/>' + [0, 2, 4, 6, 8, 10, 12].map(k => `<rect y="${k * 14 / 13}" width="22" height="${14 / 13}" fill="#b22234"/>`).join('') + '<rect width="9.5" height="7.54" fill="#3c3b6e"/>' + [[2, 1.6], [4.7, 1.6], [7.4, 1.6], [3.3, 3.8], [6, 3.8], [2, 6], [4.7, 6], [7.4, 6]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r=".55" fill="#fff"/>`).join(''); break;
+    case 'EU': b = '<rect width="22" height="14" fill="#003399"/>' + Array.from({ length: 12 }, (_, k) => { const a = k * Math.PI / 6; return `<circle cx="${(11 + 4.3 * Math.cos(a)).toFixed(2)}" cy="${(7 + 4.3 * Math.sin(a)).toFixed(2)}" r=".7" fill="#ffcc00"/>`; }).join(''); break;
+    case 'GB': b = uj(22, 14); break;
+    case 'JP': b = '<rect width="22" height="14" fill="#fff"/><circle cx="11" cy="7" r="4.2" fill="#bc002d"/>'; break;
+    case 'CN': b = '<rect width="22" height="14" fill="#de2910"/>' + star(4.2, 4, 2.6, '#ffde00') + star(8.2, 1.6, .8, '#ffde00') + star(9.6, 3.4, .8, '#ffde00') + star(9.6, 5.8, .8, '#ffde00') + star(8.2, 7.4, .8, '#ffde00'); break;
+    case 'DE': b = h3('#000', '#dd0000', '#ffce00'); break;
+    case 'FR': b = v3('#0055a4', '#fff', '#ef4135'); break;
+    case 'IT': b = v3('#009246', '#fff', '#ce2b37'); break;
+    case 'ES': b = '<rect width="22" height="14" fill="#aa151b"/><rect y="3.5" width="22" height="7" fill="#f1bf00"/>'; break;
+    case 'CA': b = '<rect width="22" height="14" fill="#fff"/><rect width="5.5" height="14" fill="#d52b1e"/><rect x="16.5" width="5.5" height="14" fill="#d52b1e"/>' + star(11, 6.6, 3.4, '#d52b1e') + '<rect x="10.6" y="8.5" width=".8" height="3" fill="#d52b1e"/>'; break;
+    case 'AU': b = '<rect width="22" height="14" fill="#00008b"/>' + `<g>${uj(11, 7)}</g>` + star(5.5, 10.6, 1.5, '#fff') + star(17, 3, .9, '#fff') + star(14.5, 6.5, .9, '#fff') + star(19.5, 6, .9, '#fff') + star(17, 11.3, .9, '#fff'); break;
+    case 'CH': b = '<rect width="22" height="14" fill="#da291c"/><rect x="9.6" y="2.6" width="2.8" height="8.8" fill="#fff"/><rect x="6.6" y="5.6" width="8.8" height="2.8" fill="#fff"/>'; break;
+    case 'IN': b = h3('#ff9933', '#fff', '#138808') + '<circle cx="11" cy="7" r="1.8" fill="none" stroke="#000080" stroke-width=".6"/>'; break;
+    case 'BR': b = '<rect width="22" height="14" fill="#009c3b"/><polygon points="11,1.4 20.4,7 11,12.6 1.6,7" fill="#ffdf00"/><circle cx="11" cy="7" r="3.1" fill="#002776"/>'; break;
+    case 'ZA': b = '<rect width="22" height="7" fill="#de3831"/><rect y="7" width="22" height="7" fill="#002395"/><path d="M0 0L9 7L0 14M9 7H22" stroke="#fff" stroke-width="4.6" fill="none"/><path d="M0 0L9 7L0 14M9 7H22" stroke="#007a4d" stroke-width="2.8" fill="none"/><polygon points="0,1.6 6.6,7 0,12.4" fill="#ffb612"/><polygon points="0,2.9 5,7 0,11.1" fill="#000"/>'; break;
+    case 'NG': b = v3('#008751', '#fff', '#008751'); break;
+    case 'GH': b = h3('#ce1126', '#fcd116', '#006b3f') + star(11, 7, 2.2, '#000'); break;
+    case 'CI': b = v3('#f77f00', '#fff', '#009e60'); break;
+    case 'SN': b = v3('#00853f', '#fdef42', '#e31b23') + star(11, 7, 2.2, '#00853f'); break;
+    case 'KE': b = '<rect width="22" height="4.2" fill="#000"/><rect y="4.2" width="22" height="5.6" fill="#fff"/><rect y="5" width="22" height="4" fill="#bb0000"/><rect y="9.8" width="22" height="4.2" fill="#006600"/><ellipse cx="11" cy="7" rx="2" ry="4" fill="#bb0000" stroke="#000" stroke-width=".5"/>'; break;
+    case 'MA': b = '<rect width="22" height="14" fill="#c1272d"/><polygon points="11,3.2 12.3,7.8 8.4,5 13.6,5 9.7,7.8" fill="none" stroke="#006233" stroke-width=".7"/>'; break;
+    case 'EG': b = h3('#ce1126', '#fff', '#000') + '<rect x="10" y="5.6" width="2" height="2.8" fill="#c09300"/>'; break;
+    default: b = '<rect width="22" height="14" fill="#444"/>';
+  }
+  return `<svg class="flg" width="${w}" height="${h}" viewBox="0 0 22 14" aria-label="${esc(FLAG_N[c] || c)}"><title>${esc(FLAG_N[c] || c)}</title>${b}</svg>`;
+}
+/* pertinence : 4 barres croissantes (haute = 4, moyenne = 3, faible = 1) */
+const relBars = i => { const lit = i >= 1 ? 4 : i === 0 ? 3 : 1; return `<svg class="rel" width="14" height="12" viewBox="0 0 14 12" aria-label="importance">${[0, 1, 2, 3].map(k => `<rect x="${k * 3.5}" y="${9 - k * 2.6}" width="2.4" height="${3 + k * 2.6}" fill="${k < lit ? (lit === 4 ? '#f9a33a' : '#e6e6e6') : '#3a3a3a'}"/>`).join('')}</svg>`; };
+
+/* ---------- ECO : calendrier économique ---------- */
+const ECO_REG = [['MAJ', 'Principales économies', ['US', 'EU', 'GB', 'JP', 'CN']], ['ALL', 'Monde (22 pays et zones)', null], ['US', 'États-Unis', ['US']], ['EZ', 'Zone euro', ['EU', 'DE', 'FR', 'IT', 'ES']],
+  ['EUR', 'Europe', ['EU', 'DE', 'FR', 'IT', 'ES', 'GB', 'CH']], ['AM', 'Amériques', ['US', 'CA', 'BR']], ['AS', 'Asie-Pacifique', ['JP', 'CN', 'IN', 'AU']], ['AF', 'Afrique', ['ZA', 'NG', 'GH', 'CI', 'SN', 'KE', 'MA', 'EG']], ['UEMOA', 'UEMOA (Côte d’Ivoire, Sénégal)', ['CI', 'SN']]];
+const ECO_CAT = { mny: 'Politique monétaire', prce: 'Prix', bsnss: 'Activité / enquêtes', gov: 'État / banque centrale', bnd: 'Adjudications', hse: 'Logement', enrg: 'Énergie', cnsm: 'Consommation', trd: 'Commerce extérieur', lbr: 'Emploi', mrkt: 'Marchés', gdp: 'PIB' };
+/* publications US reliées à une série FRED de ECWB / ECST (historique long dans le panneau de détail) */
+const ECO_FRED = [[/^Non Farm Payrolls$/i, 'PAYEMS'], [/^Unemployment Rate$/i, 'UNRATE'], [/^Initial Jobless Claims$/i, 'ICSA'], [/^(Core )?Inflation Rate (YoY|MoM)$|^CPI$/i, 'CPIAUCSL'], [/^Core Inflation Rate/i, 'CPILFESL'],
+  [/^Core PCE Price Index/i, 'PCEPILFE'], [/^PPI (MoM|YoY)$/i, 'PPIACO'], [/^Retail Sales (MoM|YoY)$/i, 'RSAFS'], [/^Industrial Production (MoM|YoY)$/i, 'INDPRO'], [/^Housing Starts$/i, 'HOUST'], [/Michigan Consumer Sentiment/i, 'UMCSENT'],
+  [/^JOLTs Job Openings$/i, 'JTSJOL'], [/^GDP Growth Rate/i, 'GDPC1'], [/^Fed Interest Rate Decision$/i, 'DFF'], [/^MBA 30-Year Mortgage Rate$|^30-Year Mortgage Rate/i, 'MORTGAGE30US'], [/^S&P\/Case-Shiller/i, 'CSUSHPINSA']];
+function ecoVal(r, v) { if (v == null || v === '') return '<span class="dm">—</span>'; if (typeof v !== 'number') return esc(String(v));
+  const dd = Math.min(3, Math.max(...[r.a, r.f, r.pr].filter(x => typeof x === 'number').map(x => { const s = String(x); return s.includes('.') ? s.split('.')[1].length : 0; })));
+  const sc = { K: ' k', M: ' M', B: ' Md', T: ' T' }[r.sc] || '', u = r.u || ''; const cur = /^[$€£¥]$|^[A-Z]{3}$/.test(u) ? u : '';
+  return num(v, dd) + (u === '%' ? '%' : '') + sc + (cur ? (sc ? '' : ' ') + cur : '') + (u && u !== '%' && !cur ? ' ' + esc(u) : ''); }
+const ecoDT = d => { const t = new Date(d + ':00Z'); return { day: t.toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit' }), hm: t.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' }), wd: t.toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', weekday: 'long', day: 'numeric', month: 'long' }), ms: t.getTime(), key: d.slice(0, 10) }; };
+const ymd = t => new Date(t).toISOString().slice(0, 10);
+const monday = t => { const d = new Date(t); const k = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - k); d.setUTCHours(0, 0, 0, 0); return d.getTime(); };
+
+PAGES.ECO = async (m, alive) => {
+  setTitle('Economic Calendars'); const C = await getJSON('calendar.json').catch(() => null); if (!alive()) return;
+  if (!C || !C.rows || !C.rows.length) { m.innerHTML = pn('Calendrier économique', 'ECO', '<div class="empty">Calendrier en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
+  const now = Date.now(), wk = monday(now), DAY = 864e5;
+  const st = ST.eco2 = ST.eco2 || { reg: 'MAJ', imp: -1, view: 'A', d0: ymd(wk), d1: ymd(wk + 6 * DAY), q: '', sel: null };
+  const R = ECO_REG.find(r => r[0] === st.reg) || ECO_REG[0], cset = R[2] ? new Set(R[2]) : null, q = st.q.trim().toLowerCase();
+  const rows = C.rows.map(r => Object.assign({ T: ecoDT(r.d) }, r)).filter(r => (!cset || cset.has(r.c)) && r.i >= st.imp && r.T.key >= st.d0 && r.T.key <= st.d1 && (!q || (r.t + ' ' + (FLAG_N[r.c] || '') + ' ' + r.c + ' ' + (r.ind || '')).toLowerCase().includes(q)));
+  const regMenu = () => [{ h: 'Calendriers' }].concat(ECO_REG.map(([k, l, cs]) => ({ l: (st.reg === k ? '● ' : '○ ') + l + (cs ? ` <span class="dm">${cs.join(' ')}</span>` : ''), run: () => { st.reg = k; render(); } })));
+  const impMenu = () => [{ h: 'Importance minimale' }].concat([[-1, 'Toutes les publications'], [0, 'Moyenne et haute'], [1, 'Haute seulement']].map(([k, l]) => ({ l: (st.imp === k ? '● ' : '○ ') + l, run: () => { st.imp = k; render(); } })));
+  const per = (a, b) => { st.d0 = ymd(a); st.d1 = ymd(b); render(); };
+  setActs([{ n: 1, l: 'Calendriers', menu: regMenu }, { n: 2, l: 'Importance', menu: impMenu },
+    { n: 3, l: 'Période', menu: () => [{ h: 'Période' }, { l: 'Aujourd’hui', run: () => per(now, now) }, { l: 'Cette semaine', run: () => per(wk, wk + 6 * DAY) }, { l: 'Semaine dernière', run: () => per(wk - 7 * DAY, wk - DAY) }, { l: 'Semaine prochaine', run: () => per(wk + 7 * DAY, wk + 13 * DAY) },
+      { l: 'Toute la fenêtre disponible', run: () => { st.d0 = C.from; st.d1 = C.to; render(); } }] }]);
+  const nextI = rows.findIndex(r => r.T.ms >= now - 5 * 60e3);
+  const sel = st.sel != null ? C.rows.find(r => r.d + r.c + r.t === st.sel) : null;
+  const tbl = rows.length ? `<table class="t eco"><thead><tr><th></th><th class="l">Date</th><th class="l">Heure</th><th class="l" colspan="2">Pays</th><th>R</th><th class="l">Événement</th><th class="l">Période</th><th title="Prévision du consensus publiée avant le chiffre">Prév.</th><th>Réel</th><th>Préc.</th></tr></thead><tbody>${rows.map((r, k) => {
+      const fut = r.T.ms > now, id = r.d + r.c + r.t;
+      return `<tr class="${fut ? 'fut' : ''}${k === nextI ? ' nx' : ''}${st.sel === id ? ' hl' : ''}" data-ev="${esc(id)}" data-n="${k + 1}"><td class="no">${k + 1})</td><td class="l am">${r.T.day}</td><td class="l am">${r.T.hm}</td><td class="fl">${flagSVG(r.c)}</td><td class="l cc">${r.c}</td><td>${relBars(r.i)}</td><td class="l ev">${esc(r.t)}</td><td class="l am">${esc(r.p || '')}</td><td>${ecoVal(r, r.f)}</td><td class="wh b">${ecoVal(r, r.a)}</td><td>${ecoVal(r, r.pr)}</td></tr>`; }).join('')}</tbody></table>`
+    : '<div class="empty">Aucune publication pour ces critères.</div>';
+  /* vue hebdomadaire : une colonne par jour */
+  const week = () => { const a = Date.parse(st.d0 + 'T00:00:00Z'), b = Date.parse(st.d1 + 'T00:00:00Z'), days = []; for (let t = a; t <= b && days.length < 14; t += DAY) days.push(ymd(t));
+    const by = {}; rows.forEach(r => (by[r.T.key] = by[r.T.key] || []).push(r)); const show = days.filter((d, i) => by[d] || new Date(d).getUTCDay() % 6);
+    return `<div class="ecw" style="grid-template-columns:repeat(${show.length},minmax(0,1fr))">${show.map(d => `<div class="ecd${d === ymd(now) ? ' td' : ''}"><div class="ecdh">${new Date(d + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' })}</div>${(by[d] || []).map(r => `<div class="ecx${r.T.ms > now ? ' fut' : ''}" data-ev="${esc(r.d + r.c + r.t)}" title="${esc(r.t)}"><span class="am">${r.T.hm}</span>${flagSVG(r.c, 16, 10)}${relBars(r.i)}<span class="t">${esc(r.t)}</span>${r.a != null ? `<span class="wh">${ecoVal(r, r.a)}</span>` : r.f != null ? `<span class="dm">${ecoVal(r, r.f)}</span>` : ''}</div>`).join('') || '<div class="dm" style="padding:4px">—</div>'}</div>`).join('')}</div>`; };
+  const tools = `<input class="ofld" id="ecQ" placeholder="Saisir un pays ou un événement" value="${esc(st.q)}" style="width:230px"><button class="tb" id="ecBr" data-n="6"><em>6)</em> Parcourir ▾</button><span class="eclk" id="ecClk"></span>
+    <span class="gsp"></span><input class="ofld dt" id="ecD0" value="${fds(st.d0)}"><span class="cal">▦</span><span class="dm">–</span><input class="ofld dt" id="ecD1" value="${fds(st.d1)}"><span class="cal">▦</span>
+    <span class="tlab">Vue</span><label class="erad"><input type="radio" name="ecv" value="A" ${st.view === 'A' ? 'checked' : ''}><i></i>Agenda</label><label class="erad"><input type="radio" name="ecv" value="W" ${st.view === 'W' ? 'checked' : ''}><i></i>Hebdomadaire</label>`;
+  const tools2 = `<select class="ofld" id="ecReg">${ECO_REG.map(([k, l]) => `<option value="${k}" ${st.reg === k ? 'selected' : ''}>${l}</option>`).join('')}</select><select class="ofld dk" id="ecImp">${[[-1, 'Toutes importances'], [0, 'Moyenne et haute'], [1, 'Haute seulement']].map(([k, l]) => `<option value="${k}" ${st.imp === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    ${[['Aujourd’hui', 0, 0], ['Semaine dernière', -7, -1], ['Cette semaine', 0, 6], ['Semaine prochaine', 7, 13]].map(([l, a, b], i) => `<button class="tb alt" data-per="${i}">${l}</button>`).join('')}<span class="gsp"></span><span class="dm">${rows.length} publication${rows.length > 1 ? 's' : ''} · heure GMT (Abidjan) · relevé ${new Date(C.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>`;
+  m.innerHTML = `<div class="tools ecot">${tools}</div><div class="tools ecot2">${tools2}</div>
+    <div class="grid ${sel ? 'side' : ''}"><div class="pn"><div class="tw" id="ecTw" style="max-height:calc(100vh - 262px - var(--nwh, 90px))">${st.view === 'W' ? week() : tbl}</div>
+      <div class="lect">Prév. = prévision du consensus publiée avant le chiffre · Réel = chiffre publié · Préc. = chiffre de la période précédente. Fond gris = à venir ; ligne orange = prochaine publication. R = importance pour les marchés. Calendrier : TradingView.</div></div>
+      ${sel ? `<div class="grid" style="align-content:start" id="ecDet"></div>` : ''}</div>`;
+  const clk = () => { const e = $('ecClk'); if (!e || !alive()) return false; e.textContent = new Date().toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan' }) + ' GMT'; return true; }; clk(); const iv = setInterval(() => { if (!clk()) clearInterval(iv); }, 1000);
+  $('ecQ').oninput = e => { clearTimeout(ST._ecq); ST._ecq = setTimeout(() => { st.q = e.target.value; render(); setTimeout(() => { const i = $('ecQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0); }, 350); };
+  $('ecBr').onclick = e => ddOpen(e.currentTarget, [{ h: 'Pays et zones' }].concat(Object.keys(FLAG_N).map(c => ({ code: c, l: `${flagSVG(c, 16, 10)} ${esc(FLAG_N[c])}`, run: () => { st.q = FLAG_N[c]; st.reg = 'ALL'; render(); } }))));
+  $('ecReg').onchange = e => { st.reg = e.target.value; render(); }; $('ecImp').onchange = e => { st.imp = +e.target.value; render(); };
+  m.querySelectorAll('[data-per]').forEach(b => b.onclick = () => { const [, a, z] = [['', 0, 0], ['', -7, -1], ['', 0, 6], ['', 7, 13]][+b.dataset.per]; const base = +b.dataset.per === 0 ? Date.parse(ymd(now) + 'T00:00:00Z') : wk; per(base + a * DAY, base + z * DAY); });
+  const dIn = () => { const a = parseDMY($('ecD0').value), b = parseDMY($('ecD1').value); if (!a || !b || b < a) { toast('Dates au format jj/mm/aaaa.'); return; } st.d0 = i2s(a); st.d1 = i2s(b); render(); };
+  ['ecD0', 'ecD1'].forEach(id => { $(id).onchange = dIn; $(id).onkeydown = e => { if (e.key === 'Enter') dIn(); }; });
+  m.querySelectorAll('input[name="ecv"]').forEach(r => r.onchange = () => { st.view = r.value; render(); });
+  m.querySelectorAll('[data-ev]').forEach(tr => tr.onclick = () => { st.sel = st.sel === tr.dataset.ev ? null : tr.dataset.ev; render(); });
+  /* place la prochaine publication en haut de la liste (comme le terminal) */
+  const tw = $('ecTw'), nx = tw && tw.querySelector('tr.nx'); if (nx && st.view === 'A' && !sel) tw.scrollTop = Math.max(0, nx.offsetTop - 26 * 4);
+  else if (sel && tw) { const h = tw.querySelector('tr.hl'); if (h) tw.scrollTop = Math.max(0, h.offsetTop - 26 * 4); }
+  if (!sel) return;
+  /* panneau de détail : la publication, ses occurrences dans la fenêtre et, pour les États-Unis, la série FRED liée */
+  const T = ecoDT(sel.d), same = C.rows.filter(r => r.c === sel.c && r.t === sel.t).sort((a, b) => b.d.localeCompare(a.d)), fred = sel.c === 'US' ? (ECO_FRED.find(([rx]) => rx.test(sel.t)) || [])[1] : null;
+  const surpr = typeof sel.a === 'number' && typeof sel.f === 'number' ? sel.a - sel.f : null;
+  $('ecDet').innerHTML = pn(`${flagSVG(sel.c)} ${esc(sel.t)}`, 'ECO', `<div class="kv2"><span>Pays / zone</span><b>${esc(FLAG_N[sel.c] || sel.c)}</b><span>Publication</span><b>${T.wd}, ${T.hm} GMT</b><span>Période</span><b>${esc(sel.p || '—')}</b><span>Catégorie</span><b>${esc(ECO_CAT[sel.cat] || sel.cat || '—')}</b>
+      <span>Importance</span><b>${['Faible', 'Moyenne', 'Haute'][sel.i + 1]} ${relBars(sel.i)}</b><span>Prévision (consensus)</span><b>${ecoVal(sel, sel.f)}</b><span>Réel</span><b class="wh">${ecoVal(sel, sel.a)}</b><span>Précédent</span><b>${ecoVal(sel, sel.pr)}</b>
+      ${surpr != null ? `<span>Écart au consensus</span><b class="${cls(surpr)}">${surpr > 0 ? '+' : ''}${num(surpr, 2)}</b>` : ''}${sel.src ? `<span>Organisme</span><b>${esc(sel.src)}</b>` : ''}${sel.ind ? `<span>Indicateur</span><b>${esc(sel.ind)}</b>` : ''}</div>`,
+    { tools: `<button class="tb" id="ecX">Fermer ✕</button>${fred ? `<button class="tb" data-fn="ECST">Série ${fred} dans ECST</button>` : ''}` })
+    + (same.length > 1 ? pn('Autres dates dans la fenêtre', 'ECO', `<table class="t"><thead><tr><th class="l">Date</th><th class="l">Période</th><th>Prév.</th><th>Réel</th><th>Préc.</th></tr></thead><tbody>${same.map(r => { const t = ecoDT(r.d); return `<tr${r === sel ? ' class="hl"' : ''}><td class="l">${t.day} ${t.hm}</td><td class="l am">${esc(r.p || '')}</td><td>${ecoVal(r, r.f)}</td><td class="wh">${ecoVal(r, r.a)}</td><td>${ecoVal(r, r.pr)}</td></tr>`; }).join('')}</tbody></table>`, { np: true }) : '')
+    + (fred ? pn(`Historique de la série ${fred} (FRED)`, 'ECST', cvb('ecF', 220), { lect: 'Niveau de la série publiée par la Réserve fédérale de St. Louis ; zones grises = récessions.' }) : '');
+  $('ecX').onclick = () => { st.sel = null; render(); };
+  if (fred) { const E = await getJSON('eco.json').catch(() => null); if (!alive() || !E || !E.s[fred]) { const e = $('ecF'); if (e) e.innerHTML = '<div class="empty">Série indisponible.</div>'; return; } ST.ecst = Object.assign(ST.ecst || {}, { geo: 'US', sel: 'F:' + fred });
+    const [d, v] = E.s[fred]; const ch = new TSChart($('ecF'), { panes: [{ h: 1 }] }); ch.set({ x: d, series: [{ y: v, color: CL.amber, label: fred, fmt: y => num(y, 2) }] }, [Math.max(0, d.findIndex(z => z >= d[d.length - 1] - 100000)), d.length - 1]); }
+};
+
+/* ---------- ECST : statistiques économiques mondiales (arbre des concepts, comme le terminal) ---------- */
+const ECST_US = [['Comptes nationaux (PIB)', ['GDPC1']], ['Prix', ['CPIAUCSL', 'CPILFESL', 'PCEPILFE', 'PPIACO', 'T10YIE', 'T5YIFR']], ['Marché du travail', ['UNRATE', 'PAYEMS', 'ICSA', 'JTSJOL', 'SAHMREALTIME']],
+  ['Commerce de détail', ['RSAFS']], ['Secteur industriel', ['INDPRO']], ['Logement et immobilier', ['HOUST', 'CSUSHPINSA', 'MORTGAGE30US']], ['Enquêtes et indicateurs de cycle', ['UMCSENT', 'USREC', 'RECPROUSM156N']],
+  ['Secteur monétaire', ['DFF', 'WALCL', 'WTREGEN', 'RRPONTSYD', 'NETLIQ', 'M2SL']], ['Taux du Trésor', ['DGS1MO', 'DGS3MO', 'DGS6MO', 'DGS1', 'DGS2', 'DGS3', 'DGS5', 'DGS7', 'DGS10', 'DGS20', 'DGS30', 'DFII10', 'T10Y2Y', 'T10Y3M']],
+  ['Crédit', ['BAMLH0A0HYM2', 'BAMLC0A0CM', 'BAMLH0A3HYC', 'BAA10Y', 'AAA10Y', 'HYIG']], ['Conditions financières et volatilité', ['STLFSI4', 'NFCI', 'VIXCLS', 'VXNCLS', 'OVXCLS', 'GVZCLS']], ['Change', ['DTWEXBGS', 'DEXUSEU']], ['Marchés', ['SP500', 'NASDAQCOM', 'DCOILWTICO']]];
+const ECST_WB = [['Comptes nationaux', ['NY.GDP.MKTP.KD.ZG', 'NY.GDP.MKTP.CD', 'NY.GDP.PCAP.CD', 'NY.GDP.PCAP.PP.CD', 'NE.GDI.TOTL.ZS']], ['Prix', ['FP.CPI.TOTL.ZG']],
+  ['Population et conditions de vie', ['SP.POP.TOTL', 'SP.POP.GROW', 'SP.URB.TOTL.IN.ZS', 'SP.DYN.LE00.IN', 'SI.POV.DDAY', 'SL.UEM.TOTL.ZS']], ['Finances publiques', ['GC.DOD.TOTL.GD.ZS', 'GC.REV.XGRT.GD.ZS']],
+  ['Commerce extérieur et balance des paiements', ['BN.CAB.XOKA.GD.ZS', 'NE.EXP.GNFS.ZS', 'NE.IMP.GNFS.ZS', 'BX.KLT.DINV.WD.GD.ZS', 'BX.TRF.PWKR.DT.GD.ZS']], ['Monnaie et crédit', ['FM.LBL.BMNY.ZG', 'FS.AST.PRVT.GD.ZS', 'FR.INR.LEND']],
+  ['Structure de l’économie', ['NV.AGR.TOTL.ZS', 'NV.IND.TOTL.ZS', 'NV.SRV.TOTL.ZS']], ['Numérique et énergie', ['IT.CEL.SETS.P2', 'IT.NET.USER.ZS', 'EG.ELC.ACCS.ZS']]];
+const ECST_GEO = [['US', 'États-Unis', 'US'], ['UEMOA', 'UEMOA (Union)', 'CI'], ['CIV', 'Côte d’Ivoire', 'CI', 'Côte d\'Ivoire'], ['SEN', 'Sénégal', 'SN', 'Sénégal'], ['BEN', 'Bénin', null, 'Bénin'], ['BFA', 'Burkina Faso', null, 'Burkina'],
+  ['MLI', 'Mali', null, 'Mali'], ['NER', 'Niger', null, 'Niger'], ['TGO', 'Togo', null, 'Togo'], ['GNB', 'Guinée-Bissau', null, 'Guinée-Bissau'], ['SSF', 'Afrique subsaharienne', null], ['WLD', 'Monde', null]];
+const ICO_CH = '<svg width="12" height="10" viewBox="0 0 12 10" style="vertical-align:-1px"><rect x=".5" y=".5" width="11" height="9" fill="none" stroke="#aaa"/><path d="M2 7.5L4.5 4.5L6.5 6L10 2" stroke="#fff" fill="none"/></svg>';
+const ECST_WBN = { 'NY.GDP.MKTP.KD.ZG': 'Croissance du PIB réel', 'FP.CPI.TOTL.ZG': 'Inflation (prix à la consommation)' };
+/* construit l'arbre (nœud -> lignes) pour une zone ; chaque ligne : { k, n, code, u, mode, pts:[[période, valeur]...] (du plus récent au plus ancien), x, y (historique) } */
+async function ecstTree(geo) {
+  const G = ECST_GEO.find(g => g[0] === geo) || ECST_GEO[0], out = [];
+  if (geo === 'US') { const E = await getJSON('eco.json').catch(() => null); if (!E) return out; const M = Object.fromEntries(E.meta.map(x => [x.id, x]));
+    const fq = { D: 'Quotidien', W: 'Hebdomadaire', M: 'Mensuel', Q: 'Trimestriel' };
+    for (const [g, ids] of ECST_US) { const rows = ids.filter(id => M[id] && E.s[id]).map(id => { const [d, v] = E.s[id], n = d.length, mt = M[id]; const pts = []; for (let i = n - 1; i >= 0 && pts.length < 6; i--) if (v[i] != null) pts.push([d[i], v[i]]);
+        const ya = (() => { const t = d[n - 1] - 10000; let k = -1; for (let i = n - 1; i >= 0; i--) if (d[i] <= t) { k = i; break; } return k >= 0 ? v[k] : null; })();
+        return { k: 'F:' + id, n: mt.n, code: id, u: mt.u, f: fq[mt.f] || mt.f, mode: 'L', pts, ya, x: d, y: v, src: 'FRED' }; }); if (rows.length) out.push([g, rows]); }
+    return out; }
+  if (geo === 'UEMOA' || G[3]) { const B = await getJSON('bceao.json').catch(() => null);
+    if (B) { const nm = geo === 'UEMOA' ? 'UEMOA' : G[3], per = o => Object.entries(o || {}).filter(([k]) => /^\d{4}(-\d{2})?$/.test(k)).sort((a, b) => b[0].localeCompare(a[0]));
+      const pr = []; const inf = B.infl && (B.infl[nm] || (geo === 'UEMOA' ? B.infl.Union : null)); if (inf) pr.push({ k: 'B:infl', n: 'Inflation sur 1 an (glissement)', code: 'BCEAO', u: '%', f: 'Mensuel / annuel', mode: 'P', pts: per(inf), src: 'BCEAO' });
+      if (B.money && B.money.rows) { const mk = geo === 'UEMOA' ? 'Union' : nm; for (const [a, o] of Object.entries(B.money.rows)) if (o[mk] != null) pr.push({ k: 'B:m:' + a, n: a, code: 'BCEAO', u: 'Md FCFA', f: 'Mensuel', mode: 'P', pts: [[B.money.asof, o[mk]]], src: 'BCEAO' }); }
+      if (pr.length) out.push(['Prix et monnaie (BCEAO)', pr]);
+      if (geo === 'UEMOA') { const pol = (B.policy || []).slice().reverse(); out.push(['Politique monétaire (BCEAO)', [{ k: 'B:pret', n: 'Taux directeur (guichet de prêt marginal)', code: 'BCEAO', u: '%', f: 'Décisions', mode: 'P', pts: pol.map(p => [p.d, p.pret]), src: 'BCEAO' },
+          { k: 'B:min', n: 'Taux minimum de soumission (appels d’offres)', code: 'BCEAO', u: '%', f: 'Décisions', mode: 'P', pts: pol.map(p => [p.d, p.min]), src: 'BCEAO' },
+          { k: 'B:mm', n: 'Taux moyen du marché monétaire', code: 'BCEAO', u: '%', f: 'Mensuel', mode: 'P', pts: (B.mm || []).slice().reverse().map(x => [x.m, x.t]), src: 'BCEAO' }]]);
+        if (B.act) out.push(['Activité économique (BCEAO, glissement annuel)', Object.entries(B.act).map(([a, o]) => ({ k: 'B:a:' + a, n: a, code: 'BCEAO', u: '%', f: 'Mensuel / annuel', mode: 'P', pts: per(o), src: 'BCEAO' }))]);
+        if (B.credit) { const lab = k => k.replace(/^credits\.vol\./, 'Crédits · ').replace(/^credits\.taux\./, 'Crédits, taux · ').replace(/^credits\.duree\./, 'Crédits · ').replace(/^depots\.vol\./, 'Dépôts · ').replace(/^depots\.taux\./, 'Dépôts, taux · ').replace(/^marge\.taux\./, '');
+          out.push(['Conditions de banque (BCEAO)', Object.entries(B.credit).map(([a, o]) => ({ k: 'B:c:' + a, n: lab(a), code: 'BCEAO', u: /taux|marge/.test(a) ? '%' : /duree/.test(a) ? 'mois' : 'Md FCFA', f: 'Mensuel / annuel', mode: 'P', pts: per(o), src: 'BCEAO' }))]); } } } }
+  if (geo !== 'US' && geo !== 'UEMOA') { const W = await getJSON('uemoa.json').catch(() => null);
+    if (W && W.ind) for (const [g, codes] of ECST_WB) { const rows = codes.filter(c => W.ind[c] && W.ind[c].v && W.ind[c].v[geo]).map(c => { const o = W.ind[c].v[geo], ys = Object.keys(o).sort();
+        return { k: 'W:' + c, n: W.ind[c].n, code: c, u: W.ind[c].u, f: 'Annuel', mode: 'P', pts: ys.slice().reverse().map(y => [y, o[y]]), x: ys.map(y => +y * 10000 + 1231), y: ys.map(y => o[y]), src: 'Banque mondiale' }; }); if (rows.length) out.push([g + ' (Banque mondiale)', rows]); } }
+  /* séries BCEAO mêlant moyennes annuelles (AAAA) et glissements mensuels (AAAA-MM) : deux lignes distinctes, jamais sur le même axe */
+  for (const node of out) { const rows = []; for (const r of node[1]) { if (r.mode !== 'P' || r.src !== 'BCEAO') { rows.push(r); continue; } const an = r.pts.filter(p => /^\d{4}$/.test(p[0])), mo = r.pts.filter(p => !/^\d{4}$/.test(p[0]));
+      if (an.length && mo.length) { rows.push(Object.assign({}, r, { k: r.k + ':m', n: r.n + ' · mensuel', f: 'Mensuel', pts: mo }), Object.assign({}, r, { k: r.k + ':a', n: r.n + ' · annuel', f: 'Annuel', pts: an })); } else rows.push(r); } node[1] = rows; }
+  return out;
+}
+const ecstFmt = (v, u) => v == null || !isFinite(v) ? '—' : Math.abs(v) >= 1e9 && /\$|hab/.test(u || '') ? big(v) : num(v, Math.abs(v) >= 1000 ? 0 : Math.abs(v) >= 100 ? 1 : 2);
+const ecstPer = p => typeof p === 'number' ? fd(p) : /^\d{4}-\d{2}-\d{2}$/.test(p) ? fds(p) : /^\d{4}-\d{2}$/.test(p) ? MOIS_AX[+p.slice(5) - 1] + ' ' + p.slice(0, 4) : p;
+
+PAGES.ECST = async (m, alive) => {
+  setTitle('World Economic Statistics'); const st = ST.ecst = ST.ecst || { geo: 'US', open: {}, sel: null, q: '', tr: 'V' };
+  const T = await ecstTree(st.geo); if (!alive()) return; const G = ECST_GEO.find(g => g[0] === st.geo) || ECST_GEO[0];
+  const q = st.q.trim().toLowerCase(), all = T.flatMap(([g, rows]) => rows.map(r => Object.assign({ g }, r)));
+  if (!st.sel || !all.find(r => r.k === st.sel)) st.sel = all.length ? all[0].k : null; const S = all.find(r => r.k === st.sel);
+  if (!Object.keys(st.open).length || st.openGeo !== st.geo) { st.open = {}; st.openGeo = st.geo; T.slice(0, 3).forEach(([g]) => st.open[g] = 1); if (S) st.open[S.g] = 1; }
+  const vis = T.map(([g, rows]) => [g, rows.filter(r => !q || (r.n + ' ' + r.code).toLowerCase().includes(q))]).filter(([, rows]) => rows.length);
+  /* transformation (comme « Transformation : Value ») : valeur, variation sur la période, variation sur 1 an */
+  const trf = (r, i) => { const v = r.pts[i] && r.pts[i][1]; if (st.tr === 'V' || v == null) return v; if (st.tr === 'P') { const p = r.pts[i + 1] && r.pts[i + 1][1]; return p ? (['%', 'pts'].includes(r.u) ? v - p : v / p - 1) : null; }
+    if (r.mode === 'L' && i === 0 && r.ya != null) return ['%', 'pts'].includes(r.u) ? v - r.ya : v / r.ya - 1; return null; };
+  const fmtT = (r, v) => v == null ? '—' : st.tr === 'V' ? ecstFmt(v, r.u) : ['%', 'pts'].includes(r.u) ? sgn(v, 2, ' pt', 1) : pc(v, 1);
+  const cols = 4;
+  const tree = `<div class="ectr">${ECST_GEO.map(([k, l, fl]) => `<div class="ecg${k === st.geo ? ' on' : ''}" data-geo="${k}">${fl ? flagSVG(fl, 16, 10) : '<span class="nf"></span>'} ${esc(l)}</div>`).join('')}</div>`;
+  const nodes = vis.map(([g, rows]) => `<div class="ecn"><div class="ecnh" data-node="${esc(g)}"><b>${st.open[g] || q ? '⊟' : '⊞'}</b> ${esc(g)} <span class="dm">(${rows.length})</span></div>${st.open[g] || q ? rows.map(r => {
+      const vals = Array.from({ length: cols }, (_, i) => trf(r, i));
+      return `<div class="ecr${r.k === st.sel ? ' on' : ''}" data-k="${esc(r.k)}"><span class="nm">${esc(r.n)}</span><span class="tk">${ICO_CH} ${esc(r.code)}</span><span class="u dm">${esc(r.u || '')}</span>${vals.map((v, i) => `<span class="v${i ? '' : ' wh'}">${r.pts[i] ? fmtT(r, v) : ''}<small>${r.pts[i] ? ecstPer(r.pts[i][0]) : ''}</small></span>`).join('')}</div>`; }).join('') : ''}</div>`).join('');
+  m.innerHTML = `<div class="grid ecst"><div class="pn ecl"><div class="tools"><span class="tlab">Zone</span><select class="ofld" id="esG">${ECST_GEO.map(([k, l]) => `<option value="${k}" ${k === st.geo ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+      <div class="tools"><input class="ofld" id="esQ" placeholder="Chercher un concept dans l’arbre" value="${esc(st.q)}" style="width:100%;text-transform:none"></div>${tree}
+      <div class="ectn"><div class="ectnh">Concepts · ${esc(G[1])}</div>${T.map(([g, rows]) => `<div class="ecti${st.open[g] ? ' on' : ''}" data-solo="${esc(g)}"><b>${st.open[g] ? '⊟' : '⊞'}</b> ${esc(g.replace(/ \((BCEAO|Banque mondiale)[^)]*\)$/, ''))} <span class="dm">${rows.length}</span></div>`).join('')}</div></div>
+    <div class="grid" style="align-content:start;min-width:0"><div class="pn"><div class="tools"><span class="tlab">Source</span><span class="wh">${esc([...new Set(all.map(r => r.src))].join(' · ') || '—')}</span><span class="tlab">Transformation</span><select class="ofld" id="esT"><option value="V" ${st.tr === 'V' ? 'selected' : ''}>Valeur</option><option value="P" ${st.tr === 'P' ? 'selected' : ''}>Variation sur la période</option><option value="Y" ${st.tr === 'Y' ? 'selected' : ''}>Variation sur 1 an</option></select>
+        <span class="gsp"></span><button class="tb alt" id="esOpen">Tout ouvrir</button><button class="tb alt" id="esClose">Tout fermer</button></div>
+      <div class="ech"><span>${esc(G[1])} · concept</span><span>Code</span><span>Unité</span>${Array.from({ length: cols }, (_, i) => `<span>${i ? 'Période −' + i : 'Dernier'}</span>`).join('')}</div>
+      <div class="tw" style="max-height:calc(100vh - 500px - var(--nwh, 90px));min-height:240px">${nodes || '<div class="empty">Aucune donnée pour cette zone.</div>'}</div></div>
+      ${S ? pn(`${esc(S.n)} <span class="dm">${esc(S.code)}</span>`, 'ECST', cvb('esC', 190), { sel: esc(S.src) + ' · ' + esc(S.f || ''), lect: `Unité : ${esc(S.u || '—')}. Dernière valeur ${ecstFmt(S.pts[0] && S.pts[0][1], S.u)} (${S.pts[0] ? ecstPer(S.pts[0][0]) : '—'}).` }) : ''}</div></div>`;
+  $('esG').onchange = e => { st.geo = e.target.value; st.sel = null; render(); }; m.querySelectorAll('[data-geo]').forEach(d => d.onclick = () => { st.geo = d.dataset.geo; st.sel = null; render(); });
+  $('esT').onchange = e => { st.tr = e.target.value; render(); };
+  $('esQ').oninput = e => { clearTimeout(ST._esq); ST._esq = setTimeout(() => { st.q = e.target.value; render(); setTimeout(() => { const i = $('esQ'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0); }, 300); };
+  m.querySelectorAll('[data-node]').forEach(d => d.onclick = () => { st.open[d.dataset.node] = !st.open[d.dataset.node]; render(); });
+  m.querySelectorAll('[data-solo]').forEach(d => d.onclick = () => { const g = d.dataset.solo; if (st.open[g] && Object.values(st.open).filter(Boolean).length === 1) { st.open[g] = 0; } else { st.open = { [g]: 1 }; const r = (T.find(t => t[0] === g) || [0, []])[1][0]; if (r) st.sel = r.k; } render(); });
+  m.querySelectorAll('.ecr').forEach(d => d.onclick = () => { st.sel = d.dataset.k; render(); });
+  $('esOpen').onclick = () => { T.forEach(([g]) => st.open[g] = 1); render(); }; $('esClose').onclick = () => { st.open = { _: 1 }; render(); };
+  if (!S) return;
+  if (S.x && S.mode === 'L') { const ch = new TSChart($('esC'), { panes: [{ h: 1 }] }); ch.set({ x: S.x, series: [{ y: S.y, color: CL.amber, label: S.code, fmt: y => num(y, 2) }] }, [Math.max(0, S.x.findIndex(z => z >= S.x[S.x.length - 1] - 150000)), S.x.length - 1]); }
+  else { const P = S.pts.slice(0, 30).reverse(); barChart($('esC'), { labels: P.map(p => String(ecstPer(p[0])).replace(/^(\d{4})-.*/, '$1')), values: P.map(p => p[1]), fmt: v => ecstFmt(v, S.u), labelsOnBars: P.length <= 14, pos: '#3d7cc9', neg: '#ff3d4d', padB: 22 }); }
+};
+
+</script>
+<script>
 /* ================= FQT — données, formats, ligne de commande, chrome Bloomberg, routeur ================= */
 'use strict';
 const $ = id => document.getElementById(id);
@@ -3680,7 +4051,9 @@ const FN = {
   US: ['Marché US', 'mkt', 'Marchés', 'Nasdaq-100, ETF secteurs, facteurs, pays, matières, crypto ; pré-marché et après-bourse', 'US Market Overview'],
   TOP: ['Actualités', 'mkt', 'Actualités', 'Fil d’actualités relié aux titres : BRVM, UEMOA, marchés mondiaux, banques centrales', 'Top News'],
   FG: ['Fear & Greed', 'mkt', 'Sentiment', 'Indice peur/avidité US (CNN + réplique) et BRVM (calculé)', 'Fear & Greed Index'],
-  ECO: ['Macro US', 'mkt', 'Macro', 'FRED : courbe des taux, crédit, liquidité, emploi, inflation, récession', 'US Economic Indicators'],
+  ECO: ['Calendrier éco', 'mkt', 'Macro', 'Calendrier économique mondial : publications, prévision du consensus, réel, précédent, importance', 'Economic Calendars'],
+  ECST: ['Statistiques éco', 'mkt', 'Macro', 'Arbre des statistiques : États-Unis (FRED), UEMOA (BCEAO), 8 États et Afrique (Banque mondiale)', 'World Economic Statistics'],
+  ECWB: ['Macro US', 'mkt', 'Macro', 'FRED : courbe des taux, crédit, liquidité, emploi, inflation, récession', 'US Economic Indicators'],
   UEMOA: ['Macro UEMOA', 'mkt', 'Macro', 'BCEAO, inflation, croissance, dette, crédit, titres publics des 8 États', 'WAEMU Economic Dashboard'],
   SRCH: ['Obligations UEMOA', 'mkt', 'Taux', 'Obligations cotées à la BRVM : coupon, échéance, cours, rendement, duration, sensibilité', 'Fixed Income Search'],
   GC: ['Courbes souveraines', 'mkt', 'Taux', 'Courbes des taux des États de l’UEMOA (UMOA-Titres) et coupons à l’émission', 'Graph Curves'],
@@ -3733,7 +4106,7 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['MON', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'UEMOA', 'SRCH', 'GC', 'WB', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'EVTS', 'HELP'];
+const MKT_KEYS = ['MON', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TRA', 'COMP', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -3741,8 +4114,9 @@ const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 const REL = { GP: ['HP', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'EQS'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'EQS'],
   MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'TOP', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'EQS'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
-  BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
-  HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'] };
+  BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECWB', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
+  HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
+  ECO: ['ECST', 'ECWB', 'WB', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'WB'], ECWB: ['ECO', 'ECST', 'WB', 'MACRO'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
@@ -3867,7 +4241,7 @@ function initCmd() {
       if (!typedSecFn && it && (!typedFn || it.a === w[0])) { pick(sel); return; } }
     ac.hidden = true; inp.value = ''; inp.blur(); runCmd(v); });
   inp.addEventListener('blur', () => setTimeout(() => { ac.hidden = true; }, 150));
-  document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') { if (!$('ddm').hidden) { ddClose(); return; } go(SECFN.has(ST.fn) && ST.fn !== 'MENU' ? 'MENU' : 'MON'); } });
+  document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') { if (!$('ddm').hidden) { ddClose(); return; } if (document.body.classList.contains('maxi')) { toggleMaxi(false); return; } go(SECFN.has(ST.fn) && ST.fn !== 'MENU' ? 'MENU' : 'MON'); } });
 }
 
 /* ---------- menus déroulants ---------- */
@@ -3903,6 +4277,7 @@ function stdActs() {
   { n: 97, l: 'Sortie', menu: () => [{ l: 'Tableau principal → Excel (CSV)', run: exportCSV }, { l: 'Graphique principal → image PNG', run: exportPNG }, { l: 'Écran → PDF / impression', run: () => window.print() }] },
   { n: 98, l: 'Réglages', menu: () => [{ l: `Taille du texte : normale${!PREF.zoom || PREF.zoom === 1 ? ' ✓' : ''}`, run: () => { PREF.zoom = 1; savePref(); applyPref(); } }, { l: `Taille du texte : grande${PREF.zoom === 1.12 ? ' ✓' : ''}`, run: () => { PREF.zoom = 1.12; savePref(); applyPref(); } },
     { l: `Taille du texte : très grande${PREF.zoom === 1.25 ? ' ✓' : ''}`, run: () => { PREF.zoom = 1.25; savePref(); applyPref(); } }, { l: PREF.nonews ? 'Afficher le panneau des actualités' : 'Masquer le panneau des actualités', run: () => { PREF.nonews = !PREF.nonews; savePref(); applyPref(); } },
+    { l: document.body.classList.contains('maxi') ? 'Réduire la fenêtre' : 'Agrandir la fenêtre (plein écran)', run: () => toggleMaxi() },
     { l: 'Fermer tous les onglets sauf celui-ci', run: () => { WT.list = [WT.list[WT.cur]]; WT.cur = 0; wtSave(); renderWtabs(); } }] }];
 }
 function exportPNG() { const c = $('main').querySelector('canvas'); if (!c) { toast('Aucun graphique sur cet écran.'); return; } const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = `FQT_${ST.fn}_${SECFN.has(ST.fn) ? ST.sec + '_' : ''}${new Date().toISOString().slice(0, 10)}.png`; a.click(); }
@@ -3914,12 +4289,17 @@ function wtLabel(t) { const s = Q.by[t.sec]; return SECFN.has(t.fn) && s ? `${(s
 function renderWtabs() {
   const w = $('wtabs'); if (!w) return;
   w.innerHTML = WT.list.map((t, i) => `<div class="wt${i === WT.cur ? ' on' : ''}" data-wt="${i}" title="${esc(wtLabel(t))}"><span>${esc(wtLabel(t))}</span>${WT.list.length > 1 ? `<b class="wx" data-wx="${i}" title="Fermer">×</b>` : ''}</div>`).join('') +
-    `<button class="wplus" id="wplus" title="Nouvel onglet (puis tapez par exemple ORAC DES)">+</button><span class="wopt">☰ Options</span>`;
+    `<button class="wplus" id="wplus" title="Nouvel onglet (puis tapez par exemple ORAC DES)">+</button><span class="wsp"></span><button class="wico" id="wsrch" title="Rechercher un titre ou une fonction">⌕</button><button class="wico" id="wmax" title="${document.body.classList.contains('maxi') ? 'Réduire' : 'Agrandir (plein écran)'}">${document.body.classList.contains('maxi') ? '⤡' : '⤢'}</button><span class="wopt">☰ Options</span>`;
   w.querySelectorAll('[data-wt]').forEach(el => el.onclick = e => { if (e.target.dataset.wx != null) return; wtSwitch(+el.dataset.wt); });
   w.querySelectorAll('[data-wx]').forEach(el => el.onclick = e => { e.stopPropagation(); wtClose(+el.dataset.wx); });
-  $('wplus').onclick = () => wtNew('MON', ST.sec, true);
+  $('wplus').onclick = () => wtNew('MON', ST.sec, true); $('wsrch').onclick = () => { const c = $('cmd'); c.focus(); }; $('wmax').onclick = () => toggleMaxi();
   w.querySelector('.wopt').onclick = e => ddOpen(e.target, stdActs()[2].menu());
 }
+/* ⤢ : agrandit l'écran courant (bandeaux masqués, plein écran du navigateur si possible), comme l'agrandissement d'une fenêtre Bloomberg */
+function toggleMaxi(on) { const b = document.body, v = on == null ? !b.classList.contains('maxi') : !!on; b.classList.toggle('maxi', v);
+  try { if (v && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => { }); if (!v && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => { }); } catch (e) { }
+  renderWtabs(); if (ST.fn === 'GP') render(); else setTimeout(() => window.dispatchEvent(new Event('resize')), 80); }
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('maxi')) toggleMaxi(false); });
 function wtSync() { const t = WT.list[WT.cur] || (WT.list[WT.cur] = {}); t.fn = ST.fn; t.sec = ST.sec; t.hist = ST.hist; t.hpos = ST.hpos; wtSave(); renderWtabs(); }
 function wtSwitch(i) { if (i === WT.cur || !WT.list[i]) return; wtSync(); WT.cur = i; const t = WT.list[i]; ST.hist = t.hist || []; ST.hpos = t.hpos ?? -1; go(t.fn, t.sec, { nohist: !!(t.hist && t.hist.length) }); }
 function wtNew(fn, secId, focus) { if (WT.list.length >= 12) { toast('12 onglets au maximum.'); return; } wtSync(); WT.list.push({ fn, sec: secId, hist: [], hpos: -1 }); WT.cur = WT.list.length - 1; ST.hist = []; ST.hpos = -1; go(fn, secId);
@@ -3933,7 +4313,10 @@ function exportCSV() {
 }
 function renderRbar() {
   const b = $('rbar'), s = sec(ST.sec), isSec = SECFN.has(ST.fn) && s;
-  const acts = PG.acts.concat(stdActs()).sort((a, b) => a.n - b.n);
+  /* numérotation cohérente : une action de la page remplace l'action standard de même nom ; en cas de numéro déjà pris, l'action standard passe au numéro libre suivant */
+  const used = new Set(PG.acts.map(a => a.n)), labs = new Set(PG.acts.map(a => a.l)), std = [];
+  for (const a of stdActs()) { if (labs.has(a.l)) continue; let k = a.n; while (used.has(k)) k++; used.add(k); std.push(Object.assign({}, a, { n: k })); }
+  const acts = PG.acts.concat(std).sort((a, b) => a.n - b.n);
   b.innerHTML = (isSec ? `<span class="ob">${esc(ykey(s))}</span>` : `<span class="ret">&lt;Menu&gt; pour revenir</span>`) +
     acts.map((a, i) => `<button class="ab${a.menu ? ' mn' : ''}${a.on ? ' on' : ''}" data-n="${a.n}" data-dd="1" data-ai="${i}"><em>${a.n})</em> ${esc(a.l)}</button>`).join('') +
     `<span class="rt">${esc(PG.title || FN[ST.fn][4] || FN[ST.fn][0])}</span>`;

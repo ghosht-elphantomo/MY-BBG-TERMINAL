@@ -14,7 +14,9 @@ const FN = {
   US: ['Marché US', 'mkt', 'Marchés', 'Nasdaq-100, ETF secteurs, facteurs, pays, matières, crypto ; pré-marché et après-bourse', 'US Market Overview'],
   TOP: ['Actualités', 'mkt', 'Actualités', 'Fil d’actualités relié aux titres : BRVM, UEMOA, marchés mondiaux, banques centrales', 'Top News'],
   FG: ['Fear & Greed', 'mkt', 'Sentiment', 'Indice peur/avidité US (CNN + réplique) et BRVM (calculé)', 'Fear & Greed Index'],
-  ECO: ['Macro US', 'mkt', 'Macro', 'FRED : courbe des taux, crédit, liquidité, emploi, inflation, récession', 'US Economic Indicators'],
+  ECO: ['Calendrier éco', 'mkt', 'Macro', 'Calendrier économique mondial : publications, prévision du consensus, réel, précédent, importance', 'Economic Calendars'],
+  ECST: ['Statistiques éco', 'mkt', 'Macro', 'Arbre des statistiques : États-Unis (FRED), UEMOA (BCEAO), 8 États et Afrique (Banque mondiale)', 'World Economic Statistics'],
+  ECWB: ['Macro US', 'mkt', 'Macro', 'FRED : courbe des taux, crédit, liquidité, emploi, inflation, récession', 'US Economic Indicators'],
   UEMOA: ['Macro UEMOA', 'mkt', 'Macro', 'BCEAO, inflation, croissance, dette, crédit, titres publics des 8 États', 'WAEMU Economic Dashboard'],
   SRCH: ['Obligations UEMOA', 'mkt', 'Taux', 'Obligations cotées à la BRVM : coupon, échéance, cours, rendement, duration, sensibilité', 'Fixed Income Search'],
   GC: ['Courbes souveraines', 'mkt', 'Taux', 'Courbes des taux des États de l’UEMOA (UMOA-Titres) et coupons à l’émission', 'Graph Curves'],
@@ -67,7 +69,7 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['MON', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'UEMOA', 'SRCH', 'GC', 'WB', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'EVTS', 'HELP'];
+const MKT_KEYS = ['MON', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TRA', 'COMP', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -75,8 +77,9 @@ const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 const REL = { GP: ['HP', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'EQS'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'EQS'],
   MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'TOP', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'EQS'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
-  BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
-  HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'] };
+  BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECWB', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
+  HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
+  ECO: ['ECST', 'ECWB', 'WB', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'WB'], ECWB: ['ECO', 'ECST', 'WB', 'MACRO'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
@@ -201,7 +204,7 @@ function initCmd() {
       if (!typedSecFn && it && (!typedFn || it.a === w[0])) { pick(sel); return; } }
     ac.hidden = true; inp.value = ''; inp.blur(); runCmd(v); });
   inp.addEventListener('blur', () => setTimeout(() => { ac.hidden = true; }, 150));
-  document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') { if (!$('ddm').hidden) { ddClose(); return; } go(SECFN.has(ST.fn) && ST.fn !== 'MENU' ? 'MENU' : 'MON'); } });
+  document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') { if (!$('ddm').hidden) { ddClose(); return; } if (document.body.classList.contains('maxi')) { toggleMaxi(false); return; } go(SECFN.has(ST.fn) && ST.fn !== 'MENU' ? 'MENU' : 'MON'); } });
 }
 
 /* ---------- menus déroulants ---------- */
@@ -237,6 +240,7 @@ function stdActs() {
   { n: 97, l: 'Sortie', menu: () => [{ l: 'Tableau principal → Excel (CSV)', run: exportCSV }, { l: 'Graphique principal → image PNG', run: exportPNG }, { l: 'Écran → PDF / impression', run: () => window.print() }] },
   { n: 98, l: 'Réglages', menu: () => [{ l: `Taille du texte : normale${!PREF.zoom || PREF.zoom === 1 ? ' ✓' : ''}`, run: () => { PREF.zoom = 1; savePref(); applyPref(); } }, { l: `Taille du texte : grande${PREF.zoom === 1.12 ? ' ✓' : ''}`, run: () => { PREF.zoom = 1.12; savePref(); applyPref(); } },
     { l: `Taille du texte : très grande${PREF.zoom === 1.25 ? ' ✓' : ''}`, run: () => { PREF.zoom = 1.25; savePref(); applyPref(); } }, { l: PREF.nonews ? 'Afficher le panneau des actualités' : 'Masquer le panneau des actualités', run: () => { PREF.nonews = !PREF.nonews; savePref(); applyPref(); } },
+    { l: document.body.classList.contains('maxi') ? 'Réduire la fenêtre' : 'Agrandir la fenêtre (plein écran)', run: () => toggleMaxi() },
     { l: 'Fermer tous les onglets sauf celui-ci', run: () => { WT.list = [WT.list[WT.cur]]; WT.cur = 0; wtSave(); renderWtabs(); } }] }];
 }
 function exportPNG() { const c = $('main').querySelector('canvas'); if (!c) { toast('Aucun graphique sur cet écran.'); return; } const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = `FQT_${ST.fn}_${SECFN.has(ST.fn) ? ST.sec + '_' : ''}${new Date().toISOString().slice(0, 10)}.png`; a.click(); }
@@ -248,12 +252,17 @@ function wtLabel(t) { const s = Q.by[t.sec]; return SECFN.has(t.fn) && s ? `${(s
 function renderWtabs() {
   const w = $('wtabs'); if (!w) return;
   w.innerHTML = WT.list.map((t, i) => `<div class="wt${i === WT.cur ? ' on' : ''}" data-wt="${i}" title="${esc(wtLabel(t))}"><span>${esc(wtLabel(t))}</span>${WT.list.length > 1 ? `<b class="wx" data-wx="${i}" title="Fermer">×</b>` : ''}</div>`).join('') +
-    `<button class="wplus" id="wplus" title="Nouvel onglet (puis tapez par exemple ORAC DES)">+</button><span class="wopt">☰ Options</span>`;
+    `<button class="wplus" id="wplus" title="Nouvel onglet (puis tapez par exemple ORAC DES)">+</button><span class="wsp"></span><button class="wico" id="wsrch" title="Rechercher un titre ou une fonction">⌕</button><button class="wico" id="wmax" title="${document.body.classList.contains('maxi') ? 'Réduire' : 'Agrandir (plein écran)'}">${document.body.classList.contains('maxi') ? '⤡' : '⤢'}</button><span class="wopt">☰ Options</span>`;
   w.querySelectorAll('[data-wt]').forEach(el => el.onclick = e => { if (e.target.dataset.wx != null) return; wtSwitch(+el.dataset.wt); });
   w.querySelectorAll('[data-wx]').forEach(el => el.onclick = e => { e.stopPropagation(); wtClose(+el.dataset.wx); });
-  $('wplus').onclick = () => wtNew('MON', ST.sec, true);
+  $('wplus').onclick = () => wtNew('MON', ST.sec, true); $('wsrch').onclick = () => { const c = $('cmd'); c.focus(); }; $('wmax').onclick = () => toggleMaxi();
   w.querySelector('.wopt').onclick = e => ddOpen(e.target, stdActs()[2].menu());
 }
+/* ⤢ : agrandit l'écran courant (bandeaux masqués, plein écran du navigateur si possible), comme l'agrandissement d'une fenêtre Bloomberg */
+function toggleMaxi(on) { const b = document.body, v = on == null ? !b.classList.contains('maxi') : !!on; b.classList.toggle('maxi', v);
+  try { if (v && !document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => { }); if (!v && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => { }); } catch (e) { }
+  renderWtabs(); if (ST.fn === 'GP') render(); else setTimeout(() => window.dispatchEvent(new Event('resize')), 80); }
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('maxi')) toggleMaxi(false); });
 function wtSync() { const t = WT.list[WT.cur] || (WT.list[WT.cur] = {}); t.fn = ST.fn; t.sec = ST.sec; t.hist = ST.hist; t.hpos = ST.hpos; wtSave(); renderWtabs(); }
 function wtSwitch(i) { if (i === WT.cur || !WT.list[i]) return; wtSync(); WT.cur = i; const t = WT.list[i]; ST.hist = t.hist || []; ST.hpos = t.hpos ?? -1; go(t.fn, t.sec, { nohist: !!(t.hist && t.hist.length) }); }
 function wtNew(fn, secId, focus) { if (WT.list.length >= 12) { toast('12 onglets au maximum.'); return; } wtSync(); WT.list.push({ fn, sec: secId, hist: [], hpos: -1 }); WT.cur = WT.list.length - 1; ST.hist = []; ST.hpos = -1; go(fn, secId);
@@ -267,7 +276,10 @@ function exportCSV() {
 }
 function renderRbar() {
   const b = $('rbar'), s = sec(ST.sec), isSec = SECFN.has(ST.fn) && s;
-  const acts = PG.acts.concat(stdActs()).sort((a, b) => a.n - b.n);
+  /* numérotation cohérente : une action de la page remplace l'action standard de même nom ; en cas de numéro déjà pris, l'action standard passe au numéro libre suivant */
+  const used = new Set(PG.acts.map(a => a.n)), labs = new Set(PG.acts.map(a => a.l)), std = [];
+  for (const a of stdActs()) { if (labs.has(a.l)) continue; let k = a.n; while (used.has(k)) k++; used.add(k); std.push(Object.assign({}, a, { n: k })); }
+  const acts = PG.acts.concat(std).sort((a, b) => a.n - b.n);
   b.innerHTML = (isSec ? `<span class="ob">${esc(ykey(s))}</span>` : `<span class="ret">&lt;Menu&gt; pour revenir</span>`) +
     acts.map((a, i) => `<button class="ab${a.menu ? ' mn' : ''}${a.on ? ' on' : ''}" data-n="${a.n}" data-dd="1" data-ai="${i}"><em>${a.n})</em> ${esc(a.l)}</button>`).join('') +
     `<span class="rt">${esc(PG.title || FN[ST.fn][4] || FN[ST.fn][0])}</span>`;

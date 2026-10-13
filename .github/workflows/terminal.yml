@@ -86,7 +86,7 @@ jobs:
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
           FQT_MODE: ${{ steps.mode.outputs.mode }}
-        run: timeout 360 python3 scripts/fetch_extra.py --out /tmp/raw --only watch,obl,cmc --site /tmp/site/data --news /tmp/site/data/news.json
+        run: timeout 360 python3 scripts/fetch_extra.py --out /tmp/raw --only watch,obl,cmc,cal --site /tmp/site/data --news /tmp/site/data/news.json
 
       - name: Outils PDF (EOD)
         if: steps.mode.outputs.mode == 'eod'

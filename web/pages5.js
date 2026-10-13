@@ -1,4 +1,4 @@
-/* ================= FQT — fonctions de marché : FG, LIQ, PER, EQS, ALRT, TOP, ECO, RRG, UEMOA, US ================= */
+/* ================= FQT — fonctions de marché : FG, LIQ, PER, EQS, ALRT, TOP, ECWB, RRG, UEMOA, US ================= */
 
 const FG_BANDS = [[0, 25, 'Peur extrême', '#b3261e'], [25, 45, 'Peur', '#ff7043'], [45, 55, 'Neutre', '#9e9e9e'], [55, 75, 'Avidité', '#7cb342'], [75, 100, 'Avidité extrême', '#2e7d32']];
 const fgLab = v => v == null ? '—' : (FG_BANDS.find(b => v >= b[0] && v <= b[1]) || FG_BANDS[2])[2];
@@ -170,19 +170,19 @@ PAGES.TOP = async (m, alive) => {
   m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { st.c = b.dataset.c; render(); }); $('tpF').onsubmit = e => { e.preventDefault(); st.q = $('tpQ').value.trim(); render(); };
 };
 
-/* ------------------------------------------------------------------ ECO (FRED) */
-PAGES.ECO = async (m, alive) => {
-  const E = await getJSON('eco.json').catch(() => null); if (!alive()) return; if (!E) { m.innerHTML = pn('Macro US', 'ECO', '<div class="empty">Données FRED en attente de la collecte du soir.</div>'); return; }
+/* ------------------------------------------------------------------ ECWB : indicateurs US (FRED), ancien ECO */
+PAGES.ECWB = async (m, alive) => {
+  const E = await getJSON('eco.json').catch(() => null); if (!alive()) return; if (!E) { m.innerHTML = pn('Macro US', 'ECWB', '<div class="empty">Données FRED en attente de la collecte du soir.</div>'); return; }
   const st = ST.eco = ST.eco || { sel: 'T10Y2Y', g: 'ALL', cmp: 1 }; const meta = E.meta, groups = [...new Set(meta.map(x => x.g))];
   const M = id => meta.find(x => x.id === id); if (!M(st.sel)) st.sel = meta[0].id;
   const tiles = meta.filter(x => st.g === 'ALL' || x.g === st.g).map(x => { const ch = x.y1 != null ? x.last - x.y1 : null, isPct = ['%', 'pts'].includes(x.u);
     return `<div class="tile ${st.sel === x.id ? 'on' : ''}" data-id="${x.id}"><div class="tn">${esc(x.n)}</div><div class="tv">${num(x.last, Math.abs(x.last) >= 1000 ? 0 : 2)} <small>${esc(x.u)}</small></div><div class="tc">${ch == null ? '' : `1 an : ${isPct ? sgn(ch, 2, ' pt', 1) : sgn(x.y1 ? x.last / x.y1 - 1 : null, 1)}`} <span class="dm">· ${fd(x.dl)}</span></div><div class="ts" id="sp_${x.id}"></div></div>`; }).join('');
   const C = E.curve; const cmpLab = { 1: '1 mois', 12: '1 an', 24: '2 ans' };
   m.innerHTML = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Thème</span><button class="tb ${st.g === 'ALL' ? 'on' : ''}" data-g="ALL">Tout</button>${groups.map(g => `<button class="tb ${st.g === g ? 'on' : ''}" data-g="${esc(g)}">${esc(g)}</button>`).join('')}<span class="tlab">Source : FRED (Réserve fédérale de St. Louis) · zones grises = récessions NBER</span></div>
-    <div class="grid c2">${pn(`${esc(M(st.sel).n)} (${esc(M(st.sel).u)})`, 'ECO', cvb('ecB', 300), { sel: M(st.sel).id })}
-    ${C ? pn('Courbe des taux du Trésor US', 'ECO', `<div class="tools">${[1, 12, 24].map(k => `<button class="tb ${st.cmp === k ? 'on' : ''}" data-cmp="${k}">contre il y a ${cmpLab[k]}</button>`).join('')}</div>${cvb('ecC', 250)}`, { lect: '<span id="ecCl"></span>' }) : ''}</div>
+    <div class="grid c2">${pn(`${esc(M(st.sel).n)} (${esc(M(st.sel).u)})`, 'ECWB', cvb('ecB', 300), { sel: M(st.sel).id })}
+    ${C ? pn('Courbe des taux du Trésor US', 'ECWB', `<div class="tools">${[1, 12, 24].map(k => `<button class="tb ${st.cmp === k ? 'on' : ''}" data-cmp="${k}">contre il y a ${cmpLab[k]}</button>`).join('')}</div>${cvb('ecC', 250)}`, { lect: '<span id="ecCl"></span>' }) : ''}</div>
     <div class="tiles">${tiles}</div>
-    ${C ? pn('Courbe des taux depuis 1990 (mensuel) : chaque colonne est une courbe', 'ECO', cvb('ecH', 210), { lect: 'Couleur = niveau du taux (bleu bas, rouge haut). Les bandes où les échéances courtes sont plus « chaudes » que les longues sont des inversions de courbe, qui ont précédé les récessions de 1990, 2001, 2008 et 2020.' }) : ''}`;
+    ${C ? pn('Courbe des taux depuis 1990 (mensuel) : chaque colonne est une courbe', 'ECWB', cvb('ecH', 210), { lect: 'Couleur = niveau du taux (bleu bas, rouge haut). Les bandes où les échéances courtes sont plus « chaudes » que les longues sont des inversions de courbe, qui ont précédé les récessions de 1990, 2001, 2008 et 2020.' }) : ''}`;
   m.querySelectorAll('[data-g]').forEach(b => b.onclick = () => { st.g = b.dataset.g; render(); }); m.querySelectorAll('[data-cmp]').forEach(b => b.onclick = () => { st.cmp = +b.dataset.cmp; render(); });
   m.querySelectorAll('.tile').forEach(t => t.onclick = () => { st.sel = t.dataset.id; render(); });
   const shade = (x, o) => { if (!E.rec) return; const { X, layout, i0, i1 } = o; const D = o.D; x.fillStyle = 'rgba(255,255,255,.07)'; for (const [a, b] of E.rec) { let ia = D.findIndex(d => d >= a), ib = D.findIndex(d => d >= b); if (ia < 0) continue; if (ib < 0) ib = D.length - 1; if (ib < i0 || ia > i1) continue; const xa = X(Math.max(ia, i0)), xb = X(Math.min(ib, i1)); for (const l of layout) x.fillRect(xa, l.top, Math.max(1, xb - xa), l.bot - l.top); } };
