@@ -220,7 +220,7 @@ PAGES.SRCH = async (m, alive) => {
    banques centrales, marché monétaire, bons et emprunts du Trésor, contrats à terme, pentes et inflation, courbe du jour contre 1 mois et 1 an */
 PAGES.BTMM = async (m, alive) => {
   const [W, E, B] = await Promise.all([WMKT(), getJSON('eco.json').catch(() => null), getJSON('bceao.json').catch(() => null)]); if (!alive()) return; setTitle('Treasury & Money Markets');
-  const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, RT = Object.fromEntries(((W && W.rt) || []).map(r => [r.s, r])), FU = Object.fromEntries(((W && W.cmd) || []).filter(r => r.g === 'RTF').map(r => [r.s, r]));
+  const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, RT = Object.fromEntries(((W && W.rt) || []).map(r => [r.s, r])), FU = Object.fromEntries(((W && W.cmd) || []).filter(r => r.g === 'RTF' || r.s === '@FF.1').map(r => [r.s, r]));
   const dI = d => d ? `${String(d).slice(6, 8)}/${String(d).slice(4, 6)}` : '—';
   const bp = v => v == null || !isFinite(v) ? '<span class="dm">—</span>' : (() => { const r = Math.round(v * 10) / 10 || 0; return `<span class="${cls(r)}">${r > 0 ? '+' : ''}${num(r, 1)}</span>`; })();
   const fr = (id, lab) => { const x = M[id]; return x ? `<tr><td class="l am">${lab}</td><td class="wh">${num(x.last, 2)}</td><td>${x.prev != null ? bp((x.last - x.prev) * 100) : '—'}</td><td class="dm">${dI(x.dl)}</td></tr>` : `<tr><td class="l am">${lab}</td><td class="dm" colspan="3">en attente du relevé du soir</td></tr>`; };

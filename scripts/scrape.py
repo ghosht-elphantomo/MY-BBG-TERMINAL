@@ -470,7 +470,8 @@ WORLD = {
             ("VOL", ".VIX")],
     "cmd": [("MET", "@GC.1"), ("MET", "@SI.1"), ("MET", "@HG.1"), ("MET", "@PL.1"), ("MET", "@PA.1"),
             ("AGR", "@CC.1"), ("AGR", "@KC.1"), ("AGR", "@CT.1"), ("AGR", "@SB.1"), ("AGR", "@W.1"), ("AGR", "@C.1"), ("AGR", "@S.1"), ("AGR", "@SM.1"), ("AGR", "@LC.1"),
-            ("RTF", "@TU.1"), ("RTF", "@FV.1"), ("RTF", "@TY.1"), ("RTF", "@US.1"), ("RTF", "@FF.1")],
+            ("RTF", "@TU.1"), ("RTF", "@FV.1"), ("RTF", "@TY.1"), ("RTF", "@US.1")] + [("FF", f"@FF.{i}") for i in range(1, 14)] +
+           [("IXF", "@SP.1"), ("IXF", "@ND.1"), ("IXF", "@DJ.1"), ("IXF", "@TFS.1"), ("IXF", "@VX.1"), ("IXF", "@FFI.1"), ("IXF", "@NK.1")],
     "fx": [("FX", ".DXY"), ("FX", "EUR="), ("FX", "GBP="), ("FX", "JPY="), ("FX", "CHF="), ("FX", "CNY="), ("FX", "XOF="), ("FX", "NGN="), ("FX", "GHS="), ("FX", "ZAR="),
            ("FX", "CAD="), ("FX", "AUD="), ("FX", "NZD="), ("FX", "SEK="), ("FX", "NOK="), ("FX", "DKK="), ("FX", "MXN="), ("FX", "BRL="), ("FX", "ARS="), ("FX", "ILS="),
            ("FX", "EGP="), ("FX", "MAD="), ("FX", "KES="), ("FX", "HKD="), ("FX", "KRW="), ("FX", "TWD="), ("FX", "INR="), ("FX", "SGD="), ("FX", "MYR="), ("FX", "TRY=")],

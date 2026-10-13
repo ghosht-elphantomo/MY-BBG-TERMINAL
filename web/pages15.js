@@ -257,3 +257,45 @@ PAGES.HS = async (m, alive) => {
   inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); const x = Q.by[inp.value.trim().toUpperCase()] || searchSecs(inp.value)[0]; if (x) { st.b = x.id; render(); } } };
   $('hsM').onchange = e => { st.mode = e.target.value; render(); }; $('hsY').onchange = e => { st.y = +e.target.value; render(); }; const hf = $('hsF'); if (hf) hf.onchange = e => { st.fx = e.target.checked; render(); };
 };
+
+/* ------------------------------------------------------------------ WEIF : contrats à terme sur indices (indication d'ouverture, écart au comptant) */
+PAGES.WEIF = async (m, alive) => {
+  setTitle('World Equity Index Futures'); const W = await WMKT(); if (!alive()) return;
+  const F = Object.fromEntries(((W && W.cmd) || []).filter(r => r.g === 'IXF').map(r => [r.s, r])), I = Object.fromEntries(((W && W.idx) || []).map(r => [r.s, r]));
+  const D = [['@SP.1', 'S&P 500 (CME)', '.SPX'], ['@ND.1', 'Nasdaq-100 (CME)', 'NDX'], ['@DJ.1', 'Dow Jones (CBOT)', '.DJI'], ['@TFS.1', 'Russell 2000 (CME)', '.RUT'], ['@VX.1', 'VIX (CBOE)', '.VIX'], ['@FFI.1', 'FTSE 100 (ICE)', '.FTSE'], ['@NK.1', 'Nikkei 225 (CME, en $)', '.N225']].filter(d => F[d[0]]);
+  if (!D.length) { m.innerHTML = pn('Contrats à terme sur indices', 'WEIF', '<div class="empty">Contrats en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
+  const spot = k => k === 'NDX' ? (Q.by.NDX ? { last: Q.by.NDX.last, t: null } : null) : I[k];
+  const mx = Math.max(1e-6, ...D.map(d => Math.abs(F[d[0]].pct || 0)));
+  m.innerHTML = `<div class="grid side">${pn('Contrats à terme sur indices · 1re échéance', 'WEIF', `<table class="t wcr"><thead><tr><th class="l">Contrat</th><th class="l">Échéance</th><th>Dernier</th><th>Var.</th><th>Var. %</th><th class="c">Indication</th><th>Heure</th><th>Indice comptant</th><th>Écart (pts)</th><th>Écart %</th></tr></thead><tbody>
+      ${D.map(([k, l, ix], i) => { const r = F[k], sp = spot(ix), b = sp && sp.last && k !== '@NK.1' ? r.last - sp.last : null;
+        return `<tr><td class="l"><span class="rn">${i + 1})</span><span class="am">${l}</span></td><td class="l dm">${esc(ctr(r.n) || r.exp || '')}</td><td class="wh">${num(r.last, 2)}</td><td class="${cls(r.chg)}">${r.chg != null ? (r.chg > 0 ? '+' : '') + num(r.chg, 2) : '—'}</td><td>${pc(r.pct)}</td>
+          <td class="wcb"><span class="z"></span>${r.pct != null ? `<i class="${r.pct >= 0 ? 'p' : 'n'}" style="width:${(Math.abs(r.pct) / mx * 50).toFixed(1)}%"></i>` : ''}</td><td class="dm">${qTime(r.t)}</td><td>${sp && sp.last ? num(sp.last, 2) : '—'}</td><td>${b != null ? `<span class="${cls(b)}">${b > 0 ? '+' : ''}${num(b, 2)}</span>` : '—'}</td><td>${b != null ? pc(b / sp.last) : '—'}</td></tr>`; }).join('')}</tbody></table>`,
+      { np: true, lect: 'Var. = variation du contrat depuis le cours de compensation de la veille : avant l’ouverture de New York, c’est l’indication du sens d’ouverture des indices. Écart = contrat − dernier niveau de l’indice au comptant (qui peut dater de la clôture précédente) ; il reflète aussi le portage (taux moins dividendes) jusqu’à l’échéance. Nikkei coté en dollars : écart non calculé.' })}
+    ${pn('Lecture', 'WEIF', `<div class="kv2">${D.filter(d => ['@SP.1', '@ND.1', '@DJ.1', '@TFS.1'].includes(d[0])).map(([k, l]) => `<span>${l.replace(/ \(.*\)/, '')}</span><b>${pc(F[k].pct)}</b>`).join('')}${F['@VX.1'] ? `<span>VIX à terme</span><b class="wh">${num(F['@VX.1'].last, 2)}</b>` : ''}</div>`, { lect: 'Signe et ampleur attendus à l’ouverture de Wall Street d’après les contrats à terme, hors nouvelles d’ici l’ouverture.' })}</div>`;
+};
+
+/* ------------------------------------------------------------------ WIRP : anticipations de taux de la Fed d'après les contrats Fed funds 30 jours */
+const FOMC = ['2026-01-28', '2026-03-18', '2026-04-29', '2026-06-17', '2026-07-29', '2026-09-16', '2026-10-28', '2026-12-09']; // dates de décision publiées par la Fed (2e jour de réunion)
+PAGES.WIRP = async (m, alive) => {
+  setTitle('World Interest Rate Probability'); const [W, E] = await Promise.all([WMKT(), getJSON('eco.json').catch(() => null)]); if (!alive()) return;
+  const FF = ((W && W.cmd) || []).filter(r => r.g === 'FF').sort((a, b) => String(a.exp).localeCompare(String(b.exp)));
+  if (FF.length < 3) { m.innerHTML = pn('Anticipations de taux', 'WIRP', '<div class="empty">Contrats Fed funds en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
+  const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, eff = M.DFF ? M.DFF.last : 100 - FF[0].last, lo = M.DFEDTARL ? M.DFEDTARL.last : null, hi = M.DFEDTARU ? M.DFEDTARU.last : null;
+  const R = FF.map(r => ({ r, ym: String(r.exp).slice(0, 7), imp: 100 - r.last }));
+  /* méthode des contrats mensuels : le mois d'une réunion mélange le taux d'avant et le taux d'après la décision */
+  const today = new Date().toISOString().slice(0, 10), meet = []; let pre = eff;
+  for (const x of R) { const md = FOMC.find(d => d.slice(0, 7) === x.ym && d >= today); if (!md) { pre = x.imp; continue; }
+    const [y, mo] = x.ym.split('-').map(Number), N = new Date(Date.UTC(y, mo, 0)).getUTCDate(), d1 = +md.slice(8, 10); /* le nouveau taux s'applique le lendemain de la décision */
+    const post = N - d1 > 0 ? (x.imp - pre * d1 / N) / ((N - d1) / N) : x.imp; meet.push({ d: md, pre, post, chg: (post - pre) * 100 }); pre = post; }
+  const mois = ym => new Date(ym + '-15T12:00:00Z').toLocaleDateString('fr-FR', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  m.innerHTML = `<div class="tools ttb"><span class="tlab">Banque centrale</span><b class="wh">Réserve fédérale (États-Unis)</b><span class="tlab">Fourchette cible</span><b class="wh">${lo != null && hi != null ? `${num(lo, 2)} – ${num(hi, 2)} %` : '—'}</b><span class="tlab">Taux effectif</span><b class="wh">${num(eff, 2)} %</b><span class="gsp"></span><span class="dm">contrats relevés à ${qTime(FF[0].t)}</span></div>
+    <div class="grid c2">${pn('Taux moyen implicite par mois', 'WIRP', cvb('wiG', 300), { np: true })}
+      ${pn('Prochaines réunions du FOMC', 'WIRP', meet.length ? `<table class="t wrp"><thead><tr><th class="l">Décision</th><th>Taux avant</th><th>Taux implicite après</th><th>Variation (pb)</th><th class="l">Lecture</th></tr></thead><tbody>${meet.map(x => { const p = Math.abs(x.chg) / 25;
+          return `<tr><td class="l am">${fds(x.d)}</td><td>${num(x.pre, 3)} %</td><td class="wh">${num(x.post, 3)} %</td><td>${bpS ? bpS(x.chg) : num(x.chg, 1)}</td><td class="l">${Math.abs(x.chg) < 2.5 ? 'statu quo attendu' : `${x.chg < 0 ? 'baisse' : 'hausse'} de 25 pb anticipée à ${num(Math.min(100, p * 100), 0)} %${p > 1 ? ' (plus d’un mouvement)' : ''}`}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">Aucune réunion restante cette année dans la fenêtre des contrats.</div>',
+        { np: true, lect: 'Méthode des contrats mensuels (celle des outils de marché) : le prix d’un mois de réunion mélange le taux d’avant et celui d’après la décision, au prorata des jours. Réunions de l’année en cours seulement.' })}</div>
+    ${pn('Contrats Fed funds 30 jours', 'WIRP', `<table class="t"><thead><tr><th class="l">Mois</th><th class="l">Échéance</th><th>Prix</th><th>Var.</th><th>Taux implicite</th><th>Écart au taux effectif (pb)</th><th>Équivalent en mouvements de 25 pb</th></tr></thead><tbody>${R.map((x, i) => { const d = (x.imp - eff) * 100;
+        return `<tr><td class="l"><span class="rn">${i + 1})</span><span class="am">${mois(x.ym)}</span></td><td class="l dm">${fds(x.r.exp)}</td><td class="wh">${num(x.r.last, 4)}</td><td class="${cls(x.r.chg)}">${x.r.chg != null ? (x.r.chg > 0 ? '+' : '') + num(x.r.chg, 3) : '—'}</td><td class="wh">${num(x.imp, 3)} %</td><td>${bpS(d)}</td><td>${num(d / 25, 2)}</td></tr>`; }).join('')}</tbody></table>`,
+      { np: true, lect: 'Taux implicite = 100 − prix du contrat : taux effectif moyen attendu sur le mois. Un écart négatif signifie que le marché anticipe des baisses de taux.' })}`;
+  new TSChart($('wiG'), { panes: [{ h: 1, fmt: v => num(v, 2) + '%', refs: (lo != null ? [{ v: lo, color: 'rgba(200,200,200,.5)' }, { v: hi, color: 'rgba(200,200,200,.5)' }] : []).concat([{ v: eff, color: CL.amber }]) }], grid: 'dot' })
+    .set({ x: R.map(x => +x.r.exp.replace(/-/g, '')), series: [{ y: R.map(x => x.imp), color: '#5fd0ea', w: 2, label: 'Taux implicite', fmt: v => num(v, 3) + ' %' }] }, [0, R.length - 1]);
+};
