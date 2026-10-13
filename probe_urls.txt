@@ -1,4 +1,6 @@
-cnbc_idx1|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=.SPX%7C.DJI%7C.IXIC%7C.RUT%7C.VIX%7C.GSPTSE%7C.BVSP%7C.MXX%7C.MERV%7C.FTSE%7C.GDAXI%7C.FCHI%7C.STOXX50E%7C.FTMIB%7C.IBEX%7C.AEX%7C.SSMI%7C.OMXS30&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
-cnbc_idx2|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=.N225%7C.HSI%7C.SSEC%7C.SZI%7C.KS11%7C.TWII%7C.NSEI%7C.BSESN%7C.AXJO%7C.STI%7C.JKSE%7C.KLSE%7C.TA35%7C.TASI%7C.EGX30%7C.JALSH%7C.NGSEINDX%7C.MASI&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
-cnbc_com|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=%40GC.1%7C%40SI.1%7C%40HG.1%7C%40PL.1%7C%40PA.1%7C%40W.1%7C%40C.1%7C%40S.1%7C%40KC.1%7C%40CC.1%7C%40CT.1%7C%40SB.1%7C%40LC.1%7C%40RC.1%7C%40CO.1%7C%40SM.1&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
-cnbc_fx|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=EUR%3D%7CGBP%3D%7CJPY%3D%7CCHF%3D%7CCNY%3D%7CXOF%3D%7CNGN%3D%7CZAR%3D%7CGHS%3D%7C.DXY%7CUS3M%7CUS2Y%7CUS5Y%7CUS10Y%7CUS30Y%7CDE10Y-DE%7CFR10Y-FR%7C.BTC.CB%3D&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
+tv_cal.json|https://economic-calendar.tradingview.com/events?from=2026-10-05T00:00:00.000Z&to=2026-10-24T00:00:00.000Z&countries=US,EU,GB,JP,CN,DE,FR,CI,SN,NG,ZA,GH
+ff_week.json|https://nfs.faireconomy.media/ff_calendar_thisweek.json
+ff_next.json|https://nfs.faireconomy.media/ff_calendar_nextweek.json
+fred_cal.html|https://fred.stlouisfed.org/releases/calendar
+bls.ics|https://www.bls.gov/schedule/news_release/bls.ics
+cnbc_rt.json|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=US1M%7CUS6M%7CUS1Y%7CUS7Y%7CUS20Y%7CGB10Y-GB%7CIT10Y-IT%7CES10Y-ES%7CJP10Y-JP%7CCN10Y-CN%7CCA10Y-CA%7CAU10Y-AU%7CCH10Y-CH%7CZA10Y-ZA%7CBR10Y-BR%7CIN10Y-IN&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
