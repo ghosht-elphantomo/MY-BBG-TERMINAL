@@ -1,6 +1,4 @@
-brvm_actions.html|https://www.brvm.org/fr/cours-actions/0
-brvm_indices.html|https://www.brvm.org/fr/indices
-sika_palmares.html|https://www.sikafinance.com/marches/palmares
-stooq_us.csv|https://stooq.com/q/l/?s=aapl.us&f=sd2t2ohlcv&h&e=csv
-nq_quotes.json|https://api.nasdaq.com/api/quote/AAPL/info?assetclass=stocks
-ecb_hist.xml|https://www.ecb.europa.eu/stats/eurofxref/eurofxref-hist-90d.xml
+brvm_cap.html|https://www.brvm.org/fr/capitalisations/0
+brvm_cap_actions.html|https://www.brvm.org/fr/capitalisations/1
+brvm_emetteurs.html|https://www.brvm.org/fr/emetteurs/societes-cotees
+brvm_snts.html|https://www.brvm.org/fr/emetteurs/societes-cotees/sonatel
