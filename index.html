@@ -398,7 +398,8 @@ body.maxi .fkeys,body.maxi .nwp,body.maxi .status{display:none}
 body.maxi main{padding:2px}
 /* ---- GP façon Bloomberg ---- */
 .gpr,.gpr2{gap:4px}
-.gpr2 .tb{padding:1px 7px}
+.gpr2 .tb{padding:1px 6px}
+.gpr2{gap:3px}
 .gck{display:inline-flex;align-items:center;gap:5px;color:#e6e6e6;font-size:12.5px;margin-left:8px;cursor:pointer;user-select:none}
 .gck input{display:none}
 .gck i{width:11px;height:11px;border:1px solid #9a9a9a;background:#111;display:inline-block;position:relative}
@@ -413,7 +414,7 @@ body.maxi main{padding:2px}
 .gsp{flex:1}
 .tb.gdd{background:#1e1e1e;color:#e6e6e6}
 .tb.gdd:hover{background:#3d3d3d}
-.tools input.gadd{width:168px;text-transform:uppercase}
+.tools input.gadd{width:150px;text-transform:uppercase}
 .tb.gmx{background:#1e1e1e}
 .tb.gmx{font-size:14px;padding:0 7px}
 .gpcw{position:relative}
@@ -1350,7 +1351,7 @@ PAGES.GP = async (m, alive) => {
       <select class="ofld" id="gpCcy" title="Devise d'affichage" ${ccyOpts.length < 2 ? 'disabled' : ''}>${ccyOpts.map(c => `<option value="${c === ccyL ? '' : c}" ${(g.ccy || ccyL) === c ? 'selected' : ''}>${c === ccyL ? 'Devise locale' + (c ? ' (' + c + ')' : '') : c}</option>`).join('')}</select>
       ${ck('gpMaOn', maOn, 'Moy. mobiles', 'Moyennes mobiles (50 et 200 séances par défaut)')}${maOn ? `<span class="gmas">${g.ma.map((v, i) => `<input class="ofld ma" data-ma="${i}" value="${esc(v || (g.ma.every(x => !x) ? MA_DEF[i] : ''))}" placeholder="—" title="Période de la moyenne mobile ${i + 1}">`).join('')}</span>` : `<span class="gpen" id="gpMaEd" title="Choisir les périodes">✎</span>`}
       ${ck('gpEv', g.ev, 'Événements clés', 'Dividendes (D), résultats, états financiers et rapports d’activité (R), assemblées générales (A)')}<span class="gsp"></span><button class="tb gmx" id="gpMx" title="${document.body.classList.contains('maxi') ? 'Réduire' : 'Agrandir (plein écran)'}">${document.body.classList.contains('maxi') ? '⤡ Réduire' : '⤢ Agrandir'}</button></div>`;
-  const row2 = `<div class="tools gpr2">${(intra ? ['1J'] : []).concat(ranges).map(r => tb('r:' + r, r === '1J' ? '1J 5MIN' : r === 'MAX' ? 'Max' : r, g.range === r)).join('')}
+  const row2 = `<div class="tools gpr2">${(intra ? ['1J'] : []).concat(ranges).map(r => tb('r:' + r, r === 'MAX' ? 'Max' : r, g.range === r, r === '1J' ? 'Séance du jour, barres de 5 minutes (heure de New York)' : '')).join('')}
       ${!monthly ? `<select class="ofld dk" id="gpPer"><option value="D" ${g.per === 'D' ? 'selected' : ''}>Quotidien</option><option value="W" ${g.per === 'W' ? 'selected' : ''}>Hebdomadaire</option><option value="M" ${g.per === 'M' ? 'selected' : ''}>Mensuel</option></select>` : ''}
       <span class="gico">${['bbg', 'line', 'area'].concat(s.cls !== 'Curncy' && !monthly ? ['candle'] : []).map(k => `<button class="tb ico ${g.type === k ? 'on' : ''}" data-gp="t:${k}" title="${{ bbg: 'Montagne Bloomberg', line: 'Ligne', area: 'Aire', candle: 'Bougies' }[k]}">${GP_ICO[k]}</button>`).join('')}</span>
       <button class="tb ${g.tbl ? 'on' : ''}" id="gpTb" title="Tableau des cours de la période affichée">Tableau</button>
@@ -2404,19 +2405,19 @@ PAGES.PER = async (m, alive) => {
   const B = P.boc || { d: [] }, bl = B.d.length - 1, F = P.fqt || { d: [], pe: [] }; const fl = (() => { for (let i = F.pe.length - 1; i >= 0; i--) if (F.pe[i] != null) return i; return -1; })();
   const src = (P.sources || []).filter(x => x && x.v != null); const fwd = src.filter(x => x.kind === 'forward'), trl = src.filter(x => x.kind !== 'forward');
   const avgF = fwd.length ? U.mean(fwd.map(x => x.v)) : null;
-  const rowsS = [bl >= 0 ? { n: 'Bulletin officiel de la cote', kind: 'PER moyen du marché (passé)', v: B.per[bl], d: B.d[bl], u: null } : null,
+  const rowsS = [bl >= 0 ? { n: 'PER officiel du marché', kind: 'PER moyen du marché (passé)', v: B.per[bl], d: B.d[bl], u: null } : null,
     fl >= 0 ? { n: 'FQT — calcul pondéré par les capitalisations', kind: 'PER passé (Σ capitalisations ÷ Σ résultats)', v: F.pe[fl], d: F.d[fl], u: null } : null, ...src.map((x, i) => ({ n: `Estimation publiée n° ${i + 1}`, kind: x.kind === 'forward' ? `PER prévisionnel ${x.y || ''}` : 'PER passé', v: x.v, d: x.d, u: null, cov: x.cov }))].filter(Boolean);
   const pes = (IDX ? IDX.rows : []).filter(r => r.mkt === 'BRVM' && r.pe != null && r.pe > 0 && r.pe < 80);
   const bins = [0, 5, 8, 10, 12, 15, 20, 30, 80]; const hist = bins.slice(0, -1).map((b, i) => pes.filter(r => r.pe >= b && r.pe < bins[i + 1]).length);
   const bySec = {}; pes.forEach(r => { (bySec[r.grp] = bySec[r.grp] || []).push(r); }); const secRows = Object.entries(bySec).map(([g, a]) => ({ g, n: a.length, pe: (() => { const mc = a.reduce((s, r) => s + (r.mcap || 0), 0), e = a.reduce((s, r) => s + (r.mcap || 0) / r.pe, 0); return e ? mc / e : null; })(), med: med(a.map(r => r.pe)) })).sort((a, b) => b.n - a.n);
   m.innerHTML = `<div class="grid c2">${pn('PER du marché BRVM', 'PER', `<table class="t"><thead><tr><th class="l">Référence</th><th class="l">Mesure</th><th>Valeur</th><th class="l">Date</th></tr></thead><tbody>${rowsS.map(r => `<tr><td class="l wh">${r.u ? `<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.n)}</a>` : esc(r.n)}</td><td class="l">${esc(r.kind)}${r.cov ? ` <span class="dm">(${r.cov})</span>` : ''}</td><td class="yl">${num(r.v, 2)} x</td><td class="l">${typeof r.d === 'number' ? fd(r.d) : esc(r.d || '—')}</td></tr>`).join('')}</tbody></table>
-      <div class="kv2" style="margin-top:8px"><span>PER prévisionnel · moyenne des estimations</span><b>${avgF != null ? num(avgF, 2) + ' x (' + fwd.length + ' estimation' + (fwd.length > 1 ? 's' : '') + ')' : 'non disponible'}</b><span>Rendement des bénéfices (1 / PER officiel)</span><b>${bl >= 0 ? P1(1 / B.per[bl], 2) : '—'}</b><span>Rendement moyen du marché (BOC)</span><b>${bl >= 0 && B.rdt[bl] != null ? num(B.rdt[bl], 2) + ' %' : '—'}</b><span>Prime de risque du marché (BOC)</span><b>${bl >= 0 && B.prime[bl] != null ? num(B.prime[bl], 2) : '—'}</b></div>`,
-      { lect: `Le PER prévisionnel de l’indice BRVM est rarement publié : ${fwd.length ? `${fwd.length} estimation${fwd.length > 1 ? 's' : ''} disponible${fwd.length > 1 ? 's' : ''}, moyenne affichée avec sa date` : 'aucune estimation exploitable lors de la dernière collecte'}. Le bulletin officiel de la cote publie un PER moyen calculé sur les derniers bénéfices connus.` })}
-    ${pn('Historique du PER du marché', 'PER', cvb('peH', 300), { lect: 'Points ambre : PER moyen publié dans le bulletin officiel (un relevé par mois, rattrapage progressif). Ligne cyan : calcul FQT (capitalisations ÷ résultats nets du dernier exercice publié), sur les sociétés dont les comptes sont disponibles.' })}</div>
+      <div class="kv2" style="margin-top:8px"><span>PER prévisionnel · moyenne des estimations</span><b>${avgF != null ? num(avgF, 2) + ' x (' + fwd.length + ' estimation' + (fwd.length > 1 ? 's' : '') + ')' : 'non disponible'}</b><span>Rendement des bénéfices (1 / PER officiel)</span><b>${bl >= 0 ? P1(1 / B.per[bl], 2) : '—'}</b><span>Rendement moyen du marché (officiel)</span><b>${bl >= 0 && B.rdt[bl] != null ? num(B.rdt[bl], 2) + ' %' : '—'}</b><span>Prime de risque du marché (officielle)</span><b>${bl >= 0 && B.prime[bl] != null ? num(B.prime[bl], 2) : '—'}</b></div>`,
+      { lect: `Le PER prévisionnel de l’indice BRVM est rarement publié : ${fwd.length ? `${fwd.length} estimation${fwd.length > 1 ? 's' : ''} disponible${fwd.length > 1 ? 's' : ''}, moyenne affichée avec sa date` : 'aucune estimation exploitable lors de la dernière collecte'}. Le PER officiel du marché est un PER moyen calculé sur les derniers bénéfices connus.` })}
+    ${pn('Historique du PER du marché', 'PER', cvb('peH', 300), { lect: 'Points ambre : PER officiel du marché (un relevé par mois, rattrapage progressif). Ligne cyan : calcul FQT (capitalisations ÷ résultats nets du dernier exercice publié), sur les sociétés dont les comptes sont disponibles.' })}</div>
     <div class="grid c2">${pn('Distribution des PER des actions', 'PER', cvb('peD', 220), { lect: `${pes.length} sociétés avec un résultat positif. Médiane <strong>${num(med(pes.map(r => r.pe)), 1)}</strong>.` })}
     ${pn('PER par secteur', 'PER', `<table class="t"><thead><tr><th class="l">Secteur</th><th>Sociétés</th><th>PER agrégé</th><th>PER médian</th></tr></thead><tbody>${secRows.map(r => `<tr><td class="l am">${esc(r.g)}</td><td>${r.n}</td><td class="wh">${num(r.pe, 1)}</td><td>${num(r.med, 1)}</td></tr>`).join('')}</tbody></table>`, { np: true, lect: 'PER agrégé = Σ capitalisations ÷ Σ bénéfices du secteur (pondéré). PER médian = société médiane.' })}</div>`;
   const xs = [...new Set(F.d.concat(B.d))].sort((a, b) => a - b); const bm = new Map(B.d.map((d, i) => [d, B.per[i]])), fm = new Map(F.d.map((d, i) => [d, F.pe[i]]));
-  if (xs.length) new TSChart($('peH'), { panes: [{ h: 1, fmt: v => num(v, 0) + 'x' }] }).set({ x: xs, series: [{ y: xs.map(d => fm.has(d) ? fm.get(d) : null), color: CL.cyan, label: 'FQT', fmt: v => num(v, 2) + ' x' }, { type: 'dots', y: xs.map(d => bm.has(d) ? bm.get(d) : null), color: CL.amber, label: 'BRVM (BOC)', fmt: v => num(v, 2) + ' x' }] }, [0, xs.length - 1]);
+  if (xs.length) new TSChart($('peH'), { panes: [{ h: 1, fmt: v => num(v, 0) + 'x' }] }).set({ x: xs, series: [{ y: xs.map(d => fm.has(d) ? fm.get(d) : null), color: CL.cyan, label: 'FQT', fmt: v => num(v, 2) + ' x' }, { type: 'dots', y: xs.map(d => bm.has(d) ? bm.get(d) : null), color: CL.amber, label: 'PER officiel', fmt: v => num(v, 2) + ' x' }] }, [0, xs.length - 1]);
   barChart($('peD'), { labels: bins.slice(0, -1).map((b, i) => `${b}-${bins[i + 1]}`), values: hist, fmt: v => num(v, 0), pos: CL.cyan, labelsOnBars: true });
 };
 
@@ -2861,6 +2862,11 @@ async function desPerf(m, s, S) {
 }
 
 /* ------------------------------------------------------------------ HDS : actionnariat (BRVM : SikaFinance ; US : détenteurs institutionnels 13F via Nasdaq) */
+/* chiffres Nasdaq (« 1,426,283,914 », « 1.919% », « $480,144,217 ») remis au format français */
+const nqv = x => { if (x == null) return null; const v = parseFloat(String(x).replace(/[$,%\s]/g, '')); return isFinite(v) ? v : null; };
+const nqf = (x, d) => { const v = nqv(x); return v == null ? '—' : num(v, d); };
+const HDS_POS = { 'Increased Positions': 'Positions renforcées', 'Decreased Positions': 'Positions réduites', 'Held Positions': 'Positions inchangées', 'Total Institutional Shares': 'Total des titres détenus',
+  'New Positions': 'Nouvelles positions', 'Sold Out Positions': 'Positions soldées' };
 PAGES.HDS = async (m, alive) => {
   const s = sec(ST.sec), brvm = isBRVM(s); const PR = await getJSON('profiles.json').catch(() => ({})); if (!alive()) return; const P = PR[s.id] || {};
   setTitle('Holdings: Current');
@@ -2879,9 +2885,9 @@ PAGES.HDS = async (m, alive) => {
   const I = P.inst; setTabs([['i', 'Institutionnels']], 'i', () => { });
   if (!I) { m.innerHTML = pn(`${esc(s.n)} · détenteurs`, 'HDS', '<div class="empty">Détenteurs non encore collectés (relevé Nasdaq chaque soir).</div>'); return; }
   m.innerHTML = `<div class="grid c2">${pn(`${esc(s.n)} · principaux détenteurs institutionnels`, 'HDS', `<div class="tw"><table class="t"><thead><tr><th class="l">#</th><th class="l">Détenteur</th><th class="l">Déclaration</th><th>Titres</th><th>Variation</th><th>Var. %</th><th>Valeur (k$)</th></tr></thead><tbody>
-      ${(I.rows || []).map((r, i) => `<tr><td class="l">${i + 1})</td><td class="l nm">${esc(r[0])}</td><td class="l">${usDate(r[1]) || esc(r[1] || '')}</td><td>${esc(r[2] || '')}</td><td class="${/^-/.test(r[3] || '') ? 'dn' : 'up'}">${esc(r[3] || '')}</td><td>${esc(r[4] || '')}</td><td>${esc((r[5] || '').replace('$', ''))}</td></tr>`).join('')}</tbody></table></div>`,
+      ${(I.rows || []).map((r, i) => { const ch = nqv(r[3]), pv = nqv(r[4]); return `<tr><td class="l">${i + 1})</td><td class="l nm">${esc(r[0])}</td><td class="l">${usDate(r[1]) || esc(r[1] || '')}</td><td>${nqf(r[2], 0)}</td><td class="${cls(ch)}">${ch != null ? (ch > 0 ? '+' : '') + num(ch, 0) : '—'}</td><td>${pv != null ? sgn(pv / 100, 2) : '—'}</td><td>${nqf(r[5], 0)}</td></tr>`; }).join('')}</tbody></table></div>`,
       { np: true, lect: `Source : déclarations 13F agrégées par Nasdaq (relevé du ${fds(P.d)}). Les dates de déclaration diffèrent selon les institutions ; seuls les gérants de plus de 100 M$ déclarent.` })}
-    ${pn('Synthèse', 'HDS', dkv([['Détention institutionnelle', esc(I.pct || '')], ['Institutions déclarantes', I.n ? num(+I.n, 0) : null], ['Titres en circulation (M)', esc(I.sh_m || '')]].concat((I.pos || []).map(r => [esc(r[0]), `${esc(r[1])} inst. · ${esc(r[2])} titres`]))))}</div>`;
+    ${pn('Synthèse', 'HDS', dkv([['Détention institutionnelle', nqv(I.pct) != null ? num(nqv(I.pct), 2) + ' %' : '—'], ['Institutions déclarantes', I.n ? num(+I.n, 0) : null], ['Titres en circulation (M)', nqf(I.sh_m, 0)]].concat((I.pos || []).map(r => [esc(HDS_POS[r[0]] || r[0]), `${nqf(r[1], 0)} inst. · ${nqf(r[2], 0)} titres`]))))}</div>`;
 };
 
 </script>
@@ -3115,7 +3121,7 @@ PAGES.MODL = async (m, alive) => {
       <tr><td class="l">PER (fin de période)</td>${hist.map(i => { const ye = (us ? Y.y[i] : Y.y[i] * 10000 + 1231); let k = -1; for (let j = S.x.length - 1; j >= 0; j--) if (S.x[j] <= ye) { k = j; break; } return `<td>${k >= 0 && Y.eps[i] > 0 ? num(S.c[k] / Y.eps[i], 1) + ' x' : '—'}</td>`; }).join('')}${['bear', 'base', 'bull'].map(k => `<td class="est-b">${inp(k, 'pe', H.sc[k].pe, 1)} x</td>`).join('')}</tr>
       <tr><td class="l">Dividendes cumulés / action</td>${hist.map(() => '<td></td>').join('')}${['bear', 'base', 'bull'].map(k => `<td>${num(R[k].cum, 2)}</td>`).join('')}</tr></tbody></table></div>
       <div class="tools"><span class="tlab">Horizon</span><input class="ofld ma" id="moN" value="${H.N}"> ans<button class="tb rd" id="moGo">Recalculer</button><button class="tb" id="moR">Hypothèses par défaut</button></div>`,
-      { np: true, lect: `<b>Cases jaunes = hypothèses</b> (modifiables, enregistrées dans ce navigateur), <b>colonnes « publié » = comptes</b> (${esc(F.src || '')}). Par défaut : croissance base = TCAM du CA sur 5 ans (${P1(g5)}) bornée, marge = dernière marge publiée, distribution = dernier taux, PER base = PER actuel (${num(peNow, 1)} x, sans changement de multiple), bull = +20 %, bear = le plus bas entre −20 % et la médiane de ses 5 dernières années${peMed ? ' (' + num(peMed, 1) + ' x)' : ''} ; bull/bear = ±4 points de croissance, ±2 points de marge. Rendement = (cours théorique + dividendes cumulés non réinvestis) ÷ cours actuel, annualisé. Actions en circulation supposées constantes. Ce sont des scénarios, pas des prévisions.` })}`;
+      { np: true, lect: `<b>Cases jaunes = hypothèses</b> (modifiables, enregistrées dans ce navigateur), <b>colonnes « publié » = comptes publiés</b>${F.mkt === 'US' ? ' (' + esc(F.src || '') + ')' : ''}. Par défaut : croissance base = TCAM du CA sur 5 ans (${P1(g5)}) bornée, marge = dernière marge publiée, distribution = dernier taux, PER base = PER actuel (${num(peNow, 1)} x, sans changement de multiple), bull = +20 %, bear = le plus bas entre −20 % et la médiane de ses 5 dernières années${peMed ? ' (' + num(peMed, 1) + ' x)' : ''} ; bull/bear = ±4 points de croissance, ±2 points de marge. Rendement = (cours théorique + dividendes cumulés non réinvestis) ÷ cours actuel, annualisé. Actions en circulation supposées constantes. Ce sont des scénarios, pas des prévisions.` })}`;
   $('moGo').onclick = () => { const h = JSON.parse(JSON.stringify(H)); m.querySelectorAll('[data-k]').forEach(i => { const v = parseFloat(i.value.replace(/\s| /g, '').replace(',', '.')); if (isFinite(v)) h.sc[i.dataset.k][i.dataset.f] = i.dataset.f === 'pe' ? v : v / 100; }); h.N = Math.max(1, Math.min(15, +$('moN').value || 5)); lsSet(key, h); render(); };
   $('moR').onclick = () => { lsSet(key, null); render(); };
   /* axe hebdomadaire : 5 ans d'historique, puis l'horizon des scénarios à la même échelle */
@@ -4127,7 +4133,7 @@ function avail(code, s) {
   if (['EE', 'SURP'].includes(code)) return brvm ? 'aucun consensus d’analystes public pour la BRVM' : s.mkt === 'US' && eq ? (s.ee === false ? 'pas de consensus publié pour ce titre' : null) : 'réservé aux actions US';
   if (code === 'DVD' || code === 'DDM') return s.cls === 'Equity' || s.typ === 'ETF' ? null : 'pas de dividende';
   if (code === 'BTST' || code === 'QLAB' || code === 'ANOM') return s.f === 'D' ? null : 'série mensuelle';
-  if (code === 'HDS') return brvm && eq ? null : eq ? 'actionnariat publié uniquement pour les sociétés de la BRVM' : 'réservé aux actions';
+  if (code === 'HDS') return eq && (brvm || s.mkt === 'US') ? null : eq ? 'actionnariat non publié pour ce marché' : 'réservé aux actions';
   if (code === 'SCOR' || code === 'PEER') return eq && (brvm || s.fa) ? null : 'réservé aux actions dont les comptes sont disponibles';
   if (code === 'LQA') return s.cls === 'Equity' && s.f === 'D' ? null : 'réservé aux actions et ETF';
   if (code === 'TRA' || code === 'HVT' || code === 'VAP') return s.f === 'D' ? null : 'série mensuelle';
@@ -4399,7 +4405,7 @@ function renderSecbar() { renderSech(); }
 function renderStatus() {
   const L = Q.live && Q.live.qqq, ss = Q.sum.session;
   $('status').innerHTML = `<span>Données au <b>${fd(Q.sum.asof)}</b> · ${Q.sum.secs.length} titres · séance BRVM <b>${ss ? fds(ss.asof) : '—'}</b>${L ? ` · QQQ <b>${num(L.price, 2)}</b> (${L.state === 'REGULAR' ? 'séance' : L.state === 'PRE' ? 'pré-marché' : L.state === 'POST' ? 'après-bourse' : L.state === 'CLOSED' ? 'clôturé' : L.state}, ${new Date(L.time * 1000).toISOString().slice(11, 16)} UTC)` : ''}</span>
-    <span>Sources : BCEAO · UMOA-Titres · Nasdaq · SEC · FRED · CBOE · CNN · EIA · Coinbase · Banque mondiale — outil d'analyse, pas un conseil en investissement</span>`;
+    <span>Sources : BCEAO · UMOA-Titres · Nasdaq · SEC · FRED · CNBC · Yahoo Finance · TradingView · CBOE · CNN · EIA · AIE · Coinbase · Banque mondiale — outil d'analyse, pas un conseil en investissement</span>`;
 }
 let clocksTick = () => { };
 function clocks() { const z = [['ABJ', 'Africa/Abidjan'], ['PAR', 'Europe/Paris'], ['NY', 'America/New_York'], ['TYO', 'Asia/Tokyo']];

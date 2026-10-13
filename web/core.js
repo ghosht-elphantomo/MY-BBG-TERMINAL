@@ -90,7 +90,7 @@ function avail(code, s) {
   if (['EE', 'SURP'].includes(code)) return brvm ? 'aucun consensus d’analystes public pour la BRVM' : s.mkt === 'US' && eq ? (s.ee === false ? 'pas de consensus publié pour ce titre' : null) : 'réservé aux actions US';
   if (code === 'DVD' || code === 'DDM') return s.cls === 'Equity' || s.typ === 'ETF' ? null : 'pas de dividende';
   if (code === 'BTST' || code === 'QLAB' || code === 'ANOM') return s.f === 'D' ? null : 'série mensuelle';
-  if (code === 'HDS') return brvm && eq ? null : eq ? 'actionnariat publié uniquement pour les sociétés de la BRVM' : 'réservé aux actions';
+  if (code === 'HDS') return eq && (brvm || s.mkt === 'US') ? null : eq ? 'actionnariat non publié pour ce marché' : 'réservé aux actions';
   if (code === 'SCOR' || code === 'PEER') return eq && (brvm || s.fa) ? null : 'réservé aux actions dont les comptes sont disponibles';
   if (code === 'LQA') return s.cls === 'Equity' && s.f === 'D' ? null : 'réservé aux actions et ETF';
   if (code === 'TRA' || code === 'HVT' || code === 'VAP') return s.f === 'D' ? null : 'série mensuelle';
@@ -362,7 +362,7 @@ function renderSecbar() { renderSech(); }
 function renderStatus() {
   const L = Q.live && Q.live.qqq, ss = Q.sum.session;
   $('status').innerHTML = `<span>Données au <b>${fd(Q.sum.asof)}</b> · ${Q.sum.secs.length} titres · séance BRVM <b>${ss ? fds(ss.asof) : '—'}</b>${L ? ` · QQQ <b>${num(L.price, 2)}</b> (${L.state === 'REGULAR' ? 'séance' : L.state === 'PRE' ? 'pré-marché' : L.state === 'POST' ? 'après-bourse' : L.state === 'CLOSED' ? 'clôturé' : L.state}, ${new Date(L.time * 1000).toISOString().slice(11, 16)} UTC)` : ''}</span>
-    <span>Sources : BCEAO · UMOA-Titres · Nasdaq · SEC · FRED · CBOE · CNN · EIA · Coinbase · Banque mondiale — outil d'analyse, pas un conseil en investissement</span>`;
+    <span>Sources : BCEAO · UMOA-Titres · Nasdaq · SEC · FRED · CNBC · Yahoo Finance · TradingView · CBOE · CNN · EIA · AIE · Coinbase · Banque mondiale — outil d'analyse, pas un conseil en investissement</span>`;
 }
 let clocksTick = () => { };
 function clocks() { const z = [['ABJ', 'Africa/Abidjan'], ['PAR', 'Europe/Paris'], ['NY', 'America/New_York'], ['TYO', 'Asia/Tokyo']];

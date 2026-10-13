@@ -146,6 +146,11 @@ async function desPerf(m, s, S) {
 }
 
 /* ------------------------------------------------------------------ HDS : actionnariat (BRVM : SikaFinance ; US : détenteurs institutionnels 13F via Nasdaq) */
+/* chiffres Nasdaq (« 1,426,283,914 », « 1.919% », « $480,144,217 ») remis au format français */
+const nqv = x => { if (x == null) return null; const v = parseFloat(String(x).replace(/[$,%\s]/g, '')); return isFinite(v) ? v : null; };
+const nqf = (x, d) => { const v = nqv(x); return v == null ? '—' : num(v, d); };
+const HDS_POS = { 'Increased Positions': 'Positions renforcées', 'Decreased Positions': 'Positions réduites', 'Held Positions': 'Positions inchangées', 'Total Institutional Shares': 'Total des titres détenus',
+  'New Positions': 'Nouvelles positions', 'Sold Out Positions': 'Positions soldées' };
 PAGES.HDS = async (m, alive) => {
   const s = sec(ST.sec), brvm = isBRVM(s); const PR = await getJSON('profiles.json').catch(() => ({})); if (!alive()) return; const P = PR[s.id] || {};
   setTitle('Holdings: Current');
@@ -164,7 +169,7 @@ PAGES.HDS = async (m, alive) => {
   const I = P.inst; setTabs([['i', 'Institutionnels']], 'i', () => { });
   if (!I) { m.innerHTML = pn(`${esc(s.n)} · détenteurs`, 'HDS', '<div class="empty">Détenteurs non encore collectés (relevé Nasdaq chaque soir).</div>'); return; }
   m.innerHTML = `<div class="grid c2">${pn(`${esc(s.n)} · principaux détenteurs institutionnels`, 'HDS', `<div class="tw"><table class="t"><thead><tr><th class="l">#</th><th class="l">Détenteur</th><th class="l">Déclaration</th><th>Titres</th><th>Variation</th><th>Var. %</th><th>Valeur (k$)</th></tr></thead><tbody>
-      ${(I.rows || []).map((r, i) => `<tr><td class="l">${i + 1})</td><td class="l nm">${esc(r[0])}</td><td class="l">${usDate(r[1]) || esc(r[1] || '')}</td><td>${esc(r[2] || '')}</td><td class="${/^-/.test(r[3] || '') ? 'dn' : 'up'}">${esc(r[3] || '')}</td><td>${esc(r[4] || '')}</td><td>${esc((r[5] || '').replace('$', ''))}</td></tr>`).join('')}</tbody></table></div>`,
+      ${(I.rows || []).map((r, i) => { const ch = nqv(r[3]), pv = nqv(r[4]); return `<tr><td class="l">${i + 1})</td><td class="l nm">${esc(r[0])}</td><td class="l">${usDate(r[1]) || esc(r[1] || '')}</td><td>${nqf(r[2], 0)}</td><td class="${cls(ch)}">${ch != null ? (ch > 0 ? '+' : '') + num(ch, 0) : '—'}</td><td>${pv != null ? sgn(pv / 100, 2) : '—'}</td><td>${nqf(r[5], 0)}</td></tr>`; }).join('')}</tbody></table></div>`,
       { np: true, lect: `Source : déclarations 13F agrégées par Nasdaq (relevé du ${fds(P.d)}). Les dates de déclaration diffèrent selon les institutions ; seuls les gérants de plus de 100 M$ déclarent.` })}
-    ${pn('Synthèse', 'HDS', dkv([['Détention institutionnelle', esc(I.pct || '')], ['Institutions déclarantes', I.n ? num(+I.n, 0) : null], ['Titres en circulation (M)', esc(I.sh_m || '')]].concat((I.pos || []).map(r => [esc(r[0]), `${esc(r[1])} inst. · ${esc(r[2])} titres`]))))}</div>`;
+    ${pn('Synthèse', 'HDS', dkv([['Détention institutionnelle', nqv(I.pct) != null ? num(nqv(I.pct), 2) + ' %' : '—'], ['Institutions déclarantes', I.n ? num(+I.n, 0) : null], ['Titres en circulation (M)', nqf(I.sh_m, 0)]].concat((I.pos || []).map(r => [esc(HDS_POS[r[0]] || r[0]), `${nqf(r[1], 0)} inst. · ${nqf(r[2], 0)} titres`]))))}</div>`;
 };

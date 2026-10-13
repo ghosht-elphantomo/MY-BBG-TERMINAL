@@ -390,7 +390,8 @@ body.maxi .fkeys,body.maxi .nwp,body.maxi .status{display:none}
 body.maxi main{padding:2px}
 /* ---- GP façon Bloomberg ---- */
 .gpr,.gpr2{gap:4px}
-.gpr2 .tb{padding:1px 7px}
+.gpr2 .tb{padding:1px 6px}
+.gpr2{gap:3px}
 .gck{display:inline-flex;align-items:center;gap:5px;color:#e6e6e6;font-size:12.5px;margin-left:8px;cursor:pointer;user-select:none}
 .gck input{display:none}
 .gck i{width:11px;height:11px;border:1px solid #9a9a9a;background:#111;display:inline-block;position:relative}
@@ -405,7 +406,7 @@ body.maxi main{padding:2px}
 .gsp{flex:1}
 .tb.gdd{background:#1e1e1e;color:#e6e6e6}
 .tb.gdd:hover{background:#3d3d3d}
-.tools input.gadd{width:168px;text-transform:uppercase}
+.tools input.gadd{width:150px;text-transform:uppercase}
 .tb.gmx{background:#1e1e1e}
 .tb.gmx{font-size:14px;padding:0 7px}
 .gpcw{position:relative}
