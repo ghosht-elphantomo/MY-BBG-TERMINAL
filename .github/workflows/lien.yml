@@ -1,0 +1,51 @@
+name: Lien temporaire
+
+# Ouvre un lien d'accès au terminal qui expire tout seul (15 min par défaut).
+# Le lien pointe vers une copie du site servie depuis ce job par un tunnel Cloudflare à adresse aléatoire
+# (https://xxxx.trycloudflare.com) : aucune trace de l'adresse Vercel ni du dépôt dans le lien ou dans la page.
+# Les données sont celles du dernier relevé, remises à jour toutes les 4 minutes pendant la durée du lien.
+# À l'échéance, le job s'arrête : le tunnel disparaît et le lien ne mène plus nulle part.
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Durée de validité du lien, en minutes (1 à 60)"
+        default: "15"
+
+permissions:
+  contents: read
+
+jobs:
+  lien:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ouvrir le lien
+        id: open
+        run: |
+          MIN="${{ inputs.minutes }}"; case "$MIN" in ''|*[!0-9]*) MIN=15;; esac; [ "$MIN" -lt 1 ] && MIN=1; [ "$MIN" -gt 60 ] && MIN=60
+          T0=$(date +%s); echo "t0=$T0" >> "$GITHUB_OUTPUT"; echo "min=$MIN" >> "$GITHUB_OUTPUT"
+          # copie du site (page seule, sans le relais de données ni la configuration d'hébergement) + données du moment
+          mkdir -p /tmp/www && cp -r public/. /tmp/www/
+          git fetch -q --depth 1 origin data && git archive FETCH_HEAD data | tar -x -C /tmp/www
+          nohup python3 -m http.server 8080 --bind 127.0.0.1 --directory /tmp/www > /tmp/http.log 2>&1 &
+          # données rafraîchies toutes les 4 minutes pendant la durée du lien
+          nohup bash -c 'while sleep 240; do git fetch -q --depth 1 origin data && git archive FETCH_HEAD data | tar -x -C /tmp/www; done' > /dev/null 2>&1 &
+          curl -sSL -o /tmp/cf https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 && chmod +x /tmp/cf
+          nohup /tmp/cf tunnel --no-autoupdate --url http://127.0.0.1:8080 > /tmp/cf.log 2>&1 &
+          URL=""; for i in $(seq 1 60); do URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf.log | head -1); [ -n "$URL" ] && break; sleep 2; done
+          [ -z "$URL" ] && { tail -30 /tmp/cf.log; echo "::error::Tunnel indisponible"; exit 1; }
+          # attend que le lien réponde vraiment
+          OK=0; for i in $(seq 1 45); do c=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$URL/"); [ "$c" = "200" ] && { OK=1; break; }; sleep 2; done
+          FIN=$(date -u -d "@$((T0 + MIN * 60))" +%H:%M)
+          echo "::notice title=Lien temporaire valable ${MIN} min (jusqu'à ${FIN} UTC)::${URL}"
+          { echo "## Lien temporaire"; echo; echo "**${URL}**"; echo; echo "Valable ${MIN} minutes, jusqu'à ${FIN} UTC. Ensuite le lien ne mène plus nulle part."; [ "$OK" = 1 ] || echo "(le lien met parfois une minute à répondre)"; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Garder le lien ouvert jusqu'à l'échéance, puis le fermer
+        run: |
+          END=$(( ${{ steps.open.outputs.t0 }} + ${{ steps.open.outputs.min }} * 60 )); NOW=$(date +%s)
+          [ "$END" -gt "$NOW" ] && sleep $(( END - NOW ))
+          pkill -f "cf tunnel" || true; pkill -f "http.server 8080" || true
+          echo "Lien expiré à $(date -u +%H:%M:%S) UTC."
