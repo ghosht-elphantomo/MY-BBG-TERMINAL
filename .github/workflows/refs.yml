@@ -1,0 +1,35 @@
+name: Références visuelles
+
+# Développement : télécharge des documents publics (guides du terminal, captures) listés dans refs_urls.txt
+# et les range sur la branche `refs` (jamais déployée : vercel.json de la branche désactive le déploiement).
+on:
+  push:
+    branches: [main]
+    paths: ["refs_urls.txt"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Télécharger
+        run: |
+          mkdir -p /tmp/refs
+          BUA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+          while IFS='|' read -r name url; do
+            [ -z "$name" ] && continue
+            code=$(curl -sL -m 90 --max-filesize 60000000 -A "$BUA" -o "/tmp/refs/$name" -w '%{http_code} %{size_download}' "$url" || echo "000 0")
+            echo "$code $name $url" | tee -a /tmp/refs/_status.txt
+          done < refs_urls.txt
+      - name: Publier (branche refs)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/refs/vercel.json
+          cd /tmp/refs && git init -q -b refs && git config user.name fqt-bot && git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Références $(date -u +%H:%M)" && git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" refs
