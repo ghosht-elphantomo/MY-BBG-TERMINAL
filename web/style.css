@@ -474,3 +474,4 @@ svg.rel{vertical-align:middle}
 .ecti b{color:#9a9a9a;font-weight:400;margin-right:4px}
 .ecti:hover{background:#1e2a3e}
 .ecti.on{color:#fff;background:#1d3557}
+@media (max-width:700px){.gpbar{display:none}.gpsug .gi{font-size:11.5px}}
