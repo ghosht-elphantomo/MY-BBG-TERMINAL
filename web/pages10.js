@@ -196,6 +196,9 @@ PAGES.SRCH = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ GC : courbes des taux souveraines de l'UEMOA (UMOA-Titres) */
+/* les fichiers d'UMOA-Titres écrivent le même pays de plusieurs façons (« Côte d'Ivoire », « Cote d'ivoire ») */
+const gcNorm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[’`]/g, "'").toLowerCase().trim();
+const gcFind = (o, name) => { if (!o) return null; if (o[name]) return o[name]; const k = Object.keys(o).find(x => gcNorm(x) === gcNorm(name)); return k ? o[k] : null; };
 const ctyName = c => ({ "Cote d'ivoire": "Côte d'Ivoire", "Cote d'Ivoire": "Côte d'Ivoire", 'Burkina': 'Burkina Faso' })[c] || c;
 PAGES.GC = async (m, alive) => {
   const [C, B, OB] = await Promise.all([getJSON('umoa_curves.json').catch(() => null), getJSON('bceao.json').catch(() => null), getJSON('bonds.json').catch(() => null)]); if (!alive()) return; setTitle('Graph Curves');
@@ -207,7 +210,7 @@ PAGES.GC = async (m, alive) => {
   const at = (c, lab, k = st.kind) => { const p = (cur[c] || []).find(q => q[0] === lab); return p ? p[k] : null; };
   setTabs([['c', 'Courbes par pays'], ['h', 'Évolution d’un pays']], tabState('GC', 'c'), k => { ST.tab.GC = k; render(); });
   if (ST.tab.GC === 'h') {
-    const lines = ds.map((d, i) => ({ d, c: C.curves[d].c[st.cty] })).filter(o => o.c);
+    const lines = ds.map((d, i) => ({ d, c: gcFind(C.curves[d].c, st.cty) })).filter(o => o.c);
     m.innerHTML = `<div class="tools"><span class="tlab">Pays</span><select class="ofld" id="gcC">${ctys.map(c => `<option value="${esc(c)}" ${c === st.cty ? 'selected' : ''}>${esc(ctyName(c))}</option>`).join('')}</select><span class="tlab">Taux</span><button class="tb ${st.kind === 3 ? 'on' : ''}" data-kd="3">Après lissage</button><button class="tb ${st.kind === 2 ? 'on' : ''}" data-kd="2">Zéro-coupon</button></div>
       ${pn(`${esc(ctyName(st.cty))} · courbe au ${esc(C.curves[dL].asof || dL)} et à des dates antérieures`, 'GC', cvb('gcH', 380), { lect: `Courbes publiées par UMOA-Titres (fichiers hebdomadaires « Courbes des taux »). Dates disponibles : ${lines.map(o => fds(o.d)).join(', ')}.` })}`;
     gcDraw($('gcH'), lines.map((o, i) => ({ lab: fds(o.d), col: i === lines.length - 1 ? '#f9a33a' : `rgba(200,200,200,${.25 + .5 * i / lines.length})`, pts: o.c.map(p => [p[1], p[st.kind]]), w: i === lines.length - 1 ? 2.2 : 1.2 })));
@@ -221,7 +224,7 @@ PAGES.GC = async (m, alive) => {
     if (iss.length) { const cc = [...new Set(iss.map(x => x.cty))]; scatterL($('gcI'), { pts: iss.map((x, i) => ({ x: x.y + (i % 7) / 14, y: x.cpn, label: '', color: COLS[cc.indexOf(x.cty) % 8], id: null })), fx: v => String(Math.round(v)), fy: v => num(v * 100, 1) + '%', xlab: 'année d’émission', ylab: 'coupon', tipf: p => num(p.y * 100, 2) + ' %' }); }
     m.querySelectorAll('[data-cy]').forEach(b => b.onclick = () => { const c = b.dataset.cy; st.sel = st.sel.includes(c) ? st.sel.filter(x => x !== c) : st.sel.concat([c]); render(); });
   }
-  m.querySelectorAll('[data-kd]').forEach(b => b.onclick = () => { st.kind = +b.dataset.kd; render(); }); if ($('gcC') && $('gcC').tagName === 'SELECT') { } const sc = document.getElementById('gcC'); if (sc && sc.tagName === 'SELECT') sc.onchange = e => { st.cty = e.target.value; render(); };
+  m.querySelectorAll('[data-kd]').forEach(b => b.onclick = () => { st.kind = +b.dataset.kd; render(); }); if ($('gcC') && $('gcC').tagName === 'SELECT') { } const sc = document.getElementById('gcC'); if (sc && sc.tagName === 'SELECT') sc.onchange = e => { st.cty = st.foc = e.target.value; render(); };
 };
 function gcDraw(host, lines) {
   const { x, w, h } = setupCanvas(host); const padL = 46, padB = 22, padT = 10, W = w - padL - 12, H = h - padT - padB; const all = lines.flatMap(l => l.pts.map(p => p[1])).filter(v => v != null && isFinite(v));
@@ -230,7 +233,7 @@ function gcDraw(host, lines) {
   const X = t => padL + Math.log(t * 12) / Math.log(tmax * 12) * W, Y = v => padT + (hi - v) / (hi - lo) * H; x.font = FNUM;
   x.setLineDash([1, 3]); for (const t of niceTicks(lo * 100, hi * 100, 5)) { const yy = Math.round(Y(t / 100)) + .5; x.strokeStyle = 'rgba(160,160,160,.35)'; x.beginPath(); x.moveTo(padL, yy); x.lineTo(w - 12, yy); x.stroke(); x.fillStyle = '#ddd'; x.textAlign = 'right'; x.fillText(num(t, 1) + '%', padL - 4, yy + 3); }
   const ticks = [[1 / 12, '1M'], [.25, '3M'], [.5, '6M'], [1, '1A'], [2, '2A'], [3, '3A'], [5, '5A'], [7, '7A'], [10, '10A'], [15, '15A'], [20, '20A'], [30, '30A']].filter(t => t[0] <= tmax); for (const [t, l] of ticks) { const xx = Math.round(X(t)) + .5; x.beginPath(); x.moveTo(xx, padT); x.lineTo(xx, padT + H); x.stroke(); x.fillStyle = '#ddd'; x.textAlign = 'center'; x.fillText(l, xx, h - 6); } x.setLineDash([]);
-  lines.forEach((l, k) => { x.strokeStyle = l.col; x.lineWidth = l.w || 1.6; x.beginPath(); l.pts.forEach((p, i) => { if (p[1] == null) return; i ? x.lineTo(X(p[0]), Y(p[1])) : x.moveTo(X(p[0]), Y(p[1])); }); x.stroke(); x.fillStyle = l.col; l.pts.forEach(p => { if (p[1] == null) return; x.beginPath(); x.arc(X(p[0]), Y(p[1]), 2.4, 0, 7); x.fill(); }); });
+  lines.forEach((l, k) => { x.strokeStyle = l.col; x.lineWidth = l.w || 1.6; x.setLineDash(l.dash || []); x.beginPath(); l.pts.forEach((p, i) => { if (p[1] == null) return; i ? x.lineTo(X(p[0]), Y(p[1])) : x.moveTo(X(p[0]), Y(p[1])); }); x.stroke(); x.setLineDash([]); x.fillStyle = l.col; l.pts.forEach(p => { if (p[1] == null) return; x.beginPath(); x.arc(X(p[0]), Y(p[1]), 2.4, 0, 7); x.fill(); }); });
   let ly = padT + 4; x.font = FUI; x.textAlign = 'left'; for (const l of lines.slice(-9)) { x.fillStyle = 'rgba(0,0,0,.75)'; x.fillRect(padL + 6, ly - 1, x.measureText(l.lab).width + 22, 14); x.fillStyle = l.col; x.fillRect(padL + 9, ly + 3, 8, 6); x.fillStyle = '#e6e6e6'; x.fillText(l.lab, padL + 21, ly + 9); ly += 15; }
   host.onmousemove = e => { const r = host.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top; let best = null, bd = 100; for (const l of lines) for (const p of l.pts) { const d = (X(p[0]) - mx) ** 2 + (Y(p[1]) - my) ** 2; if (d < bd) { bd = d; best = [l, p]; } }
     if (best) tip(e, `<b>${esc(best[0].lab)}</b> · ${best[1][0] < 1 ? num(best[1][0] * 12, 0) + ' mois' : num(best[1][0], 0) + ' an(s)'} : <b>${num(best[1][1] * 100, 2)} %</b>`); else untip(); }; host.onmouseleave = untip;

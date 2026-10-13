@@ -114,3 +114,46 @@ PAGES.FXC = async (m, alive) => {
   $('fxS').onchange = e => { st.set = e.target.value; render(); }; $('fxV').onchange = e => { st.v = e.target.value; render(); };
   m.querySelectorAll('[data-fxh]').forEach(x => x.onclick = () => { st.hl = st.hl === x.dataset.fxh ? null : x.dataset.fxh; render(); });
 };
+
+/* ------------------------------------------------------------------ GC : écran « Graph Curves » — courbes, courbe de comparaison en pointillés,
+   histogramme des variations en points de base sous le graphique, légende numérotée des courbes à droite */
+const GC_OLD = PAGES.GC;
+/* points de base signés, sans « −0,0 » */
+const bpS = (v, d = 1) => { if (v == null || !isFinite(v)) return '<span class="dm">—</span>'; const r = +v.toFixed(d) || 0; return `<span class="${cls(r)}">${r > 0 ? '+' : ''}${num(r, d)}</span>`; };
+PAGES.GC = async (m, alive) => {
+  if (tabState('GC', 'c') === 'h') return GC_OLD(m, alive);
+  const C = await getJSON('umoa_curves.json').catch(() => null); if (!alive()) return; setTitle('Graph Curves');
+  if (!C || !C.curves || !Object.keys(C.curves).length) { m.innerHTML = pn('Courbes souveraines', 'GC', '<div class="empty">Courbes des États de l’UEMOA en attente de la collecte du soir.</div>'); return; }
+  setTabs([['c', 'Courbes par pays'], ['h', 'Évolution d’un pays']], 'c', k => { ST.tab.GC = k; render(); });
+  const ds = Object.keys(C.curves).sort(), dL = ds[ds.length - 1], cur = C.curves[dL].c, ctys = Object.keys(cur);
+  const st = ST.gc = ST.gc || {}; st.sel = (st.sel || ctys.slice(0, 4)).filter(c => ctys.includes(c)); if (!st.sel.length) st.sel = ctys.slice(0, 1);
+  st.kind = st.kind || 3; if (!ctys.includes(st.foc)) { st.foc = ctys.find(c => gcNorm(c) === "cote d'ivoire") || st.sel[0]; if (!st.sel.includes(st.foc)) st.sel = [st.foc].concat(st.sel).slice(0, 4); } if (!ds.includes(st.cmp) || st.cmp === dL) st.cmp = ds.length > 1 ? ds[ds.length - 2] : null;
+  st.cty = st.foc; const COLS = ['#f9a33a', '#5fd0ea', '#2fd26a', '#ff7ab2', '#b69cff', '#ffd200', '#ff3d4d', '#3fd3c0'], col = c => COLS[ctys.indexOf(c) % 8];
+  const yrs = s => { const m_ = String(s).match(/(\d+)\s*(mois|an)/); return m_ ? +m_[1] / (m_[2] === 'mois' ? 12 : 1) : 99; };
+  const mats = [...new Set(ctys.flatMap(c => cur[c].map(p => p[0])))].sort((a, b) => yrs(a) - yrs(b));
+  const at = (d, c, lab) => { const p = gcFind((C.curves[d] || {}).c, c); const q = p && p.find(x => x[0] === lab); return q ? q[st.kind] : null; };
+  const ten = c => at(dL, c, '10 ans') ?? (cur[c].filter(p => p[1] <= 10).slice(-1)[0] || [])[st.kind] ?? null;
+  const tenLab = c => (cur[c].find(p => p[0] === '10 ans') || cur[c].filter(p => p[1] <= 10).slice(-1)[0] || [])[0];
+  const cmpLab = d => { if (!d) return '—'; const days = Math.round((new Date(dL) - new Date(d)) / 864e5); return `${fds(d)} (${days < 45 ? '−1 mois' : days < 120 ? '−3 mois' : days < 250 ? '−6 mois' : '−1 an'})`; };
+  const foc = st.foc, chg = mats.map(l => { const a = at(dL, foc, l), b = st.cmp ? at(st.cmp, foc, l) : null; return a != null && b != null ? (a - b) * 1e4 : NaN; });
+  const legend = ctys.map((c, i) => { const on = st.sel.includes(c), t = ten(c), tl = tenLab(c), tp = st.cmp && tl ? at(st.cmp, c, tl) : null;
+    return `<tr class="${c === foc ? 'cur' : ''}"><td class="l"><span class="rn">${i + 1})</span><label class="gck"><input type="checkbox" data-cy="${esc(c)}" ${on ? 'checked' : ''}><i></i></label><span class="gsw" style="background:${col(c)}"></span></td><td class="l am" data-fo="${esc(c)}" style="cursor:pointer">${esc(ctyName(c))}</td><td class="dm">${esc(tl || '')}</td><td class="wh">${t != null ? num(t * 100, 3) : '—'}</td><td>${t != null && tp != null ? bpS((t - tp) * 1e4) : '<span class="dm">—</span>'}</td></tr>`; }).join('');
+  const c2 = st.sel.find(c => c !== foc), act = mats.filter(l => at(dL, foc, l) != null);
+  const tbl = `<table class="t"><thead><tr><th class="l">Maturité</th><th>Taux %</th><th>au ${st.cmp ? fds(st.cmp) : '—'}</th><th>Var. pb</th>${c2 ? `<th>Écart vs ${esc(ctyName(c2))} (pb)</th>` : ''}</tr></thead><tbody>${act.map(l => { const a = at(dL, foc, l), b = st.cmp ? at(st.cmp, foc, l) : null, o = c2 ? at(dL, c2, l) : null;
+    return `<tr><td class="l am">${esc(l)}</td><td class="wh">${num(a * 100, 3)}</td><td class="dm">${b == null ? '—' : num(b * 100, 3)}</td><td>${b != null ? bpS((a - b) * 1e4) : '—'}</td>${c2 ? `<td>${o != null ? bpS((a - o) * 1e4, 0) : '—'}</td>` : ''}</tr>`; }).join('')}</tbody></table>`;
+  m.innerHTML = `<div class="tools weic"><span class="tlab">Taux</span><select class="ofld" id="gcK"><option value="3" ${st.kind === 3 ? 'selected' : ''}>Après lissage</option><option value="2" ${st.kind === 2 ? 'selected' : ''}>Zéro-coupon</option></select>
+      <span class="tlab">Comparer avec</span><select class="ofld" id="gcD">${ds.filter(d => d !== dL).reverse().map(d => `<option value="${d}" ${st.cmp === d ? 'selected' : ''}>${cmpLab(d)}</option>`).join('')}</select>
+      <span class="tlab">Courbe de référence</span><span class="wh">${esc(ctyName(foc))}</span><span class="gsp"></span><span class="dm">courbes au ${esc(C.curves[dL].asof || fds(dL))} · ${ds.length} dates</span></div>
+    <div class="grid side gcg"><div>${pn(`Courbes souveraines UEMOA (FCFA) · ${st.kind === 3 ? 'taux après lissage' : 'taux zéro-coupon'}`, 'GC', cvb('gcC', 330), { np: true })}
+      ${pn(`Variation de la courbe ${esc(ctyName(foc))} depuis le ${st.cmp ? fds(st.cmp) : '—'} (points de base)`, 'GC', cvb('gcB', 150), { np: true, lect: `Trait plein : courbes au ${esc(C.curves[dL].asof || fds(dL))}. Pointillés : courbe de ${esc(ctyName(foc))} à la date de comparaison. 1 pb = 0,01 %.` })}</div>
+      <div>${pn('Courbes', 'GC', `<table class="t gcl"><thead><tr><th class="l"></th><th class="l">État</th><th class="l">Pt.</th><th>Taux %</th><th>Var. pb</th></tr></thead><tbody>${legend}</tbody></table>`, { np: true, lect: 'Case : afficher la courbe. Clic sur le nom : courbe de référence (pointillés et histogramme).' })}
+      ${pn(`${esc(ctyName(foc))} : taux par maturité`, 'GC', `<div class="tw">${tbl}</div>`, { np: true })}</div></div>`;
+  gcDraw($('gcC'), st.sel.map(c => ({ lab: ctyName(c), col: col(c), pts: (cur[c] || []).map(p => [p[1], p[st.kind]]), w: c === foc ? 2.2 : 1.6 }))
+    .concat(st.cmp && gcFind(C.curves[st.cmp].c, foc) ? [{ lab: `${ctyName(foc)} ${fds(st.cmp)}`, col: col(foc), pts: gcFind(C.curves[st.cmp].c, foc).map(p => [p[1], p[st.kind]]), w: 1.2, dash: [4, 3] }] : []));
+  const mxc = Math.max(0, ...chg.filter(isFinite).map(Math.abs)), dch = mxc < 5 ? 1 : 0;
+  barChart($('gcB'), { labels: mats.map(l => l.replace(' mois', 'M').replace(/ ans?/, 'A')), values: chg, fmt: v => { const r = +v.toFixed(dch) || 0; return (r > 0 ? '+' : '') + num(r, dch); }, axisFmt: v => num(v, dch), labelsOnBars: true, padB: 18 });
+  if (mxc < .05 && chg.some(isFinite)) $('gcB').insertAdjacentHTML('beforeend', `<div class="gcz">Courbe ${esc(ctyName(foc))} inchangée entre le ${fds(st.cmp)} et le ${fds(dL)}.</div>`);
+  $('gcK').onchange = e => { st.kind = +e.target.value; render(); }; const gd = $('gcD'); if (gd) gd.onchange = e => { st.cmp = e.target.value; render(); };
+  m.querySelectorAll('input[data-cy]').forEach(b => b.onchange = () => { const c = b.dataset.cy; st.sel = b.checked ? st.sel.concat([c]) : st.sel.filter(x => x !== c); if (!st.sel.length) st.sel = [c]; render(); });
+  m.querySelectorAll('[data-fo]').forEach(b => b.onclick = () => { st.foc = b.dataset.fo; if (!st.sel.includes(st.foc)) st.sel = [st.foc].concat(st.sel); else st.sel = [st.foc].concat(st.sel.filter(x => x !== st.foc)); render(); });
+};

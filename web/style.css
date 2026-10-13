@@ -570,3 +570,9 @@ table.t.eqt td{line-height:24px}
 .t.fxm td.l{cursor:pointer;white-space:nowrap}
 .t.fxm td.dg{text-align:center;color:#555;background:#141414}
 .t.fxm .hx{background:#0b2a4d!important}
+/* GC : légende numérotée des courbes */
+.gsw{display:inline-block;width:10px;height:10px;margin:0 4px 0 2px;vertical-align:-1px}
+.t.gcl td{padding:1px 5px}
+.t.gcl .gck{margin:0 2px}
+.gcg{grid-template-columns:minmax(0,1fr) minmax(360px,460px)}
+.cv .gcz{position:absolute;left:0;right:0;top:38%;text-align:center;color:#8a8a8a;pointer-events:none}
