@@ -4881,6 +4881,37 @@ PAGES.TECH = async (m, alive) => {
       { pane: 1, y: sl(R), color: '#b69cff', w: 1.2, label: 'RSI', fmt: v => num(v, 1) }, { pane: 2, type: 'bar', y: sl(hist), colorFn: v => v >= 0 ? CL.up : CL.dn, label: 'Histogramme', fmt: v => num(v, 3) }, { pane: 2, y: sl(macd), color: '#5fd0ea', w: 1.1, label: 'MACD', fmt: v => num(v, 3) }, { pane: 2, y: sl(sig), color: '#f9a33a', w: 1, label: 'Signal', fmt: v => num(v, 3) }] }, [0, n - 1 - k0]);
 };
 
+/* ------------------------------------------------------------------ EA : écran « Earnings Analysis » — publications de résultats à venir
+   (date, moment, consensus du trimestre) et publiées (BPA réel contre consensus, surprise, réaction du cours) ; actions US suivies */
+PAGES.EA = async (m, alive) => {
+  setTitle('Earnings Analysis'); const E = await getJSON('ee.json').catch(() => null); if (!alive()) return;
+  if (!E) { m.innerHTML = pn('Résultats', 'EA', '<div class="empty">Estimations en attente du relevé du soir.</div>'); return; }
+  const tab = tabState('EA', 'u'); setTabs([['u', 'À venir'], ['p', 'Publiés (60 jours)']], tab, k => { ST.tab.EA = k; render(); });
+  const us = t => { const x = String(t || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return x ? `${x[3]}-${x[1].padStart(2, '0')}-${x[2].padStart(2, '0')}` : null; };
+  const today = new Date().toISOString().slice(0, 10), wd = d => new Date(d + 'T12:00:00Z').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' });
+  const st = ST.ea = ST.ea || { q: '' };
+  if (tab === 'u') {
+    const L = Object.entries(E).map(([id, x]) => { const d = us(x.ed), s = Q.by[id]; if (!d || d < today || !s) return null; const q0 = (x.qr || [])[0] || {}, sur = (x.sur || []).slice().sort((a, b) => (us(b.d) || '').localeCompare(us(a.d) || ''))[0];
+      return { id, s, d, when: /after market/i.test(x.ed) ? 'après clôture' : /before market/i.test(x.ed) ? 'avant ouverture' : '—', est: /estimated|algorithm/i.test(x.ed), q: q0.fiscalEnd, eps: q0.consensusEPSForecast, hi: q0.highEPSForecast, lo: q0.lowEPSForecast, nb: q0.noOfEstimates, last: sur }; }).filter(Boolean)
+      .filter(r => !st.q || (r.id + ' ' + r.s.n).toLowerCase().includes(st.q.toLowerCase())).sort((a, b) => a.d.localeCompare(b.d) || (b.s.mcap || 0) - (a.s.mcap || 0));
+    let cur = '', k = 0; const rows = L.map(r => { const hd = r.d !== cur ? `<tr class="grp"><td class="l" colspan="11">${wd(r.d)}${r.d === today ? ' · aujourd’hui' : ''}</td></tr>` : ''; cur = r.d;
+      return hd + `<tr data-sec="${r.id}" data-to="EE" style="cursor:pointer"><td class="l"><span class="rn">${++k})</span><b class="wh">${r.id}</b></td><td class="l am">${esc(r.s.short || r.s.n)}</td><td class="l">${r.when}${r.est ? ' <i class="qd" title="date estimée d’après l’historique de publication">e</i>' : ''}</td><td class="l dm">${esc(r.q || '')}</td><td class="wh">${r.eps != null ? num(r.eps, 2) : '—'}</td><td class="dm">${r.lo != null ? num(r.lo, 2) + ' – ' + num(r.hi, 2) : '—'}</td><td>${r.nb ?? '—'}</td><td>${r.last ? `<span class="${cls(r.last.pct)}">${r.last.pct > 0 ? '+' : ''}${num(r.last.pct, 1)} %</span>` : '—'}</td><td class="wh">${px(r.s, r.s.last)}</td><td>${pc(r.s.pct)}</td><td>${big(r.s.mcap)}</td></tr>`; }).join('');
+    m.innerHTML = `<div class="tools ttb"><span class="tnar"><input id="eaQ" class="ofld" value="${esc(st.q)}" placeholder="&lt;Filtrer&gt;"></span><span class="dm">${L.length} publications à venir · actions US suivies</span><span class="gsp"></span><span class="dm">e = date estimée</span></div>
+      ${pn('Publications de résultats à venir', 'EA', `<div class="tw" style="max-height:calc(100vh - 250px - var(--nwh, 90px))"><table class="t"><thead><tr><th class="l">Titre</th><th class="l">Société</th><th class="l">Moment</th><th class="l">Trimestre</th><th>BPA consensus</th><th>Fourchette</th><th>Analystes</th><th>Dernière surprise</th><th>Cours</th><th>Var. jour</th><th>Capi. ($)</th></tr></thead><tbody>${rows || '<tr><td class="l dm" colspan="11">Aucune publication annoncée.</td></tr>'}</tbody></table></div>`,
+        { np: true, lect: 'Dates et consensus du bénéfice par action (BPA) publiés pour le trimestre en cours ; « Dernière surprise » = BPA publié au trimestre précédent contre le consensus d’alors. Clic : estimations du titre (EE). Aucun consensus public pour la BRVM.' })}`;
+  } else {
+    const t60 = new Date(Date.now() - 60 * 864e5).toISOString().slice(0, 10);
+    const L = Object.entries(E).flatMap(([id, x]) => (x.sur || []).map(su => ({ id, s: Q.by[id], d: us(su.d), q: su.q, eps: su.eps, cons: su.cons, pct: su.pct }))).filter(r => r.s && r.d && r.d >= t60 && r.d <= today).sort((a, b) => b.d.localeCompare(a.d));
+    m.innerHTML = `<div class="empty">Calcul des réactions de cours…</div>`;
+    const react = await Promise.all(L.map(async r => { const S = await series(r.id).catch(() => null); if (!S) return null; const di = +r.d.replace(/-/g, ''); let i = S.x.findIndex(x => x >= di); if (i < 1) return null; const j = Math.min(S.x.length - 1, i + 1); return j > i - 1 ? S.c[j] / S.c[i - 1] - 1 : null; })); if (!alive()) return;
+    const beat = L.filter(r => r.pct > 0).length, avg = L.length ? U.mean(L.map(r => r.pct || 0)) : null;
+    m.innerHTML = `<div class="tools ttb"><span class="tlab">Publications</span><b class="wh">${L.length}</b><span class="tlab">Au-dessus du consensus</span><b class="up">${beat}</b><span class="dm">(${L.length ? num(beat / L.length * 100, 0) : '—'} %)</span><span class="tlab">Surprise moyenne</span><b class="${cls(avg)}">${avg != null ? num(avg, 1) + ' %' : '—'}</b></div>
+      ${pn('Résultats publiés depuis 60 jours', 'EA', `<div class="tw" style="max-height:calc(100vh - 250px - var(--nwh, 90px))"><table class="t"><thead><tr><th class="l">Date</th><th class="l">Titre</th><th class="l">Société</th><th class="l">Trimestre</th><th>BPA publié</th><th>Consensus</th><th>Surprise</th><th class="c"></th><th>Réaction (2 séances)</th></tr></thead><tbody>${L.map((r, i) => `<tr data-sec="${r.id}" data-to="SURP" style="cursor:pointer"><td class="l dm">${fds(r.d)}</td><td class="l"><span class="rn">${i + 1})</span><b class="wh">${r.id}</b></td><td class="l am">${esc(r.s.short || r.s.n)}</td><td class="l dm">${esc(r.q)}</td><td class="wh">${num(r.eps, 2)}</td><td>${num(r.cons, 2)}</td><td><span class="${cls(r.pct)}">${r.pct > 0 ? '+' : ''}${num(r.pct, 1)} %</span></td><td class="wcb" style="width:16%;min-width:90px;position:relative"><span class="z" style="position:absolute;left:50%;top:2px;bottom:2px;border-left:1px solid #5a5a5a"></span><i style="position:absolute;top:4px;bottom:4px;${r.pct >= 0 ? 'left:50%;background:#32c74c' : 'right:50%;background:#ff433d'};width:${Math.min(50, Math.abs(r.pct) / 20 * 50).toFixed(1)}%"></i></td><td>${react[i] != null ? pc(react[i]) : '—'}</td></tr>`).join('') || '<tr><td class="l dm" colspan="9">Aucune publication sur la période.</td></tr>'}</tbody></table></div>`,
+        { np: true, lect: 'Surprise = (BPA publié − consensus) ÷ |consensus|. Réaction : variation du cours entre la clôture de la veille de la publication et celle du lendemain (couvre une publication avant l’ouverture comme après la clôture). Barre : surprise (échelle ±20 %).' })}`;
+  }
+  const q = $('eaQ'); if (q) q.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); st.q = q.value.trim(); render(); } };
+};
+
 </script>
 <script>
 /* ================= FQT — données, formats, ligne de commande, chrome Bloomberg, routeur ================= */
@@ -4916,6 +4947,7 @@ const FN = {
   PORT: ['Portefeuille', 'mkt', 'Portefeuille', 'Vos positions BRVM et US : valeur, plus-values, risque (volatilité, VaR, bêta, contributions), performance, dividendes à venir', 'Portfolio & Risk Analytics'],
   EQS: ['Screener', 'mkt', 'Fondamentaux', 'Filtrer US et BRVM par ratios : FCF, croissance, qualité, valorisation, score', 'Equity Screening'],
   LIQ: ['Liquidité BRVM', 'mkt', 'Marchés', 'Montants échangés, jours cotés, Amihud, délai pour constituer une position', 'Market Liquidity'],
+  EA: ['Publications de résultats', 'mkt', 'Fondamentaux', 'Calendrier des résultats US (date, consensus, dernière surprise) et résultats publiés (surprise, réaction du cours)', 'Earnings Analysis'],
   ALRT: ['Alertes', 'mkt', 'Fondamentaux', 'Marges, FCF, dette, révisions, seuils de valorisation, résultats à venir', 'Alert Monitor'],
   DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique', 'Dividend Calendar'],
   EVTS: ['Avis BRVM', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers', 'Corporate Events'],
@@ -4959,7 +4991,7 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['MON', 'PORT', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['MON', 'PORT', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -4970,7 +5002,7 @@ const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: [
   BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECWB', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
   ECO: ['ECST', 'ECWB', 'WB', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'WB'], ECWB: ['ECO', 'ECST', 'WB', 'MACRO'],
-  WCRS: ['FXC', 'FX', 'WEI', 'WB'], BTMM: ['WB', 'GC', 'ECWB', 'ECO'], PORT: ['EQS', 'CORR', 'DIVC', 'FX'], FXC: ['WCRS', 'FX', 'UEMOA'], FX: ['WCRS', 'FXC', 'UEMOA'] };
+  WCRS: ['FXC', 'FX', 'WEI', 'WB'], BTMM: ['WB', 'GC', 'ECWB', 'ECO'], PORT: ['EQS', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], FXC: ['WCRS', 'FX', 'UEMOA'], FX: ['WCRS', 'FXC', 'UEMOA'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */

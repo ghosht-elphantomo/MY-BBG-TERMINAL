@@ -31,6 +31,7 @@ const FN = {
   PORT: ['Portefeuille', 'mkt', 'Portefeuille', 'Vos positions BRVM et US : valeur, plus-values, risque (volatilité, VaR, bêta, contributions), performance, dividendes à venir', 'Portfolio & Risk Analytics'],
   EQS: ['Screener', 'mkt', 'Fondamentaux', 'Filtrer US et BRVM par ratios : FCF, croissance, qualité, valorisation, score', 'Equity Screening'],
   LIQ: ['Liquidité BRVM', 'mkt', 'Marchés', 'Montants échangés, jours cotés, Amihud, délai pour constituer une position', 'Market Liquidity'],
+  EA: ['Publications de résultats', 'mkt', 'Fondamentaux', 'Calendrier des résultats US (date, consensus, dernière surprise) et résultats publiés (surprise, réaction du cours)', 'Earnings Analysis'],
   ALRT: ['Alertes', 'mkt', 'Fondamentaux', 'Marges, FCF, dette, révisions, seuils de valorisation, résultats à venir', 'Alert Monitor'],
   DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique', 'Dividend Calendar'],
   EVTS: ['Avis BRVM', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers', 'Corporate Events'],
@@ -74,7 +75,7 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['MON', 'PORT', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['MON', 'PORT', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -85,7 +86,7 @@ const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: [
   BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECWB', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
   ECO: ['ECST', 'ECWB', 'WB', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'WB'], ECWB: ['ECO', 'ECST', 'WB', 'MACRO'],
-  WCRS: ['FXC', 'FX', 'WEI', 'WB'], BTMM: ['WB', 'GC', 'ECWB', 'ECO'], PORT: ['EQS', 'CORR', 'DIVC', 'FX'], FXC: ['WCRS', 'FX', 'UEMOA'], FX: ['WCRS', 'FXC', 'UEMOA'] };
+  WCRS: ['FXC', 'FX', 'WEI', 'WB'], BTMM: ['WB', 'GC', 'ECWB', 'ECO'], PORT: ['EQS', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], FXC: ['WCRS', 'FX', 'UEMOA'], FX: ['WCRS', 'FXC', 'UEMOA'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
