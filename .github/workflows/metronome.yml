@@ -8,7 +8,11 @@ name: Métronome
 on:
   schedule:
     - cron: "7 * * * *"            # chien de garde horaire
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      parent:
+        description: "Métronome qui passe le relais (ignoré dans le contrôle des doublons)"
+        default: ""
 
 permissions:
   actions: write
@@ -24,9 +28,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # autres métronomes en cours lancés il y a moins de 5 h (un métronome en fin de course passe le relais : on l'ignore)
+          # autres métronomes en cours (un métronome tourne au plus 5 h 40) ; celui qui vient de passer le relais est ignoré
+          P="${{ inputs.parent }}"; case "$P" in ''|*[!0-9]*) P=0;; esac
           n=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/metronome.yml/runs?status=in_progress&per_page=20" \
-                --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID and ((.run_started_at // .created_at) | fromdateiso8601) > (now - 18000))] | length" || echo 0)
+                --jq "[.workflow_runs[] | select(.id != $GITHUB_RUN_ID and .id != $P and ((.run_started_at // .created_at) | fromdateiso8601) > (now - 21600))] | length" || echo 0)
           echo "Autres métronomes actifs : ${n:-0}"
           if [ "${n:-0}" -gt 0 ]; then echo "run=0" >> "$GITHUB_OUTPUT"; else echo "run=1" >> "$GITHUB_OUTPUT"; fi
 
@@ -52,4 +57,4 @@ jobs:
         if: steps.chk.outputs.run == '1'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/metronome.yml/dispatches" -f ref=main
+        run: gh api -X POST "repos/$GITHUB_REPOSITORY/actions/workflows/metronome.yml/dispatches" -f ref=main -f "inputs[parent]=$GITHUB_RUN_ID"
