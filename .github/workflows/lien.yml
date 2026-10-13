@@ -37,8 +37,8 @@ jobs:
           nohup /tmp/cf tunnel --no-autoupdate --url http://127.0.0.1:8080 > /tmp/cf.log 2>&1 &
           URL=""; for i in $(seq 1 60); do URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/cf.log | head -1); [ -n "$URL" ] && break; sleep 2; done
           [ -z "$URL" ] && { tail -30 /tmp/cf.log; echo "::error::Tunnel indisponible"; exit 1; }
-          # attend que le lien réponde vraiment
-          OK=0; for i in $(seq 1 45); do c=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$URL/"); [ "$c" = "200" ] && { OK=1; break; }; sleep 2; done
+          # attend que le lien réponde vraiment (le nom du tunnel met quelques secondes à exister dans le DNS)
+          OK=0; for i in $(seq 1 45); do c=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "$URL/" || true); [ "$c" = "200" ] && { OK=1; break; }; sleep 2; done
           FIN=$(date -u -d "@$((T0 + MIN * 60))" +%H:%M)
           echo "::notice title=Lien temporaire valable ${MIN} min (jusqu'à ${FIN} UTC)::${URL}"
           { echo "## Lien temporaire"; echo; echo "**${URL}**"; echo; echo "Valable ${MIN} minutes, jusqu'à ${FIN} UTC. Ensuite le lien ne mène plus nulle part."; [ "$OK" = 1 ] || echo "(le lien met parfois une minute à répondre)"; } >> "$GITHUB_STEP_SUMMARY"
