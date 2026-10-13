@@ -110,7 +110,7 @@ jobs:
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
           FQT_MODE: ${{ steps.mode.outputs.mode }}
-        run: timeout 360 python3 scripts/fetch_extra.py --out /tmp/raw --only watch,obl,cmc,cal --site /tmp/site/data --news /tmp/site/data/news.json
+        run: timeout 360 python3 scripts/fetch_extra.py --out /tmp/raw --only avis,watch,obl,cmc,cal --site /tmp/site/data --news /tmp/site/data/news.json
 
       - name: Outils PDF (EOD)
         if: steps.mode.outputs.mode == 'eod'
@@ -232,18 +232,22 @@ jobs:
           cp vercel.json /tmp/web/vercel.json
           cp api/data.js /tmp/web/api/data.js
           cp index.html /tmp/web/public/index.html
+          cp public/version.json /tmp/web/public/version.json 2>/dev/null || true
           cp deploy/robots.txt /tmp/web/public/robots.txt
           cp web/fonts/LICENSE-NotoSans.txt /tmp/web/public/LICENSE-fonts.txt
           cp web/icons/favicon.ico web/icons/favicon.svg web/icons/apple-touch-icon.png /tmp/web/public/
           URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          SRC_T=$(git log -1 --format=%ct)  # date du code de ce passage : un passage plus ancien ne remplace jamais un site plus récent
           export GIT_DIR=/tmp/web.git GIT_WORK_TREE=/tmp/web
           rm -rf "$GIT_DIR"; git init -q -b site
           git config user.name "fqt-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A && git commit -qm "Site $(date -u +'%d/%m/%Y %H:%M') UTC"
+          git add -A && git commit -qm "Site $(date -u +'%d/%m/%Y %H:%M') UTC src_t=$SRC_T"
           NEW=$(git rev-parse HEAD^{tree})
           OLD=$(git fetch -q --depth 1 "$URL" site 2>/dev/null && git rev-parse FETCH_HEAD^{tree} || echo none)
           if [ "$NEW" = "$OLD" ]; then echo "Code inchangé : pas de redéploiement Vercel"; exit 0; fi
+          OLD_T=$(git log -1 --format=%B FETCH_HEAD 2>/dev/null | grep -o 'src_t=[0-9]*' | cut -d= -f2); OLD_T=${OLD_T:-0}
+          if [ "$SRC_T" -lt "$OLD_T" ]; then echo "Le site en ligne vient d'un code plus récent : pas de retour en arrière"; exit 0; fi
           git push -q -f "$URL" HEAD:site && echo "Site publié : Vercel redéploie"
 
       - name: Archiver la séance BRVM sur main (EOD)

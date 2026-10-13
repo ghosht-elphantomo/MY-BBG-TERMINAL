@@ -16,3 +16,4 @@ demander « reviens au point de restauration du … » ; le code de ce point est
 | 13/10/2026 18 h 20 | Avant le retrait de la touche TOP (écran renommé NEWS) | `840afad90721c1224de4843e5f2009f7c20bb515` | `35da078f0ae558cddcdb26f9835cc9246c795b03` |
 | 13/10/2026 18 h 25 | Avant le retrait de la touche MON (écran renommé MONITOR, touche placée en premier) | `cf363916bb73890ebdc8b2211eeef10d7b73946d` | `feb30b29ca036637ebe98a916d45a385153046d6` |
 | 13/10/2026 18 h 30 | Avant le renommage de GLCO en COMMO | `f02ad6691b0f5d6df9bc43724ac94c94ffade2ab` | `feb30b29ca036637ebe98a916d45a385153046d6` |
+| 13/10/2026 18 h 30 | Avant la mise à jour automatique des pages ouvertes, la garde contre la republication d'un site plus ancien et la lecture des avis sur brvm.org | `0723e6acdffec4654db40ef8f649ff2fccdb29e7` | `6d0c64ea6fc518b955778e8b6af13a856a5142c3` |

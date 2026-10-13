@@ -2524,6 +2524,171 @@ def tag_news(items, summary_path):
 
 
 # ---------------------------------------------------------------- main
+# ------------------------------------------------------------------ avis officiels lus directement sur brvm.org
+# Secours de la base d'avis du jeu de données tiers : si celle-ci s'arrête, les nouveaux avis, dividendes annoncés et
+# fractionnements continuent d'arriver depuis les pages officielles. Fusion (et rapprochement société -> titre) dans build_terminal.py.
+AVIS_PAGES = [  # (clé, chemin, catégorie par défaut)
+    ("marche", "/fr/marche/avis-et-publications/avis", None),
+    ("ag", "/fr/emetteurs/type-annonces/convocations-assemblees-generales", "Convocation / communiqué AG"),
+    ("comm", "/fr/emetteurs/type-annonces/communiques", "Communiqué société"),
+    ("resol", "/fr/emetteurs/type-annonces/projets-de-resolution", "Projet de résolutions"),
+    ("notation", "/fr/emetteurs/type-annonces/notations-financieres", "Notation financière"),
+    ("dirig", "/fr/emetteurs/type-annonces/changements-de-dirigeants", "Changement de direction"),
+    ("div", "/fr/esv/paiement-de-dividendes", "Annonce dividende"),
+    ("frac", "/fr/esv/fractionnement", "Fractionnement"),
+    ("capital", "/fr/esv/augmentation-de-capital", None),
+]
+FR_NUM = {"un": 1, "une": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5, "six": 6, "sept": 7, "huit": 8, "neuf": 9, "dix": 10, "onze": 11, "douze": 12,
+          "quinze": 15, "vingt": 20, "vingt-cinq": 25, "trente": 30, "cinquante": 50, "cent": 100}
+
+
+def views_rows(html):
+    """Lignes des tableaux « views-table » de brvm.org : {champ: {t: texte, d: date ISO, u: [liens]}} (le bloc « Top 5 » de la colonne n'est pas un views-table)."""
+    out = []
+    for tb in re.findall(r'<table class="views-table[^"]*"[^>]*>(.*?)</table>', html, re.S):
+        for tr in re.findall(r"<tr[^>]*>(.*?)</tr>", tb, re.S):
+            cells = {}
+            for cls, body in re.findall(r'<td class="views-field views-field-([a-z0-9\-]+)"[^>]*>(.*?)</td>', tr, re.S):
+                d = re.search(r'content="(\d{4}-\d{2}-\d{2})', body)
+                u = [x if x.startswith("http") else "https://www.brvm.org" + x for x in re.findall(r'href="([^"]+)"', body) if "/node/" not in x and "/edit" not in x]
+                t = re.sub(r"\s+", " ", HTML.unescape(re.sub(r"<[^>]+>", " ", body))).replace("Télécharger", "").strip()
+                cells[cls] = {"t": t, "d": d.group(1) if d else None, "u": u}
+            if cells:
+                out.append(cells)
+    return out
+
+
+def fr_parity(txt):
+    """« dix (10) actions nouvelles pour une (1) action ancienne » -> (10, 1) ; None si illisible."""
+    m = re.search(r"(.+?)\s+actions?\s+nouvelles?\s+pour\s+(.+?)\s+actions?\s+anciennes?", (txt or "").lower())
+    if not m:
+        return None
+
+    def n_(s_):
+        x = re.search(r"\((\d+)\)", s_) or re.search(r"(\d+)\s*$", s_.strip())
+        if x:
+            return int(x.group(1))
+        return FR_NUM.get(s_.strip().split()[-1]) if s_.strip() else None
+    a_, b_ = n_(m.group(1)), n_(m.group(2))
+    return (a_, b_) if a_ and b_ else None
+
+
+def _avis_market_cat(ti):
+    t = _nrm(ti)
+    return ("Marché fermé (jour férié)" if "ferie" in t else "Composition d'un indice BRVM mise à jour" if "composition" in t and "indice" in t
+            else "Valeur théorique publiée" if "valeur theorique" in t else "Transaction annulée par la BRVM" if "annulation de transaction" in t else "Avis de la BRVM")
+
+
+def run_avis(site_data):
+    if not site_data:
+        return
+    path = os.path.join(site_data, "avis_brvm.json")
+    st = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"items": {}}
+    items = st.setdefault("items", {})
+    deep = not items or os.environ.get("FQT_MODE") == "eod"  # premier passage ou soir : 3 pages par rubrique, sinon la première
+
+    def pub(u):
+        x = re.search(r"/(20\d{2})(\d{2})(\d{2})[_\-]", u or "")
+        return f"{x.group(1)}-{x.group(2)}-{x.group(3)}" if x else None
+
+    def one(job):
+        key, path_, cat, pg = job
+        try:
+            html = get("https://www.brvm.org" + path_ + (f"?page={pg}" if pg else ""), tries=2, timeout=30).decode("utf8", "replace")
+        except Exception as e:  # noqa: BLE001
+            return key, None, str(e)
+        recs = []
+        for r in views_rows(html):
+            g = lambda k: r.get(k) or {"t": "", "d": None, "u": []}  # noqa: E731
+            if key == "div":
+                soc, u = g("field-emetteur-esv")["t"], (g("field-avis-dividende-esv")["u"] or [None])[0]
+                amt = re.search(r"([\d\s \xa0]+(?:[.,]\d+)?)", g("field-montant-du-dividende-net")["t"])
+                dps = float(re.sub(r"[\s \xa0]", "", amt.group(1)).replace(",", ".")) if amt and re.sub(r"\D", "", amt.group(1)) else None
+                ex = (g("field-exercice-comptable-esv")["d"] or "")[:4] or None
+                det, pay = g("field-date-ex-dividende")["d"], g("field-date-de-paiement-esv")["d"]
+                if soc and u and (dps or det or pay):
+                    recs.append({"k": key, "soc": soc, "c": cat, "u": u, "d": pub(u) or det, "e": det or pay, "ex": int(ex) if ex else None, "dps": dps, "det": det, "pay": pay,
+                                 "ti": f"{soc} : dividende de l’exercice {ex or '—'}" + (f" · {dps:g} FCFA net" if dps else "") + (f" · détachement le {det[8:]}/{det[5:7]}/{det[:4]}" if det else "") + (f" · paiement le {pay[8:]}/{pay[5:7]}/{pay[:4]}" if pay else "")})
+            elif key == "frac":
+                soc, par = g("field-emetteur-esv")["t"], g("field-parite-esv")["t"]
+                u = (g("field-avis-dividende-esv")["u"] or g("field-communique-esv")["u"] or [None])[0]
+                e, rt = g("field-date-de-fractionnement")["d"], fr_parity(par)
+                if soc and u and e:
+                    recs.append({"k": key, "soc": soc, "c": cat, "u": u, "d": pub(u) or e, "e": e, "ratio": list(rt) if rt else None, "ti": f"{soc} : fractionnement · {par}" if par else f"{soc} : fractionnement"})
+            elif key == "marche":
+                ti, d, u = g("title")["t"], g("field-date-avis")["d"], (g("field-fichier-avis")["u"] or [None])[0]
+                if ti and u:
+                    soc = ti.split(" : ")[0].strip() if " : " in ti and not re.match(r"(?i)^(avis|brvm|rappel|communiqu)", ti) else None
+                    recs.append({"k": key, "soc": soc, "c": _avis_market_cat(ti), "u": u, "d": d or pub(u), "e": d or pub(u), "ti": ti})
+            elif key == "capital":  # rubrique sans exemple vérifié : lecture générique (émetteur, dates, liens)
+                soc = g("field-emetteur-esv")["t"]
+                links = [x for v in r.values() for x in v["u"]]
+                dates = sorted(v["d"] for v in r.values() if v["d"])
+                txt = " · ".join(v["t"] for k, v in r.items() if v["t"] and k not in ("field-emetteur-esv",) and not v["d"])
+                if soc and links:
+                    recs.append({"k": key, "soc": soc, "c": "Actions gratuites" if "gratuit" in _nrm(txt) else "Augmentation de capital avec droits", "u": links[0],
+                                 "d": pub(links[0]) or (dates[0] if dates else None), "e": dates[-1] if dates else pub(links[0]), "ti": f"{soc} : {txt}"[:200] if txt else f"{soc} : opération sur le capital"})
+            else:  # annonces des émetteurs (AG, communiqués, résolutions, notations, dirigeants)
+                ti, d, soc, u = g("title")["t"], g("field-date-annonce")["d"], g("og-group-ref")["t"], (g("field-fichier-annonce")["u"] or [None])[0]
+                if ti and u:
+                    c = "Projet de résolutions" if key == "ag" and "resolution" in _nrm(ti) else cat
+                    recs.append({"k": key, "soc": soc or None, "c": c, "u": u, "d": d or pub(u), "e": d or pub(u), "ti": ti})
+        return key, recs, None
+
+    jobs = [(k, p_, c, pg) for k, p_, c in AVIS_PAGES for pg in (range(3) if deep else (0,))]
+    n_new = 0
+    with ThreadPoolExecutor(6) as ex:
+        for key, recs, err in ex.map(one, jobs):
+            if recs is None:
+                note("avis-brvm", False, f"{key}: {err}")
+                continue
+            note("avis-brvm")
+            for r in recs:
+                if r["u"] not in items:
+                    n_new += 1
+                items[r["u"]] = {**items.get(r["u"], {}), **r, "seen": items.get(r["u"], {}).get("seen") or TODAY.isoformat()}
+    # date de l'assemblée lue dans les convocations récentes (le soir seulement : il faut l'outil PDF)
+    todo = [r for r in items.values() if r.get("k") == "ag" and "convocation" in _nrm(r.get("ti") or "") and "ag" not in r and r.get("d") and _doc_recent(r["d"].replace("-", ""), 90)]
+    if todo and os.environ.get("FQT_MODE") == "eod":
+        import shutil, subprocess, tempfile
+        if not shutil.which("pdftotext"):
+            os.system("sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1")
+        if shutil.which("pdftotext"):
+            for r in todo[:15]:
+                try:
+                    with tempfile.NamedTemporaryFile(suffix=".pdf") as fh:
+                        fh.write(get(r["u"], tries=2, timeout=40))
+                        fh.flush()
+                        txt = subprocess.run(["pdftotext", "-layout", fh.name, "-"], capture_output=True, timeout=60).stdout.decode("utf8", "replace")
+                    r["ag"] = ag_date(txt, r["d"]) or ""
+                except Exception as e:  # noqa: BLE001
+                    note("avis-brvm", False, f"convocation {r['u'][-60:]}: {e}")
+    st["ts"] = int(time.time())
+    save(path, st)
+    log(f"avis brvm.org : {len(items)} connus, {n_new} nouveaux")
+
+
+FR_MOIS = {"janvier": 1, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6, "juillet": 7, "aout": 8, "septembre": 9, "octobre": 10, "novembre": 11, "decembre": 12}
+
+
+def ag_date(txt, pub):
+    """Date de la réunion dans un avis de convocation : première date écrite en toutes lettres, précédée de peu par
+    « assemblée », « se tiendra », « réunion » ou « convoqués », comprise entre la publication et 4 mois après. None sinon."""
+    t = _nrm(txt)
+    try:
+        p0 = dt.date.fromisoformat(pub[:10])
+    except (TypeError, ValueError):
+        return None
+    for m in re.finditer(r"(?:(?:lundi|mardi|mercredi|jeudi|vendredi|samedi|dimanche)\s+)?(\d{1,2})(?:er)?\s+(" + "|".join(FR_MOIS) + r")\s+(20\d{2})", t):
+        try:
+            d = dt.date(int(m.group(3)), FR_MOIS[m.group(2)], int(m.group(1)))
+        except ValueError:
+            continue
+        if p0 <= d <= p0 + dt.timedelta(days=120) and re.search(r"assemblee|se tiendra|reunion|convoque", t[max(0, m.start() - 250):m.start()]):
+            return d.isoformat()
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True, help="dossier brut (branche quant-raw), lu et réécrit sur place")
@@ -2535,7 +2700,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     only = set(a.only.split(",")) if a.only else set()
     t0 = time.time()
-    steps = [("cal", lambda: run_cal(a.out, a.site)), ("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
+    steps = [("cal", lambda: run_cal(a.out, a.site)), ("avis", lambda: run_avis(a.site)), ("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),

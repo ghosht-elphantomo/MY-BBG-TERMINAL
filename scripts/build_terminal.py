@@ -199,6 +199,52 @@ def beta_corr(x, y):
 
 
 # ------------------------------------------------------------------ main
+def _nm(x):
+    import unicodedata
+    x = unicodedata.normalize("NFKD", x or "").encode("ascii", "ignore").decode().lower()
+    return re.sub(r"[^a-z0-9]+", " ", x.replace("&", " ")).strip()
+
+
+def brvm_avis(items, ev_src, acts, out):
+    """Avis lus directement sur brvm.org (secours de la base tierce) : rattachés à un titre par le nom de société tel que brvm.org l'écrit
+    (noms appris de la base d'avis, du registre des titres et des pages des sociétés). Renvoie (avis, nombre de sociétés non rattachées)."""
+    m = collections.defaultdict(collections.Counter)
+    for x in ev_src:
+        t, ti = x.get("ticker"), x.get("title") or ""
+        if t:
+            for k in (x.get("issuer"), x.get("company"), ti.split(" : ")[0] if " : " in ti else None):
+                if k:
+                    m[_nm(k)][t] += 1
+    for a_ in acts:
+        for k in (a_.get("nom"), a_.get("nom_officiel"), a_.get("ticker")):
+            if k:
+                m[_nm(k)][a_["ticker"]] += 3
+    rp = os.path.join(out, "reports.json")
+    if os.path.exists(rp):
+        for x in (json.load(open(rp, encoding="utf8")).get("issuers") or {}).values():
+            if x.get("t") and x.get("n"):
+                m[_nm(x["n"])][x["t"]] += 1
+    tick = {a_["ticker"] for a_ in acts}
+
+    def find(*names):
+        for n in names:
+            k = _nm(n)
+            if k and k in m:
+                return m[k].most_common(1)[0][0]
+        for n in names:  # ticker cité entre parenthèses, ex. « (BBGC) »
+            x = re.search(r"\(([A-Z]{4,5})\)", n or "")
+            if x and x.group(1) in tick:
+                return x.group(1)
+        return None
+    res, nomap = [], set()
+    for u, r in items.items():
+        t = find(r.get("soc"), (r.get("ti") or "").split(" : ")[0] if " : " in (r.get("ti") or "") else None)
+        if r.get("soc") and not t:
+            nomap.add(r["soc"])
+        res.append({**r, "u": u, "t": t})
+    return res, nomap
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--brvm-src", required=True)
@@ -333,6 +379,40 @@ def main():
                 if rec.get("cfo") is not None:
                     pdf_cf.setdefault(t, {})[y] = {"cfo": rec["cfo"], "capex": rec.get("capex", 0), "fcf": rec.get("fcf", rec["cfo"] - (rec.get("capex") or 0)), "src": rec.get("src")}
     divs = json.load(open(os.path.join(src, "dividendes.json"), encoding="utf8"))["all"]
+    # avis lus directement sur brvm.org (relevés toutes les 15 min) : secours si la base d'avis tierce s'arrête
+    AV = []
+    try:
+        avp = os.path.join(a.out, "avis_brvm.json")
+        if os.path.exists(avp):
+            AV, nomap = brvm_avis(json.load(open(avp, encoding="utf8")).get("items") or {}, json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"], acts, a.out)
+            log("avis brvm.org :", len(AV), "lus" + (", sociétés non rattachées : " + ", ".join(sorted(nomap)) if nomap else ""))
+    except Exception as e:  # noqa: BLE001
+        log("avis brvm.org illisibles :", e)
+    av_chk = {"div": 0, "split": 0, "ev": 0, "ag": 0}
+    if AV:  # dividendes annoncés sur brvm.org (montant net, détachement, paiement) absents de la base : ajoutés
+      try:
+        have = collections.defaultdict(list)
+        for x in divs:
+            if x.get("ticker"):
+                have[x["ticker"]].append(x)
+
+        def near(d1, d2, n=10):
+            try:
+                return abs((dt.date.fromisoformat(d1[:10]) - dt.date.fromisoformat(d2[:10])).days) <= n
+            except (TypeError, ValueError):
+                return False
+        for r in AV:
+            if r.get("k") != "div" or not r.get("t") or not r.get("dps") or not (r.get("det") or r.get("pay")):
+                continue
+            if any((r.get("ex") and x.get("exercice") == r["ex"] and abs((x.get("dividende") or 0) - r["dps"]) < 0.5)
+                   or near(x.get("date_detachement"), r.get("det")) or near(x.get("date_paiement"), r.get("pay")) for x in have[r["t"]]):
+                continue
+            nx = {"ticker": r["t"], "dividende": r["dps"], "exercice": r.get("ex"), "date_annonce": r.get("d"), "date_detachement": r.get("det"), "date_paiement": r.get("pay"), "source": "BRVM"}
+            divs.append(nx)
+            have[r["t"]].append(nx)
+            av_chk["div"] += 1
+      except Exception as e:  # noqa: BLE001
+        log("dividendes brvm.org ignorés :", e)
     # bulletins officiels de la cote (BRVM) : contrôle et secours des cours et des dividendes
     BOC = {}
     if a.boc and os.path.isdir(a.boc):
@@ -383,6 +463,15 @@ def main():
                     SPL[x["ticker"]].append((e_, k_))
     except Exception as e:  # noqa: BLE001
         log("fractionnements illisibles :", e)
+    for r in AV:  # fractionnements publiés sur brvm.org (date et parité) absents de la base d'avis
+      try:
+        if r.get("k") == "frac" and r.get("t") and r.get("e") and r.get("ratio") and r["ratio"][0] and r["ratio"][1]:
+            k_, e_ = r["ratio"][0] / r["ratio"][1], di(r["e"][:10])
+            if k_ > 0 and abs(k_ - 1) > 1e-9 and all(abs(e_ - e0) > 20 for e0, _ in SPL[r["t"]]):
+                SPL[r["t"]].append((e_, k_))
+                av_chk["split"] += 1
+      except Exception as e:  # noqa: BLE001
+        log("fractionnement brvm.org ignoré :", r.get("u"), e)
     split_log, force_write, PX_DATE = [], set(), {}
 
     def split_factor(t, date_int, upto):
@@ -714,6 +803,33 @@ def main():
     ev = json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"]
     emeta = [{"d": x.get("published_at") or x.get("event_at"), "e": x.get("event_at"), "t": x.get("ticker"), "c": x.get("category_label"),
               "ti": x.get("title"), "u": x.get("document_url")} for x in ev if (x.get("published_at") or x.get("event_at"))]
+    known_u = {x["u"] for x in emeta if x.get("u")}
+    known_k = {(x.get("t"), x.get("c"), x.get("d")) for x in emeta if x.get("t")}
+    known_e = {(x.get("t"), x.get("e")) for x in emeta if x.get("t") and x.get("c") in ("Annonce dividende", "Paiement dividende", "Détachement dividende")}
+
+    def dup(r):  # même document, ou même avis déjà repris par la base sous une autre adresse
+        if r["u"] in known_u:
+            return True
+        try:
+            d0 = dt.date.fromisoformat(r["d"][:10])
+        except (TypeError, ValueError):
+            return False
+        if r.get("t") and any((r["t"], r.get("c"), (d0 + dt.timedelta(days=k)).isoformat()) in known_k for k in range(-3, 4)):
+            return True
+        return r.get("k") == "div" and r.get("t") and ((r["t"], r.get("det")) in known_e or (r["t"], r.get("pay")) in known_e)
+    for r in AV:  # avis brvm.org pas encore dans la base : ajoutés tels que publiés (date de publication ; date de l'AG quand elle a été lue dans la convocation)
+        try:
+            if not r.get("d") or dup(r):
+                continue
+        except Exception:  # noqa: BLE001
+            continue
+        emeta.append({"d": r["d"], "e": r.get("e") or r["d"], "t": r.get("t"), "c": r.get("c"), "ti": r.get("ti"), "u": r["u"]})
+        av_chk["ev"] += 1
+        if r.get("k") == "ag" and r.get("ag"):
+            emeta.append({"d": r["d"], "e": r["ag"], "t": r.get("t"), "c": "Assemblée générale", "ti": r.get("ti"), "u": r["u"]})
+            av_chk["ag"] += 1
+    if AV:
+        log("avis brvm.org ajoutés :", av_chk)
     emeta.sort(key=lambda x: x["d"] or "", reverse=True)
 
     # Calculs dérivés (macro, sentiment, liquidité, comptes, consensus, valorisation BRVM, UEMOA) ----
@@ -739,7 +855,7 @@ def main():
     summ = {"asof": asof, "built": int(time.time()), "secs": secs, "sectors": sorted({s["grp"] for s in secs if s["mkt"] == "BRVM" and s["cls"] == "Equity"}),
             "session": {"asof": session.get("asof"), "label": session.get("session"), "capA": session.get("capA")} if session else None, "cty": CTY_NAME}
     for name, obj in (("summary", summ), ("weekly", wm), ("breadth", breadth), ("fundamentals", fmeta), ("dividends", dmeta), ("events", emeta),
-                      ("events_recent", emeta[:80]), ("boc_check", {**boc_chk, "d": dt.date.today().isoformat()} if BOC else {"n": 0})):
+                      ("events_recent", emeta[:80]), ("boc_check", {**boc_chk, "avis": av_chk, "d": dt.date.today().isoformat()} if BOC else {"n": 0, "avis": av_chk})):
         with open(os.path.join(out, name + ".json"), "w", encoding="utf8") as fh:
             json.dump(obj, fh, separators=(",", ":"), ensure_ascii=False)
     tot = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(out) for f in fs)

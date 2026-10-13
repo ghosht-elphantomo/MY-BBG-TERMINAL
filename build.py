@@ -33,11 +33,16 @@ else:
     html = ('<!doctype html>\n<html lang="fr"><head><meta charset="utf-8">'
             '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n'
             '<link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="alternate icon" href="/favicon.ico">\n' + HEAD + '</head><body>\n' + BODY + JS + '</body></html>\n')
+    # version du code : la page en ligne la compare à public/version.json et se recharge d'elle-même quand le code change
+    import hashlib, json
+    APP_V = hashlib.sha1(html.encode("utf8")).hexdigest()[:12]
+    html = html.replace("'__APP_V__'", "'" + APP_V + "'")
     open(os.path.join(HERE, "index.html"), "w", encoding="utf8").write(html)
     # dossier servi par Vercel (outputDirectory « public ») : main est déployable tel quel
     import shutil
     os.makedirs(os.path.join(HERE, "public"), exist_ok=True)
     open(os.path.join(HERE, "public", "index.html"), "w", encoding="utf8").write(html)
+    json.dump({"v": APP_V}, open(os.path.join(HERE, "public", "version.json"), "w", encoding="utf8"))
     shutil.copy(os.path.join(HERE, "deploy", "robots.txt"), os.path.join(HERE, "public", "robots.txt"))
     shutil.copy(os.path.join(HERE, "web", "fonts", "LICENSE-NotoSans.txt"), os.path.join(HERE, "public", "LICENSE-fonts.txt"))
     for f in ("favicon.ico", "favicon.svg", "apple-touch-icon.png"):  # icône propre au terminal (sinon le navigateur garde une ancienne icône)

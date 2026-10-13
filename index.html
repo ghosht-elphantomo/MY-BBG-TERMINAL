@@ -5615,6 +5615,20 @@ function feedState() { const L = Q.live && Q.live.qqq, f = $('feed'); if (!f) re
 function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms); }
 
 /* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
+/* ---------- mise à jour silencieuse du terminal : quand une nouvelle version est en ligne, la page se recharge d'elle-même
+   au premier moment calme (onglet en arrière-plan, retour sur l'onglet, ou une minute sans action), en gardant l'écran et ses onglets ---------- */
+const APP_V = 'f2af70f08599';
+let APP_NEW = false, APP_ACT = Date.now();
+function appReload() { try { sessionStorage.setItem('fqt_tabs', JSON.stringify(ST.tab)); } catch (e) { } location.reload(); }
+function appMaybe(now) { if (!APP_NEW) return; const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value; if (document.hidden || now || (!typing && Date.now() - APP_ACT > 60000)) appReload(); }
+async function appCheck(now) { if (/^__/.test(APP_V) || APP_NEW) { appMaybe(now); return; }
+  try { const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) { const j = await r.json(); if (j && j.v && j.v !== APP_V) APP_NEW = true; } } catch (e) { } appMaybe(now); }
+function initAppUpdate() {
+  try { const t = JSON.parse(sessionStorage.getItem('fqt_tabs') || 'null'); if (t) { Object.assign(ST.tab, t); sessionStorage.removeItem('fqt_tabs'); } } catch (e) { }
+  ['keydown', 'pointerdown', 'wheel', 'touchstart'].forEach(ev => document.addEventListener(ev, () => { APP_ACT = Date.now(); }, { passive: true, capture: true }));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) appCheck(true); else appMaybe(); });
+  setInterval(() => appCheck(false), 5 * 60 * 1000); setInterval(() => appMaybe(false), 20000);
+}
 async function initFeed() {
   if (!window.claude || !window.claude.use) { setInterval(pollStatic, 5 * 60 * 1000); return; }
   let db = null; try { db = await window.claude.use('db'); } catch (e) { } if (!db) return;
@@ -5657,7 +5671,7 @@ async function boot() {
   for (const s of Q.sum.secs) Q.by[s.id] = s;
   try { Q.live = await getJSON('live.json'); } catch (e) { } try { Q.quotes = await getJSON('quotes.json'); applyQuotes(); } catch (e) { }
   for (const t of WT.list) { const a = FN_ALIAS[t.fn]; if (a) t.fn = a[0]; } if (WT.cur >= WT.list.length) WT.cur = 0; const t0 = WT.list[WT.cur]; if (t0 && FN[t0.fn]) { ST.fn = t0.fn; if (Q.by[t0.sec]) ST.sec = t0.sec; }
-  fromHash(); initCmd(); clocks(); applyPref();
+  initAppUpdate(); fromHash(); initCmd(); clocks(); applyPref();
   document.addEventListener('click', e => { const f = e.target.closest('[data-fn]'); if (f && !f.closest('#ddm')) { if (f.dataset.t) ST.tab[f.dataset.fn] = f.dataset.t; go(f.dataset.fn, f.dataset.s); return; }
     const s = e.target.closest('[data-sec]'); if (s && !e.target.closest('a')) { const id = s.dataset.sec; go(s.dataset.to || (SECFN.has(ST.fn) && ST.fn !== 'MENU' && !avail(ST.fn, sec(id)) ? ST.fn : 'MENU'), id); } });
   window.addEventListener('hashchange', () => { const a = ST.fn + ST.sec; fromHash(); if (ST.fn + ST.sec !== a) go(ST.fn, ST.sec); });

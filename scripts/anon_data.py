@@ -31,7 +31,7 @@ for d, _, fs in os.walk(root):
         except Exception:  # noqa: BLE001
             continue
         o = clean(o)
-        if f in ("news.json", "events.json", "events_recent.json", "reports.json"):  # liens d'articles et d'avis : pas d'adresse d'origine
+        if f in ("news.json", "events.json", "events_recent.json", "reports.json", "avis_brvm.json"):  # liens d'articles et d'avis : pas d'adresse d'origine
             t = json.dumps(o, ensure_ascii=False, separators=(",", ":"))
             t = re.sub(r'"(u|url|link|s|pdf)":"[^"]*"', lambda m_: f'"{m_.group(1)}":""', t)
             t = NAMES.sub("", t)
