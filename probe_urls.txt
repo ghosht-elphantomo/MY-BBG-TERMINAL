@@ -1,6 +1,6 @@
 ecb.xml|https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml
 treas.csv|https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2026/all?type=daily_treasury_yield_curve&field_tdr_date_value=2026&page&_format=csv
-fred_sp500.csv|https://fred.stlouisfed.org/graph/fredgraph.csv?id=SP500
+fred_sp500.csv|https://fred.stlouisfed.org/graph/fredgraph.csv?id=SP500,DGS10,DEXUSEU
 stooq_us.csv|https://stooq.com/q/l/?s=aapl.us,qqq.us,msft.us,nvda.us,tsla.us,%5Espx,%5Endx,%5Edji&f=sd2t2ohlcv&h&e=csv
 stooq_fx.csv|https://stooq.com/q/l/?s=eurusd,usdjpy,gbpusd,usdchf,xauusd,xagusd,cb.f,%5Eftm,%5Edax,%5Ecac,%5Enkx&f=sd2t2ohlcv&h&e=csv
 brvm_actions.html|https://www.brvm.org/fr/cours-actions/0
