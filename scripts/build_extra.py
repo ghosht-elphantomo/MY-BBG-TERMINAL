@@ -453,6 +453,8 @@ def eco(extra, out, log):
                         "d": [base[i] for i in daily], "v": [[r_(cols[t[0]][i], 3) for t in ten] for i in daily],
                         "md": [base[i] for i in months], "mv": [[r_(cols[t[0]][i], 3) for t in ten] for i in months]}
     jsave(os.path.join(out, "eco.json"), res)
+    # version légère (sans les historiques) pour les écrans qui n'affichent que les derniers chiffres et la courbe
+    jsave(os.path.join(out, "eco_lite.json"), {k: res[k] for k in ("meta", "rec", "curve") if k in res})
     log(f"eco.json : {len(res['s'])} séries FRED")
     return F
 

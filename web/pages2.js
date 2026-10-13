@@ -341,14 +341,29 @@ PAGES.DIVC = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ EVTS */
+/* un même avis porte parfois plusieurs événements (dividende : annonce, détachement, paiement) : une seule ligne par document,
+   catégories réunies, échéances détaillées */
+const EV_SHORT = { 'Détachement dividende': 'détachement', 'Paiement dividende': 'paiement', 'Annonce dividende': 'annonce', 'Assemblée générale': 'AG', 'Convocation / communiqué AG': 'convocation' };
+function evMerge(L) {
+  const out = [], by = new Map();
+  for (const e of L) {
+    const k = e.u ? e.u + '|' + (e.t || '') : null, g = k ? by.get(k) : null;
+    if (g) { if (e.c && !g.cs.includes(e.c)) g.cs.push(e.c); if (e.e && e.e !== e.d) g.es.push([e.c, e.e]); if (e.c === 'Annonce dividende' || e.c === 'Convocation / communiqué AG') g.ti = e.ti; if ((e.d || '') > (g.d || '')) g.d = e.d; continue; }
+    const r = { ...e, cs: e.c ? [e.c] : [], es: e.e && e.e !== e.d ? [[e.c, e.e]] : [] }; out.push(r); if (k) by.set(k, r);
+  }
+  const DIVF = ['Annonce dividende', 'Détachement dividende', 'Paiement dividende'], AGF = ['Convocation / communiqué AG', 'Assemblée générale'];
+  for (const r of out) { r.c = r.cs.length > 1 && r.cs.every(c => DIVF.includes(c)) ? 'Dividende' : r.cs.length > 1 && r.cs.every(c => AGF.includes(c)) ? 'Assemblée générale' : r.cs.join(' · '); r.es.sort((a, b) => a[1].localeCompare(b[1])); }
+  return out;
+}
+const evDue = e => e.es && e.es.length > 1 ? e.es.map(([c, d]) => `${EV_SHORT[c] || ''} ${fds(d)}`.trim()).join(' · ') : e.es && e.es.length ? fds(e.es[0][1]) : '';
 PAGES.EVTS = async (m, alive) => {
   const EV = await getJSON('events.json'); if (!alive()) return; const st = ST.ev;
   const cats = [...new Set(EV.map(e => e.c).filter(Boolean))].sort(), tks = [...new Set(EV.map(e => e.t).filter(Boolean))].sort();
-  const q = st.q.toLowerCase(); const F = EV.filter(e => (!st.cat || e.c === st.cat) && (!st.tk || e.t === st.tk) && (!q || (e.ti || '').toLowerCase().includes(q)));
+  const q = st.q.toLowerCase(); const F = evMerge(EV.filter(e => (!st.cat || e.c === st.cat) && (!st.tk || e.t === st.tk) && (!q || (e.ti || '').toLowerCase().includes(q))));
   const per = 100, pages = Math.max(1, Math.ceil(F.length / per)); st.page = Math.min(st.page, pages - 1);
   const byY = {}; for (const e of F) { const y = (e.d || '').slice(0, 4); if (y) byY[y] = (byY[y] || 0) + 1; } const ys = Object.keys(byY).sort().slice(-20);
-  m.innerHTML = `${pn('Avis officiels BRVM · ' + num(EV.length, 0), 'EVTS', `<div class="tw" style="max-height:66vh"><table class="t"><thead><tr><th class="l">Publication</th><th class="l">Échéance</th><th class="l">Titre</th><th class="l">Catégorie</th><th class="l">Avis</th></tr></thead><tbody>
-    ${F.slice(st.page * per, st.page * per + per).map(e => `<tr><td class="l">${fds(e.d)}</td><td class="l dm">${e.e && e.e !== e.d ? fds(e.e) : ''}</td><td class="l tk" ${e.t ? `data-sec="${e.t}" data-to="DES" style="cursor:pointer"` : ''}>${e.t || '—'}</td><td class="l am">${esc(e.c || '')}</td><td class="l" style="white-space:normal">${e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a>` : esc(e.ti || '')}</td></tr>`).join('')}</tbody></table></div>
+  m.innerHTML = `${pn('Avis officiels BRVM · ' + num(evMerge(EV).length, 0), 'EVTS', `<div class="tw" style="max-height:66vh"><table class="t"><thead><tr><th class="l">Publication</th><th class="l">Échéance</th><th class="l">Titre</th><th class="l">Catégorie</th><th class="l">Avis</th></tr></thead><tbody>
+    ${F.slice(st.page * per, st.page * per + per).map(e => `<tr><td class="l">${fds(e.d)}</td><td class="l dm">${evDue(e)}</td><td class="l tk" ${e.t ? `data-sec="${e.t}" data-to="DES" style="cursor:pointer"` : ''}>${e.t || '—'}</td><td class="l am">${esc(e.c || '')}</td><td class="l" style="white-space:normal">${e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a>` : esc(e.ti || '')}</td></tr>`).join('')}</tbody></table></div>
     <div class="pager"><button class="tb alt" id="evP" ${st.page ? '' : 'disabled'}>◀</button><span>page ${st.page + 1} / ${pages} · ${num(F.length, 0)} avis</span><button class="tb alt" id="evN" ${st.page < pages - 1 ? '' : 'disabled'}>▶</button></div>`,
     { np: true, tools: `<span class="tlab">Catégorie</span><select id="evC"><option value="">Toutes</option>${cats.map(c => `<option ${c === st.cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select><span class="tlab">Titre</span><select id="evT"><option value="">Tous</option>${tks.map(t => `<option ${t === st.tk ? 'selected' : ''}>${t}</option>`).join('')}</select><span class="tlab">Recherche</span><input id="evQ" value="${esc(st.q)}" style="width:200px;text-transform:none" placeholder="assemblée, dividende…">` })}
     ${pn('Nombre d’avis par année (filtre courant)', 'EVTS', cvb('evY', 160))}`;

@@ -271,8 +271,9 @@ PAGES.CN = async (m, alive) => {
   const docs = RP ? Object.entries(RP.issuers || {}).filter(([, x]) => x.t === s.id).flatMap(([slug]) => (RP.docs || {})[slug] || []) : [];
   const H = [];  // { ts (tri), d (aaaa-mm-jj), hm, cat, k, t, u, s, x }
   for (const x of its) H.push({ ts: x.t * 1000, cat: 'N', k: x.ev && x.ev !== 'Marchés' ? x.ev : '', t: deent(x.ti), u: x.u, s: srcCode(x), x: deent(x.x || ''), hm: true });
-  for (const e of EV.filter(x => x.t === s.id)) H.push({ ts: Date.parse(e.d + 'T12:00:00Z'), cat: 'A', k: e.c || 'Avis', t: e.ti, u: e.u, s: '' });
-  for (const d of docs) if (d.d) H.push({ ts: Date.parse(i2s(+d.d) + 'T12:00:00Z'), cat: 'P', k: /etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Rapport d’activité' : 'Publication', t: d.ti, u: d.u, s: '' });
+  const evU = new Set();
+  for (const e of evMerge(EV.filter(x => x.t === s.id))) { if (e.u) evU.add(e.u); H.push({ ts: Date.parse(e.d + 'T12:00:00Z'), cat: 'A', k: e.c || 'Avis', t: e.ti, u: e.u, s: '' }); }
+  for (const d of docs) if (d.d && !evU.has(d.u)) H.push({ ts: Date.parse(i2s(+d.d) + 'T12:00:00Z'), cat: 'P', k: /etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Rapport d’activité' : 'Publication', t: d.ti, u: d.u, s: '' });
   for (const x of DV.filter(x => x.t === s.id && x.dps)) if (x.det) H.push({ ts: Date.parse(x.det + 'T12:00:00Z'), cat: 'D', k: 'Dividende', t: `Détachement du dividende de l’exercice ${x.ex} : ${num(x.dps, 2)} FCFA net`, s: '' });
   for (const a of ((AN && AN.by && AN.by[s.id]) || []).filter(a => a.d)) H.push({ ts: Date.parse(i2s(a.d) + 'T12:00:00Z'), cat: 'X', k: 'Anomalie · ' + a.k, t: a.m, s: 'FQT' });
   H.sort((a, b) => b.ts - a.ts);

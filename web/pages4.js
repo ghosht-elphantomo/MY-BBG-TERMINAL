@@ -161,7 +161,7 @@ async function RV_main(m, alive) {
 
 /* ------------------------------------------------------------------ WACC */
 PAGES.WACC = async (m, alive) => {
-  const s = sec(ST.sec); const [F, E, PER] = await Promise.all([faJSON(s.id).catch(() => null), getJSON('eco.json').catch(() => null), getJSON('per.json').catch(() => null)]); if (!alive()) return;
+  const s = sec(ST.sec); const [F, E, PER] = await Promise.all([faJSON(s.id).catch(() => null), ecoLite().catch(() => null), getJSON('per.json').catch(() => null)]); if (!alive()) return;
   if (!F) { m.innerHTML = pn(s.tk + ' · création de valeur', 'WACC', '<div class="empty">Comptes non disponibles.</div>'); return; }
   const us = F.mkt === 'US', t10 = E && E.meta ? E.meta.find(x => x.id === 'DGS10') : null;
   const st = ST.wacc && ST.wacc.id === s.id ? ST.wacc : (ST.wacc = { id: s.id, rf: us ? (t10 ? t10.last / 100 : .042) : .065, erp: us ? .045 : .095, beta: s.beta != null ? .67 * s.beta + .33 : 1, kd: null, tax: F.tax != null ? F.tax : us ? .21 : .25 });
@@ -227,7 +227,7 @@ PAGES.DVD = async (m, alive) => {
 
 /* ------------------------------------------------------------------ DDM */
 PAGES.DDM = async (m, alive) => {
-  const s = sec(ST.sec); const [S, F, E, DV] = await Promise.all([series(s.id), faJSON(s.id).catch(() => null), getJSON('eco.json').catch(() => null), getJSON('dividends.json')]); if (!alive()) return;
+  const s = sec(ST.sec); const [S, F, E, DV] = await Promise.all([series(s.id), faJSON(s.id).catch(() => null), ecoLite().catch(() => null), getJSON('dividends.json')]); if (!alive()) return;
   const us = !isBRVM(s), price = s.last; let d0 = null, hist = [];
   if (!us) { hist = DV.filter(x => x.t === s.id && x.dps).sort((a, b) => (a.ex || 0) - (b.ex || 0)).map(x => x.dps); d0 = s.dps || hist[hist.length - 1]; }
   else { const by = {}; for (let i = 0; i < S.x.length; i++) if (S.div[i]) { const y = Math.floor(S.x[i] / 10000); by[y] = (by[y] || 0) + S.div[i]; } const ys = Object.keys(by).sort(); const cy = String(new Date().getFullYear()); hist = ys.filter(y => y !== cy).map(y => by[y]); d0 = hist[hist.length - 1];
@@ -346,8 +346,8 @@ PAGES.HP = async (m, alive) => {
 
 /* ------------------------------------------------------------------ CN */
 function aliasesOf(s) {
-  const out = new Set([s.id]); const n = (s.short || s.n || '').replace(/\b(SA|S\.A\.|Inc\.?|Corp\.?|Corporation|Holdings?|Ltd|PLC|Group|Class [A-C]|Common Stock|Co\.)\b/gi, '').replace(/[,.]/g, ' ').trim(); if (n.length > 3) out.add(n);
-  const extra = { SNTS: ['Sonatel'], ORAC: ['Orange Côte d', 'Orange CI'], SGBC: ['Société Générale Côte', 'SGBCI', 'SGCI'], ETIT: ['Ecobank Transnational', 'ETI '], ECOC: ['Ecobank Côte'], SIBC: ['Société Ivoirienne de Banque', 'SIB '], CBIBF: ['Coris Bank'], PALC: ['Palm C'], SPHC: ['SAPH'], SOGC: ['SOGB'], NTLC: ['Nestlé C'], SLBC: ['Solibra'], UNLC: ['Unilever C'], TTLC: ['TotalEnergies Marketing C', 'Total CI'], CIEC: ['CIE '], SDCC: ['SODECI'], ONTBF: ['Onatel'], BOAC: ['BOA Côte', 'Bank of Africa Côte'], NSBC: ['NSIA Banque'], BICC: ['BICICI', 'BICI CI'], SMBC: ['SMB '], STBC: ['SITAB'], SDSC: ['AGL ', 'Africa Global Logistics'], ORGT: ['Oragroup'], NVDA: ['Nvidia'], AAPL: ['Apple'], MSFT: ['Microsoft'], GOOG: ['Alphabet', 'Google'], GOOGL: ['Alphabet', 'Google'], AMZN: ['Amazon'], META: ['Meta '], TSLA: ['Tesla'], AVGO: ['Broadcom'], AMD: ['AMD'] };
+  const out = new Set([s.id]); const n = (s.short || s.n || '').replace(/\b(SA|S\.A\.|Inc\.?|Corp\.?|Corporation|Holdings?|Ltd|PLC|Group|Class [A-C]|Common Stock|Co\.|ADR|Sponsored|Ordinary Shares)\b/gi, '').replace(/[,.]/g, ' ').trim(); if (n.length > 3) out.add(n);
+  const extra = { TSM: ['TSMC', 'Taiwan Semiconductor'], SNTS: ['Sonatel'], ORAC: ['Orange Côte d', 'Orange CI'], SGBC: ['Société Générale Côte', 'SGBCI', 'SGCI'], ETIT: ['Ecobank Transnational', 'ETI '], ECOC: ['Ecobank Côte'], SIBC: ['Société Ivoirienne de Banque', 'SIB '], CBIBF: ['Coris Bank'], PALC: ['Palm C'], SPHC: ['SAPH'], SOGC: ['SOGB'], NTLC: ['Nestlé C'], SLBC: ['Solibra'], UNLC: ['Unilever C'], TTLC: ['TotalEnergies Marketing C', 'Total CI'], CIEC: ['CIE '], SDCC: ['SODECI'], ONTBF: ['Onatel'], BOAC: ['BOA Côte', 'Bank of Africa Côte'], NSBC: ['NSIA Banque'], BICC: ['BICICI', 'BICI CI'], SMBC: ['SMB '], STBC: ['SITAB'], SDSC: ['AGL ', 'Africa Global Logistics'], ORGT: ['Oragroup'], NVDA: ['Nvidia'], AAPL: ['Apple'], MSFT: ['Microsoft'], GOOG: ['Alphabet', 'Google'], GOOGL: ['Alphabet', 'Google'], AMZN: ['Amazon'], META: ['Meta '], TSLA: ['Tesla'], AVGO: ['Broadcom'], AMD: ['AMD'] };
   (extra[s.id] || []).forEach(a => out.add(a)); return [...out].filter(a => a.length >= 3);
 }
 function newsRow(x) { return `<div class="nw"><span class="d">${new Date(x.t * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span><span class="c">${esc(x.c || '')}</span><span><a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.ti)}</a> ${hideSrc(x) ? '' : `<span class="src">${esc(x.s || '')}</span>`}${x.x ? `<small>${esc(x.x)}</small>` : ''}</span></div>`; }

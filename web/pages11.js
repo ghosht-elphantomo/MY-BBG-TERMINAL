@@ -4,6 +4,8 @@ const rangeBar3 = (v, lo, hi) => (v == null || lo == null || hi == null || hi <=
 const qTime = t => { if (!t) return '—'; if (String(t).length === 10) return String(t).slice(8, 10) + '/' + String(t).slice(5, 7); const d = new Date(t); if (isNaN(d)) return esc(t); return Date.now() - d < 20 * 3600e3 ? d.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit' }); };
 const ctr = n => (n || '').match(/\(([^)]+)\)\s*$/) ? (n.match(/\(([^)]+)\)\s*$/)[1]) : '';
 const WMKT = () => getJSON('world_mkt.json').catch(() => null);
+/* derniers chiffres FRED et courbe du Trésor (sans les historiques : 100 Ko au lieu de 1,8 Mo) */
+const ecoLite = () => getJSON('eco_lite.json').catch(() => getJSON('eco.json'));
 /* paires cotées « devise / USD » (dollars pour une unité) ; toutes les autres sont cotées « USD / devise » */
 const FX_INV = new Set(['EUR=', 'GBP=', 'AUD=', 'NZD=']);
 

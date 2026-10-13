@@ -219,7 +219,7 @@ PAGES.SRCH = async (m, alive) => {
 /* ------------------------------------------------------------------ marché monétaire US (onglet 1 de RATES, ex-BTMM) : écran « Treasury & Money Markets » — panneaux numérotés :
    banques centrales, marché monétaire, bons et emprunts du Trésor, contrats à terme, pentes et inflation, courbe du jour contre 1 mois et 1 an */
 async function btmmView(m, alive) {
-  const [W, E, B] = await Promise.all([WMKT(), getJSON('eco.json').catch(() => null), getJSON('bceao.json').catch(() => null)]); if (!alive()) return; setTitle('Treasury & Money Markets');
+  const [W, E, B] = await Promise.all([WMKT(), ecoLite().catch(() => null), getJSON('bceao.json').catch(() => null)]); if (!alive()) return; setTitle('Treasury & Money Markets');
   const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, RT = Object.fromEntries(((W && W.rt) || []).map(r => [r.s, r])), FU = Object.fromEntries(((W && W.cmd) || []).filter(r => r.g === 'RTF' || r.s === '@FF.1').map(r => [r.s, r]));
   const dI = d => d ? `${String(d).slice(6, 8)}/${String(d).slice(4, 6)}` : '—';
   const bp = v => v == null || !isFinite(v) ? '<span class="dm">—</span>' : (() => { const r = Math.round(v * 10) / 10 || 0; return `<span class="${cls(r)}">${r > 0 ? '+' : ''}${num(r, 1)}</span>`; })();

@@ -97,8 +97,11 @@ PAGES.ECO = async (m, alive) => {
   m.querySelectorAll('input[name="ecv"]').forEach(r => r.onchange = () => { st.view = r.value; render(); });
   m.querySelectorAll('[data-ev]').forEach(tr => tr.onclick = () => { st.sel = st.sel === tr.dataset.ev ? null : tr.dataset.ev; render(); });
   /* place la prochaine publication en haut de la liste (comme le terminal) */
-  const tw = $('ecTw'), nx = tw && tw.querySelector('tr.nx'); if (nx && st.view === 'A' && !sel) tw.scrollTop = Math.max(0, nx.offsetTop - 26 * 4);
-  else if (sel && tw) { const h = tw.querySelector('tr.hl'); if (h) tw.scrollTop = Math.max(0, h.offsetTop - 26 * 4); }
+  /* la ligne visée arrive 4 lignes sous l'en-tête figé (aucune ligne à moitié cachée sous l'en-tête) */
+  const tw = $('ecTw'), nx = tw && tw.querySelector('tr.nx'), thH = tw ? ((tw.querySelector('thead') || {}).offsetHeight || 0) : 0;
+  const goRow = r => { const rh = r.offsetHeight || 22; tw.scrollTop = Math.max(0, r.offsetTop - thH - rh * 4); };
+  if (nx && st.view === 'A' && !sel) goRow(nx);
+  else if (sel && tw) { const h = tw.querySelector('tr.hl'); if (h) goRow(h); }
   if (!sel) return;
   /* panneau de détail : la publication, ses occurrences dans la fenêtre et, pour les États-Unis, la série FRED liée */
   const T = ecoDT(sel.d), same = C.rows.filter(r => r.c === sel.c && r.t === sel.t).sort((a, b) => b.d.localeCompare(a.d)), fred = sel.c === 'US' ? (ECO_FRED.find(([rx]) => rx.test(sel.t)) || [])[1] : null;

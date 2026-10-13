@@ -283,7 +283,7 @@ PAGES.WEIF = async (m, alive) => {
 /* ------------------------------------------------------------------ anticipations de taux de la Fed (onglet 2 de RATES, ex-WIRP) d'après les contrats Fed funds 30 jours */
 const FOMC = ['2026-01-28', '2026-03-18', '2026-04-29', '2026-06-17', '2026-07-29', '2026-09-16', '2026-10-28', '2026-12-09']; // dates de décision publiées par la Fed (2e jour de réunion)
 async function wirpView(m, alive) {
-  setTitle('World Interest Rate Probability'); const [W, E] = await Promise.all([WMKT(), getJSON('eco.json').catch(() => null)]); if (!alive()) return;
+  setTitle('World Interest Rate Probability'); const [W, E] = await Promise.all([WMKT(), ecoLite().catch(() => null)]); if (!alive()) return;
   const FF = ((W && W.cmd) || []).filter(r => r.g === 'FF').sort((a, b) => String(a.exp).localeCompare(String(b.exp)));
   if (FF.length < 3) { m.innerHTML = pn('Anticipations de taux', 'RATES', '<div class="empty">Contrats Fed funds en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, eff = M.DFF ? M.DFF.last : 100 - FF[0].last, lo = M.DFEDTARL ? M.DFEDTARL.last : null, hi = M.DFEDTARU ? M.DFEDTARU.last : null;

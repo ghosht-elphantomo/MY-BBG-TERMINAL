@@ -606,6 +606,12 @@ table.t.eqt td{line-height:24px}
 .spb{background:#3a2a00;border:1px solid #ffa028;color:#ffd27a;padding:5px 8px;margin:0 0 4px;font-size:12.5px}.spb .tb{margin-left:8px}
 .t.cft td.l{max-width:240px;overflow:hidden;text-overflow:ellipsis}.cfl{color:var(--link)}
 
+/* ---- MONITOR : toutes les colonnes visibles sans défilement horizontal (nom tronqué, colonnes secondaires masquées sur écran étroit) ---- */
+.t.mon td.nm{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t.mon td.tk{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:1599px){.t.mon .w16{display:none}}
+@media (max-width:1399px){.t.mon .w14{display:none}}
+
 </style>
 </head><body>
 <div id="app">
@@ -1307,15 +1313,15 @@ function lastCross(c, s) { const n = c.length; const above = c[n - 1] > s[n - 1]
 PAGES.MONITOR = async (m, alive) => {
   const G = [['Indices & ETF · États-Unis', s => s.mkt === 'US' && s.typ === 'ETF'], ['Actions · États-Unis', s => s.mkt === 'US' && s.typ !== 'ETF'], ['Taïwan', s => s.mkt === 'TW'],
     ['Indices BRVM', s => s.mkt === 'BRVM' && s.cls === 'Index' && !legacy(s)], ['Matières premières', s => s.cls === 'Comdty'], ['Taux · volatilité · macro', s => s.mkt === 'MACRO' && (s.cls === 'Index' || s.cls === 'Rate')], ['Change', s => s.cls === 'Curncy']];
-  const row = s => `<tr data-sec="${s.id}"><td class="l tk">${s.tk}</td><td class="l nm ns">${esc(s.short || s.n)}</td><td class="wh">${px(s, s.last)}</td><td>${sgn(s.last - s.prev, pxd(s), '', 1)}</td><td>${pc(s.pct)}</td>
-    <td>${s.f === 'D' ? pc(s.r1w, 1) : '<span class="fl">—</span>'}</td><td>${pc(s.r1m, 1)}</td><td>${pc(s.ytd, 1)}</td><td>${pc(s.r1y, 1)}</td><td>${num(s.vol * 100, 1)}</td><td>${rangeBar(s)}</td><td>${sparkSVG(s.spark)}</td><td class="dm">${s.f === 'M' ? fd(s.dt).slice(3) : fd(s.dt).slice(0, 5)}</td></tr>`;
+  const row = s => `<tr data-sec="${s.id}"><td class="l tk">${s.tk}</td><td class="l nm ns" title="${esc(s.n)}">${esc(s.short || s.n)}</td><td class="wh">${px(s, s.last)}</td><td>${sgn(s.last - s.prev, pxd(s), '', 1)}</td><td>${pc(s.pct)}</td>
+    <td>${s.f === 'D' ? pc(s.r1w, 1) : '<span class="fl">—</span>'}</td><td>${pc(s.r1m, 1)}</td><td>${pc(s.ytd, 1)}</td><td>${pc(s.r1y, 1)}</td><td class="w16">${num(s.vol * 100, 1)}</td><td class="w14">${rangeBar(s)}</td><td class="w16">${sparkSVG(s.spark)}</td><td class="dm">${s.f === 'M' ? fd(s.dt).slice(3) : fd(s.dt).slice(0, 5)}</td></tr>`;
   const body = G.map(([t, f]) => { const ss = secsWhere(f); return ss.length ? `<tr class="sec"><td class="l" colspan="13">${t} · ${ss.length}</td></tr>` + ss.map(row).join('') : ''; }).join('');
   const br = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity');
   const up = br.slice().sort((a, b) => b.pct - a.pct).slice(0, 7), dn = br.slice().sort((a, b) => a.pct - b.pct).slice(0, 7), vo = br.slice().sort((a, b) => (b.vday || 0) - (a.vday || 0)).slice(0, 7);
   const mini = (rs, v) => `<table class="t"><tbody>${rs.map(s => `<tr data-sec="${s.id}"><td class="l tk">${s.id}</td><td class="wh">${px(s, s.last)}</td><td>${v(s)}</td></tr>`).join('')}</tbody></table>`;
   const nUp = br.filter(s => s.pct > 0).length, nDn = br.filter(s => s.pct < 0).length;
   m.innerHTML = `<div class="grid c2">
-    ${pn('Marchés · vue d’ensemble', 'MONITOR', `<div class="tw" style="max-height:calc(100vh - 128px)"><table class="t"><thead><tr><th class="l">Titre</th><th class="l ns">Nom</th><th>Dernier</th><th>Var.</th><th>Var.%</th><th>1 sem.</th><th>1 mois</th><th>YTD</th><th>1 an</th><th>Vol. 1A %</th><th>Plage 52 sem.</th><th>60 dernières</th><th>Date</th></tr></thead><tbody>${body}</tbody></table></div>`, { np: true, sel: `${Q.sum.secs.filter(s => !legacy(s)).length} titres · cliquer une ligne pour ouvrir le graphique` })}
+    ${pn('Marchés · vue d’ensemble', 'MONITOR', `<div class="tw" style="max-height:calc(100vh - 128px)"><table class="t mon"><thead><tr><th class="l">Titre</th><th class="l ns">Nom</th><th>Dernier</th><th>Var.</th><th>Var.%</th><th>1 sem.</th><th>1 mois</th><th>YTD</th><th>1 an</th><th class="w16">Vol. 1A %</th><th class="w14">Plage 52 sem.</th><th class="w16">60 dernières</th><th>Date</th></tr></thead><tbody>${body}</tbody></table></div>`, { np: true, sel: `${Q.sum.secs.filter(s => !legacy(s)).length} titres · cliquer une ligne pour ouvrir le graphique` })}
     <div class="grid" style="align-content:start">
       ${pn('QQQ · règle SMA 200 → TQQQ', 'QQQ GP', `<div class="grid c2b" style="gap:8px"><div class="kv2" id="sigKv"></div>${cvb('sigCv', 150)}</div>`, { lect: '<span id="sigLect">…</span>' })}
       ${pn('BRVM · séance', 'BRVM', `<div class="grid c3" style="gap:6px"><div><div class="am" style="font-size:11px;margin-bottom:2px">Plus fortes hausses</div>${mini(up, s => pc(s.pct))}</div><div><div class="am" style="font-size:11px;margin-bottom:2px">Plus fortes baisses</div>${mini(dn, s => pc(s.pct))}</div><div><div class="am" style="font-size:11px;margin-bottom:2px">Plus gros échanges</div>${mini(vo, s => big(s.vday))}</div></div>`,
@@ -1325,7 +1331,7 @@ PAGES.MONITOR = async (m, alive) => {
     ${pn('BRVM · carte des capitalisations', 'BRVM', '<div class="tmap" id="tmap"></div>', { sel: 'taille = capitalisation boursière · couleur = variation du jour', lect: 'Chaque rectangle est une société cotée, proportionnel à sa capitalisation (cours × nombre de titres). <b>Vert</b> = hausse du jour, <b>rouge</b> = baisse ; l’intensité suit l’ampleur (saturée à ±4 %). Cliquer ouvre le graphique.' })}`;
   const tm = br.filter(s => s.mcap).map(s => ({ id: s.id, v: s.mcap, label: s.id, sub: (s.pct > 0 ? '+' : '') + num(s.pct * 100, 2) + '%', color: s.pct === 0 || !isFinite(s.pct) ? '#1f1f1f' : heatBg(s.pct, .04).replace(/,(0\.\d+|0)\)$/, (m0, a) => ',' + Math.max(.22, +a).toFixed(2) + ')'), title: `${s.n} · capi ${big(s.mcap)} XOF` }));
   treemap($('tmap'), tm, 250);
-  getJSON('events_recent.json').then(ev => { if (!alive()) return; $('monEv').innerHTML = ev.slice(0, 40).map(e => `<div class="ev"><span class="d">${fds(e.d)}</span><span class="tk" data-sec="${e.t}" data-to="DES">${e.t || ''}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join(''); }).catch(() => { $('monEv').textContent = 'Avis indisponibles.'; });
+  getJSON('events_recent.json').then(ev => { if (!alive()) return; $('monEv').innerHTML = evMerge(ev).slice(0, 40).map(e => `<div class="ev"><span class="d">${fds(e.d)}</span><span class="tk" data-sec="${e.t}" data-to="DES">${e.t || ''}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join(''); }).catch(() => { $('monEv').textContent = 'Avis indisponibles.'; });
   const M = await market('QQQ'); if (!alive()) return; const S = await series('QQQ');
   const n = M.n, last = M.c[n - 1], s200 = M.sma200[n - 1], { above, k } = lastCross(M.c, M.sma200), L = Q.live && Q.live.qqq;
   const lp = L && L.price ? L.price : last;
@@ -1952,14 +1958,29 @@ PAGES.DIVC = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ EVTS */
+/* un même avis porte parfois plusieurs événements (dividende : annonce, détachement, paiement) : une seule ligne par document,
+   catégories réunies, échéances détaillées */
+const EV_SHORT = { 'Détachement dividende': 'détachement', 'Paiement dividende': 'paiement', 'Annonce dividende': 'annonce', 'Assemblée générale': 'AG', 'Convocation / communiqué AG': 'convocation' };
+function evMerge(L) {
+  const out = [], by = new Map();
+  for (const e of L) {
+    const k = e.u ? e.u + '|' + (e.t || '') : null, g = k ? by.get(k) : null;
+    if (g) { if (e.c && !g.cs.includes(e.c)) g.cs.push(e.c); if (e.e && e.e !== e.d) g.es.push([e.c, e.e]); if (e.c === 'Annonce dividende' || e.c === 'Convocation / communiqué AG') g.ti = e.ti; if ((e.d || '') > (g.d || '')) g.d = e.d; continue; }
+    const r = { ...e, cs: e.c ? [e.c] : [], es: e.e && e.e !== e.d ? [[e.c, e.e]] : [] }; out.push(r); if (k) by.set(k, r);
+  }
+  const DIVF = ['Annonce dividende', 'Détachement dividende', 'Paiement dividende'], AGF = ['Convocation / communiqué AG', 'Assemblée générale'];
+  for (const r of out) { r.c = r.cs.length > 1 && r.cs.every(c => DIVF.includes(c)) ? 'Dividende' : r.cs.length > 1 && r.cs.every(c => AGF.includes(c)) ? 'Assemblée générale' : r.cs.join(' · '); r.es.sort((a, b) => a[1].localeCompare(b[1])); }
+  return out;
+}
+const evDue = e => e.es && e.es.length > 1 ? e.es.map(([c, d]) => `${EV_SHORT[c] || ''} ${fds(d)}`.trim()).join(' · ') : e.es && e.es.length ? fds(e.es[0][1]) : '';
 PAGES.EVTS = async (m, alive) => {
   const EV = await getJSON('events.json'); if (!alive()) return; const st = ST.ev;
   const cats = [...new Set(EV.map(e => e.c).filter(Boolean))].sort(), tks = [...new Set(EV.map(e => e.t).filter(Boolean))].sort();
-  const q = st.q.toLowerCase(); const F = EV.filter(e => (!st.cat || e.c === st.cat) && (!st.tk || e.t === st.tk) && (!q || (e.ti || '').toLowerCase().includes(q)));
+  const q = st.q.toLowerCase(); const F = evMerge(EV.filter(e => (!st.cat || e.c === st.cat) && (!st.tk || e.t === st.tk) && (!q || (e.ti || '').toLowerCase().includes(q))));
   const per = 100, pages = Math.max(1, Math.ceil(F.length / per)); st.page = Math.min(st.page, pages - 1);
   const byY = {}; for (const e of F) { const y = (e.d || '').slice(0, 4); if (y) byY[y] = (byY[y] || 0) + 1; } const ys = Object.keys(byY).sort().slice(-20);
-  m.innerHTML = `${pn('Avis officiels BRVM · ' + num(EV.length, 0), 'EVTS', `<div class="tw" style="max-height:66vh"><table class="t"><thead><tr><th class="l">Publication</th><th class="l">Échéance</th><th class="l">Titre</th><th class="l">Catégorie</th><th class="l">Avis</th></tr></thead><tbody>
-    ${F.slice(st.page * per, st.page * per + per).map(e => `<tr><td class="l">${fds(e.d)}</td><td class="l dm">${e.e && e.e !== e.d ? fds(e.e) : ''}</td><td class="l tk" ${e.t ? `data-sec="${e.t}" data-to="DES" style="cursor:pointer"` : ''}>${e.t || '—'}</td><td class="l am">${esc(e.c || '')}</td><td class="l" style="white-space:normal">${e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a>` : esc(e.ti || '')}</td></tr>`).join('')}</tbody></table></div>
+  m.innerHTML = `${pn('Avis officiels BRVM · ' + num(evMerge(EV).length, 0), 'EVTS', `<div class="tw" style="max-height:66vh"><table class="t"><thead><tr><th class="l">Publication</th><th class="l">Échéance</th><th class="l">Titre</th><th class="l">Catégorie</th><th class="l">Avis</th></tr></thead><tbody>
+    ${F.slice(st.page * per, st.page * per + per).map(e => `<tr><td class="l">${fds(e.d)}</td><td class="l dm">${evDue(e)}</td><td class="l tk" ${e.t ? `data-sec="${e.t}" data-to="DES" style="cursor:pointer"` : ''}>${e.t || '—'}</td><td class="l am">${esc(e.c || '')}</td><td class="l" style="white-space:normal">${e.u ? `<a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a>` : esc(e.ti || '')}</td></tr>`).join('')}</tbody></table></div>
     <div class="pager"><button class="tb alt" id="evP" ${st.page ? '' : 'disabled'}>◀</button><span>page ${st.page + 1} / ${pages} · ${num(F.length, 0)} avis</span><button class="tb alt" id="evN" ${st.page < pages - 1 ? '' : 'disabled'}>▶</button></div>`,
     { np: true, tools: `<span class="tlab">Catégorie</span><select id="evC"><option value="">Toutes</option>${cats.map(c => `<option ${c === st.cat ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select><span class="tlab">Titre</span><select id="evT"><option value="">Tous</option>${tks.map(t => `<option ${t === st.tk ? 'selected' : ''}>${t}</option>`).join('')}</select><span class="tlab">Recherche</span><input id="evQ" value="${esc(st.q)}" style="width:200px;text-transform:none" placeholder="assemblée, dividende…">` })}
     ${pn('Nombre d’avis par année (filtre courant)', 'EVTS', cvb('evY', 160))}`;
@@ -2260,7 +2281,7 @@ async function RV_main(m, alive) {
 
 /* ------------------------------------------------------------------ WACC */
 PAGES.WACC = async (m, alive) => {
-  const s = sec(ST.sec); const [F, E, PER] = await Promise.all([faJSON(s.id).catch(() => null), getJSON('eco.json').catch(() => null), getJSON('per.json').catch(() => null)]); if (!alive()) return;
+  const s = sec(ST.sec); const [F, E, PER] = await Promise.all([faJSON(s.id).catch(() => null), ecoLite().catch(() => null), getJSON('per.json').catch(() => null)]); if (!alive()) return;
   if (!F) { m.innerHTML = pn(s.tk + ' · création de valeur', 'WACC', '<div class="empty">Comptes non disponibles.</div>'); return; }
   const us = F.mkt === 'US', t10 = E && E.meta ? E.meta.find(x => x.id === 'DGS10') : null;
   const st = ST.wacc && ST.wacc.id === s.id ? ST.wacc : (ST.wacc = { id: s.id, rf: us ? (t10 ? t10.last / 100 : .042) : .065, erp: us ? .045 : .095, beta: s.beta != null ? .67 * s.beta + .33 : 1, kd: null, tax: F.tax != null ? F.tax : us ? .21 : .25 });
@@ -2326,7 +2347,7 @@ PAGES.DVD = async (m, alive) => {
 
 /* ------------------------------------------------------------------ DDM */
 PAGES.DDM = async (m, alive) => {
-  const s = sec(ST.sec); const [S, F, E, DV] = await Promise.all([series(s.id), faJSON(s.id).catch(() => null), getJSON('eco.json').catch(() => null), getJSON('dividends.json')]); if (!alive()) return;
+  const s = sec(ST.sec); const [S, F, E, DV] = await Promise.all([series(s.id), faJSON(s.id).catch(() => null), ecoLite().catch(() => null), getJSON('dividends.json')]); if (!alive()) return;
   const us = !isBRVM(s), price = s.last; let d0 = null, hist = [];
   if (!us) { hist = DV.filter(x => x.t === s.id && x.dps).sort((a, b) => (a.ex || 0) - (b.ex || 0)).map(x => x.dps); d0 = s.dps || hist[hist.length - 1]; }
   else { const by = {}; for (let i = 0; i < S.x.length; i++) if (S.div[i]) { const y = Math.floor(S.x[i] / 10000); by[y] = (by[y] || 0) + S.div[i]; } const ys = Object.keys(by).sort(); const cy = String(new Date().getFullYear()); hist = ys.filter(y => y !== cy).map(y => by[y]); d0 = hist[hist.length - 1];
@@ -2445,8 +2466,8 @@ PAGES.HP = async (m, alive) => {
 
 /* ------------------------------------------------------------------ CN */
 function aliasesOf(s) {
-  const out = new Set([s.id]); const n = (s.short || s.n || '').replace(/\b(SA|S\.A\.|Inc\.?|Corp\.?|Corporation|Holdings?|Ltd|PLC|Group|Class [A-C]|Common Stock|Co\.)\b/gi, '').replace(/[,.]/g, ' ').trim(); if (n.length > 3) out.add(n);
-  const extra = { SNTS: ['Sonatel'], ORAC: ['Orange Côte d', 'Orange CI'], SGBC: ['Société Générale Côte', 'SGBCI', 'SGCI'], ETIT: ['Ecobank Transnational', 'ETI '], ECOC: ['Ecobank Côte'], SIBC: ['Société Ivoirienne de Banque', 'SIB '], CBIBF: ['Coris Bank'], PALC: ['Palm C'], SPHC: ['SAPH'], SOGC: ['SOGB'], NTLC: ['Nestlé C'], SLBC: ['Solibra'], UNLC: ['Unilever C'], TTLC: ['TotalEnergies Marketing C', 'Total CI'], CIEC: ['CIE '], SDCC: ['SODECI'], ONTBF: ['Onatel'], BOAC: ['BOA Côte', 'Bank of Africa Côte'], NSBC: ['NSIA Banque'], BICC: ['BICICI', 'BICI CI'], SMBC: ['SMB '], STBC: ['SITAB'], SDSC: ['AGL ', 'Africa Global Logistics'], ORGT: ['Oragroup'], NVDA: ['Nvidia'], AAPL: ['Apple'], MSFT: ['Microsoft'], GOOG: ['Alphabet', 'Google'], GOOGL: ['Alphabet', 'Google'], AMZN: ['Amazon'], META: ['Meta '], TSLA: ['Tesla'], AVGO: ['Broadcom'], AMD: ['AMD'] };
+  const out = new Set([s.id]); const n = (s.short || s.n || '').replace(/\b(SA|S\.A\.|Inc\.?|Corp\.?|Corporation|Holdings?|Ltd|PLC|Group|Class [A-C]|Common Stock|Co\.|ADR|Sponsored|Ordinary Shares)\b/gi, '').replace(/[,.]/g, ' ').trim(); if (n.length > 3) out.add(n);
+  const extra = { TSM: ['TSMC', 'Taiwan Semiconductor'], SNTS: ['Sonatel'], ORAC: ['Orange Côte d', 'Orange CI'], SGBC: ['Société Générale Côte', 'SGBCI', 'SGCI'], ETIT: ['Ecobank Transnational', 'ETI '], ECOC: ['Ecobank Côte'], SIBC: ['Société Ivoirienne de Banque', 'SIB '], CBIBF: ['Coris Bank'], PALC: ['Palm C'], SPHC: ['SAPH'], SOGC: ['SOGB'], NTLC: ['Nestlé C'], SLBC: ['Solibra'], UNLC: ['Unilever C'], TTLC: ['TotalEnergies Marketing C', 'Total CI'], CIEC: ['CIE '], SDCC: ['SODECI'], ONTBF: ['Onatel'], BOAC: ['BOA Côte', 'Bank of Africa Côte'], NSBC: ['NSIA Banque'], BICC: ['BICICI', 'BICI CI'], SMBC: ['SMB '], STBC: ['SITAB'], SDSC: ['AGL ', 'Africa Global Logistics'], ORGT: ['Oragroup'], NVDA: ['Nvidia'], AAPL: ['Apple'], MSFT: ['Microsoft'], GOOG: ['Alphabet', 'Google'], GOOGL: ['Alphabet', 'Google'], AMZN: ['Amazon'], META: ['Meta '], TSLA: ['Tesla'], AVGO: ['Broadcom'], AMD: ['AMD'] };
   (extra[s.id] || []).forEach(a => out.add(a)); return [...out].filter(a => a.length >= 3);
 }
 function newsRow(x) { return `<div class="nw"><span class="d">${new Date(x.t * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span><span class="c">${esc(x.c || '')}</span><span><a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.ti)}</a> ${hideSrc(x) ? '' : `<span class="src">${esc(x.s || '')}</span>`}${x.x ? `<small>${esc(x.x)}</small>` : ''}</span></div>`; }
@@ -3741,6 +3762,8 @@ const rangeBar3 = (v, lo, hi) => (v == null || lo == null || hi == null || hi <=
 const qTime = t => { if (!t) return '—'; if (String(t).length === 10) return String(t).slice(8, 10) + '/' + String(t).slice(5, 7); const d = new Date(t); if (isNaN(d)) return esc(t); return Date.now() - d < 20 * 3600e3 ? d.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit' }); };
 const ctr = n => (n || '').match(/\(([^)]+)\)\s*$/) ? (n.match(/\(([^)]+)\)\s*$/)[1]) : '';
 const WMKT = () => getJSON('world_mkt.json').catch(() => null);
+/* derniers chiffres FRED et courbe du Trésor (sans les historiques : 100 Ko au lieu de 1,8 Mo) */
+const ecoLite = () => getJSON('eco_lite.json').catch(() => getJSON('eco.json'));
 /* paires cotées « devise / USD » (dollars pour une unité) ; toutes les autres sont cotées « USD / devise » */
 const FX_INV = new Set(['EUR=', 'GBP=', 'AUD=', 'NZD=']);
 
@@ -4103,8 +4126,11 @@ PAGES.ECO = async (m, alive) => {
   m.querySelectorAll('input[name="ecv"]').forEach(r => r.onchange = () => { st.view = r.value; render(); });
   m.querySelectorAll('[data-ev]').forEach(tr => tr.onclick = () => { st.sel = st.sel === tr.dataset.ev ? null : tr.dataset.ev; render(); });
   /* place la prochaine publication en haut de la liste (comme le terminal) */
-  const tw = $('ecTw'), nx = tw && tw.querySelector('tr.nx'); if (nx && st.view === 'A' && !sel) tw.scrollTop = Math.max(0, nx.offsetTop - 26 * 4);
-  else if (sel && tw) { const h = tw.querySelector('tr.hl'); if (h) tw.scrollTop = Math.max(0, h.offsetTop - 26 * 4); }
+  /* la ligne visée arrive 4 lignes sous l'en-tête figé (aucune ligne à moitié cachée sous l'en-tête) */
+  const tw = $('ecTw'), nx = tw && tw.querySelector('tr.nx'), thH = tw ? ((tw.querySelector('thead') || {}).offsetHeight || 0) : 0;
+  const goRow = r => { const rh = r.offsetHeight || 22; tw.scrollTop = Math.max(0, r.offsetTop - thH - rh * 4); };
+  if (nx && st.view === 'A' && !sel) goRow(nx);
+  else if (sel && tw) { const h = tw.querySelector('tr.hl'); if (h) goRow(h); }
   if (!sel) return;
   /* panneau de détail : la publication, ses occurrences dans la fenêtre et, pour les États-Unis, la série FRED liée */
   const T = ecoDT(sel.d), same = C.rows.filter(r => r.c === sel.c && r.t === sel.t).sort((a, b) => b.d.localeCompare(a.d)), fred = sel.c === 'US' ? (ECO_FRED.find(([rx]) => rx.test(sel.t)) || [])[1] : null;
@@ -4475,8 +4501,9 @@ PAGES.CN = async (m, alive) => {
   const docs = RP ? Object.entries(RP.issuers || {}).filter(([, x]) => x.t === s.id).flatMap(([slug]) => (RP.docs || {})[slug] || []) : [];
   const H = [];  // { ts (tri), d (aaaa-mm-jj), hm, cat, k, t, u, s, x }
   for (const x of its) H.push({ ts: x.t * 1000, cat: 'N', k: x.ev && x.ev !== 'Marchés' ? x.ev : '', t: deent(x.ti), u: x.u, s: srcCode(x), x: deent(x.x || ''), hm: true });
-  for (const e of EV.filter(x => x.t === s.id)) H.push({ ts: Date.parse(e.d + 'T12:00:00Z'), cat: 'A', k: e.c || 'Avis', t: e.ti, u: e.u, s: '' });
-  for (const d of docs) if (d.d) H.push({ ts: Date.parse(i2s(+d.d) + 'T12:00:00Z'), cat: 'P', k: /etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Rapport d’activité' : 'Publication', t: d.ti, u: d.u, s: '' });
+  const evU = new Set();
+  for (const e of evMerge(EV.filter(x => x.t === s.id))) { if (e.u) evU.add(e.u); H.push({ ts: Date.parse(e.d + 'T12:00:00Z'), cat: 'A', k: e.c || 'Avis', t: e.ti, u: e.u, s: '' }); }
+  for (const d of docs) if (d.d && !evU.has(d.u)) H.push({ ts: Date.parse(i2s(+d.d) + 'T12:00:00Z'), cat: 'P', k: /etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Rapport d’activité' : 'Publication', t: d.ti, u: d.u, s: '' });
   for (const x of DV.filter(x => x.t === s.id && x.dps)) if (x.det) H.push({ ts: Date.parse(x.det + 'T12:00:00Z'), cat: 'D', k: 'Dividende', t: `Détachement du dividende de l’exercice ${x.ex} : ${num(x.dps, 2)} FCFA net`, s: '' });
   for (const a of ((AN && AN.by && AN.by[s.id]) || []).filter(a => a.d)) H.push({ ts: Date.parse(i2s(a.d) + 'T12:00:00Z'), cat: 'X', k: 'Anomalie · ' + a.k, t: a.m, s: 'FQT' });
   H.sort((a, b) => b.ts - a.ts);
@@ -4716,7 +4743,7 @@ PAGES.SRCH = async (m, alive) => {
 /* ------------------------------------------------------------------ marché monétaire US (onglet 1 de RATES, ex-BTMM) : écran « Treasury & Money Markets » — panneaux numérotés :
    banques centrales, marché monétaire, bons et emprunts du Trésor, contrats à terme, pentes et inflation, courbe du jour contre 1 mois et 1 an */
 async function btmmView(m, alive) {
-  const [W, E, B] = await Promise.all([WMKT(), getJSON('eco.json').catch(() => null), getJSON('bceao.json').catch(() => null)]); if (!alive()) return; setTitle('Treasury & Money Markets');
+  const [W, E, B] = await Promise.all([WMKT(), ecoLite().catch(() => null), getJSON('bceao.json').catch(() => null)]); if (!alive()) return; setTitle('Treasury & Money Markets');
   const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, RT = Object.fromEntries(((W && W.rt) || []).map(r => [r.s, r])), FU = Object.fromEntries(((W && W.cmd) || []).filter(r => r.g === 'RTF' || r.s === '@FF.1').map(r => [r.s, r]));
   const dI = d => d ? `${String(d).slice(6, 8)}/${String(d).slice(4, 6)}` : '—';
   const bp = v => v == null || !isFinite(v) ? '<span class="dm">—</span>' : (() => { const r = Math.round(v * 10) / 10 || 0; return `<span class="${cls(r)}">${r > 0 ? '+' : ''}${num(r, 1)}</span>`; })();
@@ -5047,7 +5074,7 @@ PAGES.WEIF = async (m, alive) => {
 /* ------------------------------------------------------------------ anticipations de taux de la Fed (onglet 2 de RATES, ex-WIRP) d'après les contrats Fed funds 30 jours */
 const FOMC = ['2026-01-28', '2026-03-18', '2026-04-29', '2026-06-17', '2026-07-29', '2026-09-16', '2026-10-28', '2026-12-09']; // dates de décision publiées par la Fed (2e jour de réunion)
 async function wirpView(m, alive) {
-  setTitle('World Interest Rate Probability'); const [W, E] = await Promise.all([WMKT(), getJSON('eco.json').catch(() => null)]); if (!alive()) return;
+  setTitle('World Interest Rate Probability'); const [W, E] = await Promise.all([WMKT(), ecoLite().catch(() => null)]); if (!alive()) return;
   const FF = ((W && W.cmd) || []).filter(r => r.g === 'FF').sort((a, b) => String(a.exp).localeCompare(String(b.exp)));
   if (FF.length < 3) { m.innerHTML = pn('Anticipations de taux', 'RATES', '<div class="empty">Contrats Fed funds en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, eff = M.DFF ? M.DFF.last : 100 - FF[0].last, lo = M.DFEDTARL ? M.DFEDTARL.last : null, hi = M.DFEDTARU ? M.DFEDTARU.last : null;
@@ -5618,7 +5645,7 @@ function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hi
 /* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
 /* ---------- mise à jour silencieuse du terminal : quand une nouvelle version est en ligne, la page se recharge d'elle-même
    au premier moment calme (onglet en arrière-plan, retour sur l'onglet, ou une minute sans action), en gardant l'écran et ses onglets ---------- */
-const APP_V = 'bd6ce52b9f82';
+const APP_V = 'b71953d36962';
 let APP_NEW = false, APP_ACT = Date.now();
 function appReload() { try { sessionStorage.setItem('fqt_tabs', JSON.stringify(ST.tab)); } catch (e) { } location.reload(); }
 function appMaybe(now) { if (!APP_NEW) return; const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value; if (document.hidden || now || (!typing && Date.now() - APP_ACT > 60000)) appReload(); }

@@ -597,3 +597,9 @@ table.t.eqt td{line-height:24px}
 .t.wrp td.l:last-child{white-space:normal}
 .spb{background:#3a2a00;border:1px solid #ffa028;color:#ffd27a;padding:5px 8px;margin:0 0 4px;font-size:12.5px}.spb .tb{margin-left:8px}
 .t.cft td.l{max-width:240px;overflow:hidden;text-overflow:ellipsis}.cfl{color:var(--link)}
+
+/* ---- MONITOR : toutes les colonnes visibles sans défilement horizontal (nom tronqué, colonnes secondaires masquées sur écran étroit) ---- */
+.t.mon td.nm{max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t.mon td.tk{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:1599px){.t.mon .w16{display:none}}
+@media (max-width:1399px){.t.mon .w14{display:none}}
