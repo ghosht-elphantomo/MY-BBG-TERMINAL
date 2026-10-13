@@ -680,6 +680,9 @@ _SPLIT_B = [1.5, 2, 3, 4, 5, 6, 7, 8, 10, 15, 20, 25, 30, 40, 50]
 SPLIT_C = sorted({1.0} | set(_SPLIT_B) | {a * b for a in _SPLIT_B for b in _SPLIT_B if a * b <= 400} | {1 / x for x in _SPLIT_B})
 # sauts d'actions dus à des fusions (pas des divisions) : séries laissées telles quelles
 SPLIT_EXCLUDE = {"KDP", "TMUS", "LIN", "FANG"}
+# certificats américains (ADR / ADS) : nombre d'actions ordinaires par certificat coté à New York (les dépôts SEC comptent les actions ordinaires)
+ADR_RATIO = {"TSM": 5, "PDD": 4}
+US_SPL = {}  # fractionnements récents par titre (raw/us_splits.json), chargés par fundamentals()
 
 
 def split_adjust(sh, q=None, first=None):
@@ -747,10 +750,27 @@ def us_company(co, b, s, fx):
     while L > 0 and g(T, "rev", L) is None and g(T, "ni", L) is None:
         L -= 1
     P = L - 4 if L >= 4 else None
-    k_fx = fx.get(co.get("ccy") or "USD")
+    k_fx = fx.get(co.get("ccy") or "USD")  # unités de la devise des comptes pour 1 dollar
     price = b["c"][-1] if b else None
-    shares = sh(L)
-    mcap = price * shares / k_fx if price and shares and k_fx and not co.get("annual_only") else (price * shares if price and shares and co.get("ccy") == "USD" else None)
+    # nombre de titres actuel : le plus récent entre la page de garde du dépôt (dei) et la moyenne diluée du dernier trimestre,
+    # ramené aux fractionnements intervenus depuis (le cours coté en tient déjà compte), puis en certificats pour les ADR
+    cand = []
+    if co.get("sho") and co["sho"][1]:
+        cand.append((int(str(co["sho"][0]).replace("-", "")), co["sho"][1]))
+    if sh(L):
+        cand.append((q[L], sh(L)))
+    shares = None
+    if cand:
+        d0, shares = max(cand)
+        if (s or {}).get("id") not in SPLIT_EXCLUDE:
+            for d_, r_ in US_SPL.get(co.get("t") or (s or {}).get("id"), []):
+                if int(d_.replace("-", "")) > d0 and r_ > 0:
+                    shares *= r_
+        shares /= ADR_RATIO.get(co.get("t") or (s or {}).get("id"), 1)
+    mcap_usd = price * shares if price and shares else None
+    mcap = mcap_usd * k_fx if mcap_usd and k_fx else None  # dans la devise des comptes (ratios homogènes)
+    if s is not None and mcap_usd:
+        s["mcap"] = round(mcap_usd)  # même capitalisation partout (en-tête, DES, US, RV, SCREN)
 
     def m(i):  # mesures TTM au trimestre i
         if i is None or i < 0:
@@ -773,7 +793,7 @@ def us_company(co, b, s, fx):
     avg = lambda k: (now.get(k) + ago[k]) / 2 if now.get(k) is not None and ago.get(k) is not None else now.get(k)  # noqa: E731
     rev, ni, fcf, ocf = now.get("rev"), now.get("ni"), now.get("fcf"), now.get("ocf")
     ev = mcap + (now.get("debt") or 0) - (now.get("cash") or 0) if mcap else None
-    r = {"src": "SEC EDGAR (XBRL)", "ccy": co.get("ccy"), "annual_only": co.get("annual_only"), "asof_q": q[L], "mcap": mcap, "ev": ev, "price": price,
+    r = {"src": "SEC EDGAR (XBRL)", "ccy": co.get("ccy"), "annual_only": co.get("annual_only"), "asof_q": q[L], "mcap": mcap, "mcap_usd": mcap_usd, "ev": ev, "price": price,
          "pe": div0(mcap, ni) if ni and ni > 0 else None, "ps": div0(mcap, rev), "pb": div0(mcap, now.get("eq")) if (now.get("eq") or 0) > 0 else None,
          "ev_ebitda": div0(ev, now.get("ebitda")) if (now.get("ebitda") or 0) > 0 else None, "ev_sales": div0(ev, rev), "ev_ebit": div0(ev, now.get("opi")) if (now.get("opi") or 0) > 0 else None,
          "fcfy": div0(fcf, mcap), "fcfy_sbc": div0(fcf - (now.get("sbc") or 0), mcap) if fcf is not None else None, "ey": div0(now.get("opi"), ev),
@@ -1070,6 +1090,8 @@ def stability(r, dps_by_year=None):
 
 def fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, analyst, log):
     sec = jload(os.path.join(extra, "secfacts.json"), {}) if extra else {}
+    US_SPL.clear()
+    US_SPL.update(((jload(os.path.join(extra, "us_splits.json"), {}) or {}).get("s") or {}) if extra else {})
     fcf = (jload(fcf_path, {}) or {}).get("series", {}) if fcf_path else {}
     fx = {"USD": 1.0}
     if "EURUSD" in files:
@@ -1113,7 +1135,7 @@ def fundamentals(extra, out, files, secs_by, fund, fcf_path, dmeta, analyst, log
         r["fpe"] = fpe
         s["fa"] = True
         jsave(os.path.join(out, "fa", t + ".json"), rnd_tree({"id": t, "mkt": "US", **r}))
-        idx.append({"id": t, "mkt": "US", "grp": s.get("grp"), **{k: r.get(k) for k in keep}, **stability(r)})
+        idx.append({"id": t, "mkt": "US", "grp": s.get("grp"), **{k: r.get(k) for k in keep}, **({"mcap": r["mcap_usd"]} if r.get("mcap_usd") else {}), **stability(r)})
     # BRVM
     dps = collections.defaultdict(dict)
     for x in dmeta:

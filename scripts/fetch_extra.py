@@ -2689,6 +2689,38 @@ def ag_date(txt, pub):
     return None
 
 
+
+# ------------------------------------------------------------------ fractionnements des actions US (Yahoo Finance, événements « split »)
+def run_ussplit(raw):
+    """Ramène le nombre de titres publié dans les dépôts SEC à la base actuelle quand un fractionnement a eu lieu depuis le dépôt."""
+    facts = os.path.join(raw, "secfacts.json")
+    syms = sorted((json.load(open(facts, encoding="utf8")).get("co") or {}).keys()) if os.path.exists(facts) else [x[0] for x in US if x[2] != "ETF"]
+    out = {}
+
+    def one(sym):
+        err = None
+        for host in ("query1", "query2"):
+            try:
+                j = json.loads(get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}?range=5y&interval=3mo&events=split", tries=2, timeout=30,
+                                   headers={"Referer": "https://finance.yahoo.com/", "Origin": "https://finance.yahoo.com"}))
+                res = ((j.get("chart") or {}).get("result") or [{}])[0] or {}
+                ev = (res.get("events") or {}).get("splits") or {}
+                return sym, sorted([dt.datetime.fromtimestamp(int(v["date"]), dt.timezone.utc).strftime("%Y-%m-%d"), v["numerator"] / v["denominator"]]
+                                   for v in ev.values() if v.get("denominator") and v.get("numerator")), None
+            except Exception as e:  # noqa: BLE001
+                err = e
+        return sym, None, str(err)
+    with ThreadPoolExecutor(6) as ex:
+        for sym, sp, err in ex.map(one, syms):
+            if sp is None:
+                note("us-splits", False, f"{sym}: {err}")
+                continue
+            note("us-splits")
+            out[sym] = sp
+    if out:
+        save(os.path.join(raw, "us_splits.json"), {"ts": int(time.time()), "s": out})
+    log(f"fractionnements US : {len(out)} titres, {sum(1 for v in out.values() if v)} avec au moins un fractionnement sur 5 ans")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True, help="dossier brut (branche quant-raw), lu et réécrit sur place")
@@ -2704,7 +2736,7 @@ def main():
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
-             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("ei", lambda: run_ei(a.out))]
+             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("ussplit", lambda: run_ussplit(a.out)), ("ei", lambda: run_ei(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

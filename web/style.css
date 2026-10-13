@@ -603,3 +603,10 @@ table.t.eqt td{line-height:24px}
 .t.mon td.tk{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (max-width:1599px){.t.mon .w16{display:none}}
 @media (max-width:1399px){.t.mon .w14{display:none}}
+
+/* ---- FA : 10 exercices + 3 TCAM visibles sans défilement horizontal ---- */
+.t.acc td:not(.l){padding:1px 4px}.t.acc th{padding:2px 4px}
+.t.acc th.tc{white-space:normal;line-height:1.05;font-size:11px;min-width:40px}
+
+/* ---- RV (pairs et historique) : tableaux larges sur toute la largeur, graphiques côte à côte ---- */
+.rvg > .pn:first-child,.rvg > .pn:last-child{grid-column:1/-1}

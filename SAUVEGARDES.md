@@ -20,3 +20,4 @@ demander « reviens au point de restauration du … » ; le code de ce point est
 | 13/10/2026 18 h 50 | Avant l'arrêt des publications « aperçu » de la branche site sur Vercel (vercel.json : "site": false) | `258ab64f779aa84875e61e0d0560af7e7f0127e1` | `fc271f4437d1417c63adaa182255a69cb7f4f62b` |
 | 13/10/2026 19 h 05 | Avant le regroupement de BTMM, WIRP et WB dans RATES (onglets : marché monétaire, Fed, BONDS) | `e8b640d15f5b49ecd349d7bf9b130e84d7989d8c` | `a3023a41c82da4316dcf4b2b3b4a4f6bc1df15eb` |
 | 13/10/2026 22 h 25 | Avant : avis d'un même document réunis en une ligne, MONITOR sans colonnes cachées, ECO, fichier eco_lite, alias d'actualités | `6001f989dafe53d335df3a8e4ec351e585f7161d` | `b85bbf3cfdff19fe446bbdf2c6df7ec79b0d05ff` |
+| 13/10/2026 22 h 55 | Avant : capitalisations US unifiées (fractionnements, ADR), montants officiels BRVM, mises en page FA/RV | `0ff9e279d5788e2e595e56005a0a435def131710` | `efeeb31268e3bc8a1da51d956ee47deccf48f1e3` |
