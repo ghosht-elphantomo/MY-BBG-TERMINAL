@@ -383,6 +383,17 @@ def main():
                 if rec.get("cfo") is not None:
                     pdf_cf.setdefault(t, {})[y] = {"cfo": rec["cfo"], "capex": rec.get("capex", 0), "fcf": rec.get("fcf", rec["cfo"] - (rec.get("capex") or 0)), "src": rec.get("src")}
     divs = json.load(open(os.path.join(src, "dividendes.json"), encoding="utf8"))["all"]
+    # contrôle contre le calendrier officiel des dividendes de la BRVM : un montant net qui ne correspond ni au montant du calendrier,
+    # ni à son brut diminué de l'impôt (IRVM 5 à 20 %), est remplacé par le montant de la BRVM (ex. ABJC 2025 : avis n°193, 124 FCFA net)
+    div_fix = []
+    for x in divs:
+        cal, net, br = x.get("dividende_calendrier"), x.get("dividende"), x.get("dividende_brut")
+        if not (cal and net) or abs(net - cal) / cal < .02 or (br and abs(br - cal) / cal < .02 and .80 < net / br < .95):
+            continue
+        div_fix.append(f'{x.get("ticker")} {x.get("exercice")} : {net} -> {cal}')
+        x["dividende"], x["cal"] = cal, 1
+    if div_fix:
+        log("dividendes corrigés d'après le calendrier BRVM :", "; ".join(div_fix))
     # avis lus directement sur brvm.org (relevés toutes les 15 min) : secours si la base d'avis tierce s'arrête
     AV = []
     try:
