@@ -603,6 +603,7 @@ table.t.eqt td{line-height:24px}
 .tch .t td.l:last-child{white-space:normal;color:#bdbdbd}.tch .t td{padding:1px 5px}
 .alb{background:#870f1e;color:#fff;border:0;font:inherit;font-size:12px;padding:0 6px;margin-right:6px;cursor:pointer;height:18px}
 .t.wrp td.l:last-child{white-space:normal}
+.spb{background:#3a2a00;border:1px solid #ffa028;color:#ffd27a;padding:5px 8px;margin:0 0 4px;font-size:12.5px}.spb .tb{margin-left:8px}
 
 </style>
 </head><body>
@@ -1290,6 +1291,8 @@ function scatterL(host, o) {
 /* ================= FQT — pages: MON, BRVM, GP, DES, HELP ================= */
 'use strict';
 const codeAttr = code => { const w = String(code || '').trim().split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
+/* dividende par action : marqué « a » quand il a été ajusté d'un fractionnement (montant publié en infobulle) */
+const adjMark = x => x && x.adj ? `<i class="qd" title="montant publié : ${num(x.dps0, 2)} par action ancienne ; ajusté du fractionnement (1 → ${num(x.adj, 0)})">a</i>` : '';
 const pn = (title, code, body, o = {}) => `<div class="pn" ${o.id ? `id="${o.id}"` : ''} ${o.style ? `style="${o.style}"` : ''}><div class="pt">${title}${o.sel ? `<span class="sel">${o.sel}</span>` : ''}<span class="code"${codeAttr(code)}>${code || ''}</span></div>${o.tools ? `<div class="tools">${o.tools}</div>` : ''}<div class="pb ${o.np ? 'np' : ''}">${body}</div>${o.lect ? `<div class="lect">${o.lect}</div>` : ''}</div>`;
 const cvb = (id, h) => `<div class="cv" id="${id}" style="height:${h}px"></div>`;
 const rangeBar = s => { if (!(s.hi52 > s.lo52)) return ''; const f = U.clamp((s.last - s.lo52) / (s.hi52 - s.lo52), 0, 1); return `<span class="rng" title="${px(s, s.lo52)} – ${px(s, s.hi52)}"><i style="left:${(f * 68).toFixed(0)}px"></i></span>`; };
@@ -1586,7 +1589,7 @@ PAGES.GP = async (m, alive) => {
   if (s.mkt === 'BRVM' && s.cls === 'Equity') {
     const [dv, ev] = await Promise.all([getJSON('dividends.json'), getJSON('events.json')]); if (!alive()) return;
     const d1 = dv.filter(x => x.t === s.id).sort((a, b) => (b.ex || 0) - (a.ex || 0)).slice(0, 6), e1 = ev.filter(x => x.t === s.id).slice(0, 8);
-    side.innerHTML = pn('Dividendes', 'DVD', `<table class="t"><thead><tr><th class="l">Exercice</th><th>Net</th><th>Paiement</th></tr></thead><tbody>${d1.map(x => `<tr><td class="l">${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}</td><td>${fds(x.pay)}</td></tr>`).join('') || '<tr><td class="l dm" colspan="3">Aucun</td></tr>'}</tbody></table>`, { np: true })
+    side.innerHTML = pn('Dividendes', 'DVD', `<table class="t"><thead><tr><th class="l">Exercice</th><th>Net</th><th>Paiement</th></tr></thead><tbody>${d1.map(x => `<tr><td class="l">${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}${adjMark(x)}</td><td>${fds(x.pay)}</td></tr>`).join('') || '<tr><td class="l dm" colspan="3">Aucun</td></tr>'}</tbody></table>`, { np: true })
       + pn('Avis récents', 'EVTS', e1.map(e => `<div class="ev" style="grid-template-columns:84px 1fr"><span class="d">${fds(e.d)}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join('') || '<div class="dm">Aucun avis.</div>');
   }
 };
@@ -1942,7 +1945,7 @@ PAGES.DIVC = async (m, alive) => {
   </div>
   ${pn('Classement par rendement', 'DIVC', `<div class="tw" style="max-height:55vh"><table class="t" id="dvT"><thead><tr>${thSort(cols, st.sort)}</tr></thead><tbody>${rk.map(s => `<tr data-sec="${s.id}" data-to="DES"><td class="l tk">${s.id}</td><td class="l nm">${esc(s.short || s.n)}</td><td class="wh">${px(s, s.last)}</td><td>${num(s.dps, 2)}</td><td>${s.dps_ex || '—'}</td><td class="${s.old ? 'dm' : s.yld > .07 ? 'up' : ''}" title="${s.old ? 'dernier dividende ancien : rendement non représentatif' : ''}">${num(s.yld * 100, 2)}%${s.old ? ' <i class="qd">a</i>' : ''}</td><td title="${s.r5 != null ? 'taux souverain 5 ans : ' + num(s.r5 * 100, 2) + ' %' : ''}">${s.spr5 != null ? `<span class="${cls(s.spr5)}">${s.spr5 > 0 ? '+' : ''}${num(s.spr5 * 100, 2)} pt</span>` : '<span class="dm">—</span>'}</td><td>${s.payout ? num(s.payout * 100, 0) + '%' : '—'}</td><td>${num(s.per, 1)}</td><td>${fds(s.dps_pay)}</td></tr>`).join('')}</tbody></table></div>`, { np: true, lect: 'Rendement = dernier dividende net ÷ cours actuel. a = dernier dividende versé il y a plus de deux exercices : rendement affiché pour mémoire, classé en fin de liste. Écart / État 5 ans = rendement du dividende − taux souverain à 5 ans de l’État du siège (courbe la plus récente) : positif, l’action rapporte davantage en dividende que l’emprunt d’État, mais le dividende n’est pas garanti. Un payout supérieur à 100 % signifie que la société distribue plus que son bénéfice du dernier exercice (puisé dans les réserves) : à surveiller.' })}
   ${pn('Historique complet · ' + DV.length + ' dividendes', 'DVD', `<div class="tw" style="max-height:50vh"><table class="t"><thead><tr><th class="l">Titre</th><th>Exercice</th><th>Net / titre</th><th class="l">Annonce</th><th class="l">Détachement</th><th class="l">Paiement</th></tr></thead><tbody>
-    ${DV.slice().sort((a, b) => (b.pay || b.det || '').localeCompare(a.pay || a.det || '')).map(x => `<tr data-sec="${x.t}" data-to="DES"><td class="l tk">${x.t}</td><td>${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}</td><td class="l">${fds(x.ann)}</td><td class="l">${fds(x.det)}</td><td class="l">${fds(x.pay)}</td></tr>`).join('')}</tbody></table></div>`, { np: true })}`;
+    ${DV.slice().sort((a, b) => (b.pay || b.det || '').localeCompare(a.pay || a.det || '')).map(x => `<tr data-sec="${x.t}" data-to="DES"><td class="l tk">${x.t}</td><td>${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}${adjMark(x)}</td><td class="l">${fds(x.ann)}</td><td class="l">${fds(x.det)}</td><td class="l">${fds(x.pay)}</td></tr>`).join('')}</tbody></table></div>`, { np: true })}`;
   m.querySelectorAll('#dvT th[data-k]').forEach(th => th.onclick = () => { const k = th.dataset.k; st.sort = { k, dir: st.sort.k === k ? -st.sort.dir : -1 }; render(); });
   barChart($('dvY'), { labels: exs, values: exs.map(e => byEx[e].tot / 1e9), fmt: v => num(v, 0), pos: CL.amber, labelsOnBars: true, extra: i => byEx[exs[i]].n + ' sociétés' });
 };
@@ -4251,7 +4254,7 @@ PAGES.DVD = async (m, alive) => {
   const [S, DV, PR] = await Promise.all([series(s.id), isBRVM(s) ? getJSON('dividends.json') : null, isBRVM(s) ? null : getJSON('profiles.json').catch(() => ({}))]); if (!alive()) return;
   const today = new Date().toISOString().slice(0, 10), last = S.c[S.c.length - 1];
   let H = [];
-  if (isBRVM(s)) H = DV.filter(x => x.t === s.id && x.dps).map(x => ({ ann: x.ann, det: x.det, pay: x.pay, amt: x.dps, ex: x.ex, ccy: 'XOF' }));
+  if (isBRVM(s)) H = DV.filter(x => x.t === s.id && x.dps).map(x => ({ ann: x.ann, det: x.det, pay: x.pay, amt: x.dps, ex: x.ex, ccy: 'XOF', adj: x.adj, dps0: x.dps0 }));
   else for (let i = 0; i < S.x.length; i++) if (S.div[i]) H.push({ det: i2s(S.x[i]), amt: S.div[i], ccy: s.ccy || 'USD' });
   H.sort((a, b) => (b.det || b.pay || b.ann || '').localeCompare(a.det || a.pay || a.ann || ''));
   /* fréquence : nombre de versements par an (calculée sur les 3 dernières années complètes) */
@@ -4274,8 +4277,8 @@ PAGES.DVD = async (m, alive) => {
     ['Dernier dividende', past[0] ? `${num(past[0].amt, isBRVM(s) ? 0 : 4)} ${past[0].ccy}` : '—'], ['Prochain détachement annoncé', next ? fds(next.det) + ' · ' + num(next.amt, isBRVM(s) ? 0 : 4) + ' ' + next.ccy : '—']];
   m.innerHTML = `<div class="grid">${pn(`${esc(ykey(s))} · dividendes`, 'DVD', `<div class="dvk">${kv.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div>`, { np: false })}
     ${pn(`Historique des versements (${H.length})`, 'DVD', H.length ? `<div class="tw" style="max-height:calc(100vh - 330px - var(--nwh, 90px))"><table class="t"><thead><tr><th class="l">Annonce</th><th class="l">Détachement</th><th class="l">Enregistrement</th><th class="l">Paiement</th><th>Montant</th><th class="l">Fréquence</th><th class="l">Type</th>${isBRVM(s) ? '<th>Exercice</th>' : ''}</tr></thead><tbody>
-      ${H.map(h => `<tr${(h.det || '') > today ? ' class="hl"' : ''}><td class="l">${fds(h.ann)}</td><td class="l am">${fds(h.det)}</td><td class="l dm">—</td><td class="l">${fds(h.pay)}</td><td class="wh">${num(h.amt, isBRVM(s) ? 2 : 4)} ${h.ccy}</td><td class="l">${fqL}</td><td class="l">${isBRVM(s) ? 'Dividende net' : 'Dividende'}</td>${isBRVM(s) ? `<td>${h.ex || '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Aucun dividende recensé pour ce titre.</div>',
-      { np: true, lect: `${isBRVM(s) ? 'Montants nets par action, tels qu’annoncés par la société.' : 'Montants par action à la date de détachement (Yahoo Finance) ; date d’annonce et de paiement non fournies par la source.'} En surbrillance : versement à venir. Date d’enregistrement non publiée. Rendement indicatif = dernier dividende × fréquence ÷ cours ; rendement 12 mois = dividendes détachés sur 12 mois ÷ cours. Analyse détaillée : onglet 2.` })}</div>`;
+      ${H.map(h => `<tr${(h.det || '') > today ? ' class="hl"' : ''}><td class="l">${fds(h.ann)}</td><td class="l am">${fds(h.det)}</td><td class="l dm">—</td><td class="l">${fds(h.pay)}</td><td class="wh">${num(h.amt, isBRVM(s) ? 2 : 4)} ${h.ccy}${adjMark(h)}</td><td class="l">${fqL}</td><td class="l">${isBRVM(s) ? 'Dividende net' : 'Dividende'}</td>${isBRVM(s) ? `<td>${h.ex || '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Aucun dividende recensé pour ce titre.</div>',
+      { np: true, lect: `${isBRVM(s) ? 'Montants nets par action tels qu’annoncés par la société ; a = ramené sur la base des actions actuelles après un fractionnement (montant publié en infobulle).' : 'Montants par action à la date de détachement (Yahoo Finance) ; date d’annonce et de paiement non fournies par la source.'} En surbrillance : versement à venir. Date d’enregistrement non publiée. Rendement indicatif = dernier dividende × fréquence ÷ cours ; rendement 12 mois = dividendes détachés sur 12 mois ÷ cours. Analyse détaillée : onglet 2.` })}</div>`;
 };
 
 /* ------------------------------------------------------------------ BETA : régression (nuage, droite, statistiques) comme l'écran du terminal ; onglet 2 = analyse */
@@ -4800,9 +4803,15 @@ PAGES.PORT = async (m, alive) => {
   if (!P.pos.length) { m.innerHTML = head + pn('Portefeuille', 'PORT', `<div class="empty">Aucune position. Saisissez un titre, une quantité et, si vous le souhaitez, votre prix de revient unitaire (dans la devise du titre), puis « Ajouter ». Vous pouvez aussi coller une liste avec 92) Importer.</div>`, { lect: 'Les positions restent dans ce navigateur : elles ne sont envoyées nulle part. Les valeurs, le risque et les dividendes sont calculés à partir des cours relevés toutes les 15 minutes.' }); bind(); return; }
   const grp = k => { const o = {}; for (const r of ok) { const g = k(r); o[g] = (o[g] || 0) + r.v; } return Object.entries(o).sort((a, b) => b[1] - a[1]); };
   const alloc = (title, L) => pn(title, 'PORT', `<table class="t wcr"><tbody>${L.map(([g, v]) => `<tr><td class="l am">${esc(g)}</td><td class="wh">${num(v / tot * 100, 1)} %</td><td class="wcb" style="width:45%"><i class="p" style="left:0;width:${(v / tot * 100).toFixed(1)}%"></i></td></tr>`).join('')}</tbody></table>`, { np: true });
+  /* fractionnements récents ou annoncés sur les titres détenus : quantité et prix de revient à ramener sur les actions nouvelles */
+  const todayI = +new Date().toISOString().slice(0, 10).replace(/-/g, ''), i2 = d => +new Date(Date.now() + d * 864e5).toISOString().slice(0, 10).replace(/-/g, '');
+  const SPW = P.pos.flatMap(p => ((Q.by[p.id] || {}).split || []).filter(([e]) => e >= i2(-60) && e <= i2(60) && !(p.sp || []).includes(e)).map(([e, k]) => ({ p, e, k })));
+  const spBan = SPW.map(x => `<div class="spb"><b>${esc(x.p.id)}</b> : fractionnement ${num(x.k, 0)} actions nouvelles pour 1 ancienne, effectif le ${fd(x.e)}. ${x.e <= todayI ? `Les cours sont désormais sur la base des actions nouvelles : votre quantité devient ${num(x.p.q * x.k, 0)} et votre prix de revient ${x.p.c ? num(x.p.c / x.k, 2) : '—'}. <button class="tb on" data-spl="${esc(x.p.id)}" data-e="${x.e}" data-k="${x.k}">Ajuster ma position et mes alertes</button>` : 'À cette date, il faudra multiplier la quantité et diviser le prix de revient par ce rapport ; un bouton apparaîtra ici.'}</div>`).join('');
+  const bindSp = () => m.querySelectorAll('[data-spl]').forEach(b => b.onclick = () => { const p = P.pos.find(x => x.id === b.dataset.spl), k = +b.dataset.k, e = +b.dataset.e; if (!p) return; p.q = p.q * k; if (p.c) p.c = p.c / k; p.sp = (p.sp || []).concat(e); portSave(P);
+    const A = maLoad(); A.forEach(a => { if (a.id === p.id && (a.k === 'pxu' || a.k === 'pxd') && a.v) a.v = a.v / k; }); maSave(A); render(); });
   if (tab === 'p') {
     const L = rows.slice().sort((a, b) => (b.v || 0) - (a.v || 0));
-    m.innerHTML = head + `<div class="grid side">${pn(`Positions · valeurs en ${cur}`, 'PORT', `<div class="tw"><table class="t"><thead><tr><th class="l">Titre</th><th class="l">Nom</th><th>Quantité</th><th>Prix de revient</th><th>Cours</th><th>Var. jour</th><th>Valeur (${cur})</th><th>Poids</th><th>Résultat jour</th><th>+/− latente</th><th>%</th><th>Rdt div.</th><th></th></tr></thead><tbody>
+    m.innerHTML = head + spBan + `<div class="grid side">${pn(`Positions · valeurs en ${cur}`, 'PORT', `<div class="tw"><table class="t"><thead><tr><th class="l">Titre</th><th class="l">Nom</th><th>Quantité</th><th>Prix de revient</th><th>Cours</th><th>Var. jour</th><th>Valeur (${cur})</th><th>Poids</th><th>Résultat jour</th><th>+/− latente</th><th>%</th><th>Rdt div.</th><th></th></tr></thead><tbody>
         ${L.map((r, i) => { const s = r.s; if (!s) return `<tr><td class="l"><span class="rn">${i + 1})</span>${esc(r.p.id)}</td><td class="l dm" colspan="11">titre introuvable dans la base</td><td><span class="pdx" data-pdel="${esc(r.p.id)}">✕</span></td></tr>`;
           return `<tr data-sec="${s.id}" data-to="DES" style="cursor:pointer"><td class="l"><span class="rn">${i + 1})</span><b class="wh">${s.id}</b></td><td class="l am">${esc(s.short || s.n)}</td><td>${num(r.p.q, r.p.q % 1 ? 2 : 0)}</td><td>${r.p.c ? px(s, r.p.c) : '<span class="dm">—</span>'}</td><td class="wh">${px(s, s.last)} <span class="dm">${s.ccy}</span></td><td>${pc(s.pct)}</td>
             <td class="wh">${mny(r.v)}</td><td>${r.v != null && tot ? num(r.v / tot * 100, 1) + ' %' : '—'}</td><td>${mnyS(r.dj)}</td><td>${r.pl != null ? mnyS(r.pl) : '—'}</td><td>${r.pl != null && r.cost ? pc(r.pl / r.cost) : '—'}</td><td>${s.yld ? num(s.yld * 100, 2) + ' %' : '—'}</td>
@@ -4810,7 +4819,7 @@ PAGES.PORT = async (m, alive) => {
         <tr class="sep2"><td class="l wh" colspan="6">Total</td><td class="wh">${mny(tot)}</td><td>100 %</td><td>${mnyS(dj)}</td><td>${cst.length ? mnyS(pl) : '—'}</td><td>${cb ? pc(pl / cb) : '—'}</td><td>${tot && inc ? num(inc / tot * 100, 2) + ' %' : '—'}</td><td></td></tr></tbody></table></div>`,
         { np: true, lect: `Valeurs converties en ${cur} au cours de change du dernier relevé (franc CFA : parité fixe avec l’euro). Prix de revient dans la devise du titre ; la plus-value latente inclut donc l’effet de change. Rendement du dividende : dernier dividende publié ÷ cours (BRVM, net) ou rendement indicatif (US). Clic sur une ligne : fiche du titre.` })}
       <div>${pn('Synthèse', 'PORT', kv)}${alloc('Répartition par secteur', grp(r => r.s.grp || 'Autres'))}${alloc('Répartition par marché et devise', grp(r => `${r.s.mkt === 'BRVM' ? 'BRVM' : r.s.mkt === 'US' ? 'États-Unis' : r.s.mkt || 'Autre'} · ${r.s.ccy}`))}</div></div>`;
-    bind(); return;
+    bind(); bindSp(); return;
   }
   m.innerHTML = head + `<div class="empty" id="ptW">Calcul sur les cours quotidiens du dernier an…</div>`; bind();
   const D = await portSeries(P); if (!alive()) return;

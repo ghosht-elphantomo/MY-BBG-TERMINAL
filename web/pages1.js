@@ -1,6 +1,8 @@
 /* ================= FQT — pages: MON, BRVM, GP, DES, HELP ================= */
 'use strict';
 const codeAttr = code => { const w = String(code || '').trim().split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
+/* dividende par action : marqué « a » quand il a été ajusté d'un fractionnement (montant publié en infobulle) */
+const adjMark = x => x && x.adj ? `<i class="qd" title="montant publié : ${num(x.dps0, 2)} par action ancienne ; ajusté du fractionnement (1 → ${num(x.adj, 0)})">a</i>` : '';
 const pn = (title, code, body, o = {}) => `<div class="pn" ${o.id ? `id="${o.id}"` : ''} ${o.style ? `style="${o.style}"` : ''}><div class="pt">${title}${o.sel ? `<span class="sel">${o.sel}</span>` : ''}<span class="code"${codeAttr(code)}>${code || ''}</span></div>${o.tools ? `<div class="tools">${o.tools}</div>` : ''}<div class="pb ${o.np ? 'np' : ''}">${body}</div>${o.lect ? `<div class="lect">${o.lect}</div>` : ''}</div>`;
 const cvb = (id, h) => `<div class="cv" id="${id}" style="height:${h}px"></div>`;
 const rangeBar = s => { if (!(s.hi52 > s.lo52)) return ''; const f = U.clamp((s.last - s.lo52) / (s.hi52 - s.lo52), 0, 1); return `<span class="rng" title="${px(s, s.lo52)} – ${px(s, s.hi52)}"><i style="left:${(f * 68).toFixed(0)}px"></i></span>`; };
@@ -297,7 +299,7 @@ PAGES.GP = async (m, alive) => {
   if (s.mkt === 'BRVM' && s.cls === 'Equity') {
     const [dv, ev] = await Promise.all([getJSON('dividends.json'), getJSON('events.json')]); if (!alive()) return;
     const d1 = dv.filter(x => x.t === s.id).sort((a, b) => (b.ex || 0) - (a.ex || 0)).slice(0, 6), e1 = ev.filter(x => x.t === s.id).slice(0, 8);
-    side.innerHTML = pn('Dividendes', 'DVD', `<table class="t"><thead><tr><th class="l">Exercice</th><th>Net</th><th>Paiement</th></tr></thead><tbody>${d1.map(x => `<tr><td class="l">${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}</td><td>${fds(x.pay)}</td></tr>`).join('') || '<tr><td class="l dm" colspan="3">Aucun</td></tr>'}</tbody></table>`, { np: true })
+    side.innerHTML = pn('Dividendes', 'DVD', `<table class="t"><thead><tr><th class="l">Exercice</th><th>Net</th><th>Paiement</th></tr></thead><tbody>${d1.map(x => `<tr><td class="l">${x.ex || '—'}</td><td class="wh">${num(x.dps, 2)}${adjMark(x)}</td><td>${fds(x.pay)}</td></tr>`).join('') || '<tr><td class="l dm" colspan="3">Aucun</td></tr>'}</tbody></table>`, { np: true })
       + pn('Avis récents', 'EVTS', e1.map(e => `<div class="ev" style="grid-template-columns:84px 1fr"><span class="d">${fds(e.d)}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join('') || '<div class="dm">Aucun avis.</div>');
   }
 };

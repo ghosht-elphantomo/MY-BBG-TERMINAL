@@ -370,6 +370,41 @@ def main():
                 divs.append({"ticker": sym, "dividende": r["div"], "date_paiement": r["div_d"], "exercice": pd_.year - 1, "source": "BOC"})
                 have_pay[sym].append(pd_)
                 boc_chk["div_added"] += 1
+    # Fractionnements (avis BRVM) : cours, dividendes et données par action ramenés sur la base des actions actuelles.
+    # Un fractionnement n'est appliqué qu'une fois effectif (date d'effet atteinte par les cours) et seulement s'il manque dans la source.
+    SPL = collections.defaultdict(list)
+    try:
+        for x in json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"]:
+            dd_ = x.get("details") or {}
+            if x.get("category") in ("stock_split", "reverse_split") and x.get("ticker") and x.get("event_at") and dd_.get("ratio_new") and dd_.get("ratio_old"):
+                k_ = float(dd_["ratio_new"]) / float(dd_["ratio_old"])
+                e_ = di(x["event_at"][:10])
+                if k_ > 0 and abs(k_ - 1) > 1e-9 and all(abs(e_ - e0) > 20 for e0, _ in SPL[x["ticker"]]):
+                    SPL[x["ticker"]].append((e_, k_))
+    except Exception as e:  # noqa: BLE001
+        log("fractionnements illisibles :", e)
+    split_log, force_write = [], set()
+
+    def split_factor(t, date_int, upto):
+        """Produit des fractionnements effectifs après `date_int` (et au plus tard à `upto`)."""
+        f_ = 1.0
+        for e_, k_ in SPL.get(t, []):
+            if date_int < e_ <= upto:
+                f_ *= k_
+        return f_
+    today_i = int(os.environ.get("FQT_TODAY") or dt.date.today().strftime("%Y%m%d"))
+    for x in divs:  # dividendes historiques publiés par action ancienne
+        t = x.get("ticker")
+        if not t or t not in SPL or not x.get("dividende"):
+            continue
+        ds_ = x.get("date_detachement") or x.get("date_paiement") or (f"{int(x['exercice']) + 1}-06-30" if x.get("exercice") else None)
+        if not ds_:
+            continue
+        f_ = split_factor(t, di(ds_[:10]), today_i)
+        if f_ != 1.0:
+            x["dividende_publie"] = x["dividende"]
+            x["dividende"] = round(x["dividende"] / f_, 4)
+            x["ajust"] = f_
     status = json.load(open(os.path.join(src, "trading_status.json"), encoding="utf8"))
     session = json.load(open(a.session, encoding="utf8")) if a.session and os.path.exists(a.session) else None
     sess_rows = {r["t"]: r for r in (session or {}).get("rows", [])}
@@ -414,16 +449,49 @@ def main():
             rows = [r for r in rows if r[0] != sess_d] + [bar]
         if len(rows) < 3:
             continue
-        cty = "BF" if t.endswith("BF") else CTY.get(t[-1], "CI")
         f = fund.get(t, {})
         shares = f.get("nb_titres")
+        bnpa_, dfund_ = f.get("bnpa"), f.get("dividende")
+        for e_, k_ in sorted(SPL.get(t, [])):
+            if e_ > rows[-1][0]:
+                continue  # pas encore effectif
+            i_ = next((j for j, r in enumerate(rows) if r[0] >= e_), None)
+            if i_ and rows[i_ - 1][4] and rows[i_][4] and abs(math.log((rows[i_ - 1][4] / rows[i_][4]) / k_)) < math.log(1.4):
+                rows = [(r[0], r[1] / k_, r[2] / k_, r[3] / k_, r[4] / k_, int(round(r[5] * k_)), r[6]) if j < i_ else r for j, r in enumerate(rows)]
+                split_log.append(f"{t} {e_} x{k_:g} : cours antérieurs ajustés")
+                force_write.add(t)
+            # données par action de la fiche société : ajustées si elles datent d'avant le fractionnement
+            src_d = di(str(f.get("date_source") or "2000-01-01")[:10])
+            per_boc = None
+            if BOC.get(t):
+                kb = max(BOC[t])
+                per_boc = BOC[t][kb].get("per") if kb >= e_ else None
+            stale = src_d < e_
+            if per_boc and bnpa_ and bnpa_ > 0 and rows[-1][4]:
+                r_ = (rows[-1][4] / bnpa_) / per_boc
+                stale = abs(math.log(r_ * k_)) < math.log(1.4)  # PER calculé ≈ PER officiel ÷ k : BNPA encore par action ancienne
+            if stale:
+                bnpa_ = bnpa_ / k_ if bnpa_ else bnpa_
+                dfund_ = dfund_ / k_ if dfund_ else dfund_
+                ser_ = f.get("series") or {}
+                for key_ in ("bnpa", "dividende"):
+                    for y_, v_ in list((ser_.get(key_) or {}).items()):
+                        if v_ is not None and di(f"{int(y_) + 1}-04-30") < e_:
+                            ser_[key_][y_] = v_ / k_
+                split_log.append(f"{t} {e_} x{k_:g} : BNPA et dividende par action ajustés")
+            if shares and (f.get("provenance_champs") or {}).get("nb_titres") == "fichier_initial" and e_ >= 20250101:
+                shares = shares * k_
+                f["nb_titres"] = shares
+                split_log.append(f"{t} {e_} x{k_:g} : nombre de titres ajusté")
+        cty = "BF" if t.endswith("BF") else CTY.get(t[-1], "CI")
         ld = last_div.get(t, (None, {}))[1]
         last = rows[-1][4]
         meta = {"id": t, "tk": f"{t} BC", "n": act.get("nom_officiel") or act.get("nom"), "short": act.get("nom"), "cls": "Equity", "typ": "Equity",
                 "mkt": "BRVM", "grp": act.get("secteur"), "ccy": "XOF", "bench": "BRVMC", "cty": cty, "bank": bool(act.get("banque")),
                 "shares": shares, "float": f.get("flottant"), "mcap": rnd(shares * last, 0) if shares else None,
-                "bnpa": f.get("bnpa"), "dps": ld.get("dividende") or f.get("dividende"), "dps_ex": ld.get("exercice"), "dps_pay": ld.get("date_paiement"),
-                "per": rnd(last / f["bnpa"], 2) if f.get("bnpa") and f["bnpa"] > 0 else None,
+                "bnpa": rnd(bnpa_, 2) if bnpa_ else bnpa_, "dps": ld.get("dividende") or dfund_, "dps_ex": ld.get("exercice"), "dps_pay": ld.get("date_paiement"),
+                "dps_adj": ld.get("ajust"), "split": [[e_, k_] for e_, k_ in sorted(SPL.get(t, []))] or None,
+                "per": rnd(last / bnpa_, 2) if bnpa_ and bnpa_ > 0 else None,
                 "yld": rnd((ld.get("dividende") or 0) / last, 5) if ld.get("dividende") else None,
                 "susp": (status.get(t) or {}).get("statut") == "suspendue"}
         add(meta, [r[0] for r in rows], [r[4] for r in rows], [r[1] for r in rows], [r[2] for r in rows], [r[3] for r in rows],
@@ -579,7 +647,9 @@ def main():
                  "series": {s: v["series"][s] for s in keep if v.get("series", {}).get(s)}}
              for k, v in fund.items() if k != "_meta"}
     dmeta = [{"t": x.get("ticker"), "ex": x.get("exercice"), "dps": x.get("dividende"), "ann": x.get("date_annonce"), "det": x.get("date_detachement"),
-              "pay": x.get("date_paiement"), "src": x.get("source")} for x in divs if x.get("ticker")]
+              "pay": x.get("date_paiement"), "src": x.get("source"), **({"dps0": x["dividende_publie"], "adj": x["ajust"]} if x.get("ajust") else {})} for x in divs if x.get("ticker")]
+    if split_log:
+        log("fractionnements :", "; ".join(split_log[:40]))
     ev = json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"]
     emeta = [{"d": x.get("published_at") or x.get("event_at"), "e": x.get("event_at"), "t": x.get("ticker"), "c": x.get("category_label"),
               "ti": x.get("title"), "u": x.get("document_url")} for x in ev if (x.get("published_at") or x.get("event_at"))]
@@ -600,7 +670,7 @@ def main():
     # write ------------------------------------------------------------------
     for sid, body in files.items():
         p_ = os.path.join(sdir, sid.replace(".", "_") + ".json")
-        if a.live and os.path.exists(p_):
+        if a.live and os.path.exists(p_) and sid not in force_write:
             continue  # séance : la page applique elle-même les cours du jour (quotes.json) aux séries
         with open(p_, "w", encoding="utf8") as fh:
             json.dump(body, fh, separators=(",", ":"))
