@@ -1991,7 +1991,12 @@ PAGES.MENU = async m => {
 PAGES.HELP = async m => {
   const row = k => `<tr data-fn="${k}" style="cursor:pointer"><td class="l tk">${k}</td><td class="l wh">${FN[k][0]}</td><td class="l nm">${esc(FN[k][3])}</td><td class="l am">${FN[k][1] === 'sec' ? 'SNTS ' + k : k} &lt;GO&gt;</td></tr>`;
   const t = (title, keys) => pn(title, 'HELP', `<table class="t"><thead><tr><th class="l">Code</th><th class="l">Fonction</th><th class="l">Contenu</th><th class="l">À taper</th></tr></thead><tbody>${keys.map(row).join('')}</tbody></table>`, { np: true });
+  /* écrans regroupés : onglets (cliquables) et anciens codes encore acceptés */
+  const exOf = (f, k) => Object.entries(FN_ALIAS).filter(([, a]) => a[0] === f && (k == null ? !a[1] : a[1] === k)).map(([c]) => c);
+  const grp = Object.entries(FN_TABS).map(([f, L]) => `<tr><td class="l tk" data-fn="${f}" style="cursor:pointer">${f}</td><td class="l wh">${esc(FN[f][4])}</td><td class="l">${L.map(([k, l], i) => { const ex = exOf(f, k); return `<span class="cfl" data-fn="${f}" data-t="${k}" style="cursor:pointer">${i + 1}) ${esc(l)}</span>${ex.length ? ` <span class="dm">(ex-${ex.join(', ex-')})</span>` : ''}`; }).join('<br>')}</td></tr>`).join('')
+    + Object.keys(FN).filter(f => !FN_TABS[f] && exOf(f).length).map(f => `<tr><td class="l tk" data-fn="${f}" style="cursor:pointer">${f}</td><td class="l wh">${esc(FN[f][4])}</td><td class="l"><span class="dm">nouveau nom de ${exOf(f).join(', ')}</span></td></tr>`).join('');
   m.innerHTML = `<div class="grid c2">${t('Fonctions de marché (touches du haut)', MKT_KEYS)}${t('Fonctions d’un titre (onglets sous la cotation)', ['MENU'].concat(SEC_TABS))}</div>
+    ${pn('Écrans regroupés · onglets et anciens codes', 'HELP', `<table class="t"><thead><tr><th class="l">Code</th><th class="l">Écran</th><th class="l">Onglets (clic pour ouvrir)</th></tr></thead><tbody>${grp}</tbody></table>`, { np: true, lect: `Ces écrans réunissent des fonctions qui faisaient doublon : l’onglet 1 est la vue principale, les autres sont des options. Les anciens codes (${Object.keys(FN_ALIAS).join(', ')}) restent acceptés dans la ligne de commande et dans les liens : ils ouvrent directement le bon écran et le bon onglet. Dans un écran à onglets, le numéro de l’onglet + Entrée l’ouvre aussi.` })}
     ${pn('Utilisation', 'HELP', `<div class="lectb">
       <p><b>Ligne de commande.</b> Tapez n’importe où : le texte va dans la ligne de commande. <b>SNTS</b> + Entrée ouvre le menu du titre ; <b>SNTS</b> + espace (ou Tab) affiche ses fonctions ; <b>SNTS FA</b> + Entrée ouvre directement l’analyse financière. Une fonction de marché seule (<b>FG</b>, <b>TOP</b>, <b>CORR</b>…) s’ouvre telle quelle. Dans un menu, un numéro + Entrée ouvre la fonction correspondante. <b>Échap</b> revient à MON.</p>
       <p><b>Graphiques.</b> Trackpad : deux doigts à l’horizontale = défilement, à la verticale = zoom doux, pincer = zoom. Souris : molette = zoom, glisser = défilement. Double-clic = vue initiale.</p>
@@ -4490,7 +4495,7 @@ PAGES.CN = async (m, alive) => {
 
 </script>
 <script>
-/* ================= FQT — classement mondial des devises (onglet de FX) et FXC (matrice des changes croisés) ================= */
+/* ================= FQT — FXC : matrice des changes croisés et, en option, classement mondial des devises (ex-WCRS) ================= */
 'use strict';
 
 /* drapeaux supplémentaires pour les devises (les 22 premiers sont dans pages12.js) */
@@ -4559,10 +4564,10 @@ function fxPair(a, b, U) {
   return aFirst ? [`${a}/${b}`, x] : [`${b}/${a}`, 1 / x];
 }
 
-/* ------------------------------------------------------------------ classement mondial des devises (onglet 2 de FX) */
+/* ------------------------------------------------------------------ classement mondial des devises (onglet 2 de FXC, ex-WCRS) */
 async function wcrsView(m, alive) {
   const W = await WMKT(); if (!alive()) return; setTitle('World Currency Ranker');
-  if (!W || !W.fx) { m.innerHTML = pn('Devises', 'FX', '<div class="empty">Cotations des changes en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
+  if (!W || !W.fx) { m.innerHTML = pn('Devises', 'FXC', '<div class="empty">Cotations des changes en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const st = ST.wcrs = ST.wcrs || { b: 'USD', p: 'd', r: 'ALL' }, U_ = fxUsd(W);
   if (!U_[st.b]) st.b = 'USD';
   const P = [['d', '1 jour'], ['w', '1 semaine'], ['y', 'Depuis janv.']], B = U_[st.b];
@@ -4578,18 +4583,18 @@ async function wcrsView(m, alive) {
     return `<tr data-fxc="${c}"><td class="l"><span class="rn">${i + 1})</span>${flag2(CCY[c][1], 18, 12)} <b class="wh">${c}</b></td><td class="l am">${esc(CCY[c][0])}</td><td class="l dm">${pl}</td><td class="wh">${num(pv, fxDec(pv))}${u.peg ? '<i class="qd">f</i>' : '<i class="qd">d</i>'}</td>
       <td>${x.v == null ? '<span class="dm">—</span>' : pc(x.v)}</td><td class="wcb"><span class="z"></span>${x.v == null ? '' : `<i class="${x.v >= 0 ? 'p' : 'n'}" style="width:${(w / 2).toFixed(1)}%"></i>`}</td><td class="dm">${qTime(u.t)}<i class="qd">${u.stale ? 'c' : ''}</i></td></tr>`; }).join('');
   const per = P.find(p => p[0] === st.p)[1].toLowerCase();
-  m.innerHTML = ctl + `<div class="grid side">${pn(`Performance des devises contre ${st.b} · ${per}`, 'FX', `<div class="tw"><table class="t wcr"><thead><tr><th class="l">Devise</th><th class="l">Nom</th><th class="l">Paire</th><th>Cours</th><th>Var. %</th><th class="c">Appréciation / dépréciation contre ${st.b}</th><th>Heure</th></tr></thead><tbody>${rows || '<tr><td class="l dm" colspan="7">Aucune devise pour cette sélection.</td></tr>'}</tbody></table></div>`,
-      { np: true, lect: `Variation de la valeur de chaque devise exprimée en ${st.b} : une barre verte signifie que la devise s’est appréciée contre ${st.b}. d = cotation différée ; c = dernière cotation d’une séance précédente ; f = parité fixe (le franc CFA vaut 1/655,957 euro). « 1 semaine » et « depuis janv. » : affichés quand la clôture de référence a été relevée. Clic sur une ligne : matrice des changes (FXC).` })}
-    <div>${pn('Indice dollar et synthèse', 'FX', `<div class="kv2"><span>Indice dollar (DXY)</span><b class="wh">${dxy ? num(dxy.last, 3) : '—'}</b><span>Variation du jour</span><b>${dxy ? pc(dxy.pct) : '—'}</b><span>Depuis janv.</span><b>${dxy && W.yb && W.yb.v && W.yb.v['.DXY'] ? pc(dxy.last / W.yb.v['.DXY'] - 1) : '—'}</b><span>Plus forte hausse</span><b>${L[0] && L[0].v != null ? `${L[0].c} ${pc(L[0].v)}` : '—'}</b><span>Plus forte baisse</span><b>${(() => { const z = L.filter(x => x.v != null).slice(-1)[0]; return z ? `${z.c} ${pc(z.v)}` : '—'; })()}</b><span>Devises cotées</span><b>${Object.keys(U_).length}</b></div>`)}
+  m.innerHTML = ctl + `<div class="grid side">${pn(`Performance des devises contre ${st.b} · ${per}`, 'FXC', `<div class="tw"><table class="t wcr"><thead><tr><th class="l">Devise</th><th class="l">Nom</th><th class="l">Paire</th><th>Cours</th><th>Var. %</th><th class="c">Appréciation / dépréciation contre ${st.b}</th><th>Heure</th></tr></thead><tbody>${rows || '<tr><td class="l dm" colspan="7">Aucune devise pour cette sélection.</td></tr>'}</tbody></table></div>`,
+      { np: true, lect: `Variation de la valeur de chaque devise exprimée en ${st.b} : une barre verte signifie que la devise s’est appréciée contre ${st.b}. d = cotation différée ; c = dernière cotation d’une séance précédente ; f = parité fixe (le franc CFA vaut 1/655,957 euro). « 1 semaine » et « depuis janv. » : affichés quand la clôture de référence a été relevée. Clic sur une ligne : matrice des changes croisés (onglet 1).` })}
+    <div>${pn('Indice dollar et synthèse', 'FXC', `<div class="kv2"><span>Indice dollar (DXY)</span><b class="wh">${dxy ? num(dxy.last, 3) : '—'}</b><span>Variation du jour</span><b>${dxy ? pc(dxy.pct) : '—'}</b><span>Depuis janv.</span><b>${dxy && W.yb && W.yb.v && W.yb.v['.DXY'] ? pc(dxy.last / W.yb.v['.DXY'] - 1) : '—'}</b><span>Plus forte hausse</span><b>${L[0] && L[0].v != null ? `${L[0].c} ${pc(L[0].v)}` : '—'}</b><span>Plus forte baisse</span><b>${(() => { const z = L.filter(x => x.v != null).slice(-1)[0]; return z ? `${z.c} ${pc(z.v)}` : '—'; })()}</b><span>Devises cotées</span><b>${Object.keys(U_).length}</b></div>`)}
       ${pn('Franc CFA', 'FX', `<div class="kv2"><span>EUR / XOF</span><b class="wh">655,957 <i class="qd">f</i></b>${U_.XOF ? `<span>USD / XOF</span><b class="wh">${num(1 / U_.XOF.now, 2)}</b><span>Var. du jour (XOF contre USD)</span><b>${U_.XOF.d ? pc(U_.XOF.now / U_.XOF.d - 1) : '—'}</b><span>Depuis janv. (XOF contre USD)</span><b>${U_.XOF.y ? pc(U_.XOF.now / U_.XOF.y - 1) : '—'}</b>` : ''}${U_.NGN ? `<span>XOF / NGN</span><b class="wh">${num(U_.XOF ? U_.XOF.now / U_.NGN.now : null, 4)}</b>` : ''}${U_.GHS ? `<span>1 000 XOF en GHS</span><b class="wh">${num(U_.XOF ? U_.XOF.now / U_.GHS.now * 1000 : null, 3)}</b>` : ''}</div>`, { lect: 'Le franc CFA suit l’euro : contre le dollar, il évolue exactement comme l’euro.' })}</div></div>`;
   $('wcB').onchange = e => { st.b = e.target.value; render(); }; $('wcP').onchange = e => { st.p = e.target.value; render(); }; $('wcR').onchange = e => { st.r = e.target.value; render(); };
-  m.querySelectorAll('[data-fxc]').forEach(tr => tr.onclick = () => { ST.fxc = Object.assign(ST.fxc || {}, { hl: tr.dataset.fxc }); go('FXC'); });
+  m.querySelectorAll('[data-fxc]').forEach(tr => tr.onclick = () => { ST.fxc = Object.assign(ST.fxc || {}, { hl: tr.dataset.fxc }); ST.tab.FXC = 'm'; render(); });
 }
 
 /* ------------------------------------------------------------------ FXC : matrice des changes croisés */
 const FXC_SETS = { G10: ['USD', 'EUR', 'JPY', 'GBP', 'CHF', 'CAD', 'AUD', 'NZD', 'SEK', 'NOK'], AF: ['USD', 'EUR', 'XOF', 'NGN', 'GHS', 'ZAR', 'EGP', 'MAD', 'KES'], AS: ['USD', 'EUR', 'JPY', 'CNY', 'HKD', 'KRW', 'TWD', 'INR', 'SGD', 'MYR'],
   AM: ['USD', 'EUR', 'CAD', 'MXN', 'BRL', 'ARS'], UE: ['USD', 'EUR', 'XOF', 'GBP', 'JPY', 'CNY', 'CHF', 'NGN', 'GHS', 'ZAR'] };
-PAGES.FXC = async (m, alive) => {
+async function fxcView(m, alive) {
   const W = await WMKT(); if (!alive()) return; setTitle('Currency Rates Matrix');
   if (!W || !W.fx) { m.innerHTML = pn('Changes croisés', 'FXC', '<div class="empty">Cotations des changes en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const st = ST.fxc = Object.assign({ set: 'UE', v: 'q', hl: null }, ST.fxc || {}), U_ = fxUsd(W);
@@ -4602,10 +4607,10 @@ PAGES.FXC = async (m, alive) => {
   m.innerHTML = `<div class="tools weic"><span class="tlab">Groupe</span><select class="ofld" id="fxS">${[['UE', 'Franc CFA et partenaires'], ['G10', 'G10'], ['AF', 'Afrique'], ['AS', 'Asie'], ['AM', 'Amériques']].map(([k, l]) => `<option value="${k}" ${st.set === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <span class="tlab">Afficher</span><select class="ofld" id="fxV">${V.map(([k, l]) => `<option value="${k}" ${st.v === k ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="gsp"></span><span class="dm">relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} GMT</span></div>
     ${pn(`Matrice des changes croisés · ${V.find(x => x[0] === st.v)[1]}`, 'FXC', `<div class="tw"><table class="t fxm"><thead><tr><th class="l"></th>${C.map(c => `<th class="c${c === st.hl ? ' hx' : ''}" data-fxh="${c}">${flag2(CCY[c][1], 16, 10)}<br>${c}</th>`).join('')}</tr></thead><tbody>${C.map(a => `<tr><td class="l${a === st.hl ? ' hx' : ''}" data-fxh="${a}">${flag2(CCY[a][1], 16, 10)} <b class="am">${a}</b></td>${C.map(b => cell(a, b)).join('')}</tr>`).join('')}</tbody></table></div>`,
-      { np: true, lect: `Lecture : 1 unité de la devise en ligne vaut le nombre indiqué d’unités de la devise en colonne. Taux croisés calculés à partir des cotations différées de chaque devise contre le dollar ; le franc CFA est calculé à la parité fixe de 655,957 FCFA pour 1 euro. En variation : appréciation (vert) ou dépréciation (rouge) de la devise en ligne contre la devise en colonne. Classement des devises : FX, onglet 2.` })}`;
+      { np: true, lect: `Lecture : 1 unité de la devise en ligne vaut le nombre indiqué d’unités de la devise en colonne. Taux croisés calculés à partir des cotations différées de chaque devise contre le dollar ; le franc CFA est calculé à la parité fixe de 655,957 FCFA pour 1 euro. En variation : appréciation (vert) ou dépréciation (rouge) de la devise en ligne contre la devise en colonne. Classement des devises : onglet 2.` })}`;
   $('fxS').onchange = e => { st.set = e.target.value; render(); }; $('fxV').onchange = e => { st.v = e.target.value; render(); };
   m.querySelectorAll('[data-fxh]').forEach(x => x.onclick = () => { st.hl = st.hl === x.dataset.fxh ? null : x.dataset.fxh; render(); });
-};
+}
 
 /* ------------------------------------------------------------------ GC : écran « Graph Curves » — courbes, courbe de comparaison en pointillés,
    histogramme des variations en points de base sous le graphique, légende numérotée des courbes à droite */
@@ -4749,12 +4754,10 @@ PAGES.BTMM = async (m, alive) => {
   if (lines.length) gcDraw($('btC'), lines);
 };
 
-/* ------------------------------------------------------------------ FX : franc CFA et effet de change (vue principale) et, en option, classement mondial des devises */
-const FX_MAIN = PAGES.FX;
-PAGES.FX = async (m, alive) => {
-  const tab = tabState('FX', 'x'); setTabs([['x', 'Franc CFA et effet de change'], ['w', 'Classement des devises']], tab, k => { ST.tab.FX = k; render(); });
-  if (tab === 'w') return wcrsView(m, alive);
-  return FX_MAIN(m, alive);
+/* ------------------------------------------------------------------ FXC : matrice des changes croisés (vue principale) et, en option, classement mondial des devises */
+PAGES.FXC = async (m, alive) => {
+  const tab = tabState('FXC', 'm'); setTabs(FN_TABS.FXC, tab, k => { ST.tab.FXC = k; render(); });
+  return tab === 'w' ? wcrsView(m, alive) : fxcView(m, alive);
 };
 
 </script>
@@ -5167,14 +5170,14 @@ async function cfView(m, alive, tab) {
 /* ------------------------------------------------------------------ EVTS : avis officiels BRVM (vue principale) et, en option, suivi des sociétés */
 const EVTS_AVIS = PAGES.EVTS;
 PAGES.EVTS = async (m, alive) => {
-  const tab = tabState('EVTS', 'avis'); setTabs([['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['u', 'Sociétés US'], ['a', 'Agenda des sociétés']], tab, k => { ST.tab.EVTS = k; render(); });
+  const tab = tabState('EVTS', 'avis'); setTabs(FN_TABS.EVTS, tab, k => { ST.tab.EVTS = k; render(); });
   if (tab === 'avis') { setTitle('Corporate Events'); return EVTS_AVIS(m, alive); }
   return cfView(m, alive, tab);
 };
 
 /* ------------------------------------------------------------------ RATES : anticipations de la Fed (vue principale) et, en option, taux souverains mondiaux */
 PAGES.RATES = async (m, alive) => {
-  const tab = tabState('RATES', 'f'); setTabs([['f', 'Anticipations de la Fed'], ['w', 'Taux souverains mondiaux']], tab, k => { ST.tab.RATES = k; render(); });
+  const tab = tabState('RATES', 'f'); setTabs(FN_TABS.RATES, tab, k => { ST.tab.RATES = k; render(); });
   return tab === 'w' ? wbView(m, alive) : wirpView(m, alive);
 };
 
@@ -5205,8 +5208,8 @@ const FN = {
   GC: ['Courbes souveraines', 'mkt', 'Taux', 'Courbes des taux des États de l’UEMOA (UMOA-Titres) et coupons à l’émission', 'Graph Curves'],
   BMAP: ['Carte du pétrole', 'mkt', 'Matières premières', 'Flux pétroliers mondiaux, détroits stratégiques, Brent et WTI, stocks US', 'Oil Flow Map'],
   MACRO: ['Macro & Or', 'mkt', 'Macro', 'Or depuis 1833, krachs, CAPE, inflation, pétrole, VIX', 'Macro & Gold'],
-  FX: ['Franc CFA', 'mkt', 'Macro', 'USD/XOF, EUR/USD, effet de change, simulateur ; en option : classement mondial des devises', 'FX Monitor'],
-  FXC: ['Changes croisés', 'mkt', 'Changes', 'Matrice des taux croisés : franc CFA, G10, Afrique, Asie, Amériques ; cours ou variation', 'Currency Rates Matrix'],
+  FX: ['Franc CFA', 'mkt', 'Macro', 'USD/XOF, EUR/USD, effet de change, simulateur', 'FX Monitor'],
+  FXC: ['Changes croisés et classement', 'mkt', 'Changes', 'Matrice des taux croisés : franc CFA, G10, Afrique, Asie, Amériques ; cours ou variation ; en option : classement mondial des devises', 'Currency Rates Matrix'],
   CORR: ['Corrélations', 'mkt', 'Quant', 'Matrice BRVM × monde, paire au choix, ACP', 'Correlation Matrix'],
   RRG: ['Rotation (RRG)', 'mkt', 'Quant', 'Graphe de rotation relative : secteurs, facteurs, pays, BRVM', 'Relative Rotation Graph'],
   PER: ['Valorisation BRVM', 'mkt', 'Fondamentaux', 'PER du marché (BRVM officiel), PER prévisionnel des sources, historique', 'Market Valuation'],
@@ -5216,7 +5219,7 @@ const FN = {
   EA: ['Publications de résultats', 'mkt', 'Fondamentaux', 'Calendrier des résultats US (date, consensus, dernière surprise) et résultats publiés (surprise, réaction du cours)', 'Earnings Analysis'],
   ALRT: ['Alertes', 'mkt', 'Fondamentaux', 'Marges, FCF, dette, révisions, seuils de valorisation, résultats à venir', 'Alert Monitor'],
   DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique', 'Dividend Calendar'],
-  EVTS: ['Avis BRVM', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers ; en option : suivi des sociétés BRVM et US, agenda des sociétés', 'Corporate Events'],
+  EVTS: ['Événements des sociétés', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers ; en option : suivi des sociétés BRVM et US, agenda des sociétés', 'Corporate Events'],
   WEIF: ['Contrats à terme sur indices', 'mkt', 'Marchés', 'S&P 500, Nasdaq-100, Dow Jones, Russell 2000, VIX, FTSE 100, Nikkei : indication d’ouverture et écart au comptant', 'World Equity Index Futures'],
   WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines', 'World Equity Indices'],
   GLCO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
@@ -5374,7 +5377,7 @@ function initCmd() {
         .map(k => ({ k: 'fn', id: k, a: k, b: `${esc(FN[k][4])} <i>— ${esc(FN[k][3])}</i>`, c: FN[k][1] === 'sec' ? 'fonction titre' : 'fonction', tt: FN[k][3] }));
       const ss = searchSecs(last).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: ykey(s), b: esc(s.n), c: s.mkt === 'BRVM' ? 'BRVM' : s.mkt === 'US' ? (s.typ === 'ETF' ? 'ETF US' : 'US') : s.cls }));
       /* sections comme l'autocomplétion du terminal : FONCTIONS puis TITRES (ou l'inverse si le texte est un ticker exact) */
-      for (const [k, [f, t]] of Object.entries(FN_ALIAS)) if (L && k.startsWith(L) && has(f)) { const tl = t ? (PAGE_TABS[f] || {})[t] : null; fns.unshift({ k: 'fn', id: k, a: k, b: `${esc(FN[f][4])} <i>— ${tl ? `désormais dans ${f}, onglet « ${esc(tl)} »` : `s’appelle désormais ${f}`}</i>`, c: 'fonction', tt: FN[f][3] }); }
+      for (const [k, [f, t]] of Object.entries(FN_ALIAS)) if (L && k.startsWith(L) && has(f)) { const tl = t ? tabLabel(f, t) : null; fns.unshift({ k: 'fn', id: k, a: k, b: `${esc(FN[f][4])} <i>— ${tl ? `désormais dans ${f}, onglet « ${esc(tl)} »` : `s’appelle désormais ${f}`}</i>`, c: 'fonction', tt: FN[f][3] }); }
       const F = fns.slice(0, 8), T = ss.slice(0, 10), secFirst = ss.length && ss[0].id.toUpperCase() === L;
       const blk = (lab, arr) => arr.length ? [{ k: 'h', a: lab }].concat(arr) : [];
       items = secFirst ? blk('TITRES', T).concat(blk('FONCTIONS', F)) : blk('FONCTIONS', F).concat(blk('TITRES', T));
@@ -5559,9 +5562,14 @@ function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hi
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
-/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FX, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN */
-const PAGE_TABS = { EVTS: { b: 'Suivi des sociétés BRVM' }, FX: { w: 'Classement des devises' }, RATES: { f: 'Anticipations de la Fed', w: 'Taux souverains mondiaux' } };
-const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FX', 'w'], EQS: ['SCREN'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
+/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN */
+/* écrans à onglets qui regroupent d'anciennes fonctions (onglet 1 = vue principale) : source unique pour les onglets, l'aide et l'autocomplétion */
+const FN_TABS = {
+  EVTS: [['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['u', 'Sociétés US'], ['a', 'Agenda des sociétés']],
+  FXC: [['m', 'Matrice des changes croisés'], ['w', 'Classement des devises']],
+  RATES: [['f', 'Anticipations de la Fed'], ['w', 'Taux souverains mondiaux']] };
+const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
+const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
 function fnAlias(f) { const a = FN_ALIAS[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }
 function go(fn, s, o = {}) {
   fn = fnAlias(fn);
@@ -5650,7 +5658,7 @@ async function boot() {
   try { Q.live = await getJSON('live.json'); } catch (e) { } try { Q.quotes = await getJSON('quotes.json'); applyQuotes(); } catch (e) { }
   if (WT.cur >= WT.list.length) WT.cur = 0; const t0 = WT.list[WT.cur]; if (t0 && FN[t0.fn]) { ST.fn = t0.fn; if (Q.by[t0.sec]) ST.sec = t0.sec; }
   fromHash(); initCmd(); clocks(); applyPref();
-  document.addEventListener('click', e => { const f = e.target.closest('[data-fn]'); if (f && !f.closest('#ddm')) { go(f.dataset.fn, f.dataset.s); return; }
+  document.addEventListener('click', e => { const f = e.target.closest('[data-fn]'); if (f && !f.closest('#ddm')) { if (f.dataset.t) ST.tab[f.dataset.fn] = f.dataset.t; go(f.dataset.fn, f.dataset.s); return; }
     const s = e.target.closest('[data-sec]'); if (s && !e.target.closest('a')) { const id = s.dataset.sec; go(s.dataset.to || (SECFN.has(ST.fn) && ST.fn !== 'MENU' && !avail(ST.fn, sec(id)) ? ST.fn : 'MENU'), id); } });
   window.addEventListener('hashchange', () => { const a = ST.fn + ST.sec; fromHash(); if (ST.fn + ST.sec !== a) go(ST.fn, ST.sec); });
   go(ST.fn, ST.sec); renderNews(); initFeed(); initSync();

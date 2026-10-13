@@ -406,13 +406,13 @@ async function cfView(m, alive, tab) {
 /* ------------------------------------------------------------------ EVTS : avis officiels BRVM (vue principale) et, en option, suivi des sociétés */
 const EVTS_AVIS = PAGES.EVTS;
 PAGES.EVTS = async (m, alive) => {
-  const tab = tabState('EVTS', 'avis'); setTabs([['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['u', 'Sociétés US'], ['a', 'Agenda des sociétés']], tab, k => { ST.tab.EVTS = k; render(); });
+  const tab = tabState('EVTS', 'avis'); setTabs(FN_TABS.EVTS, tab, k => { ST.tab.EVTS = k; render(); });
   if (tab === 'avis') { setTitle('Corporate Events'); return EVTS_AVIS(m, alive); }
   return cfView(m, alive, tab);
 };
 
 /* ------------------------------------------------------------------ RATES : anticipations de la Fed (vue principale) et, en option, taux souverains mondiaux */
 PAGES.RATES = async (m, alive) => {
-  const tab = tabState('RATES', 'f'); setTabs([['f', 'Anticipations de la Fed'], ['w', 'Taux souverains mondiaux']], tab, k => { ST.tab.RATES = k; render(); });
+  const tab = tabState('RATES', 'f'); setTabs(FN_TABS.RATES, tab, k => { ST.tab.RATES = k; render(); });
   return tab === 'w' ? wbView(m, alive) : wirpView(m, alive);
 };

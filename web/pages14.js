@@ -1,4 +1,4 @@
-/* ================= FQT — classement mondial des devises (onglet de FX) et FXC (matrice des changes croisés) ================= */
+/* ================= FQT — FXC : matrice des changes croisés et, en option, classement mondial des devises (ex-WCRS) ================= */
 'use strict';
 
 /* drapeaux supplémentaires pour les devises (les 22 premiers sont dans pages12.js) */
@@ -67,10 +67,10 @@ function fxPair(a, b, U) {
   return aFirst ? [`${a}/${b}`, x] : [`${b}/${a}`, 1 / x];
 }
 
-/* ------------------------------------------------------------------ classement mondial des devises (onglet 2 de FX) */
+/* ------------------------------------------------------------------ classement mondial des devises (onglet 2 de FXC, ex-WCRS) */
 async function wcrsView(m, alive) {
   const W = await WMKT(); if (!alive()) return; setTitle('World Currency Ranker');
-  if (!W || !W.fx) { m.innerHTML = pn('Devises', 'FX', '<div class="empty">Cotations des changes en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
+  if (!W || !W.fx) { m.innerHTML = pn('Devises', 'FXC', '<div class="empty">Cotations des changes en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const st = ST.wcrs = ST.wcrs || { b: 'USD', p: 'd', r: 'ALL' }, U_ = fxUsd(W);
   if (!U_[st.b]) st.b = 'USD';
   const P = [['d', '1 jour'], ['w', '1 semaine'], ['y', 'Depuis janv.']], B = U_[st.b];
@@ -86,18 +86,18 @@ async function wcrsView(m, alive) {
     return `<tr data-fxc="${c}"><td class="l"><span class="rn">${i + 1})</span>${flag2(CCY[c][1], 18, 12)} <b class="wh">${c}</b></td><td class="l am">${esc(CCY[c][0])}</td><td class="l dm">${pl}</td><td class="wh">${num(pv, fxDec(pv))}${u.peg ? '<i class="qd">f</i>' : '<i class="qd">d</i>'}</td>
       <td>${x.v == null ? '<span class="dm">—</span>' : pc(x.v)}</td><td class="wcb"><span class="z"></span>${x.v == null ? '' : `<i class="${x.v >= 0 ? 'p' : 'n'}" style="width:${(w / 2).toFixed(1)}%"></i>`}</td><td class="dm">${qTime(u.t)}<i class="qd">${u.stale ? 'c' : ''}</i></td></tr>`; }).join('');
   const per = P.find(p => p[0] === st.p)[1].toLowerCase();
-  m.innerHTML = ctl + `<div class="grid side">${pn(`Performance des devises contre ${st.b} · ${per}`, 'FX', `<div class="tw"><table class="t wcr"><thead><tr><th class="l">Devise</th><th class="l">Nom</th><th class="l">Paire</th><th>Cours</th><th>Var. %</th><th class="c">Appréciation / dépréciation contre ${st.b}</th><th>Heure</th></tr></thead><tbody>${rows || '<tr><td class="l dm" colspan="7">Aucune devise pour cette sélection.</td></tr>'}</tbody></table></div>`,
-      { np: true, lect: `Variation de la valeur de chaque devise exprimée en ${st.b} : une barre verte signifie que la devise s’est appréciée contre ${st.b}. d = cotation différée ; c = dernière cotation d’une séance précédente ; f = parité fixe (le franc CFA vaut 1/655,957 euro). « 1 semaine » et « depuis janv. » : affichés quand la clôture de référence a été relevée. Clic sur une ligne : matrice des changes (FXC).` })}
-    <div>${pn('Indice dollar et synthèse', 'FX', `<div class="kv2"><span>Indice dollar (DXY)</span><b class="wh">${dxy ? num(dxy.last, 3) : '—'}</b><span>Variation du jour</span><b>${dxy ? pc(dxy.pct) : '—'}</b><span>Depuis janv.</span><b>${dxy && W.yb && W.yb.v && W.yb.v['.DXY'] ? pc(dxy.last / W.yb.v['.DXY'] - 1) : '—'}</b><span>Plus forte hausse</span><b>${L[0] && L[0].v != null ? `${L[0].c} ${pc(L[0].v)}` : '—'}</b><span>Plus forte baisse</span><b>${(() => { const z = L.filter(x => x.v != null).slice(-1)[0]; return z ? `${z.c} ${pc(z.v)}` : '—'; })()}</b><span>Devises cotées</span><b>${Object.keys(U_).length}</b></div>`)}
+  m.innerHTML = ctl + `<div class="grid side">${pn(`Performance des devises contre ${st.b} · ${per}`, 'FXC', `<div class="tw"><table class="t wcr"><thead><tr><th class="l">Devise</th><th class="l">Nom</th><th class="l">Paire</th><th>Cours</th><th>Var. %</th><th class="c">Appréciation / dépréciation contre ${st.b}</th><th>Heure</th></tr></thead><tbody>${rows || '<tr><td class="l dm" colspan="7">Aucune devise pour cette sélection.</td></tr>'}</tbody></table></div>`,
+      { np: true, lect: `Variation de la valeur de chaque devise exprimée en ${st.b} : une barre verte signifie que la devise s’est appréciée contre ${st.b}. d = cotation différée ; c = dernière cotation d’une séance précédente ; f = parité fixe (le franc CFA vaut 1/655,957 euro). « 1 semaine » et « depuis janv. » : affichés quand la clôture de référence a été relevée. Clic sur une ligne : matrice des changes croisés (onglet 1).` })}
+    <div>${pn('Indice dollar et synthèse', 'FXC', `<div class="kv2"><span>Indice dollar (DXY)</span><b class="wh">${dxy ? num(dxy.last, 3) : '—'}</b><span>Variation du jour</span><b>${dxy ? pc(dxy.pct) : '—'}</b><span>Depuis janv.</span><b>${dxy && W.yb && W.yb.v && W.yb.v['.DXY'] ? pc(dxy.last / W.yb.v['.DXY'] - 1) : '—'}</b><span>Plus forte hausse</span><b>${L[0] && L[0].v != null ? `${L[0].c} ${pc(L[0].v)}` : '—'}</b><span>Plus forte baisse</span><b>${(() => { const z = L.filter(x => x.v != null).slice(-1)[0]; return z ? `${z.c} ${pc(z.v)}` : '—'; })()}</b><span>Devises cotées</span><b>${Object.keys(U_).length}</b></div>`)}
       ${pn('Franc CFA', 'FX', `<div class="kv2"><span>EUR / XOF</span><b class="wh">655,957 <i class="qd">f</i></b>${U_.XOF ? `<span>USD / XOF</span><b class="wh">${num(1 / U_.XOF.now, 2)}</b><span>Var. du jour (XOF contre USD)</span><b>${U_.XOF.d ? pc(U_.XOF.now / U_.XOF.d - 1) : '—'}</b><span>Depuis janv. (XOF contre USD)</span><b>${U_.XOF.y ? pc(U_.XOF.now / U_.XOF.y - 1) : '—'}</b>` : ''}${U_.NGN ? `<span>XOF / NGN</span><b class="wh">${num(U_.XOF ? U_.XOF.now / U_.NGN.now : null, 4)}</b>` : ''}${U_.GHS ? `<span>1 000 XOF en GHS</span><b class="wh">${num(U_.XOF ? U_.XOF.now / U_.GHS.now * 1000 : null, 3)}</b>` : ''}</div>`, { lect: 'Le franc CFA suit l’euro : contre le dollar, il évolue exactement comme l’euro.' })}</div></div>`;
   $('wcB').onchange = e => { st.b = e.target.value; render(); }; $('wcP').onchange = e => { st.p = e.target.value; render(); }; $('wcR').onchange = e => { st.r = e.target.value; render(); };
-  m.querySelectorAll('[data-fxc]').forEach(tr => tr.onclick = () => { ST.fxc = Object.assign(ST.fxc || {}, { hl: tr.dataset.fxc }); go('FXC'); });
+  m.querySelectorAll('[data-fxc]').forEach(tr => tr.onclick = () => { ST.fxc = Object.assign(ST.fxc || {}, { hl: tr.dataset.fxc }); ST.tab.FXC = 'm'; render(); });
 }
 
 /* ------------------------------------------------------------------ FXC : matrice des changes croisés */
 const FXC_SETS = { G10: ['USD', 'EUR', 'JPY', 'GBP', 'CHF', 'CAD', 'AUD', 'NZD', 'SEK', 'NOK'], AF: ['USD', 'EUR', 'XOF', 'NGN', 'GHS', 'ZAR', 'EGP', 'MAD', 'KES'], AS: ['USD', 'EUR', 'JPY', 'CNY', 'HKD', 'KRW', 'TWD', 'INR', 'SGD', 'MYR'],
   AM: ['USD', 'EUR', 'CAD', 'MXN', 'BRL', 'ARS'], UE: ['USD', 'EUR', 'XOF', 'GBP', 'JPY', 'CNY', 'CHF', 'NGN', 'GHS', 'ZAR'] };
-PAGES.FXC = async (m, alive) => {
+async function fxcView(m, alive) {
   const W = await WMKT(); if (!alive()) return; setTitle('Currency Rates Matrix');
   if (!W || !W.fx) { m.innerHTML = pn('Changes croisés', 'FXC', '<div class="empty">Cotations des changes en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const st = ST.fxc = Object.assign({ set: 'UE', v: 'q', hl: null }, ST.fxc || {}), U_ = fxUsd(W);
@@ -110,10 +110,10 @@ PAGES.FXC = async (m, alive) => {
   m.innerHTML = `<div class="tools weic"><span class="tlab">Groupe</span><select class="ofld" id="fxS">${[['UE', 'Franc CFA et partenaires'], ['G10', 'G10'], ['AF', 'Afrique'], ['AS', 'Asie'], ['AM', 'Amériques']].map(([k, l]) => `<option value="${k}" ${st.set === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <span class="tlab">Afficher</span><select class="ofld" id="fxV">${V.map(([k, l]) => `<option value="${k}" ${st.v === k ? 'selected' : ''}>${l}</option>`).join('')}</select><span class="gsp"></span><span class="dm">relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} GMT</span></div>
     ${pn(`Matrice des changes croisés · ${V.find(x => x[0] === st.v)[1]}`, 'FXC', `<div class="tw"><table class="t fxm"><thead><tr><th class="l"></th>${C.map(c => `<th class="c${c === st.hl ? ' hx' : ''}" data-fxh="${c}">${flag2(CCY[c][1], 16, 10)}<br>${c}</th>`).join('')}</tr></thead><tbody>${C.map(a => `<tr><td class="l${a === st.hl ? ' hx' : ''}" data-fxh="${a}">${flag2(CCY[a][1], 16, 10)} <b class="am">${a}</b></td>${C.map(b => cell(a, b)).join('')}</tr>`).join('')}</tbody></table></div>`,
-      { np: true, lect: `Lecture : 1 unité de la devise en ligne vaut le nombre indiqué d’unités de la devise en colonne. Taux croisés calculés à partir des cotations différées de chaque devise contre le dollar ; le franc CFA est calculé à la parité fixe de 655,957 FCFA pour 1 euro. En variation : appréciation (vert) ou dépréciation (rouge) de la devise en ligne contre la devise en colonne. Classement des devises : FX, onglet 2.` })}`;
+      { np: true, lect: `Lecture : 1 unité de la devise en ligne vaut le nombre indiqué d’unités de la devise en colonne. Taux croisés calculés à partir des cotations différées de chaque devise contre le dollar ; le franc CFA est calculé à la parité fixe de 655,957 FCFA pour 1 euro. En variation : appréciation (vert) ou dépréciation (rouge) de la devise en ligne contre la devise en colonne. Classement des devises : onglet 2.` })}`;
   $('fxS').onchange = e => { st.set = e.target.value; render(); }; $('fxV').onchange = e => { st.v = e.target.value; render(); };
   m.querySelectorAll('[data-fxh]').forEach(x => x.onclick = () => { st.hl = st.hl === x.dataset.fxh ? null : x.dataset.fxh; render(); });
-};
+}
 
 /* ------------------------------------------------------------------ GC : écran « Graph Curves » — courbes, courbe de comparaison en pointillés,
    histogramme des variations en points de base sous le graphique, légende numérotée des courbes à droite */
@@ -257,10 +257,8 @@ PAGES.BTMM = async (m, alive) => {
   if (lines.length) gcDraw($('btC'), lines);
 };
 
-/* ------------------------------------------------------------------ FX : franc CFA et effet de change (vue principale) et, en option, classement mondial des devises */
-const FX_MAIN = PAGES.FX;
-PAGES.FX = async (m, alive) => {
-  const tab = tabState('FX', 'x'); setTabs([['x', 'Franc CFA et effet de change'], ['w', 'Classement des devises']], tab, k => { ST.tab.FX = k; render(); });
-  if (tab === 'w') return wcrsView(m, alive);
-  return FX_MAIN(m, alive);
+/* ------------------------------------------------------------------ FXC : matrice des changes croisés (vue principale) et, en option, classement mondial des devises */
+PAGES.FXC = async (m, alive) => {
+  const tab = tabState('FXC', 'm'); setTabs(FN_TABS.FXC, tab, k => { ST.tab.FXC = k; render(); });
+  return tab === 'w' ? wcrsView(m, alive) : fxcView(m, alive);
 };
