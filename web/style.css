@@ -576,3 +576,14 @@ table.t.eqt td{line-height:24px}
 .t.gcl .gck{margin:0 2px}
 .gcg{grid-template-columns:minmax(0,1fr) minmax(360px,460px)}
 .cv .gcz{position:absolute;left:0;right:0;top:38%;text-align:center;color:#8a8a8a;pointer-events:none}
+/* SRCH : critères à gauche, résultats à droite */
+.srg{grid-template-columns:minmax(360px,420px) minmax(0,1fr)}
+.t.scr{width:100%;table-layout:fixed}
+.t.scr th:nth-child(1){width:44%}.t.scr th:nth-child(3){width:52px}
+.t.scr td{overflow:hidden}
+.t.scr select.ofld{width:100%;max-width:100%}
+.t.scr .ofld.n{width:58px}
+.t.scr input.ofld{background:#000;color:var(--white);border:1px solid #444;height:19px;padding:0 4px;box-sizing:border-box}
+.t.scr input.ofld:not(.n){width:100%}
+.t.srt td.am{max-width:220px;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:900px){.srg{grid-template-columns:minmax(0,1fr)}}

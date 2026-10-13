@@ -584,6 +584,17 @@ table.t.eqt td{line-height:24px}
 .t.gcl .gck{margin:0 2px}
 .gcg{grid-template-columns:minmax(0,1fr) minmax(360px,460px)}
 .cv .gcz{position:absolute;left:0;right:0;top:38%;text-align:center;color:#8a8a8a;pointer-events:none}
+/* SRCH : critères à gauche, résultats à droite */
+.srg{grid-template-columns:minmax(360px,420px) minmax(0,1fr)}
+.t.scr{width:100%;table-layout:fixed}
+.t.scr th:nth-child(1){width:44%}.t.scr th:nth-child(3){width:52px}
+.t.scr td{overflow:hidden}
+.t.scr select.ofld{width:100%;max-width:100%}
+.t.scr .ofld.n{width:58px}
+.t.scr input.ofld{background:#000;color:var(--white);border:1px solid #444;height:19px;padding:0 4px;box-sizing:border-box}
+.t.scr input.ofld:not(.n){width:100%}
+.t.srt td.am{max-width:220px;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:900px){.srg{grid-template-columns:minmax(0,1fr)}}
 
 </style>
 </head><body>
@@ -4622,6 +4633,51 @@ PAGES.GC = async (m, alive) => {
   $('gcK').onchange = e => { st.kind = +e.target.value; render(); }; const gd = $('gcD'); if (gd) gd.onchange = e => { st.cmp = e.target.value; render(); };
   m.querySelectorAll('input[data-cy]').forEach(b => b.onchange = () => { const c = b.dataset.cy; st.sel = b.checked ? st.sel.concat([c]) : st.sel.filter(x => x !== c); if (!st.sel.length) st.sel = [c]; render(); });
   m.querySelectorAll('[data-fo]').forEach(b => b.onclick = () => { st.foc = b.dataset.fo; if (!st.sel.includes(st.foc)) st.sel = [st.foc].concat(st.sel); else st.sel = [st.foc].concat(st.sel.filter(x => x !== st.foc)); render(); });
+};
+
+/* ------------------------------------------------------------------ SRCH : écran « Fixed Income Search » — critères numérotés avec le nombre de
+   titres retenus après chacun, tableau de résultats numéroté et trié, fiche prix ↔ rendement (YAS) du titre choisi */
+PAGES.SRCH = async (m, alive) => {
+  const B = await getJSON('bonds.json').catch(() => null); if (!alive()) return; setTitle('Fixed Income Search');
+  if (!B || !B.rows) { m.innerHTML = pn('Obligations UEMOA', 'SRCH', '<div class="empty">Cotations obligataires en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
+  const D = { live: '1', typ: 'ALL', cty: 'ALL', iss: '', c0: '', c1: '', y0: '', y1: '', r0: '', par: 'ALL' };
+  const st = ST.srch2 = ST.srch2 || { f: Object.assign({}, D), sort: 'mat', dir: 1, sel: null };
+  const now = new Date(), rows = B.rows.map(b => ({ b, c: bondCalc(b, now), cty: CTY_OBL[b.code.split('.')[0]] || '' }));
+  const F = st.f, nb = v => { const x = parseFloat(String(v).replace(',', '.')); return isFinite(x) ? x : null; };
+  const ctys = [...new Set(rows.map(r => r.cty).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'fr'));
+  const CR = [
+    ['live', 'Statut', `<select class="ofld" data-f="live"><option value="1" ${F.live === '1' ? 'selected' : ''}>En vie</option><option value="0" ${F.live === '0' ? 'selected' : ''}>Toutes, y compris échues</option></select>`, r => F.live !== '1' || !r.c.matured],
+    ['typ', 'Type d’émetteur', `<select class="ofld" data-f="typ">${[['ALL', 'Tous'], ['État', 'États'], ['Régional', 'Organismes régionaux'], ['Privé', 'Émetteurs privés']].map(([k, l]) => `<option value="${k}" ${F.typ === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`, r => F.typ === 'ALL' || r.b.typ === F.typ],
+    ['cty', 'Pays', `<select class="ofld" data-f="cty"><option value="ALL">Tous</option>${ctys.map(c => `<option ${F.cty === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>`, r => F.cty === 'ALL' || r.cty === F.cty],
+    ['iss', 'Émetteur ou code', `<input class="ofld" data-f="iss" value="${esc(F.iss)}" placeholder="TPCI, BOAD, SONATEL…">`, r => !F.iss || (r.b.code + ' ' + r.b.n + ' ' + (r.b.iss || '')).toLowerCase().includes(F.iss.toLowerCase())],
+    ['cpn', 'Coupon (%)', `<input class="ofld n" data-f="c0" value="${esc(F.c0)}" placeholder="min"> à <input class="ofld n" data-f="c1" value="${esc(F.c1)}" placeholder="max">`, r => (nb(F.c0) == null || (r.b.cpn != null && r.b.cpn * 100 >= nb(F.c0))) && (nb(F.c1) == null || (r.b.cpn != null && r.b.cpn * 100 <= nb(F.c1)))],
+    ['mat', 'Échéance (année)', `<input class="ofld n" data-f="y0" value="${esc(F.y0)}" placeholder="de"> à <input class="ofld n" data-f="y1" value="${esc(F.y1)}" placeholder="à">`, r => (nb(F.y0) == null || (r.b.y1 && r.b.y1 >= nb(F.y0))) && (nb(F.y1) == null || (r.b.y1 && r.b.y1 <= nb(F.y1)))],
+    ['ytm', 'Rendement estimé ≥ (%)', `<input class="ofld n" data-f="r0" value="${esc(F.r0)}" placeholder="min">`, r => nb(F.r0) == null || (r.c.ok && r.c.ytm * 100 >= nb(F.r0))],
+    ['par', 'Cours / nominal', `<select class="ofld" data-f="par">${[['ALL', 'Tous'], ['eq', 'Au pair'], ['lo', 'Sous le pair'], ['hi', 'Au-dessus du pair']].map(([k, l]) => `<option value="${k}" ${F.par === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`, r => F.par === 'ALL' || (r.c.pctN != null && (F.par === 'eq' ? Math.abs(r.c.pctN - 1) < .005 : F.par === 'lo' ? r.c.pctN < .995 : r.c.pctN > 1.005))]];
+  let L = rows; const cnt = CR.map(c => (L = L.filter(c[3])).length);
+  const key = { iss: r => r.b.iss || r.b.code, code: r => r.b.code, cpn: r => r.b.cpn, mat: r => r.c.T ? +r.c.T : r.b.y1 ? r.b.y1 * 1e10 : null, px: r => r.c.pctN, ytm: r => r.c.ytm, dur: r => r.c.mod, cy: r => r.c.cy };
+  L.sort((a, b) => { const A = key[st.sort](a), Bv = key[st.sort](b); if (A == null) return 1; if (Bv == null) return -1; return (typeof A === 'string' ? A.localeCompare(Bv, 'fr') : A - Bv) * st.dir; });
+  const sel = rows.find(r => r.b.code === st.sel) || L[0];
+  const th = (k, l, c = '') => `<th data-k="${k}" class="${c}${st.sort === k ? ' on' : ''}" style="cursor:pointer">${l}${st.sort === k ? (st.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+  const ok = L.filter(r => r.c.ok), avg = ok.length ? ok.reduce((s, r) => s + r.c.ytm, 0) / ok.length : null;
+  const crit = `<table class="t scr"><thead><tr><th class="l">Critère</th><th class="l">Valeur</th><th>Titres</th></tr></thead><tbody>${CR.map((c, i) => `<tr><td class="l"><span class="rn">${i + 1})</span>${c[1]}</td><td class="l">${c[2]}</td><td class="wh">${num(cnt[i], 0)}</td></tr>`).join('')}</tbody></table>`;
+  const res = `<table class="t srt"><thead><tr><th class="l">#</th>${th('iss', 'Émetteur', 'l')}${th('code', 'Code', 'l')}${th('cpn', 'Cpn')}${th('mat', 'Échéance')}<th class="l">Type</th><th class="l">Pays</th><th class="l">Dev.</th>${th('px', 'Cours %')}${th('ytm', 'Rdt est.')}${th('cy', 'Rdt cour.')}${th('dur', 'Sensib.')}</tr></thead><tbody>
+    ${L.map((r, i) => `<tr data-ob="${esc(r.b.code)}" class="${sel && r.b.code === sel.b.code ? 'cur' : ''}" style="cursor:pointer"><td class="l dm">${i + 1})</td><td class="l am" title="${esc(r.b.n)}">${esc(r.b.iss || r.b.code.split('.')[0])}</td><td class="l wh">${esc(r.b.code)}</td><td>${r.b.cpn != null ? num(r.b.cpn * 100, 3) : '<span class="dm">var.</span>'}</td>
+      <td>${r.c.T ? fds(r.c.T.toISOString().slice(0, 10)) : r.b.y1 ? r.b.y1 : '—'}</td><td class="l dm">${esc(r.b.typ || '—')}</td><td class="l dm">${esc(r.cty || '—')}</td><td class="l dm">XOF</td><td class="wh">${r.c.pctN ? num(r.c.pctN * 100, 2) : '—'}</td><td class="yl">${r.c.ok ? num(r.c.ytm * 100, 3) : `<span class="dm" title="${esc(r.c.why || '')}">n.d.</span>`}</td><td>${r.c.ok ? num(r.c.cy * 100, 2) : '—'}</td><td>${r.c.ok ? num(r.c.mod, 2) : '—'}</td></tr>`).join('') || '<tr><td class="l dm" colspan="12">Aucune obligation ne remplit tous les critères.</td></tr>'}</tbody></table>`;
+  m.innerHTML = `<div class="tools ttb"><span class="tlab">Résultats</span><b class="wh">${L.length}</b><span class="dm">titres sur ${rows.length}</span><span class="tlab">Rendement estimé moyen</span><b class="yl">${avg != null ? num(avg * 100, 2) + ' %' : '—'}</b><span class="gsp"></span><button class="tb" id="srR">2) Réinitialiser les critères</button><span class="dm">relevé ${new Date(B.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} GMT</span></div>
+    <div class="grid srg"><div>${pn('Critères de recherche', 'SRCH', crit, { np: true, lect: 'Chaque critère s’ajoute aux précédents ; la colonne « Titres » donne le nombre d’obligations encore retenues.' })}<div id="obD"></div></div>
+      ${pn(`Obligations cotées · ${L.length} résultats`, 'SRCH', `<div class="tw" style="max-height:calc(100vh - 250px - var(--nwh, 90px))">${res}</div>`, { np: true, lect: '<b>Rendement estimé</b> : ni la date exacte d’échéance ni l’échéancier d’amortissement ne sont publiés. Hypothèses : nominal restant = dernier coupon ÷ taux du coupon (× 2 si le cours indique un coupon semestriel), remboursement in fine à la date anniversaire du dernier coupon dans l’année d’échéance du nom, base exact/365. Obligations amortissables : rendement non calculé. Quand le cours égale le nominal, le rendement est égal au coupon : beaucoup de lignes cotent au pair faute d’échanges.' })}</div>`;
+  const yas = r => { const c = r.c, b = r.b;
+    return pn(`${esc(b.code)} · ${esc(b.n)}`, 'YAS', `<div class="kv2"><span>Émetteur</span><b>${esc(b.iss || '')}${r.cty ? ' · ' + esc(r.cty) : ''}</b><span>Coupon</span><b>${b.cpn != null ? num(b.cpn * 100, 3) + ' %' : 'variable'}</b><span>Cotation depuis le</span><b>${esc(b.em || '—')}</b><span>Dernier coupon payé</span><b>${b.lp_d ? esc(b.lp_d) + ' · ' + num(b.lp_v, 2) : '—'}</b><span>Cours (FCFA)</span><b class="wh">${num(b.px, 0)}</b><span>Coupon couru</span><b>${num(b.cc, 2)}</b>
+      <span>Nominal restant estimé</span><b class="est">${c.N ? num(c.N, 0) : '—'}${c.f === 2 ? ' · semestriel' : ''}</b><span>Échéance estimée</span><b class="est">${c.T ? fds(c.T.toISOString().slice(0, 10)) : '—'}</b><span>Vie résiduelle</span><b>${c.life ? num(c.life, 2) + ' ans' : '—'}</b>
+      <span>Rendement actuariel estimé</span><b class="yl">${c.ok ? num(c.ytm * 100, 3) + ' %' : 'n.d. (' + esc(c.why || '') + ')'}</b><span>Duration de Macaulay</span><b>${c.ok ? num(c.mac, 2) + ' ans' : '—'}</b><span>Sensibilité</span><b>${c.ok ? num(c.mod, 2) : '—'}</b></div>
+      ${c.ok ? `<div class="form" style="margin-top:6px"><label>Rendement visé (%)<input id="ysY" value="${num(c.ytm * 100, 2)}"></label><label>Cours correspondant<input id="ysP" disabled></label></div>` : ''}`, { lect: 'Prix ↔ rendement sur les mêmes flux estimés.' }); };
+  const show = code => { const r = rows.find(x => x.b.code === code); if (!r) return; st.sel = code; $('obD').innerHTML = yas(r); m.querySelectorAll('[data-ob]').forEach(tr => tr.classList.toggle('cur', tr.dataset.ob === code));
+    const y = $('ysY'); if (y && r.c.ok) { const upd = () => { const v = parseFloat(y.value.replace(',', '.')) / 100; if (!isFinite(v)) return; const p = r.c.cf.reduce((s, c) => s + c.v / Math.pow(1 + v, c.t), 0) - (r.b.cc || 0); $('ysP').value = num(p, 0) + ' FCFA (' + num(p / r.c.N * 100, 2) + ' %)'; }; y.oninput = upd; upd(); } };
+  m.querySelectorAll('[data-ob]').forEach(tr => tr.onclick = () => show(tr.dataset.ob)); if (sel) show(sel.b.code);
+  m.querySelectorAll('th[data-k]').forEach(t => t.onclick = () => { const k = t.dataset.k; st.dir = st.sort === k ? -st.dir : (k === 'ytm' || k === 'cpn' ? -1 : 1); st.sort = k; render(); });
+  m.querySelectorAll('[data-f]').forEach(x => { const ap = () => { F[x.dataset.f] = x.value.trim(); render(); }; if (x.tagName === 'SELECT') x.onchange = ap; else x.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); ap(); } }; if (x.tagName === 'INPUT') x.onblur = () => { if (x.value.trim() !== F[x.dataset.f]) ap(); }; });
+  $('srR').onclick = () => { st.f = Object.assign({}, D); render(); };
 };
 
 </script>
