@@ -18,3 +18,4 @@ demander « reviens au point de restauration du … » ; le code de ce point est
 | 13/10/2026 18 h 30 | Avant le renommage de GLCO en COMMO | `f02ad6691b0f5d6df9bc43724ac94c94ffade2ab` | `feb30b29ca036637ebe98a916d45a385153046d6` |
 | 13/10/2026 18 h 30 | Avant la mise à jour automatique des pages ouvertes, la garde contre la republication d'un site plus ancien et la lecture des avis sur brvm.org | `0723e6acdffec4654db40ef8f649ff2fccdb29e7` | `6d0c64ea6fc518b955778e8b6af13a856a5142c3` |
 | 13/10/2026 18 h 50 | Avant l'arrêt des publications « aperçu » de la branche site sur Vercel (vercel.json : "site": false) | `258ab64f779aa84875e61e0d0560af7e7f0127e1` | `fc271f4437d1417c63adaa182255a69cb7f4f62b` |
+| 13/10/2026 19 h 05 | Avant le regroupement de BTMM, WIRP et WB dans RATES (onglets : marché monétaire, Fed, BONDS) | `e8b640d15f5b49ecd349d7bf9b130e84d7989d8c` | `a3023a41c82da4316dcf4b2b3b4a4f6bc1df15eb` |

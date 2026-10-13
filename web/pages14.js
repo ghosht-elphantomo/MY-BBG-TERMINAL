@@ -216,9 +216,9 @@ PAGES.SRCH = async (m, alive) => {
   $('srR').onclick = () => { st.f = Object.assign({}, D); render(); };
 };
 
-/* ------------------------------------------------------------------ BTMM : écran « Treasury & Money Markets » — panneaux numérotés :
+/* ------------------------------------------------------------------ marché monétaire US (onglet 1 de RATES, ex-BTMM) : écran « Treasury & Money Markets » — panneaux numérotés :
    banques centrales, marché monétaire, bons et emprunts du Trésor, contrats à terme, pentes et inflation, courbe du jour contre 1 mois et 1 an */
-PAGES.BTMM = async (m, alive) => {
+async function btmmView(m, alive) {
   const [W, E, B] = await Promise.all([WMKT(), getJSON('eco.json').catch(() => null), getJSON('bceao.json').catch(() => null)]); if (!alive()) return; setTitle('Treasury & Money Markets');
   const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, RT = Object.fromEntries(((W && W.rt) || []).map(r => [r.s, r])), FU = Object.fromEntries(((W && W.cmd) || []).filter(r => r.g === 'RTF' || r.s === '@FF.1').map(r => [r.s, r]));
   const dI = d => d ? `${String(d).slice(6, 8)}/${String(d).slice(4, 6)}` : '—';
@@ -228,34 +228,34 @@ PAGES.BTMM = async (m, alive) => {
   const lv = s => RT[s] ? RT[s].last : null, live = (s, lab) => { const r = RT[s]; return r ? `<tr><td class="l am">${lab}</td><td class="wh">${num(r.last, 3)}</td><td>${bp(r.chg * 100)}</td><td class="dm">${qTime(r.t)}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td></tr>` : ''; };
   const pl = B && B.policy && B.policy.length ? B.policy[B.policy.length - 1] : null, hm = (B && B.home) || {}, mm = B && B.mm && B.mm.length ? B.mm[B.mm.length - 1] : null;
   const tu = M.DFEDTARU, tl = M.DFEDTARL;
-  const p1 = pn('1) Banques centrales', 'BTMM', `<table class="t">${H4()}<tbody>
+  const p1 = pn('1) Banques centrales', 'RATES', `<table class="t">${H4()}<tbody>
       ${tu && tl ? `<tr><td class="l am">Fed : fourchette cible</td><td class="wh">${num(tl.last, 2)} – ${num(tu.last, 2)}</td><td>${tu.prev != null ? bp((tu.last - tu.prev) * 100) : '—'}</td><td class="dm">${dI(tu.dl)}</td></tr>` : fr('DFEDTARU', 'Fed : fourchette cible')}
       ${fr('DFF', 'Fed funds effectif')}${fr('IORB', 'Rémunération des réserves')}${fr('DPCREDIT', 'Taux d’escompte')}${fr('DPRIME', 'Prime rate')}${fr('ECBDFR', 'BCE : facilité de dépôt')}${fr('ECBMRRFR', 'BCE : refinancement')}
       <tr><td class="l am">BCEAO : taux minimum de soumission</td><td class="wh">${num(hm.min ?? (pl && pl.min), 2)}</td><td class="dm">—</td><td class="dm">${pl ? fds(pl.d) : '—'}</td></tr>
       <tr><td class="l am">BCEAO : guichet de prêt marginal</td><td class="wh">${num(hm.pret ?? (pl && pl.pret), 2)}</td><td class="dm">—</td><td class="dm">${pl ? fds(pl.d) : '—'}</td></tr></tbody></table>`, { np: true });
-  const p2 = pn('2) Marché monétaire', 'BTMM', `<table class="t">${H4()}<tbody>${fr('SOFR', 'SOFR (pension garantie, 1 jour)')}${fr('OBFR', 'OBFR (financement 1 jour)')}${fr('DCPF3M', 'Billets de trésorerie fin. 3 mois')}${fr('DCPN3M', 'Billets de trésorerie non fin. 3 mois')}
+  const p2 = pn('2) Marché monétaire', 'RATES', `<table class="t">${H4()}<tbody>${fr('SOFR', 'SOFR (pension garantie, 1 jour)')}${fr('OBFR', 'OBFR (financement 1 jour)')}${fr('DCPF3M', 'Billets de trésorerie fin. 3 mois')}${fr('DCPN3M', 'Billets de trésorerie non fin. 3 mois')}
       ${M.RRPONTSYD ? `<tr><td class="l am">Pensions inversées Fed (RRP), Md$</td><td class="wh">${num(M.RRPONTSYD.last, 1)}</td><td>${M.RRPONTSYD.prev != null ? bp(M.RRPONTSYD.last - M.RRPONTSYD.prev) : '—'}</td><td class="dm">${dI(M.RRPONTSYD.dl)}</td></tr>` : ''}
       ${mm ? `<tr><td class="l am">UEMOA : taux moyen du marché monétaire</td><td class="wh">${num(mm.t, 2)}</td><td class="dm">—</td><td class="dm">${esc(String(mm.m).slice(5, 7) + '/' + String(mm.m).slice(0, 4))}</td></tr>` : ''}</tbody></table>`, { np: true });
   const bill = (s, id, lab) => { const r = RT[s], x = M[id]; return `<tr><td class="l am">${lab}</td><td class="wh">${r ? num(r.last, 3) : '—'}</td><td>${r ? bp(r.chg * 100) : '—'}</td><td class="dm">${r ? qTime(r.t) : '—'}</td><td>${x ? num(x.last, 2) : '—'}</td><td class="dm">${x ? dI(x.dl) : ''}</td></tr>`; };
-  const p3 = pn('3) Bons du Trésor', 'BTMM', `<table class="t"><thead><tr><th class="l"></th><th>Rdt %</th><th>Var. pb</th><th>Heure</th><th>Escompte %</th><th>Date</th></tr></thead><tbody>${bill('US1M', 'DTB4WK', '4 semaines')}${bill('US3M', 'DTB3', '13 semaines')}${bill('US6M', 'DTB6', '26 semaines')}${bill('US1Y', 'DTB1YR', '52 semaines')}</tbody></table>`, { np: true });
-  const p4 = pn('4) Emprunts du Trésor', 'BTMM', `<table class="t"><thead><tr><th class="l"></th><th>Rdt %</th><th>Var. pb</th><th>Heure</th><th>Fourchette 52 s.</th></tr></thead><tbody>${[['US2Y', '2 ans'], ['US5Y', '5 ans'], ['US7Y', '7 ans'], ['US10Y', '10 ans'], ['US20Y', '20 ans'], ['US30Y', '30 ans']].map(([s, l]) => live(s, l)).join('')}</tbody></table>`, { np: true });
+  const p3 = pn('3) Bons du Trésor', 'RATES', `<table class="t"><thead><tr><th class="l"></th><th>Rdt %</th><th>Var. pb</th><th>Heure</th><th>Escompte %</th><th>Date</th></tr></thead><tbody>${bill('US1M', 'DTB4WK', '4 semaines')}${bill('US3M', 'DTB3', '13 semaines')}${bill('US6M', 'DTB6', '26 semaines')}${bill('US1Y', 'DTB1YR', '52 semaines')}</tbody></table>`, { np: true });
+  const p4 = pn('4) Emprunts du Trésor', 'RATES', `<table class="t"><thead><tr><th class="l"></th><th>Rdt %</th><th>Var. pb</th><th>Heure</th><th>Fourchette 52 s.</th></tr></thead><tbody>${[['US2Y', '2 ans'], ['US5Y', '5 ans'], ['US7Y', '7 ans'], ['US10Y', '10 ans'], ['US20Y', '20 ans'], ['US30Y', '30 ans']].map(([s, l]) => live(s, l)).join('')}</tbody></table>`, { np: true });
   const FUN = { '@TU.1': 'T-Note 2 ans', '@FV.1': 'T-Note 5 ans', '@TY.1': 'T-Note 10 ans', '@US.1': 'T-Bond 30 ans', '@FF.1': 'Fed funds 30 jours' };
   const fut = Object.keys(FUN).filter(k => FU[k]);
-  const p5 = pn('5) Contrats à terme', 'BTMM', fut.length ? `<table class="t"><thead><tr><th class="l"></th><th>Dernier</th><th>Var.</th><th>Var. %</th><th>Heure</th></tr></thead><tbody>${fut.map(k => { const r = FU[k]; return `<tr><td class="l am">${FUN[k]} <span class="dm">${esc(ctr(r.n))}</span></td><td class="wh">${num(r.last, 4)}</td><td class="${cls(r.chg)}">${r.chg != null ? (r.chg > 0 ? '+' : '') + num(r.chg, 4) : '—'}</td><td>${pc(r.pct, 2)}</td><td class="dm">${qTime(r.t)}</td></tr>`; }).join('')}
+  const p5 = pn('5) Contrats à terme', 'RATES', fut.length ? `<table class="t"><thead><tr><th class="l"></th><th>Dernier</th><th>Var.</th><th>Var. %</th><th>Heure</th></tr></thead><tbody>${fut.map(k => { const r = FU[k]; return `<tr><td class="l am">${FUN[k]} <span class="dm">${esc(ctr(r.n))}</span></td><td class="wh">${num(r.last, 4)}</td><td class="${cls(r.chg)}">${r.chg != null ? (r.chg > 0 ? '+' : '') + num(r.chg, 4) : '—'}</td><td>${pc(r.pct, 2)}</td><td class="dm">${qTime(r.t)}</td></tr>`; }).join('')}
       ${FU['@FF.1'] ? `<tr class="sep2"><td class="l am">Taux implicite Fed funds (100 − prix)</td><td class="wh">${num(100 - FU['@FF.1'].last, 3)}</td><td colspan="3"></td></tr>` : ''}</tbody></table>` : '<div class="empty">Contrats à terme en attente du prochain relevé (toutes les 15 minutes).</div>', { np: true });
   const sp = (a, b) => lv(a) != null && lv(b) != null ? (lv(a) - lv(b)) * 100 : null;
-  const p6 = pn('6) Pentes et inflation', 'BTMM', `<table class="t"><thead><tr><th class="l"></th><th>Niveau</th><th>Unité</th><th>Date</th></tr></thead><tbody>
+  const p6 = pn('6) Pentes et inflation', 'RATES', `<table class="t"><thead><tr><th class="l"></th><th>Niveau</th><th>Unité</th><th>Date</th></tr></thead><tbody>
       ${[['10 ans − 2 ans', sp('US10Y', 'US2Y')], ['10 ans − 3 mois', sp('US10Y', 'US3M')], ['30 ans − 5 ans', sp('US30Y', 'US5Y')]].map(([l, v]) => `<tr><td class="l am">Pente ${l}</td><td class="wh">${v == null ? '—' : `<span class="${cls(v)}">${num(v, 1)}</span>`}</td><td class="dm">pb</td><td class="dm">${RT.US10Y ? qTime(RT.US10Y.t) : '—'}</td></tr>`).join('')}
       ${[['DFII10', 'Taux réel 10 ans (TIPS)'], ['T10YIE', 'Point mort d’inflation 10 ans'], ['T5YIFR', 'Inflation anticipée 5 ans dans 5 ans']].map(([id, l]) => M[id] ? `<tr><td class="l am">${l}</td><td class="wh">${num(M[id].last, 2)}</td><td class="dm">%</td><td class="dm">${dI(M[id].dl)}</td></tr>` : '').join('')}</tbody></table>`, { np: true });
   m.innerHTML = `<div class="grid c3">${p1}${p3}${p5}</div><div class="grid c3">${p2}${p4}${p6}</div>
-    <div class="grid c2">${pn('7) Courbe du Trésor : aujourd’hui, il y a 1 mois, il y a 1 an', 'BTMM', cvb('btC', 240), { np: true })}
-      ${pn('Lecture', 'BTMM', `<div class="lect" style="border:0">Rendements du Trésor en direct (différé) aux échéances de marché ; taux directeurs, SOFR, billets de trésorerie et taux d’escompte des bons : publications quotidiennes de la veille (date indiquée). 1 pb = 0,01 point. Les taux d’escompte des bons sont calculés sur une base différente du rendement (360 jours, sur le nominal) : ils sont un peu plus bas. Contrat Fed funds : 100 − prix = taux moyen attendu sur le mois d’échéance.</div>`)}</div>`;
+    <div class="grid c2">${pn('7) Courbe du Trésor : aujourd’hui, il y a 1 mois, il y a 1 an', 'RATES', cvb('btC', 240), { np: true })}
+      ${pn('Lecture', 'RATES', `<div class="lect" style="border:0">Rendements du Trésor en direct (différé) aux échéances de marché ; taux directeurs, SOFR, billets de trésorerie et taux d’escompte des bons : publications quotidiennes de la veille (date indiquée). 1 pb = 0,01 point. Les taux d’escompte des bons sont calculés sur une base différente du rendement (360 jours, sur le nominal) : ils sont un peu plus bas. Contrat Fed funds : 100 − prix = taux moyen attendu sur le mois d’échéance.</div>`)}</div>`;
   const cur = [['US1M', 1 / 12], ['US3M', .25], ['US6M', .5], ['US1Y', 1], ['US2Y', 2], ['US5Y', 5], ['US7Y', 7], ['US10Y', 10], ['US20Y', 20], ['US30Y', 30]].filter(([s]) => RT[s]).map(([s, t]) => [t, RT[s].last / 100]);
   const C = E && E.curve, lines = cur.length ? [{ lab: 'Aujourd’hui', col: '#f9a33a', pts: cur, w: 2.2 }] : [];
   if (C && C.d && C.d.length) { const back = days => { const t = new Date(Date.now() - days * 864e5), ti = t.getUTCFullYear() * 10000 + (t.getUTCMonth() + 1) * 100 + t.getUTCDate(); let k = -1; for (let i = C.d.length - 1; i >= 0; i--) if (C.d[i] <= ti) { k = i; break; } return k; };
     [[30, '1 mois', '#5fd0ea'], [365, '1 an', 'rgba(200,200,200,.7)']].forEach(([n, l, c]) => { const k = back(n); if (k >= 0) lines.push({ lab: `${l} (${dI(C.d[k])}/${String(C.d[k]).slice(2, 4)})`, col: c, pts: C.mat.map((t, j) => [t, C.v[k][j] != null ? C.v[k][j] / 100 : null]), w: 1.4, dash: [4, 3] }); }); }
   if (lines.length) gcDraw($('btC'), lines);
-};
+}
 
 /* ------------------------------------------------------------------ FXC : matrice des changes croisés (vue principale) et, en option, classement mondial des devises */
 PAGES.FXC = async (m, alive) => {

@@ -38,8 +38,7 @@ const FN = {
   WEIF: ['Contrats à terme sur indices', 'mkt', 'Marchés', 'S&P 500, Nasdaq-100, Dow Jones, Russell 2000, VIX, FTSE 100, Nikkei : indication d’ouverture et écart au comptant', 'World Equity Index Futures'],
   WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines', 'World Equity Indices'],
   COMMO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
-  BTMM: ['Trésor et marché monétaire US', 'mkt', 'Taux', 'Taux directeurs (Fed, BCE, BCEAO), SOFR, bons et emprunts du Trésor, contrats à terme, pentes, inflation anticipée', 'Treasury & Money Markets'],
-  RATES: ['Taux et anticipations Fed', 'mkt', 'Taux', 'Contrats Fed funds : taux implicite par mois, probabilité de baisse ou de hausse aux prochaines réunions ; en option : taux souverains mondiaux (courbe US, 10 ans, UEMOA)', 'World Interest Rate Probability'],
+  RATES: ['Taux : Trésor, monétaire, Fed', 'mkt', 'Taux', 'Taux directeurs (Fed, BCE, BCEAO), SOFR, bons et emprunts du Trésor, contrats à terme, pentes, inflation anticipée ; en option : anticipations de la Fed (Fed funds), BONDS (taux souverains mondiaux : courbe US, 10 ans, UEMOA)', 'Treasury & Money Markets'],
   MOST: ['Plus actives', 'mkt', 'Marchés', 'Plus fortes hausses et baisses, valeurs les plus échangées, largeur du jour', 'Most Active Securities'],
   HELP: ['Aide', 'mkt', 'Aide', 'Fonctions, sources, raccourcis', 'Help'],
   MENU: ['Menu du titre', 'sec', 'Titre', 'Toutes les fonctions disponibles pour ce titre, classées par thème', 'Security Menu'],
@@ -77,7 +76,7 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['BRIEF', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'COMMO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['BRIEF', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'RATES', 'COMMO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -87,8 +86,7 @@ const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: [
   MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'NEWS', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MONITOR', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
   BMAP: ['COMMO', 'MACRO', 'ECO', 'NEWS'], NEWS: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'COMMO'], COMMO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
-  ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'NEWS'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'],
-  BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'NEWS'], BRIEF: ['MONITOR', 'PORT', 'ECO', 'NEWS'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
+  ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'NEWS'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'NEWS'], BRIEF: ['MONITOR', 'PORT', 'ECO', 'NEWS'], RATES: ['GC', 'SRCH', 'ECWB', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
@@ -160,7 +158,7 @@ function searchSecs(qs) {
 }
 function parseCmd(txt) {
   const toks = txt.trim().toUpperCase().replace(/<GO>|\bGO\b|EQUITY|INDEX|CURNCY|COMDTY/g, ' ').split(/\s+/).filter(Boolean);
-  let fn = null, s = null; for (const t0 of toks) { const t = !fn && FN_ALIAS[t0] ? fnAlias(t0) : t0; if (!fn && FN[t] && has(t)) { fn = t; continue; } if (t === 'AIDE') { fn = 'HELP'; continue; } if (!s) { const m = Q.by[t] || searchSecs(t)[0]; if (m) s = m.id; } }
+  let fn = null, s = null; for (const t0 of toks) { const t = !fn && (FN_ALIAS[t0] || FN_SHORT[t0]) ? fnAlias(t0) : t0; if (!fn && FN[t] && has(t)) { fn = t; continue; } if (t === 'AIDE') { fn = 'HELP'; continue; } if (!s) { const m = Q.by[t] || searchSecs(t)[0]; if (m) s = m.id; } }
   if (!s && toks.length > 1 && !fn) { const m = searchSecs(toks.join(' '))[0]; if (m) s = m.id; }
   return { fn, s };
 }
@@ -192,6 +190,7 @@ function initCmd() {
         .map(k => ({ k: 'fn', id: k, a: k, b: `${esc(FN[k][4])} <i>— ${esc(FN[k][3])}</i>`, c: FN[k][1] === 'sec' ? 'fonction titre' : 'fonction', tt: FN[k][3] }));
       const ss = searchSecs(last).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: ykey(s), b: esc(s.n), c: s.mkt === 'BRVM' ? 'BRVM' : s.mkt === 'US' ? (s.typ === 'ETF' ? 'ETF US' : 'US') : s.cls }));
       /* sections comme l'autocomplétion du terminal : FONCTIONS puis TITRES (ou l'inverse si le texte est un ticker exact) */
+      for (const [k, [f, t]] of Object.entries(FN_SHORT)) if (L && k.startsWith(L) && has(f)) fns.unshift({ k: 'fn', id: k, a: k, b: `${esc(tabLabel(f, t) || '')} <i>— onglet de ${f}</i>`, c: 'fonction', tt: FN[f][3] });
       for (const [k, [f, t]] of Object.entries(FN_ALIAS)) if (L && k.startsWith(L) && has(f)) { const tl = t ? tabLabel(f, t) : null; fns.unshift({ k: 'fn', id: k, a: k, b: `${esc(FN[f][4])} <i>— ${tl ? `désormais dans ${f}, onglet « ${esc(tl)} »` : `s’appelle désormais ${f}`}</i>`, c: 'fonction', tt: FN[f][3] }); }
       const F = fns.slice(0, 8), T = ss.slice(0, 10), secFirst = ss.length && ss[0].id.toUpperCase() === L;
       const blk = (lab, arr) => arr.length ? [{ k: 'h', a: lab }].concat(arr) : [];
@@ -377,15 +376,17 @@ function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hi
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
-/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN, TOP s'appelle NEWS, MON s'appelle MONITOR, GLCO s'appelle COMMO */
+/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, BTMM s'appelle RATES et WIRP, WB en sont les onglets 2 et 3, EQS s'appelle SCREN, TOP s'appelle NEWS, MON s'appelle MONITOR, GLCO s'appelle COMMO */
 /* écrans à onglets qui regroupent d'anciennes fonctions (onglet 1 = vue principale) : source unique pour les onglets, l'aide et l'autocomplétion */
 const FN_TABS = {
   EVTS: [['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['u', 'Sociétés US'], ['a', 'Agenda des sociétés']],
   FXC: [['m', 'Matrice des changes croisés'], ['w', 'Classement des devises']],
-  RATES: [['f', 'Anticipations de la Fed'], ['w', 'Taux souverains mondiaux']] };
+  RATES: [['m', 'Marché monétaire US'], ['f', 'Anticipations de la Fed'], ['w', 'BONDS · taux souverains mondiaux']] };
 const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
-const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], MON: ['MONITOR'], GLCO: ['COMMO'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
-function fnAlias(f) { const a = FN_ALIAS[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }
+const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], MON: ['MONITOR'], GLCO: ['COMMO'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'], BTMM: ['RATES', 'm'] };
+/* raccourcis vers un onglet (ce ne sont pas d'anciens codes) */
+const FN_SHORT = { BONDS: ['RATES', 'w'] };
+function fnAlias(f) { const a = FN_ALIAS[f] || FN_SHORT[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }
 function go(fn, s, o = {}) {
   fn = fnAlias(fn);
   if (fn && FN[fn]) ST.fn = fn; if (s && Q.by[s]) ST.sec = s;
@@ -485,7 +486,7 @@ async function boot() {
   try { Q.sum = await getJSON('summary.json'); } catch (e) { $('main').innerHTML = `<div class="empty">Données introuvables (data/summary.json).</div>`; return; }
   for (const s of Q.sum.secs) Q.by[s.id] = s;
   try { Q.live = await getJSON('live.json'); } catch (e) { } try { Q.quotes = await getJSON('quotes.json'); applyQuotes(); } catch (e) { }
-  for (const t of WT.list) { const a = FN_ALIAS[t.fn]; if (a) t.fn = a[0]; } if (WT.cur >= WT.list.length) WT.cur = 0; const t0 = WT.list[WT.cur]; if (t0 && FN[t0.fn]) { ST.fn = t0.fn; if (Q.by[t0.sec]) ST.sec = t0.sec; }
+  for (const t of WT.list) { const a = FN_ALIAS[t.fn] || FN_SHORT[t.fn]; if (a) t.fn = a[0]; } if (WT.cur >= WT.list.length) WT.cur = 0; const t0 = WT.list[WT.cur]; if (t0 && FN[t0.fn]) { ST.fn = t0.fn; if (Q.by[t0.sec]) ST.sec = t0.sec; }
   initAppUpdate(); fromHash(); initCmd(); clocks(); applyPref();
   document.addEventListener('click', e => { const f = e.target.closest('[data-fn]'); if (f && !f.closest('#ddm')) { if (f.dataset.t) ST.tab[f.dataset.fn] = f.dataset.t; go(f.dataset.fn, f.dataset.s); return; }
     const s = e.target.closest('[data-sec]'); if (s && !e.target.closest('a')) { const id = s.dataset.sec; go(s.dataset.to || (SECFN.has(ST.fn) && ST.fn !== 'MENU' && !avail(ST.fn, sec(id)) ? ST.fn : 'MENU'), id); } });

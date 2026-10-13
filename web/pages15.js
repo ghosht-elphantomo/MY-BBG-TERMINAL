@@ -280,7 +280,7 @@ PAGES.WEIF = async (m, alive) => {
     ${pn('Lecture', 'WEIF', `<div class="kv2">${D.filter(d => ['@SP.1', '@ND.1', '@DJ.1', '@TFS.1'].includes(d[0])).map(([k, l]) => `<span>${l.replace(/ \(.*\)/, '')}</span><b>${pc(F[k].pct)}</b>`).join('')}${F['@VX.1'] ? `<span>VIX à terme</span><b class="wh">${num(F['@VX.1'].last, 2)}</b>` : ''}</div>`, { lect: 'Signe et ampleur attendus à l’ouverture de Wall Street d’après les contrats à terme, hors nouvelles d’ici l’ouverture.' })}</div>`;
 };
 
-/* ------------------------------------------------------------------ anticipations de taux de la Fed (onglet 1 de RATES, ex-WIRP) d'après les contrats Fed funds 30 jours */
+/* ------------------------------------------------------------------ anticipations de taux de la Fed (onglet 2 de RATES, ex-WIRP) d'après les contrats Fed funds 30 jours */
 const FOMC = ['2026-01-28', '2026-03-18', '2026-04-29', '2026-06-17', '2026-07-29', '2026-09-16', '2026-10-28', '2026-12-09']; // dates de décision publiées par la Fed (2e jour de réunion)
 async function wirpView(m, alive) {
   setTitle('World Interest Rate Probability'); const [W, E] = await Promise.all([WMKT(), getJSON('eco.json').catch(() => null)]); if (!alive()) return;
@@ -332,7 +332,7 @@ PAGES.BRIEF = async (m, alive) => {
       ${[['@CC.1', 'Cacao ($/t)'], ['@KC.1', 'Café arabica (¢/lb)'], ['@CT.1', 'Coton (¢/lb)'], ['@GC.1', 'Or ($/once)']].filter(x => cmd[x[0]]).map(([k, l]) => L(l, cmd[k].last, cmd[k].pct, 2, 'COMMO')).join('')}</tbody></table>`, { np: true });
   const bpc = r => r && r.chg != null ? `<span class="${cls(r.chg)}">${r.chg > 0 ? '+' : ''}${num(r.chg * 100, 1)} pb</span>` : '—';
   const ff = ((W && W.cmd) || []).filter(r => r.g === 'FF').sort((a, b) => String(a.exp).localeCompare(String(b.exp)));
-  const p6 = pn('6) Taux', 'BTMM', `<table class="t"><tbody>${[['US2Y', 'Trésor US 2 ans'], ['US10Y', 'Trésor US 10 ans'], ['DE10Y-DE', 'Allemagne 10 ans']].filter(x => rt[x[0]]).map(([k, l]) => `<tr data-fn="WB" style="cursor:pointer"><td class="l am">${l}</td><td class="wh">${num(rt[k].last, 3)} %</td><td>${bpc(rt[k])}</td></tr>`).join('')}
+  const p6 = pn('6) Taux', 'RATES', `<table class="t"><tbody>${[['US2Y', 'Trésor US 2 ans'], ['US10Y', 'Trésor US 10 ans'], ['DE10Y-DE', 'Allemagne 10 ans']].filter(x => rt[x[0]]).map(([k, l]) => `<tr data-fn="WB" style="cursor:pointer"><td class="l am">${l}</td><td class="wh">${num(rt[k].last, 3)} %</td><td>${bpc(rt[k])}</td></tr>`).join('')}
       ${ff.length > 3 ? `<tr data-fn="WIRP" style="cursor:pointer"><td class="l am">Fed funds implicite (${new Date(ff[3].exp + 'T12:00:00Z').toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' })})</td><td class="wh">${num(100 - ff[3].last, 3)} %</td><td class="dm">${num((100 - ff[3].last - (100 - ff[0].last)) * 100, 0)} pb vs 1er mois</td></tr>` : ''}</tbody></table>`, { np: true });
   const ev = C && C.rows ? C.rows.map(r => Object.assign({ T: ecoDT(r.d) }, r)).filter(r => r.d.slice(0, 10) === today && r.i >= 0).sort((a, b) => a.d.localeCompare(b.d)) : [];
   const er = E ? Object.entries(E).map(([id, x]) => { const mm = String(x.ed || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); const d = mm ? `${mm[3]}-${mm[1].padStart(2, '0')}-${mm[2].padStart(2, '0')}` : null; return d && d >= today && d <= wk && Q.by[id] ? { id, d, w: /after market/i.test(x.ed) ? 'après clôture' : /before market/i.test(x.ed) ? 'avant ouverture' : '' } : null; }).filter(Boolean).sort((a, b) => a.d.localeCompare(b.d)) : [];
@@ -411,8 +411,8 @@ PAGES.EVTS = async (m, alive) => {
   return cfView(m, alive, tab);
 };
 
-/* ------------------------------------------------------------------ RATES : anticipations de la Fed (vue principale) et, en option, taux souverains mondiaux */
+/* ------------------------------------------------------------------ RATES (ex-BTMM) : marché monétaire US (vue principale) et, en option, anticipations de la Fed et BONDS (taux souverains mondiaux) */
 PAGES.RATES = async (m, alive) => {
-  const tab = tabState('RATES', 'f'); setTabs(FN_TABS.RATES, tab, k => { ST.tab.RATES = k; render(); });
-  return tab === 'w' ? wbView(m, alive) : wirpView(m, alive);
+  const tab = tabState('RATES', 'm'); setTabs(FN_TABS.RATES, tab, k => { ST.tab.RATES = k; render(); });
+  return tab === 'w' ? wbView(m, alive) : tab === 'f' ? wirpView(m, alive) : btmmView(m, alive);
 };

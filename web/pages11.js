@@ -74,7 +74,7 @@ PAGES.COMMO = async (m, alive) => {
   hbars($('glB'), L.map(r => (CMD_FR[r.s] || r.n).replace(/ \(.*\)$/, '')), L.map(r => r.pct * 100), v => (v > 0 ? '+' : '') + num(v, 2) + '%');
 };
 
-/* ------------------------------------------------------------------ taux souverains mondiaux (onglet 2 de RATES, ex-WB) */
+/* ------------------------------------------------------------------ taux souverains mondiaux : BONDS, onglet 3 de RATES (ex-WB) */
 async function wbView(m, alive) {
   const [W, C] = await Promise.all([WMKT(), getJSON('umoa_curves.json').catch(() => null)]); if (!alive()) return; setTitle('World Bond Markets');
   if (!W || !W.rt) { m.innerHTML = pn('Taux souverains', 'RATES', '<div class="empty">Taux en attente du prochain relevé.</div>'); return; }
