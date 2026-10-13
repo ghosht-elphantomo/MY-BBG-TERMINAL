@@ -540,7 +540,7 @@ def world_board(out_data):
     H = prevf.get("h") or {}; seen = prevf.get("hs") or {}
     hst = prevf.get("hst") or 0  # dernier essai d'historique : au plus toutes les 2 h si la source refuse
     need_seed = [cs for cs in WORLD_YH if cs in by and time.time() - (seen.get(cs) or 0) > 20 * 3600] if time.time() - hst > 2 * 3600 else []
-    need_yb = len(out["yb"]["v"]) < len(WORLD_YH) and time.time() - (out["yb"].get("try") or 0) > 3 * 3600
+    need_yb = len(out["yb"]["v"]) < len(WORLD_YH) and time.time() - (out["yb"].get("try") or 0) > 3600
     if need_seed or need_yb:
         import threading
         box = {"h": {}, "seen": {}}
