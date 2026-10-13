@@ -1,4 +1,11 @@
-brvm_cap.html|https://www.brvm.org/fr/capitalisations/0
-brvm_cap_actions.html|https://www.brvm.org/fr/capitalisations/1
-brvm_emetteurs.html|https://www.brvm.org/fr/emetteurs/societes-cotees
-brvm_snts.html|https://www.brvm.org/fr/emetteurs/societes-cotees/sonatel
+av_marche.html|https://www.brvm.org/fr/marche/avis-et-publications/avis
+av_marche_p1.html|https://www.brvm.org/fr/marche/avis-et-publications/avis?page=1
+av_ag.html|https://www.brvm.org/fr/emetteurs/type-annonces/convocations-assemblees-generales
+av_comm.html|https://www.brvm.org/fr/emetteurs/type-annonces/communiques
+av_resol.html|https://www.brvm.org/fr/emetteurs/type-annonces/projets-de-resolution
+av_notation.html|https://www.brvm.org/fr/emetteurs/type-annonces/notations-financieres
+av_dirig.html|https://www.brvm.org/fr/emetteurs/type-annonces/changements-de-dirigeants
+av_div.html|https://www.brvm.org/fr/esv/paiement-de-dividendes
+av_frac.html|https://www.brvm.org/fr/esv/fractionnement
+av_esv.html|https://www.brvm.org/fr/esv
+av_annonces.html|https://www.brvm.org/fr/emetteurs/type-annonces
