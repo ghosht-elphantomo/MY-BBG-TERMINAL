@@ -491,7 +491,7 @@ svg.rel{vertical-align:middle}
 .fk.kw{background:none;color:#e6e6e6;font-size:13px;padding:0 6px}
 .fk.kw:hover{background:#333}
 .fsep{flex:none;width:1px;background:#555;margin:1px 5px}
-.fk{min-width:46px;justify-content:center;padding:1px 8px}
+.fk{min-width:46px;justify-content:center;padding:1px 8px;flex-shrink:0}
 .wt span b{font-weight:700;color:#fff;margin-right:2px}
 .tbar .dd.rel:after{content:'≫';font-size:12px}
 .tbar .qh{flex:none;background:#ffd200;color:#000;border:0;width:22px;height:19px;font-weight:700;margin-left:6px;border-radius:2px}

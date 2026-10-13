@@ -1,4 +1,4 @@
-/* ================= FQT — pages: MON, BRVM, GP, DES, HELP ================= */
+/* ================= FQT — pages: MONITOR, BRVM, GP, DES, HELP ================= */
 'use strict';
 const codeAttr = code => { const w = String(code || '').trim().split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
 /* dividende par action : marqué « a » quand il a été ajusté d'un fractionnement (montant publié en infobulle) */
@@ -12,8 +12,8 @@ function sortRows(rows, sort) { const { k, dir } = sort; return rows.slice().sor
 function thSort(cols, sort) { return cols.map(([k, l, left]) => `<th data-k="${k}" class="${left ? 'l' : ''} ${sort.k === k ? 'on' : ''}">${l}${sort.k === k ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join(''); }
 function lastCross(c, s) { const n = c.length; const above = c[n - 1] > s[n - 1]; let k = n - 1; while (k > 0 && isFinite(s[k - 1]) && (c[k - 1] > s[k - 1]) === above) k--; return { above, k }; }
 
-/* ------------------------------------------------------------------ MON */
-PAGES.MON = async (m, alive) => {
+/* ------------------------------------------------------------------ MONITOR (ex-MON) */
+PAGES.MONITOR = async (m, alive) => {
   const G = [['Indices & ETF · États-Unis', s => s.mkt === 'US' && s.typ === 'ETF'], ['Actions · États-Unis', s => s.mkt === 'US' && s.typ !== 'ETF'], ['Taïwan', s => s.mkt === 'TW'],
     ['Indices BRVM', s => s.mkt === 'BRVM' && s.cls === 'Index' && !legacy(s)], ['Matières premières', s => s.cls === 'Comdty'], ['Taux · volatilité · macro', s => s.mkt === 'MACRO' && (s.cls === 'Index' || s.cls === 'Rate')], ['Change', s => s.cls === 'Curncy']];
   const row = s => `<tr data-sec="${s.id}"><td class="l tk">${s.tk}</td><td class="l nm ns">${esc(s.short || s.n)}</td><td class="wh">${px(s, s.last)}</td><td>${sgn(s.last - s.prev, pxd(s), '', 1)}</td><td>${pc(s.pct)}</td>
@@ -24,7 +24,7 @@ PAGES.MON = async (m, alive) => {
   const mini = (rs, v) => `<table class="t"><tbody>${rs.map(s => `<tr data-sec="${s.id}"><td class="l tk">${s.id}</td><td class="wh">${px(s, s.last)}</td><td>${v(s)}</td></tr>`).join('')}</tbody></table>`;
   const nUp = br.filter(s => s.pct > 0).length, nDn = br.filter(s => s.pct < 0).length;
   m.innerHTML = `<div class="grid c2">
-    ${pn('Marchés · vue d’ensemble', 'MON', `<div class="tw" style="max-height:calc(100vh - 128px)"><table class="t"><thead><tr><th class="l">Titre</th><th class="l ns">Nom</th><th>Dernier</th><th>Var.</th><th>Var.%</th><th>1 sem.</th><th>1 mois</th><th>YTD</th><th>1 an</th><th>Vol. 1A %</th><th>Plage 52 sem.</th><th>60 dernières</th><th>Date</th></tr></thead><tbody>${body}</tbody></table></div>`, { np: true, sel: `${Q.sum.secs.filter(s => !legacy(s)).length} titres · cliquer une ligne pour ouvrir le graphique` })}
+    ${pn('Marchés · vue d’ensemble', 'MONITOR', `<div class="tw" style="max-height:calc(100vh - 128px)"><table class="t"><thead><tr><th class="l">Titre</th><th class="l ns">Nom</th><th>Dernier</th><th>Var.</th><th>Var.%</th><th>1 sem.</th><th>1 mois</th><th>YTD</th><th>1 an</th><th>Vol. 1A %</th><th>Plage 52 sem.</th><th>60 dernières</th><th>Date</th></tr></thead><tbody>${body}</tbody></table></div>`, { np: true, sel: `${Q.sum.secs.filter(s => !legacy(s)).length} titres · cliquer une ligne pour ouvrir le graphique` })}
     <div class="grid" style="align-content:start">
       ${pn('QQQ · règle SMA 200 → TQQQ', 'QQQ GP', `<div class="grid c2b" style="gap:8px"><div class="kv2" id="sigKv"></div>${cvb('sigCv', 150)}</div>`, { lect: '<span id="sigLect">…</span>' })}
       ${pn('BRVM · séance', 'BRVM', `<div class="grid c3" style="gap:6px"><div><div class="am" style="font-size:11px;margin-bottom:2px">Plus fortes hausses</div>${mini(up, s => pc(s.pct))}</div><div><div class="am" style="font-size:11px;margin-bottom:2px">Plus fortes baisses</div>${mini(dn, s => pc(s.pct))}</div><div><div class="am" style="font-size:11px;margin-bottom:2px">Plus gros échanges</div>${mini(vo, s => big(s.vday))}</div></div>`,
@@ -306,12 +306,12 @@ PAGES.GP = async (m, alive) => {
 
 /* ------------------------------------------------------------------ HELP */
 PAGES.HELP = async m => {
-  const rows = [['MON', 'Marchés : tous les titres, signal SMA200 de QQQ, séance BRVM, carte des capitalisations', 'MON'], ['BRVM', '48 actions triables (PER, rendement, bêta, liquidité…), indices, largeur du marché, secteurs', 'BRVM'],
+  const rows = [['MONITOR', 'Marchés : tous les titres, signal SMA200 de QQQ, séance BRVM, carte des capitalisations', 'MONITOR'], ['BRVM', '48 actions triables (PER, rendement, bêta, liquidité…), indices, largeur du marché, secteurs', 'BRVM'],
     ['GP', 'Graphique interactif : bougies, MM, Bollinger, RSI, MACD, drawdown, comparaison, échelle log, 5 min pour QQQ', 'SNTS GP · QQQ GP'], ['DES', 'Fiche : comptes sur plusieurs exercices, dividendes, avis (BRVM) ; perfs annuelles et drawdowns (tous)', 'SNTS DES'],
     ['BTST', 'Backtest de 8 stratégies sur le titre actif, levier simulé (US), Monte Carlo, durée des drawdowns', 'QQQ BTST'], ['QLAB', 'Statistiques : distribution, VaR, QQ-plot, cône de volatilité, autocorrélation, Hurst, analogues, probabilité bayésienne', 'NVDA QLAB'],
     ['CORR', 'Matrice de corrélation (hebdo), ACP et ratio d’absorption, paire au choix', 'CORR'], ['SEAS', 'Saisonnalité : années × mois, effet jour de semaine, « Sell in May »', 'BRVMC SEAS'],
     ['MACRO', 'Or depuis 1833, S&P 500 depuis 1871, CAPE, inflation, taux 10 ans, pétrole, gaz, VIX ; l’or pendant les krachs', 'MACRO'], ['FX', 'Franc CFA : USD/XOF, effet change sur QQQ et la BRVM', 'FX'],
     ['DVD', 'Dividendes BRVM : prochains paiements, rendements, historique complet', 'DVD'], ['EVTS', 'Les avis officiels BRVM (AG, dividendes, états financiers…) filtrables', 'EVTS']];
   m.innerHTML = pn('Aide · fonctions', 'HELP', `<table class="t"><thead><tr><th class="l">Code</th><th class="l">Ce que fait la fonction</th><th class="l">Exemple à taper</th></tr></thead><tbody>${rows.map(r => `<tr data-fn="${r[0]}" style="cursor:pointer"><td class="l tk">${r[0]}</td><td class="l nm">${r[1]}</td><td class="l am">${r[2]} &lt;GO&gt;</td></tr>`).join('')}</tbody></table>`,
-    { np: true, lect: 'Tapez n’importe où pour écrire dans la ligne de commande. Un ticker seul ouvre son graphique (ou la fonction en cours). <b>Échap</b> revient à MON. Sur les graphiques : molette = zoom, glisser = déplacer, double-clic = vue initiale.' });
+    { np: true, lect: 'Tapez n’importe où pour écrire dans la ligne de commande. Un ticker seul ouvre son graphique (ou la fonction en cours). <b>Échap</b> revient à MONITOR. Sur les graphiques : molette = zoom, glisser = déplacer, double-clic = vue initiale.' });
 };

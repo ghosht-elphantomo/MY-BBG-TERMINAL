@@ -2,14 +2,14 @@
 'use strict';
 const $ = id => document.getElementById(id);
 const Q = { base: 'data/', sum: null, by: {}, ser: {}, M: {}, json: {}, live: null, quotes: null };
-const ST = { fn: 'MON', sec: 'QQQ', gp: { range: '1A', type: 'bbg', ov: { sma50: false, sma200: false }, st: { vol: true }, log: false, cmp: [] }, corr: { u: 'BRVMW', win: 104, pair: null },
+const ST = { fn: 'MONITOR', sec: 'QQQ', gp: { range: '1A', type: 'bbg', ov: { sma50: false, sma200: false }, st: { vol: true }, log: false, cmp: [] }, corr: { u: 'BRVMW', win: 104, pair: null },
   brvm: { sort: { k: 'mcap', dir: -1 }, sector: 'ALL' }, dvd: { sort: { k: 'yldc', dir: -1 } }, ev: { cat: '', tk: '', q: '', page: 0 }, bt: null, qlab: {}, tab: {}, hist: [], hpos: -1, newsMin: false };
 
 /* Registre des fonctions : code -> [libellé, portée (sec = titre, mkt = marché), groupe, définition courte, titre Bloomberg]
    Les définitions suivent celles de l'autocomplétion Bloomberg (nom anglais de la fonction + ce qu'elle montre). */
 const FN = {
   BRIEF: ['Synthèse du jour', 'mkt', 'Marchés', 'BRVM, portefeuille, alertes, marchés mondiaux, changes, matières, taux, agenda du jour et actualités sur une page', 'Daily Briefing'],
-  MON: ['Moniteur de marchés', 'mkt', 'Marchés', 'Tous les titres suivis, signal SMA 200 de QQQ, séance BRVM, carte des capitalisations', 'Market Monitor'],
+  MONITOR: ['Moniteur de marchés', 'mkt', 'Marchés', 'Tous les titres suivis, signal SMA 200 de QQQ, séance BRVM, carte des capitalisations', 'Market Monitor'],
   BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs', 'BRVM Overview'],
   IMAP: ['Carte de chaleur', 'mkt', 'Marchés', 'BRVM, États-Unis, Europe, Royaume-Uni, Asie : surface = capitalisation, couleur = variation', 'Intraday Market Map'],
   US: ['Marché US', 'mkt', 'Marchés', 'Nasdaq-100, ETF secteurs, facteurs, pays, matières, crypto ; pré-marché et après-bourse', 'US Market Overview'],
@@ -77,18 +77,18 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['BRIEF', 'MON', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['BRIEF', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 /* Fonctions associées (menu « Fonctions associées » de la barre d'outils) */
 const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HS: ['COMP', 'CORR', 'BETA', 'GP'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'SCREN'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'SCREN'],
-  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'NEWS', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
+  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'NEWS', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MONITOR', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
   BMAP: ['GLCO', 'MACRO', 'ECO', 'NEWS'], NEWS: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
   ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'NEWS'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'],
-  BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'NEWS'], BRIEF: ['MON', 'PORT', 'ECO', 'NEWS'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
+  BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'NEWS'], BRIEF: ['MONITOR', 'PORT', 'ECO', 'NEWS'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
@@ -221,7 +221,7 @@ function initCmd() {
   /* touches jaunes du clavier Bloomberg : « SNTS » puis F8 (Equity) = « SNTS Equity <GO> » ; F1 = aide, F2 = obligations */
   document.addEventListener('keydown', e => { const fk = { F1: 'HELP', F2: 'GOVT', F8: 'Equity', F9: 'Comdty', F10: 'Index' }[e.key]; if (!fk || e.metaKey || e.ctrlKey || e.altKey) return; e.preventDefault();
     if (fk === 'HELP') { go('HELP'); return; } if (fk === 'GOVT') { go('SRCH'); return; } const v = $('cmd').value.trim(); if (v) { $('cmd').value = ''; runCmd(v); } else { $('cmd').focus(); toast('Tapez un ticker puis ' + e.key + ' (' + fk + ').'); } }, true);
-  document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') { if (!$('ddm').hidden) { ddClose(); return; } if (document.body.classList.contains('maxi')) { toggleMaxi(false); return; } go(SECFN.has(ST.fn) && ST.fn !== 'MENU' ? 'MENU' : 'MON'); } });
+  document.addEventListener('keydown', e => { if (e.target.matches('input,select,textarea') || e.metaKey || e.ctrlKey || e.altKey) return; if (/^[a-zA-Z0-9]$/.test(e.key)) { inp.focus(); } if (e.key === 'Escape') { if (!$('ddm').hidden) { ddClose(); return; } if (document.body.classList.contains('maxi')) { toggleMaxi(false); return; } go(SECFN.has(ST.fn) && ST.fn !== 'MENU' ? 'MENU' : 'MONITOR'); } });
 }
 
 /* ---------- menus déroulants ---------- */
@@ -263,7 +263,7 @@ function stdActs() {
 function exportPNG() { const c = $('main').querySelector('canvas'); if (!c) { toast('Aucun graphique sur cet écran.'); return; } const a = document.createElement('a'); a.href = c.toDataURL('image/png'); a.download = `FQT_${ST.fn}_${SECFN.has(ST.fn) ? ST.sec + '_' : ''}${new Date().toISOString().slice(0, 10)}.png`; a.click(); }
 
 /* ---------- onglets de fenêtre (comme les onglets du terminal Bloomberg) : un écran par onglet, « + » pour en ouvrir un ---------- */
-const WT = (() => { try { const w = JSON.parse(localStorage.getItem('fqt_wtabs') || 'null'); if (w && Array.isArray(w.list) && w.list.length) return w; } catch (e) { } return { list: [{ fn: 'MON', sec: 'QQQ' }], cur: 0 }; })();
+const WT = (() => { try { const w = JSON.parse(localStorage.getItem('fqt_wtabs') || 'null'); if (w && Array.isArray(w.list) && w.list.length) return w; } catch (e) { } return { list: [{ fn: 'MONITOR', sec: 'QQQ' }], cur: 0 }; })();
 function wtSave() { try { localStorage.setItem('fqt_wtabs', JSON.stringify({ list: WT.list.map(t => ({ fn: t.fn, sec: t.sec })), cur: WT.cur })); } catch (e) { } }
 function wtLabel(t) { const s = Q.by[t.sec]; return SECFN.has(t.fn) && s ? `${t.fn} ${(s.short || s.n || s.id).toUpperCase()} ${ykey(s).split(' ').pop()}` : `${t.fn} ${FN[t.fn] ? FN[t.fn][4] : ''}`; }
 function renderWtabs() {
@@ -272,7 +272,7 @@ function renderWtabs() {
     `<button class="wplus" id="wplus" title="Nouvel onglet (puis tapez par exemple ORAC DES)">+</button><span class="wsp"></span><button class="wico" id="wsrch" title="Rechercher un titre ou une fonction">⌕</button><button class="wico" id="wmax" title="${document.body.classList.contains('maxi') ? 'Réduire' : 'Agrandir (plein écran)'}">${document.body.classList.contains('maxi') ? '⤡' : '⤢'}</button><span class="wopt">☰ Options</span>`;
   w.querySelectorAll('[data-wt]').forEach(el => el.onclick = e => { if (e.target.dataset.wx != null) return; wtSwitch(+el.dataset.wt); });
   w.querySelectorAll('[data-wx]').forEach(el => el.onclick = e => { e.stopPropagation(); wtClose(+el.dataset.wx); });
-  $('wplus').onclick = () => wtNew('MON', ST.sec, true); $('wsrch').onclick = () => { const c = $('cmd'); c.focus(); }; $('wmax').onclick = () => toggleMaxi();
+  $('wplus').onclick = () => wtNew('MONITOR', ST.sec, true); $('wsrch').onclick = () => { const c = $('cmd'); c.focus(); }; $('wmax').onclick = () => toggleMaxi();
   w.querySelector('.wopt').onclick = e => ddOpen(e.target, stdActs()[2].menu());
 }
 /* ⤢ : agrandit l'écran courant (bandeaux masqués, plein écran du navigateur si possible), comme l'agrandissement d'une fenêtre Bloomberg */
@@ -301,7 +301,7 @@ function renderRbar() {
     acts.map((a, i) => `<button class="ab${a.menu ? ' mn' : ''}${a.on ? ' on' : ''}" data-n="${a.n}" data-dd="1" data-ai="${i}"><em>${a.n})</em> ${esc(a.l)}</button>`).join('') +
     `<span class="rt">${esc(PG.title || FN[ST.fn][4] || FN[ST.fn][0])}</span>`;
   b.querySelectorAll('[data-ai]').forEach(x => x.onclick = () => { const a = acts[+x.dataset.ai]; if (a.menu) ddOpen(x, a.menu()); else if (a.run) a.run(); });
-  b.querySelector('.ret') && (b.querySelector('.ret').onclick = () => go(SECFN.has(ST.fn) ? 'MENU' : 'MON'));
+  b.querySelector('.ret') && (b.querySelector('.ret').onclick = () => go(SECFN.has(ST.fn) ? 'MENU' : 'MONITOR'));
   if ($('obT')) $('obT').onclick = obEdit;
 }
 /* case orange du titre (comme le champ ambre du terminal) : on y tape un autre ticker, Entrée = même fonction sur ce titre */
@@ -377,14 +377,14 @@ function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hi
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
-/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN, TOP s'appelle NEWS */
+/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN, TOP s'appelle NEWS, MON s'appelle MONITOR */
 /* écrans à onglets qui regroupent d'anciennes fonctions (onglet 1 = vue principale) : source unique pour les onglets, l'aide et l'autocomplétion */
 const FN_TABS = {
   EVTS: [['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['u', 'Sociétés US'], ['a', 'Agenda des sociétés']],
   FXC: [['m', 'Matrice des changes croisés'], ['w', 'Classement des devises']],
   RATES: [['f', 'Anticipations de la Fed'], ['w', 'Taux souverains mondiaux']] };
 const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
-const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
+const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], MON: ['MONITOR'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
 function fnAlias(f) { const a = FN_ALIAS[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }
 function go(fn, s, o = {}) {
   fn = fnAlias(fn);
@@ -406,11 +406,11 @@ async function render() {
 }
 /* rangée de touches comme la barre du terminal : GO, F1-F4 (gris), touches vertes du clavier Bloomberg, puis les fonctions de marché */
 const BBG_KEYS = [['F1', 'Aide (HELP)', () => go('HELP')], ['F2', 'Govt : obligations (SRCH)', () => go('SRCH')], ['F3', 'Equity : marché BRVM', () => go('BRVM')], ['F4', 'Index : indices mondiaux (WEI)', () => go('WEI')]];
-const BBG_GREEN = [['PRINT', 'Imprimer l’écran', () => window.print()], ['HELP', 'Aide', () => go('HELP')], ['SEARCH', 'Rechercher un titre ou une fonction', () => $('cmd').focus()],
-  ['QUOTE', 'Description du titre actif (DES)', () => go('DES', ST.sec)], ['MONITOR', 'Moniteur de marchés (MON)', () => go('MON')], ['NEWS', 'Actualités (Top News)', () => go('NEWS')], ['MENU', 'Menu des fonctions du titre', () => go('MENU', ST.sec)],
+const BBG_GREEN = [['MONITOR', 'Moniteur de marchés (Market Monitor)', () => go('MONITOR')], ['PRINT', 'Imprimer l’écran', () => window.print()], ['HELP', 'Aide', () => go('HELP')], ['SEARCH', 'Rechercher un titre ou une fonction', () => $('cmd').focus()],
+  ['QUOTE', 'Description du titre actif (DES)', () => go('DES', ST.sec)], ['NEWS', 'Actualités (Top News)', () => go('NEWS')], ['MENU', 'Menu des fonctions du titre', () => go('MENU', ST.sec)],
   ['PG BACK', 'Écran précédent', () => histGo(-1)], ['PG FWD', 'Écran suivant', () => histGo(1)]];
 function renderKeys() { const f = $('fkeys');
-  f.innerHTML = `<button class="fk kgo" data-k="GO" title="Exécuter la commande">GO</button>${BBG_KEYS.map(([k, t]) => `<button class="fk kf" data-k="${k}" title="${esc(t)}">${k}</button>`).join('')}${BBG_GREEN.map(([k, t]) => `<button class="fk" data-k="${k}" title="${esc(t)}"><b>${k}</b></button>`).join('')}<button class="fk kw" data-k="CFG" title="Réglages">🔧</button><i class="fsep"></i>`
+  f.innerHTML = `<button class="fk kgo" data-k="GO" title="Exécuter la commande">GO</button>${BBG_KEYS.map(([k, t]) => `<button class="fk kf" data-k="${k}" title="${esc(t)}">${k}</button>`).join('')}${BBG_GREEN.map(([k, t]) => `<button class="fk${FN[k] && ST.fn === k ? ' on' : ''}" data-k="${k}" title="${esc(t)}"><b>${k}</b></button>`).join('')}<button class="fk kw" data-k="CFG" title="Réglages">🔧</button><i class="fsep"></i>`
     + MKT_KEYS.filter(has).map(k => `<button class="fk ${ST.fn === k ? 'on' : ''}" data-fn="${k}" title="${esc(FN[k][4] + ' — ' + FN[k][3])}"><b>${k}</b><span>${FN[k][0]}</span></button>`).join('');
   f.querySelectorAll('[data-k]').forEach(b => b.onclick = e => { const k = b.dataset.k; if (k === 'GO') { const v = $('cmd').value.trim(); if (v) { $('cmd').value = ''; runCmd(v); } else $('cmd').focus(); return; }
     if (k === 'CFG') { ddOpen(b, stdActs().find(a => a.n === 98).menu()); return; } const a = BBG_KEYS.concat(BBG_GREEN).find(x => x[0] === k); if (a) a[2](); }); }
@@ -433,7 +433,7 @@ function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hi
 async function initFeed() {
   if (!window.claude || !window.claude.use) { setInterval(pollStatic, 5 * 60 * 1000); return; }
   let db = null; try { db = await window.claude.use('db'); } catch (e) { } if (!db) return;
-  const apply = () => { applyQuotes(); for (const p of Object.values(Q.ser)) p.then(applyQuoteToSeries); Q.M = {}; feedState(); renderSech(); renderStatus(); if (['MON', 'BRVM', 'IMAP', 'US'].includes(ST.fn)) render(); };
+  const apply = () => { applyQuotes(); for (const p of Object.values(Q.ser)) p.then(applyQuoteToSeries); Q.M = {}; feedState(); renderSech(); renderStatus(); if (['MONITOR', 'BRVM', 'IMAP', 'US'].includes(ST.fn)) render(); };
   try { db.doc('feed/live').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.live || (d.ts || 0) >= (Q.live.ts || 0)) { Q.live = d; apply(); } } }, () => { }); } catch (e) { }
   try { db.doc('feed/quotes').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.quotes || (d.ts || 0) >= (Q.quotes.ts || 0)) { Q.quotes = d; apply(); } } }, () => { }); } catch (e) { }
   try { db.doc('feed/news').onSnapshot(async sn => { if (!sn.exists) return; const d = sn.data(); const cur = await (Q.json['news.json'] || Promise.resolve(null)).catch(() => null);
@@ -445,7 +445,7 @@ async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.ba
   if (fresh) { Q.gen = l.ts; Q.json = {}; try { const S = await fetch(Q.base + 'summary.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null); if (S && S.secs) { Q.sum = S; Q.json['summary.json'] = Promise.resolve(S); for (const s of S.secs) Q.by[s.id] = s; } } catch (e) { } }
   if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews();
   const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.id !== 'cmd';
-  if (!typing && (fresh || ['MON', 'BRVM', 'IMAP', 'US', 'NEWS', 'BRIEF', 'WEIF'].includes(ST.fn)) && !(ST.fn === 'NEWS' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
+  if (!typing && (fresh || ['MONITOR', 'BRVM', 'IMAP', 'US', 'NEWS', 'BRIEF', 'WEIF'].includes(ST.fn)) && !(ST.fn === 'NEWS' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
 let SYNC_RUN = null;
 function bindSync() { const b = $('syncBtn'); if (!b || !SYNC_RUN) return; b.hidden = false; b.onclick = () => SYNC_RUN(b); }
 async function initSync() {
@@ -471,7 +471,7 @@ async function boot() {
   try { Q.sum = await getJSON('summary.json'); } catch (e) { $('main').innerHTML = `<div class="empty">Données introuvables (data/summary.json).</div>`; return; }
   for (const s of Q.sum.secs) Q.by[s.id] = s;
   try { Q.live = await getJSON('live.json'); } catch (e) { } try { Q.quotes = await getJSON('quotes.json'); applyQuotes(); } catch (e) { }
-  if (WT.cur >= WT.list.length) WT.cur = 0; const t0 = WT.list[WT.cur]; if (t0 && FN[t0.fn]) { ST.fn = t0.fn; if (Q.by[t0.sec]) ST.sec = t0.sec; }
+  for (const t of WT.list) { const a = FN_ALIAS[t.fn]; if (a) t.fn = a[0]; } if (WT.cur >= WT.list.length) WT.cur = 0; const t0 = WT.list[WT.cur]; if (t0 && FN[t0.fn]) { ST.fn = t0.fn; if (Q.by[t0.sec]) ST.sec = t0.sec; }
   fromHash(); initCmd(); clocks(); applyPref();
   document.addEventListener('click', e => { const f = e.target.closest('[data-fn]'); if (f && !f.closest('#ddm')) { if (f.dataset.t) ST.tab[f.dataset.fn] = f.dataset.t; go(f.dataset.fn, f.dataset.s); return; }
     const s = e.target.closest('[data-sec]'); if (s && !e.target.closest('a')) { const id = s.dataset.sec; go(s.dataset.to || (SECFN.has(ST.fn) && ST.fn !== 'MENU' && !avail(ST.fn, sec(id)) ? ST.fn : 'MENU'), id); } });
