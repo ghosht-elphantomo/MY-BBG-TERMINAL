@@ -4967,6 +4967,42 @@ PAGES.ALRT = async (m, alive) => {
   m.querySelectorAll('[data-mre]').forEach(b => b.onclick = e => { e.stopPropagation(); const B = maLoad(), a = B[+b.dataset.mre]; if (a) { a.hit = null; a.seen = false; a.hv = null; } maSave(B); render(); });
 };
 
+/* ------------------------------------------------------------------ HS : écran « Historical Spread » — rapport ou écart entre deux titres,
+   moyenne et bandes à ±1 et ±2 écarts-types, score z, centile (valeur relative, paires) */
+PAGES.HS = async (m, alive) => {
+  const s = sec(ST.sec); setTitle('Historical Spread'); const st = ST.hs = ST.hs || {}; if (st.a !== s.id) { st.a = s.id; st.b = s.bench && s.bench !== s.id ? s.bench : s.mkt === 'BRVM' ? 'BRVMC' : 'QQQ'; }
+  st.mode = st.mode || 'r'; st.y = st.y || 3; st.fx = st.fx ?? true;
+  const b = Q.by[st.b] ? st.b : 'BRVMC';
+  const [A, B] = await Promise.all([series(s.id).catch(() => null), series(b).catch(() => null)]); if (!alive()) return;
+  if (!A || !B) { m.innerHTML = pn('Écart historique', 'HS', '<div class="empty">Historique indisponible.</div>'); return; }
+  const sb = Q.by[b], conv = st.fx && sb.ccy !== s.ccy, mb = new Map(B.x.map((d, i) => [d, B.c[i]]));
+  const t0 = (() => { const t = new Date(Date.now() - st.y * 365.25 * 864e5); return t.getUTCFullYear() * 10000 + (t.getUTCMonth() + 1) * 100 + t.getUTCDate(); })();
+  const X = A.x.filter(d => d >= t0 && mb.has(d)); const f = conv ? await fxFactor(sb.ccy, s.ccy, X).catch(() => null) : null; if (!alive()) return;
+  const ma = new Map(A.x.map((d, i) => [d, A.c[i]])), pa = X.map(d => ma.get(d)), pb = X.map((d, i) => mb.get(d) * (f && f[i] ? f[i] : 1));
+  const V = X.map((_, i) => st.mode === 'r' ? (pb[i] ? pa[i] / pb[i] : null) : st.mode === 'n' ? null : pa[i] - pb[i]);
+  /* mode « n » : performances relatives en base 100 (écart en points) */
+  if (st.mode === 'n') { for (let i = 0; i < X.length; i++) V[i] = pa[i] / pa[0] * 100 - pb[i] / pb[0] * 100; }
+  const ok = V.filter(v => v != null && isFinite(v)); if (ok.length < 30) { m.innerHTML = pn('Écart historique', 'HS', '<div class="empty">Pas assez de séances communes aux deux titres sur la période.</div>'); return; }
+  const mu = U.mean(ok), sd = U.std(ok), cur = ok[ok.length - 1], z = sd ? (cur - mu) / sd : null, pct = ok.filter(v => v <= cur).length / ok.length, mn = Math.min(...ok), mx = Math.max(...ok);
+  const ra = [], rb = []; for (let i = 1; i < X.length; i++) if (pa[i - 1] && pb[i - 1]) { ra.push(pa[i] / pa[i - 1] - 1); rb.push(pb[i] / pb[i - 1] - 1); } const cv = covar(ra, rb), corr = cv != null ? cv / (U.std(ra) * U.std(rb)) : null;
+  const half = (() => { /* demi-vie du retour à la moyenne (AR(1) sur l'écart) */ const y = ok.slice(1), x0 = ok.slice(0, -1), mx0 = U.mean(x0), my = U.mean(y); let sxy = 0, sxx = 0; for (let i = 0; i < y.length; i++) { sxy += (x0[i] - mx0) * (y[i] - my); sxx += (x0[i] - mx0) ** 2; } const ph = sxx ? sxy / sxx : null; return ph > 0 && ph < 1 ? Math.log(.5) / Math.log(ph) : null; })();
+  const fmtV = v => st.mode === 'r' ? num(v, v < 10 ? 4 : 2) : num(v, 2), ML = { r: `Rapport ${s.id} / ${b}`, s: `Écart ${s.id} − ${b}${conv ? ` (en ${s.ccy})` : ''}`, n: `Écart de performance ${s.id} − ${b} (points, base 100)` };
+  m.innerHTML = `<div class="tools weic"><span class="tlab">Second titre</span><input class="ofld" id="hsB" value="${esc(b)}" style="width:110px" autocomplete="off"><span class="am">${esc(sb.short || sb.n)}</span>
+      <span class="tlab">Mesure</span><select class="ofld" id="hsM"><option value="r" ${st.mode === 'r' ? 'selected' : ''}>Rapport</option><option value="s" ${st.mode === 's' ? 'selected' : ''}>Écart</option><option value="n" ${st.mode === 'n' ? 'selected' : ''}>Écart de performance (base 100)</option></select>
+      <span class="tlab">Période</span><select class="ofld" id="hsY">${[1, 2, 3, 5, 10].map(y => `<option value="${y}" ${st.y === y ? 'selected' : ''}>${y} an${y > 1 ? 's' : ''}</option>`).join('')}</select>
+      ${sb.ccy !== s.ccy ? `<label class="gck"><input type="checkbox" id="hsF" ${st.fx ? 'checked' : ''}><i></i>Convertir ${sb.ccy} en ${s.ccy}</label>` : ''}</div>
+    <div class="grid side">${pn(`${ML[st.mode]} · ${X.length} séances communes`, 'HS', cvb('hsG', 430), { np: true })}
+      ${pn('Statistiques', 'HS', `<div class="kv2"><span>Dernier</span><b class="wh">${fmtV(cur)}</b><span>Moyenne</span><b>${fmtV(mu)}</b><span>Écart-type</span><b>${fmtV(sd)}</b><span>Score z</span><b class="${z > 2 ? 'dn' : z < -2 ? 'up' : 'wh'}">${z != null ? num(z, 2) : '—'}</b><span>Centile sur la période</span><b>${num(pct * 100, 0)} %</b><span>Plus haut / plus bas</span><b>${fmtV(mx)} / ${fmtV(mn)}</b>
+          <span>Corrélation des variations quotidiennes</span><b>${corr != null ? num(corr, 2) : '—'}</b><span>Demi-vie du retour à la moyenne</span><b>${half ? num(half, 0) + ' séances' : 'pas de retour à la moyenne mesurable'}</b></div>`,
+        { lect: `Score z = (dernier − moyenne) ÷ écart-type sur la période : au-delà de ±2, l’écart est inhabituel par rapport à son histoire. Demi-vie : nombre de séances pour que l’écart à la moyenne se réduise de moitié, estimé sur un modèle autorégressif simple. Outil de mesure, pas un signal de transaction.` })}</div>`;
+  const XX = X.slice(-V.length), line = v => V.map(() => v);
+  new TSChart($('hsG'), { panes: [{ h: 1, fmt: fmtV }], grid: 'dot', xticks: bbgTicks }).set({ x: XX, series: [{ y: V, color: '#ffffff', w: 1.4, label: st.mode === 'r' ? 'Rapport' : 'Écart', fmt: fmtV }, { y: line(mu), color: '#f9a33a', w: 1.1, label: 'Moyenne', fmt: fmtV },
+    { y: line(mu + sd), color: 'rgba(95,208,234,.75)', w: 1, label: '+1 σ', fmt: fmtV }, { y: line(mu - sd), color: 'rgba(95,208,234,.75)', w: 1, label: '−1 σ', fmt: fmtV }, { y: line(mu + 2 * sd), color: 'rgba(255,67,61,.8)', w: 1, label: '+2 σ', fmt: fmtV }, { y: line(mu - 2 * sd), color: 'rgba(50,199,76,.8)', w: 1, label: '−2 σ', fmt: fmtV }] }, [0, XX.length - 1]);
+  const inp = $('hsB'); inp.oninput = () => { const L = searchSecs(inp.value).slice(0, 10); if (!L.length) { ddClose(); return; } ddOpen(inp, L.map(x => ({ code: x.id, l: esc(x.short || x.n), run: () => { st.b = x.id; render(); } }))); };
+  inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); const x = Q.by[inp.value.trim().toUpperCase()] || searchSecs(inp.value)[0]; if (x) { st.b = x.id; render(); } } };
+  $('hsM').onchange = e => { st.mode = e.target.value; render(); }; $('hsY').onchange = e => { st.y = +e.target.value; render(); }; const hf = $('hsF'); if (hf) hf.onchange = e => { st.fx = e.target.checked; render(); };
+};
+
 </script>
 <script>
 /* ================= FQT — données, formats, ligne de commande, chrome Bloomberg, routeur ================= */
@@ -5028,6 +5064,7 @@ const FN = {
   MOV: ['Contributions à l’indice', 'sec', 'Indice', 'Valeurs qui font monter ou baisser l’indice aujourd’hui, en points', 'Equity Index Movers'],
   HP: ['Historique des cours', 'sec', 'Cours', 'Cours quotidiens, hebdomadaires, mensuels avec variations et volumes', 'Historical Price Table'],
   TRA: ['Rendement total', 'sec', 'Cours', 'Dividendes réinvestis contre cours seul, par période et par année', 'Total Return Analysis'],
+  HS: ['Écart historique', 'sec', 'Cours', 'Rapport ou écart entre deux titres : moyenne, bandes ±1 et ±2 écarts-types, score z, centile, demi-vie', 'Historical Spread'],
   COMP: ['Rendements comparés', 'sec', 'Cours', 'Performance contre d’autres titres et un indice, dividendes réinvestis', 'Comparative Returns'],
   SEAS: ['Saisonnalité', 'sec', 'Cours', 'Rendements années × mois, jour de la semaine, « Sell in May »', 'Seasonality Chart'],
   FA: ['Analyse financière', 'sec', 'Fondamentaux', 'Chiffres clés, compte de résultat, bilan, flux, ratios sur 10 exercices', 'Financial Analysis'],
@@ -5047,11 +5084,11 @@ const FN = {
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
 const MKT_KEYS = ['MON', 'PORT', 'BRVM', 'WEI', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'WB', 'BTMM', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'EQS', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'WCRS', 'FXC', 'EVTS', 'HELP'];
-const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
+const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 /* Fonctions associées (menu « Fonctions associées » de la barre d'outils) */
-const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
+const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HS: ['COMP', 'CORR', 'BETA', 'GP'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'EQS'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'EQS'],
   MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'TOP', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'EQS'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
   BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'WB', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], WB: ['GC', 'ECWB', 'ECO', 'WEI'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
@@ -5071,7 +5108,7 @@ function avail(code, s) {
   if (code === 'HDS') return eq && (brvm || s.mkt === 'US') ? null : eq ? 'actionnariat non publié pour ce marché' : 'réservé aux actions';
   if (code === 'SCOR' || code === 'PEER') return eq && (brvm || s.fa) ? null : 'réservé aux actions dont les comptes sont disponibles';
   if (code === 'LQA') return s.cls === 'Equity' && s.f === 'D' ? null : 'réservé aux actions et ETF';
-  if (code === 'TRA' || code === 'HVT' || code === 'VAP' || code === 'TECH') return s.f === 'D' ? null : 'série mensuelle';
+  if (code === 'TRA' || code === 'HVT' || code === 'VAP' || code === 'TECH' || code === 'HS') return s.f === 'D' ? null : 'série mensuelle';
   if (code === 'ANR') return s.mkt === 'US' && eq ? null : brvm ? 'aucune recommandation d’analystes publiée pour la BRVM' : 'réservé aux actions US';
   if (code === 'GF') return eq && (brvm || s.fa) ? null : 'réservé aux actions dont les comptes sont disponibles';
   if (code === 'CACS') return s.cls === 'Equity' ? null : 'réservé aux actions et ETF';
