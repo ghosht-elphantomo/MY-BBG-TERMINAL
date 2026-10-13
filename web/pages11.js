@@ -33,7 +33,7 @@ PAGES.WEI = async (m, alive) => {
   /* % depuis janvier en dollars (colonne « %YtdCur » du terminal) : indices cotés en EUR, GBP, CHF, JPY, CNY, XOF */
   const FXR = Object.fromEntries((W.fx || []).map(r => [r.s, r.last])), IXC = { '.STOXX50E': 'EUR=', '.GDAXI': 'EUR=', '.FCHI': 'EUR=', '.FTMIB': 'EUR=', '.IBEX': 'EUR=', '.AEX': 'EUR=', '.FTSE': 'GBP=', '.SSMI': 'CHF=', '.N225': 'JPY=', '.SSEC': 'CNY=', '.SZI': 'CNY=', BRVMC: 'XOF=', BRVM30: 'XOF=', BRVMPR: 'XOF=',
     '.GSPTSE': 'CAD=', '.MXX': 'MXN=', '.BVSP': 'BRL=', '.MERV': 'ARS=', '.OMXS30': 'SEK=', '.TA35': 'ILS=', '.EGX30': 'EGP=', '.HSI': 'HKD=', '.KS11': 'KRW=', '.TWII': 'TWD=', '.NSEI': 'INR=', '.AXJO': 'AUD=', '.STI': 'SGD=', '.KLSE': 'MYR=' };
-  const usdF = r => { const US = ['.SPX', '.DJI', '.IXIC', '.RUT']; if (US.includes(r.s)) return 1; const f = IXC[r.s]; if (!f || !FXR[f] || !YB[f]) return null; return FX_INV.has(f) ? FXR[f] / YB[f] : YB[f] / FXR[f]; };
+  const usdF = r => { const US = ['.SPX', '.DJI', '.IXIC', '.RUT']; if (US.includes(r.s)) return 1; let f = IXC[r.s]; if (f === 'XOF=' && FXR['EUR='] && YB['EUR=']) f = 'EUR='; /* FCFA : parité fixe avec l'euro */ if (!f || !FXR[f] || !YB[f]) return null; return FX_INV.has(f) ? FXR[f] / YB[f] : YB[f] / FXR[f]; };
   const today = new Date().toISOString().slice(0, 10), stale = t => t && String(t).slice(0, 10) < today;
   let rn = 0; const sec_ = ([g, lab], gi) => { const L = rows.filter(r => r.g === g); if (wo.mov) L.sort((a, b) => (b.pct ?? -9) - (a.pct ?? -9)); if (!L.length) return '';
     return `<tr class="grp"><td class="l" colspan="8"><span class="rn">${gi + 1})</span>${lab}</td></tr>${L.map(r => { const f = r.ytd != null ? usdF(r) : null, yc = f != null ? (1 + r.ytd) * f - 1 : null;
