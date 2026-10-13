@@ -15,3 +15,4 @@ demander « reviens au point de restauration du … » ; le code de ce point est
 | 13/10/2026 18 h 15 | Avant le déplacement du classement des devises de FX vers FXC et la mise à jour de HELP | `b6c5fa071ee62e820f6fe4d958043e626a8bbf56` | `35da078f0ae558cddcdb26f9835cc9246c795b03` |
 | 13/10/2026 18 h 20 | Avant le retrait de la touche TOP (écran renommé NEWS) | `840afad90721c1224de4843e5f2009f7c20bb515` | `35da078f0ae558cddcdb26f9835cc9246c795b03` |
 | 13/10/2026 18 h 25 | Avant le retrait de la touche MON (écran renommé MONITOR, touche placée en premier) | `cf363916bb73890ebdc8b2211eeef10d7b73946d` | `feb30b29ca036637ebe98a916d45a385153046d6` |
+| 13/10/2026 18 h 30 | Avant le renommage de GLCO en COMMO | `f02ad6691b0f5d6df9bc43724ac94c94ffade2ab` | `feb30b29ca036637ebe98a916d45a385153046d6` |

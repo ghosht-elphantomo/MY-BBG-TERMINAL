@@ -1,4 +1,4 @@
-/* ================= FQT — fonctions Bloomberg supplémentaires : WEI, GLCO, taux mondiaux (RATES), MOST, MOV, MEMB, HVT, VAP, ANR, RELS, CACS, GF ================= */
+/* ================= FQT — fonctions Bloomberg supplémentaires : WEI, COMMO, taux mondiaux (RATES), MOST, MOV, MEMB, HVT, VAP, ANR, RELS, CACS, GF ================= */
 'use strict';
 const rangeBar3 = (v, lo, hi) => (v == null || lo == null || hi == null || hi <= lo) ? '' : `<span class="rgb" title="plus bas ${num(lo, 2)} · plus haut ${num(hi, 2)}"><i style="left:${U.clamp((v - lo) / (hi - lo) * 100, 0, 100).toFixed(1)}%"></i></span>`;
 const qTime = t => { if (!t) return '—'; if (String(t).length === 10) return String(t).slice(8, 10) + '/' + String(t).slice(5, 7); const d = new Date(t); if (isNaN(d)) return esc(t); return Date.now() - d < 20 * 3600e3 ? d.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit' }); };
@@ -57,20 +57,20 @@ function hbars(host, labels, values, fmt, mid = 0) {
   x.strokeStyle = 'rgba(200,200,200,.5)'; x.beginPath(); x.moveTo(Math.round(X(mid)) + .5, 4); x.lineTo(Math.round(X(mid)) + .5, h - 4); x.stroke();
 }
 
-/* ------------------------------------------------------------------ GLCO : matières premières mondiales */
+/* ------------------------------------------------------------------ COMMO (ex-GLCO) : matières premières mondiales */
 const CMD_U = { '@GC.1': '$/once', '@SI.1': '$/once', '@HG.1': '$/livre', '@PL.1': '$/once', '@PA.1': '$/once', '@CC.1': '$/tonne', '@KC.1': '¢/livre', '@CT.1': '¢/livre', '@SB.1': '¢/livre', '@W.1': '¢/boisseau', '@C.1': '¢/boisseau', '@S.1': '¢/boisseau', '@SM.1': '$/tonne courte', '@LC.1': '¢/livre',
   '@LCO.1': '$/baril', '@CL.1': '$/baril', '@NG.1': '$/MMBtu', '@RB.1': '$/gallon', '@HO.1': '$/gallon' };
 const CMD_FR = { '@GC.1': 'Or (COMEX)', '@SI.1': 'Argent (COMEX)', '@HG.1': 'Cuivre (COMEX)', '@PL.1': 'Platine (NYMEX)', '@PA.1': 'Palladium (NYMEX)', '@CC.1': 'Cacao (ICE New York)', '@KC.1': 'Café arabica (ICE)', '@CT.1': 'Coton (ICE)', '@SB.1': 'Sucre n° 11 (ICE)',
   '@W.1': 'Blé (CBOT)', '@C.1': 'Maïs (CBOT)', '@S.1': 'Soja (CBOT)', '@SM.1': 'Tourteau de soja (CBOT)', '@LC.1': 'Bovins vivants (CME)', '@LCO.1': 'Pétrole Brent (ICE)', '@CL.1': 'Pétrole WTI (NYMEX)', '@NG.1': 'Gaz naturel Henry Hub (NYMEX)', '@RB.1': 'Essence RBOB (NYMEX)', '@HO.1': 'Gazole ULSD (NYMEX)' };
-PAGES.GLCO = async (m, alive) => {
+PAGES.COMMO = async (m, alive) => {
   const [W, O] = await Promise.all([WMKT(), getJSON('oil.json').catch(() => null)]); if (!alive()) return; setTitle('Global Commodity Prices');
-  if (!W || !W.cmd) { m.innerHTML = pn('Matières premières', 'GLCO', '<div class="empty">Cotations en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
+  if (!W || !W.cmd) { m.innerHTML = pn('Matières premières', 'COMMO', '<div class="empty">Cotations en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const en = O ? [['@LCO.1', O.curve.BRENT && O.curve.BRENT[0]], ['@CL.1', O.curve.WTI && O.curve.WTI[0]], ['@NG.1', O.prod['@NG.1']], ['@RB.1', O.prod['@RB.1']], ['@HO.1', O.prod['@HO.1']]].filter(x => x[1]).map(([s_, r]) => ({ ...r, s: s_, g: 'EN' })) : [];
   const rows = en.concat(W.cmd.filter(r => r.g === 'MET' || r.g === 'AGR')); const G = [['EN', 'Énergie'], ['MET', 'Métaux'], ['AGR', 'Agriculture et élevage']];
   const tbl = `<table class="t"><thead><tr><th class="l">Contrat</th><th class="l">Échéance</th><th>Dernier</th><th>Var. nette</th><th>Var. %</th><th class="l">Unité</th><th>Fourchette 52 s.</th><th>Heure GMT</th></tr></thead><tbody>${G.map(([g, lab]) => { const L = rows.filter(r => r.g === g); return L.length ? `<tr class="grp"><td class="l" colspan="8">${lab}</td></tr>${L.map(r => `<tr${['@CC.1', '@KC.1', '@CT.1'].includes(r.s) ? ' class="hl"' : ''}><td class="l am">${esc(CMD_FR[r.s] || r.n)}</td><td class="l dm">${esc(ctr(r.n))}</td><td class="wh">${num(r.last, r.last < 10 ? 4 : 2)}</td><td class="${cls(r.chg)}">${r.chg != null ? (r.chg > 0 ? '+' : '') + num(r.chg, r.last < 10 ? 4 : 2) : '—'}</td><td>${pc(r.pct)}</td><td class="l dm">${CMD_U[r.s] || ''}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td><td class="dm">${qTime(r.t)}</td></tr>`).join('')}` : ''; }).join('')}</tbody></table>`;
   const L = rows.filter(r => r.pct != null).sort((a, b) => b.pct - a.pct);
-  m.innerHTML = `<div class="grid side">${pn('Matières premières mondiales : contrats à terme 1er mois', 'GLCO', tbl, { np: true, lect: `Cotations différées (ICE, CME, NYMEX, COMEX via CNBC), relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}. En surbrillance : cacao, café et coton, premières exportations agricoles de l’UEMOA (la Côte d’Ivoire est le 1er producteur mondial de cacao). Pétrole en détail : BMAP.` })}
-    ${pn('Classement du jour', 'GLCO', cvb('glB', Math.max(320, L.length * 18)))}</div>`;
+  m.innerHTML = `<div class="grid side">${pn('Matières premières mondiales : contrats à terme 1er mois', 'COMMO', tbl, { np: true, lect: `Cotations différées (ICE, CME, NYMEX, COMEX via CNBC), relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}. En surbrillance : cacao, café et coton, premières exportations agricoles de l’UEMOA (la Côte d’Ivoire est le 1er producteur mondial de cacao). Pétrole en détail : BMAP.` })}
+    ${pn('Classement du jour', 'COMMO', cvb('glB', Math.max(320, L.length * 18)))}</div>`;
   hbars($('glB'), L.map(r => (CMD_FR[r.s] || r.n).replace(/ \(.*\)$/, '')), L.map(r => r.pct * 100), v => (v > 0 ? '+' : '') + num(v, 2) + '%');
 };
 

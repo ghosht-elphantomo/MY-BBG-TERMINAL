@@ -37,7 +37,7 @@ const FN = {
   EVTS: ['Événements des sociétés', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers ; en option : suivi des sociétés BRVM et US, agenda des sociétés', 'Corporate Events'],
   WEIF: ['Contrats à terme sur indices', 'mkt', 'Marchés', 'S&P 500, Nasdaq-100, Dow Jones, Russell 2000, VIX, FTSE 100, Nikkei : indication d’ouverture et écart au comptant', 'World Equity Index Futures'],
   WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines', 'World Equity Indices'],
-  GLCO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
+  COMMO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
   BTMM: ['Trésor et marché monétaire US', 'mkt', 'Taux', 'Taux directeurs (Fed, BCE, BCEAO), SOFR, bons et emprunts du Trésor, contrats à terme, pentes, inflation anticipée', 'Treasury & Money Markets'],
   RATES: ['Taux et anticipations Fed', 'mkt', 'Taux', 'Contrats Fed funds : taux implicite par mois, probabilité de baisse ou de hausse aux prochaines réunions ; en option : taux souverains mondiaux (courbe US, 10 ans, UEMOA)', 'World Interest Rate Probability'],
   MOST: ['Plus actives', 'mkt', 'Marchés', 'Plus fortes hausses et baisses, valeurs les plus échangées, largeur du jour', 'Most Active Securities'],
@@ -77,7 +77,7 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['BRIEF', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['BRIEF', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'COMMO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -85,7 +85,7 @@ const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HS: ['COMP', 'CORR', 'BETA', 'GP'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'SCREN'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'SCREN'],
   MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'NEWS', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MONITOR', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
-  BMAP: ['GLCO', 'MACRO', 'ECO', 'NEWS'], NEWS: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
+  BMAP: ['COMMO', 'MACRO', 'ECO', 'NEWS'], NEWS: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'COMMO'], COMMO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
   ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'NEWS'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'],
   BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'NEWS'], BRIEF: ['MONITOR', 'PORT', 'ECO', 'NEWS'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
@@ -377,14 +377,14 @@ function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hi
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
-/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN, TOP s'appelle NEWS, MON s'appelle MONITOR */
+/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN, TOP s'appelle NEWS, MON s'appelle MONITOR, GLCO s'appelle COMMO */
 /* écrans à onglets qui regroupent d'anciennes fonctions (onglet 1 = vue principale) : source unique pour les onglets, l'aide et l'autocomplétion */
 const FN_TABS = {
   EVTS: [['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['u', 'Sociétés US'], ['a', 'Agenda des sociétés']],
   FXC: [['m', 'Matrice des changes croisés'], ['w', 'Classement des devises']],
   RATES: [['f', 'Anticipations de la Fed'], ['w', 'Taux souverains mondiaux']] };
 const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
-const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], MON: ['MONITOR'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
+const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], MON: ['MONITOR'], GLCO: ['COMMO'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
 function fnAlias(f) { const a = FN_ALIAS[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }
 function go(fn, s, o = {}) {
   fn = fnAlias(fn);

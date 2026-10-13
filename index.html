@@ -3735,7 +3735,7 @@ function bmapDraw(host, G, CP, yi, lay, EI) {
 
 </script>
 <script>
-/* ================= FQT — fonctions Bloomberg supplémentaires : WEI, GLCO, taux mondiaux (RATES), MOST, MOV, MEMB, HVT, VAP, ANR, RELS, CACS, GF ================= */
+/* ================= FQT — fonctions Bloomberg supplémentaires : WEI, COMMO, taux mondiaux (RATES), MOST, MOV, MEMB, HVT, VAP, ANR, RELS, CACS, GF ================= */
 'use strict';
 const rangeBar3 = (v, lo, hi) => (v == null || lo == null || hi == null || hi <= lo) ? '' : `<span class="rgb" title="plus bas ${num(lo, 2)} · plus haut ${num(hi, 2)}"><i style="left:${U.clamp((v - lo) / (hi - lo) * 100, 0, 100).toFixed(1)}%"></i></span>`;
 const qTime = t => { if (!t) return '—'; if (String(t).length === 10) return String(t).slice(8, 10) + '/' + String(t).slice(5, 7); const d = new Date(t); if (isNaN(d)) return esc(t); return Date.now() - d < 20 * 3600e3 ? d.toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit' }); };
@@ -3794,20 +3794,20 @@ function hbars(host, labels, values, fmt, mid = 0) {
   x.strokeStyle = 'rgba(200,200,200,.5)'; x.beginPath(); x.moveTo(Math.round(X(mid)) + .5, 4); x.lineTo(Math.round(X(mid)) + .5, h - 4); x.stroke();
 }
 
-/* ------------------------------------------------------------------ GLCO : matières premières mondiales */
+/* ------------------------------------------------------------------ COMMO (ex-GLCO) : matières premières mondiales */
 const CMD_U = { '@GC.1': '$/once', '@SI.1': '$/once', '@HG.1': '$/livre', '@PL.1': '$/once', '@PA.1': '$/once', '@CC.1': '$/tonne', '@KC.1': '¢/livre', '@CT.1': '¢/livre', '@SB.1': '¢/livre', '@W.1': '¢/boisseau', '@C.1': '¢/boisseau', '@S.1': '¢/boisseau', '@SM.1': '$/tonne courte', '@LC.1': '¢/livre',
   '@LCO.1': '$/baril', '@CL.1': '$/baril', '@NG.1': '$/MMBtu', '@RB.1': '$/gallon', '@HO.1': '$/gallon' };
 const CMD_FR = { '@GC.1': 'Or (COMEX)', '@SI.1': 'Argent (COMEX)', '@HG.1': 'Cuivre (COMEX)', '@PL.1': 'Platine (NYMEX)', '@PA.1': 'Palladium (NYMEX)', '@CC.1': 'Cacao (ICE New York)', '@KC.1': 'Café arabica (ICE)', '@CT.1': 'Coton (ICE)', '@SB.1': 'Sucre n° 11 (ICE)',
   '@W.1': 'Blé (CBOT)', '@C.1': 'Maïs (CBOT)', '@S.1': 'Soja (CBOT)', '@SM.1': 'Tourteau de soja (CBOT)', '@LC.1': 'Bovins vivants (CME)', '@LCO.1': 'Pétrole Brent (ICE)', '@CL.1': 'Pétrole WTI (NYMEX)', '@NG.1': 'Gaz naturel Henry Hub (NYMEX)', '@RB.1': 'Essence RBOB (NYMEX)', '@HO.1': 'Gazole ULSD (NYMEX)' };
-PAGES.GLCO = async (m, alive) => {
+PAGES.COMMO = async (m, alive) => {
   const [W, O] = await Promise.all([WMKT(), getJSON('oil.json').catch(() => null)]); if (!alive()) return; setTitle('Global Commodity Prices');
-  if (!W || !W.cmd) { m.innerHTML = pn('Matières premières', 'GLCO', '<div class="empty">Cotations en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
+  if (!W || !W.cmd) { m.innerHTML = pn('Matières premières', 'COMMO', '<div class="empty">Cotations en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const en = O ? [['@LCO.1', O.curve.BRENT && O.curve.BRENT[0]], ['@CL.1', O.curve.WTI && O.curve.WTI[0]], ['@NG.1', O.prod['@NG.1']], ['@RB.1', O.prod['@RB.1']], ['@HO.1', O.prod['@HO.1']]].filter(x => x[1]).map(([s_, r]) => ({ ...r, s: s_, g: 'EN' })) : [];
   const rows = en.concat(W.cmd.filter(r => r.g === 'MET' || r.g === 'AGR')); const G = [['EN', 'Énergie'], ['MET', 'Métaux'], ['AGR', 'Agriculture et élevage']];
   const tbl = `<table class="t"><thead><tr><th class="l">Contrat</th><th class="l">Échéance</th><th>Dernier</th><th>Var. nette</th><th>Var. %</th><th class="l">Unité</th><th>Fourchette 52 s.</th><th>Heure GMT</th></tr></thead><tbody>${G.map(([g, lab]) => { const L = rows.filter(r => r.g === g); return L.length ? `<tr class="grp"><td class="l" colspan="8">${lab}</td></tr>${L.map(r => `<tr${['@CC.1', '@KC.1', '@CT.1'].includes(r.s) ? ' class="hl"' : ''}><td class="l am">${esc(CMD_FR[r.s] || r.n)}</td><td class="l dm">${esc(ctr(r.n))}</td><td class="wh">${num(r.last, r.last < 10 ? 4 : 2)}</td><td class="${cls(r.chg)}">${r.chg != null ? (r.chg > 0 ? '+' : '') + num(r.chg, r.last < 10 ? 4 : 2) : '—'}</td><td>${pc(r.pct)}</td><td class="l dm">${CMD_U[r.s] || ''}</td><td>${rangeBar3(r.last, r.lo52, r.hi52)}</td><td class="dm">${qTime(r.t)}</td></tr>`).join('')}` : ''; }).join('')}</tbody></table>`;
   const L = rows.filter(r => r.pct != null).sort((a, b) => b.pct - a.pct);
-  m.innerHTML = `<div class="grid side">${pn('Matières premières mondiales : contrats à terme 1er mois', 'GLCO', tbl, { np: true, lect: `Cotations différées (ICE, CME, NYMEX, COMEX via CNBC), relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}. En surbrillance : cacao, café et coton, premières exportations agricoles de l’UEMOA (la Côte d’Ivoire est le 1er producteur mondial de cacao). Pétrole en détail : BMAP.` })}
-    ${pn('Classement du jour', 'GLCO', cvb('glB', Math.max(320, L.length * 18)))}</div>`;
+  m.innerHTML = `<div class="grid side">${pn('Matières premières mondiales : contrats à terme 1er mois', 'COMMO', tbl, { np: true, lect: `Cotations différées (ICE, CME, NYMEX, COMEX via CNBC), relevé ${new Date(W.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}. En surbrillance : cacao, café et coton, premières exportations agricoles de l’UEMOA (la Côte d’Ivoire est le 1er producteur mondial de cacao). Pétrole en détail : BMAP.` })}
+    ${pn('Classement du jour', 'COMMO', cvb('glB', Math.max(320, L.length * 18)))}</div>`;
   hbars($('glB'), L.map(r => (CMD_FR[r.s] || r.n).replace(/ \(.*\)$/, '')), L.map(r => r.pct * 100), v => (v > 0 ? '+' : '') + num(v, 2) + '%');
 };
 
@@ -5092,8 +5092,8 @@ PAGES.BRIEF = async (m, alive) => {
   const fut = [['@SP.1', 'S&P 500 (contrat)'], ['@ND.1', 'Nasdaq-100 (contrat)']].filter(x => cmd[x[0]]);
   const p4 = pn('4) Marchés mondiaux', 'WEI', `<table class="t"><tbody>${fut.map(([k, l]) => L(l, cmd[k].last, cmd[k].pct, 2, 'WEIF')).join('')}${[['.SPX', 'S&P 500'], ['.IXIC', 'Nasdaq Composite'], ['.STOXX50E', 'Euro Stoxx 50'], ['.FCHI', 'CAC 40'], ['.GDAXI', 'DAX'], ['.FTSE', 'FTSE 100'], ['.N225', 'Nikkei 225'], ['.HSI', 'Hang Seng'], ['.VIX', 'VIX']].filter(x => idx[x[0]]).map(([k, l]) => L(l, idx[k].last, idx[k].pct, 2, 'WEI')).join('')}</tbody></table>`, { np: true });
   const xo = fx['XOF='], eu = fx['EUR='];
-  const p5 = pn('5) Changes et matières premières', 'GLCO', `<table class="t"><tbody>${eu ? L('EUR / USD', eu.last, eu.pct, 4, 'WCRS') : ''}${eu ? L('USD / XOF (parité euro)', XOF_EUR / eu.last, eu.pct != null ? 1 / (1 + eu.pct) - 1 : null, 2, 'FX') : xo ? L('USD / XOF', xo.last, xo.pct, 2, 'FX') : ''}${fx['.DXY'] ? L('Indice dollar (DXY)', fx['.DXY'].last, fx['.DXY'].pct, 3, 'WCRS') : ''}
-      ${[['@CC.1', 'Cacao ($/t)'], ['@KC.1', 'Café arabica (¢/lb)'], ['@CT.1', 'Coton (¢/lb)'], ['@GC.1', 'Or ($/once)']].filter(x => cmd[x[0]]).map(([k, l]) => L(l, cmd[k].last, cmd[k].pct, 2, 'GLCO')).join('')}</tbody></table>`, { np: true });
+  const p5 = pn('5) Changes et matières premières', 'COMMO', `<table class="t"><tbody>${eu ? L('EUR / USD', eu.last, eu.pct, 4, 'WCRS') : ''}${eu ? L('USD / XOF (parité euro)', XOF_EUR / eu.last, eu.pct != null ? 1 / (1 + eu.pct) - 1 : null, 2, 'FX') : xo ? L('USD / XOF', xo.last, xo.pct, 2, 'FX') : ''}${fx['.DXY'] ? L('Indice dollar (DXY)', fx['.DXY'].last, fx['.DXY'].pct, 3, 'WCRS') : ''}
+      ${[['@CC.1', 'Cacao ($/t)'], ['@KC.1', 'Café arabica (¢/lb)'], ['@CT.1', 'Coton (¢/lb)'], ['@GC.1', 'Or ($/once)']].filter(x => cmd[x[0]]).map(([k, l]) => L(l, cmd[k].last, cmd[k].pct, 2, 'COMMO')).join('')}</tbody></table>`, { np: true });
   const bpc = r => r && r.chg != null ? `<span class="${cls(r.chg)}">${r.chg > 0 ? '+' : ''}${num(r.chg * 100, 1)} pb</span>` : '—';
   const ff = ((W && W.cmd) || []).filter(r => r.g === 'FF').sort((a, b) => String(a.exp).localeCompare(String(b.exp)));
   const p6 = pn('6) Taux', 'BTMM', `<table class="t"><tbody>${[['US2Y', 'Trésor US 2 ans'], ['US10Y', 'Trésor US 10 ans'], ['DE10Y-DE', 'Allemagne 10 ans']].filter(x => rt[x[0]]).map(([k, l]) => `<tr data-fn="WB" style="cursor:pointer"><td class="l am">${l}</td><td class="wh">${num(rt[k].last, 3)} %</td><td>${bpc(rt[k])}</td></tr>`).join('')}
@@ -5222,7 +5222,7 @@ const FN = {
   EVTS: ['Événements des sociétés', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers ; en option : suivi des sociétés BRVM et US, agenda des sociétés', 'Corporate Events'],
   WEIF: ['Contrats à terme sur indices', 'mkt', 'Marchés', 'S&P 500, Nasdaq-100, Dow Jones, Russell 2000, VIX, FTSE 100, Nikkei : indication d’ouverture et écart au comptant', 'World Equity Index Futures'],
   WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines', 'World Equity Indices'],
-  GLCO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
+  COMMO: ['Matières premières', 'mkt', 'Matières premières', 'Énergie, métaux, agriculture (cacao, café, coton) : contrats à terme du jour', 'Global Commodity Prices'],
   BTMM: ['Trésor et marché monétaire US', 'mkt', 'Taux', 'Taux directeurs (Fed, BCE, BCEAO), SOFR, bons et emprunts du Trésor, contrats à terme, pentes, inflation anticipée', 'Treasury & Money Markets'],
   RATES: ['Taux et anticipations Fed', 'mkt', 'Taux', 'Contrats Fed funds : taux implicite par mois, probabilité de baisse ou de hausse aux prochaines réunions ; en option : taux souverains mondiaux (courbe US, 10 ans, UEMOA)', 'World Interest Rate Probability'],
   MOST: ['Plus actives', 'mkt', 'Marchés', 'Plus fortes hausses et baisses, valeurs les plus échangées, largeur du jour', 'Most Active Securities'],
@@ -5262,7 +5262,7 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['BRIEF', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['BRIEF', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'COMMO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -5270,7 +5270,7 @@ const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HS: ['COMP', 'CORR', 'BETA', 'GP'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'SCREN'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'SCREN'],
   MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'NEWS', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MONITOR', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
-  BMAP: ['GLCO', 'MACRO', 'ECO', 'NEWS'], NEWS: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
+  BMAP: ['COMMO', 'MACRO', 'ECO', 'NEWS'], NEWS: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'COMMO'], COMMO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
   ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'NEWS'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'],
   BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'NEWS'], BRIEF: ['MONITOR', 'PORT', 'ECO', 'NEWS'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
@@ -5562,14 +5562,14 @@ function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hi
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
-/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN, TOP s'appelle NEWS, MON s'appelle MONITOR */
+/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN, TOP s'appelle NEWS, MON s'appelle MONITOR, GLCO s'appelle COMMO */
 /* écrans à onglets qui regroupent d'anciennes fonctions (onglet 1 = vue principale) : source unique pour les onglets, l'aide et l'autocomplétion */
 const FN_TABS = {
   EVTS: [['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['u', 'Sociétés US'], ['a', 'Agenda des sociétés']],
   FXC: [['m', 'Matrice des changes croisés'], ['w', 'Classement des devises']],
   RATES: [['f', 'Anticipations de la Fed'], ['w', 'Taux souverains mondiaux']] };
 const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
-const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], MON: ['MONITOR'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
+const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], MON: ['MONITOR'], GLCO: ['COMMO'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
 function fnAlias(f) { const a = FN_ALIAS[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }
 function go(fn, s, o = {}) {
   fn = fnAlias(fn);
