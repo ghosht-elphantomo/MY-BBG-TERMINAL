@@ -1,3 +1,1 @@
-nq_aapl.json|https://api.nasdaq.com/api/quote/AAPL/historical?assetclass=stocks&fromdate=2026-08-01&todate=2026-10-13&limit=60
-nq_qqq.json|https://api.nasdaq.com/api/quote/QQQ/historical?assetclass=etf&fromdate=2026-08-01&todate=2026-10-13&limit=60
-nq_msft.json|https://api.nasdaq.com/api/quote/MSFT/historical?assetclass=stocks&fromdate=2026-08-01&todate=2026-10-13&limit=60
+cnbc_fut.json|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=%40SP.1%7C%40ND.1%7C%40DJ.1%7C%40TF.1%7C%40RTY.1%7C%40VX.1%7C%40NK.1%7C%40NIY.1%7C%40FESX.1%7C%40FDAX.1%7C%40FFI.1%7C%40HSI.1%7C%40TU.1%7C%40FV.1%7C%40TY.1%7C%40US.1%7C%40FF.1%7C%40SR3.1%7C%40ED.1&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
