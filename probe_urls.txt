@@ -1,6 +1,3 @@
-tv_cal.json|https://economic-calendar.tradingview.com/events?from=2026-10-05T00:00:00.000Z&to=2026-10-24T00:00:00.000Z&countries=US,EU,GB,JP,CN,DE,FR,CI,SN,NG,ZA,GH
-ff_week.json|https://nfs.faireconomy.media/ff_calendar_thisweek.json
-ff_next.json|https://nfs.faireconomy.media/ff_calendar_nextweek.json
-fred_cal.html|https://fred.stlouisfed.org/releases/calendar
-bls.ics|https://www.bls.gov/schedule/news_release/bls.ics
-cnbc_rt.json|https://quote.cnbc.com/quote-html-webservice/restQuote/symbolType/symbol?symbols=US1M%7CUS6M%7CUS1Y%7CUS7Y%7CUS20Y%7CGB10Y-GB%7CIT10Y-IT%7CES10Y-ES%7CJP10Y-JP%7CCN10Y-CN%7CCA10Y-CA%7CAU10Y-AU%7CCH10Y-CH%7CZA10Y-ZA%7CBR10Y-BR%7CIN10Y-IN&requestMethod=itv&noform=1&partnerId=2&fund=1&exthrs=1&output=json
+nq_aapl.json|https://api.nasdaq.com/api/quote/AAPL/historical?assetclass=stocks&fromdate=2026-08-01&todate=2026-10-13&limit=60
+nq_qqq.json|https://api.nasdaq.com/api/quote/QQQ/historical?assetclass=etf&fromdate=2026-08-01&todate=2026-10-13&limit=60
+nq_msft.json|https://api.nasdaq.com/api/quote/MSFT/historical?assetclass=stocks&fromdate=2026-08-01&todate=2026-10-13&limit=60
