@@ -418,7 +418,7 @@ function clocks() { const z = [['ABJ', 'Africa/Abidjan'], ['PAR', 'Europe/Paris'
   clocksTick(); setInterval(clocksTick, 1000); }
 function feedState() { const L = Q.live && Q.live.qqq, f = $('feed'); if (!f) return; const age = Q.live ? Date.now() / 1000 - (Q.live.ts || 0) : 1e9;
   const live = L && L.state === 'REGULAR' && age < 40 * 60; f.classList.toggle('live', !!live);
-  $('feedTxt').textContent = Q.live ? 'MAJ ' + new Date(Q.live.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' GMT' : 'EOD ' + fd(Q.sum.asof); }
+  $('feedTxt').textContent = (live ? 'FLUX 15 MIN · ' : '') + (Q.live ? 'MAJ ' + new Date(Q.live.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' GMT' : 'EOD ' + fd(Q.sum.asof)); }
 function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms); }
 
 /* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
