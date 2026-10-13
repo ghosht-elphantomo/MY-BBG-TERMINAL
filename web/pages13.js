@@ -111,14 +111,14 @@ PAGES.BETA = async (m, alive) => {
   if (o) scatter($('btS'), { pts: P.map(([y, x]) => [x, y]), line: [o.a, o.b], color: rgba(CL.cyan, .7), lineColor: CL.amber, fx: v => num(v, 1) + ' %', fy: v => num(v, 1) + ' %', xlab: `${st.bench} (%)`, ylab: `${s.id} (%) · y = ${num(o.b, 3)} x ${o.a >= 0 ? '+' : '−'} ${num(Math.abs(o.a), 3)}` });
 };
 
-/* ------------------------------------------------------------------ TOP : « Top News » du terminal (sections numérotées, colonne de droite) */
+/* ------------------------------------------------------------------ NEWS (ex-TOP) : « Top News » du terminal (sections numérotées, colonne de droite) */
 const TOP_PAGES = [['HOME', 'À la une', null], ['AF', 'Afrique, UEMOA et BRVM', x => ['Afrique', 'UEMOA', 'BRVM'].includes(x.c)], ['MKT', 'Marchés', x => x.c === 'Marchés'], ['TECH', 'Tech US', x => x.c === 'Tech US'],
   ['CMD', 'Matières premières', x => x.c === 'Matières premières' || x.ev === 'Matières premières'], ['CB', 'Banques centrales et macro', x => x.c === 'Banques centrales' || ['Banques centrales', 'Macro'].includes(x.ev)],
   ['CO', 'Sociétés citées', x => (x.tk || []).length], ['ERN', 'Résultats et analystes', x => ['Résultats', 'Analystes'].includes(x.ev)]];
-PAGES.TOP = async (m, alive) => {
+PAGES.NEWS = async (m, alive) => {
   const N = await getJSON('news.json').catch(() => null); if (!alive()) return; setTitle('Top News');
   const st = ST.top2 = ST.top2 || { pg: 'HOME', q: '', off: {} };
-  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Top News', 'TOP', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
+  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Top News', 'NEWS', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
   const q = st.q.trim().toLowerCase(), seenT = new Set(), all = N.items.filter(x => { const k = deent(x.ti || '').toLowerCase().replace(/[^a-z0-9àâçéèêëîïôûùüÿœ]+/g, ' ').trim().slice(0, 70); if (!k || seenT.has(k)) return false; seenT.add(k); return true; })
     .filter(x => !q || (x.ti + ' ' + (x.x || '') + ' ' + (x.s || '') + ' ' + (x.tk || []).join(' ')).toLowerCase().includes(q));
   const hm = t => new Date(t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' });
@@ -283,7 +283,7 @@ PAGES.CN = async (m, alive) => {
   const col = h => h.cat === 'X' ? 'var(--dn)' : EV_COL[h.k] || (h.cat === 'A' ? '#5fd0ea' : h.cat === 'P' ? '#f9a33a' : h.cat === 'D' ? '#2fd26a' : '#8a8a8a');
   m.innerHTML = `<div class="tools ttb"><span class="tnar"><input id="cnQ" value="${esc(st.q)}" placeholder="&lt;Filtrer&gt;"><b>⌕</b></span>${CAT.map(([k, l]) => `<button class="tb alt ${st.c === k ? 'on' : ''}" data-cc="${k}">${l} (${k === 'ALL' ? H.length : H.filter(h => h.cat === k).length})</button>`).join('')}<span class="gsp"></span><span class="dm">heure GMT (Abidjan) · mise à jour toutes les 15 min</span></div>
     ${pn(`${esc(ykey(s))} · ${esc(s.short || s.n)} · ${L.length} éléments`, 'CN', `<div class="tw" style="max-height:calc(100vh - 280px - var(--nwh, 90px))">${L.slice(0, 400).map((h, i) => `<div class="tn cnr" data-n="${i + 1}" data-u="${esc(h.u || '')}" title="${esc(h.x || '')}"><span class="no">${i + 1})</span><span class="h">${h.k ? `<b class="evb" style="background:${col(h)}">${esc(h.k.split(' · ')[0])}</b>` : ''}${esc(h.t || '')}</span><span class="s">${esc(h.s || '')}</span><span class="t">${when(h)}</span></div>`).join('') || '<div class="empty">Aucun élément pour ce filtre.</div>'}</div>`,
-      { np: true, lect: `Réunit les articles qui citent la société (« ${al.map(esc).join(' », « ')} »)${brvm ? ', ses avis officiels, ses publications et ses détachements de dividendes' : ''} et les anomalies statistiques détectées (ANOM). Clic : ouvre l’article ou le document. Fil général : TOP.` })}`;
+      { np: true, lect: `Réunit les articles qui citent la société (« ${al.map(esc).join(' », « ')} »)${brvm ? ', ses avis officiels, ses publications et ses détachements de dividendes' : ''} et les anomalies statistiques détectées (ANOM). Clic : ouvre l’article ou le document. Fil général : NEWS.` })}`;
   m.querySelectorAll('[data-cc]').forEach(b => b.onclick = () => { st.c = b.dataset.cc; render(); });
   m.querySelectorAll('.cnr[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
   $('cnQ').onkeydown = e => { if (e.key === 'Enter') { st.q = e.target.value; render(); } };

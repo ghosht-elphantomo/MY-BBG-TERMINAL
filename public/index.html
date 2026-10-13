@@ -615,7 +615,7 @@ table.t.eqt td{line-height:24px}
     <i class="clm" aria-hidden="true"></i>
     <form class="cmd" id="cmdForm" autocomplete="off">
       <label for="cmd">Commande</label>
-      <input id="cmd" spellcheck="false" autocapitalize="characters" placeholder="Ticker + fonction &lt;GO&gt; · ex. SNTS DES, AAPL GP, TOP" aria-label="Ligne de commande">
+      <input id="cmd" spellcheck="false" autocapitalize="characters" placeholder="Ticker + fonction &lt;GO&gt; · ex. SNTS DES, AAPL GP, NEWS" aria-label="Ligne de commande">
       <button class="go" type="submit" title="Exécuter (Entrée)">GO</button>
       <div class="ac" id="ac" hidden></div>
     </form>
@@ -1995,10 +1995,10 @@ PAGES.HELP = async m => {
   const exOf = (f, k) => Object.entries(FN_ALIAS).filter(([, a]) => a[0] === f && (k == null ? !a[1] : a[1] === k)).map(([c]) => c);
   const grp = Object.entries(FN_TABS).map(([f, L]) => `<tr><td class="l tk" data-fn="${f}" style="cursor:pointer">${f}</td><td class="l wh">${esc(FN[f][4])}</td><td class="l">${L.map(([k, l], i) => { const ex = exOf(f, k); return `<span class="cfl" data-fn="${f}" data-t="${k}" style="cursor:pointer">${i + 1}) ${esc(l)}</span>${ex.length ? ` <span class="dm">(ex-${ex.join(', ex-')})</span>` : ''}`; }).join('<br>')}</td></tr>`).join('')
     + Object.keys(FN).filter(f => !FN_TABS[f] && exOf(f).length).map(f => `<tr><td class="l tk" data-fn="${f}" style="cursor:pointer">${f}</td><td class="l wh">${esc(FN[f][4])}</td><td class="l"><span class="dm">nouveau nom de ${exOf(f).join(', ')}</span></td></tr>`).join('');
-  m.innerHTML = `<div class="grid c2">${t('Fonctions de marché (touches du haut)', MKT_KEYS)}${t('Fonctions d’un titre (onglets sous la cotation)', ['MENU'].concat(SEC_TABS))}</div>
+  m.innerHTML = `<div class="grid c2">${t('Fonctions de marché (touches du haut)', ['NEWS'].concat(MKT_KEYS.filter(k => k !== 'NEWS')))}${t('Fonctions d’un titre (onglets sous la cotation)', ['MENU'].concat(SEC_TABS))}</div>
     ${pn('Écrans regroupés · onglets et anciens codes', 'HELP', `<table class="t"><thead><tr><th class="l">Code</th><th class="l">Écran</th><th class="l">Onglets (clic pour ouvrir)</th></tr></thead><tbody>${grp}</tbody></table>`, { np: true, lect: `Ces écrans réunissent des fonctions qui faisaient doublon : l’onglet 1 est la vue principale, les autres sont des options. Les anciens codes (${Object.keys(FN_ALIAS).join(', ')}) restent acceptés dans la ligne de commande et dans les liens : ils ouvrent directement le bon écran et le bon onglet. Dans un écran à onglets, le numéro de l’onglet + Entrée l’ouvre aussi.` })}
     ${pn('Utilisation', 'HELP', `<div class="lectb">
-      <p><b>Ligne de commande.</b> Tapez n’importe où : le texte va dans la ligne de commande. <b>SNTS</b> + Entrée ouvre le menu du titre ; <b>SNTS</b> + espace (ou Tab) affiche ses fonctions ; <b>SNTS FA</b> + Entrée ouvre directement l’analyse financière. Une fonction de marché seule (<b>FG</b>, <b>TOP</b>, <b>CORR</b>…) s’ouvre telle quelle. Dans un menu, un numéro + Entrée ouvre la fonction correspondante. <b>Échap</b> revient à MON.</p>
+      <p><b>Ligne de commande.</b> Tapez n’importe où : le texte va dans la ligne de commande. <b>SNTS</b> + Entrée ouvre le menu du titre ; <b>SNTS</b> + espace (ou Tab) affiche ses fonctions ; <b>SNTS FA</b> + Entrée ouvre directement l’analyse financière. Une fonction de marché seule (<b>FG</b>, <b>NEWS</b>, <b>CORR</b>…) s’ouvre telle quelle. Dans un menu, un numéro + Entrée ouvre la fonction correspondante. <b>Échap</b> revient à MON.</p>
       <p><b>Graphiques.</b> Trackpad : deux doigts à l’horizontale = défilement, à la verticale = zoom doux, pincer = zoom. Souris : molette = zoom, glisser = défilement. Double-clic = vue initiale.</p>
       <p><b>Données.</b> Chaque écran indique sa source et sa date. Une donnée absente est marquée « n.d. » avec la raison ; aucune valeur n’est extrapolée sans être signalée comme estimation.</p></div>`)}`;
 };
@@ -2456,14 +2456,14 @@ PAGES.CN = async (m, alive) => {
   const al = aliasesOf(s).map(a => a.toLowerCase()); const its = (N.items || []).filter(x => { const t = (x.ti + ' ' + (x.x || '')).toLowerCase(); return al.some(a => a === s.id.toLowerCase() ? new RegExp('\\b' + a + '\\b').test(t) : t.includes(a)); });
   const ev = EV.filter(x => x.t === s.id).slice(0, 80);
   m.innerHTML = `<div class="grid c2">${pn(`${s.tk} · articles qui citent la société (${its.length})`, 'CN', its.length ? its.slice(0, 120).map(newsRow).join('') : `<div class="empty">Aucun article récent ne cite ${esc(s.short || s.n)} dans les flux suivis (45 derniers jours).</div>`,
-      { lect: `Recherche de « ${al.map(esc).join(' », « ')} » dans les titres et résumés des flux d’actualités (Google Actualités, Financial Afrik, allAfrica, Les Echos, CNBC, MarketWatch…). Mise à jour toutes les 15 à 30 minutes. Fil complet : TOP.` })}
-    ${isBRVM(s) ? pn(`Publications de la société · ${docs.length}`, 'CN', docs.length ? docs.map(d => `<div class="ev" style="grid-template-columns:72px 1fr"><span class="d">${d.d ? fd(+d.d) : '—'}</span><span><span class="c">${/etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Activité' : 'Rapport'}</span><a href="${esc(d.u)}" target="_blank" rel="noopener">${esc(d.ti)}</a></span></div>`).join('') : '<div class="dm">Liste en cours de constitution (relevée toutes les 15 minutes).</div>', { lect: `États financiers et rapports d’activité publiés par la société, relevés toutes les 15 minutes${RP && RP.ts ? ' (dernier relevé ' + new Date(RP.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ')' : ''}. Une nouvelle publication apparaît aussi dans TOP.` }) : ''}
+      { lect: `Recherche de « ${al.map(esc).join(' », « ')} » dans les titres et résumés des flux d’actualités (Google Actualités, Financial Afrik, allAfrica, Les Echos, CNBC, MarketWatch…). Mise à jour toutes les 15 à 30 minutes. Fil complet : NEWS.` })}
+    ${isBRVM(s) ? pn(`Publications de la société · ${docs.length}`, 'CN', docs.length ? docs.map(d => `<div class="ev" style="grid-template-columns:72px 1fr"><span class="d">${d.d ? fd(+d.d) : '—'}</span><span><span class="c">${/etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Activité' : 'Rapport'}</span><a href="${esc(d.u)}" target="_blank" rel="noopener">${esc(d.ti)}</a></span></div>`).join('') : '<div class="dm">Liste en cours de constitution (relevée toutes les 15 minutes).</div>', { lect: `États financiers et rapports d’activité publiés par la société, relevés toutes les 15 minutes${RP && RP.ts ? ' (dernier relevé ' + new Date(RP.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ')' : ''}. Une nouvelle publication apparaît aussi dans NEWS.` }) : ''}
     ${pn(isBRVM(s) ? `Avis officiels BRVM · ${ev.length}` : 'Avis officiels', 'EVTS', isBRVM(s) ? ev.map(e => `<div class="ev" style="grid-template-columns:72px 1fr"><span class="d">${fds(e.d)}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join('') || '<div class="dm">Aucun avis.</div>' : '<div class="empty">Avis officiels disponibles pour les titres BRVM uniquement. Pour les sociétés US, les dépôts SEC alimentent FA et SURP.</div>')}</div>`;
 };
 
 </script>
 <script>
-/* ================= FQT — fonctions de marché : FG, LIQ, PER, SCREN, ALRT, TOP, ECWB, RRG, UEMOA, US ================= */
+/* ================= FQT — fonctions de marché : FG, LIQ, PER, SCREN, ALRT, NEWS, ECWB, RRG, UEMOA, US ================= */
 
 const FG_BANDS = [[0, 25, 'Peur extrême', '#b3261e'], [25, 45, 'Peur', '#ff7043'], [45, 55, 'Neutre', '#9e9e9e'], [55, 75, 'Avidité', '#7cb342'], [75, 100, 'Avidité extrême', '#2e7d32']];
 const fgLab = v => v == null ? '—' : (FG_BANDS.find(b => v >= b[0] && v <= b[1]) || FG_BANDS[2])[2];
@@ -2622,17 +2622,17 @@ PAGES.ALRT = async (m, alive) => {
   $('alF').onsubmit = e => { e.preventDefault(); const o = {}; $('alF').querySelectorAll('[data-k]').forEach(i => { const v = parseFloat(i.value); if (isFinite(v)) o[i.dataset.k] = ['fcfy', 'dy', 'near'].includes(i.dataset.k) ? v / 100 : v; }); try { localStorage.setItem('fqt_alrt', JSON.stringify(o)); } catch (er) { } render(); };
 };
 
-/* ------------------------------------------------------------------ TOP (actualités) */
-PAGES.TOP = async (m, alive) => {
+/* ------------------------------------------------------------------ NEWS (actualités, ex-TOP) */
+PAGES.NEWS = async (m, alive) => {
   const N = await getJSON('news.json').catch(() => null); if (!alive()) return; const st = ST.top = ST.top || { c: 'ALL', q: '' };
-  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'TOP', '<div class="empty">Fil d’actualités en cours de constitution (premier relevé au prochain passage de la collecte).</div>'); return; }
+  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'NEWS', '<div class="empty">Fil d’actualités en cours de constitution (premier relevé au prochain passage de la collecte).</div>'); return; }
   const cats = [...new Set(N.items.map(x => x.c))]; const brvmAl = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity').map(s => [s.id, aliasesOf(s).filter(a => a !== s.id).map(a => a.toLowerCase())]);
   const tag = x => { const t = (x.ti + ' ' + (x.x || '')).toLowerCase(); return brvmAl.filter(([, al]) => al.some(a => a.length > 3 && t.includes(a))).map(([id]) => id).slice(0, 4); };
   let L = N.items.filter(x => st.c === 'ALL' || x.c === st.c); if (st.q) { const q = st.q.toLowerCase(); L = L.filter(x => (x.ti + ' ' + (x.x || '') + ' ' + (x.s || '')).toLowerCase().includes(q)); }
   const age = Math.round((Date.now() / 1000 - N.ts) / 60);
   m.innerHTML = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Rubrique</span><button class="tb ${st.c === 'ALL' ? 'on' : ''}" data-c="ALL">Tout (${N.items.length})</button>${cats.map(c => `<button class="tb ${st.c === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)} (${N.items.filter(x => x.c === c).length})</button>`).join('')}
     <form id="tpF" style="display:inline-flex;gap:6px;margin-left:10px"><input id="tpQ" value="${esc(st.q)}" placeholder="mot-clé : cacao, Sonatel, Fed…" style="width:220px"><button class="tb">Filtrer</button></form><span class="tlab">relevé il y a ${age < 120 ? age + ' min' : Math.round(age / 60) + ' h'}</span></div>
-    ${pn(`Fil d’actualités · ${L.length} articles`, 'TOP', L.slice(0, 250).map(x => { const tg = tag(x); return newsRow(x).replace('</span></div>', `</span>${tg.length ? `<span class="tags">${tg.map(t => `<b data-sec="${t}" data-to="CN">${t}</b>`).join('')}</span>` : ''}</div>`); }).join(''),
+    ${pn(`Fil d’actualités · ${L.length} articles`, 'NEWS', L.slice(0, 250).map(x => { const tg = tag(x); return newsRow(x).replace('</span></div>', `</span>${tg.length ? `<span class="tags">${tg.map(t => `<b data-sec="${t}" data-to="CN">${t}</b>`).join('')}</span>` : ''}</div>`); }).join(''),
       { lect: `Flux publics : ${Object.values(N.feeds || {}).filter((v, i, a) => a.indexOf(v) === i && !/brvm|sika/i.test(v)).join(', ')}. Les titres BRVM cités sont repérés automatiquement (clic = actualités de la société). Les articles restent la propriété de leurs éditeurs ; le lien ouvre la source.` })}`;
   m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { st.c = b.dataset.c; render(); }); $('tpF').onsubmit = e => { e.preventDefault(); st.q = $('tpQ').value.trim(); render(); };
 };
@@ -3367,10 +3367,10 @@ function newsRow2(x, o = {}) {
   return `<div class="nw${o.short ? ' s' : ''}"><span class="d">${d.toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span><span class="c">${esc(srcCode(x))}</span><span>${evBadge(x.ev)}<a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(deent(x.ti))}</a> ${hideSrc(x) ? '' : `<span class="src">${esc(deent(x.s || ''))}</span>`}${tk.length ? `<span class="tags">${tk.map(t => `<b data-sec="${t}" data-to="CN" title="${esc(Q.by[t].n)}">${t}</b>`).join('')}</span>` : ''}${x.x && !o.short ? `<small>${esc(deent(x.x))}</small>` : ''}</span></div>`;
 }
 
-/* ------------------------------------------------------------------ TOP : fil relié aux titres, typé par événement */
-PAGES.TOP = async (m, alive) => {
+/* ------------------------------------------------------------------ NEWS (ex-TOP) : fil relié aux titres, typé par événement */
+PAGES.NEWS = async (m, alive) => {
   const N = await getJSON('news.json').catch(() => null); if (!alive()) return; const st = ST.top = ST.top || { c: 'ALL', ev: 'ALL', mk: 'ALL', q: '' }; setTitle('Top News');
-  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'TOP', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
+  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'NEWS', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
   const its = N.items, cats = [...new Set(its.map(x => x.c).filter(Boolean))], evs = Object.keys(EV_COL).filter(e => its.some(x => x.ev === e));
   const mkOf = x => (x.tk || []).map(t => Q.by[t] && Q.by[t].mkt).filter(Boolean);
   let L = its.filter(x => (st.c === 'ALL' || x.c === st.c) && (st.ev === 'ALL' || x.ev === st.ev) && (st.mk === 'ALL' || (st.mk === 'LINK' ? (x.tk || []).length : mkOf(x).includes(st.mk))));
@@ -3380,7 +3380,7 @@ PAGES.TOP = async (m, alive) => {
   m.innerHTML = `<div class="tools"><span class="tlab">Rubrique</span><select class="ofld" id="tpC"><option value="ALL">Toutes (${its.length})</option>${cats.map(c => `<option value="${esc(c)}" ${st.c === c ? 'selected' : ''}>${esc(c)} (${its.filter(x => x.c === c).length})</option>`).join('')}</select>
       <span class="tlab">Événement</span><select class="ofld" id="tpE"><option value="ALL">Tous</option>${evs.map(e => `<option value="${esc(e)}" ${st.ev === e ? 'selected' : ''}>${esc(e)} (${its.filter(x => x.ev === e).length})</option>`).join('')}</select>
       <form id="tpF" style="display:inline-flex;gap:4px;margin-left:6px"><input id="tpQ" value="${esc(st.q)}" placeholder="mot-clé, ticker…" style="width:200px"><button class="tb">Filtrer</button></form><span class="tlab">relevé il y a ${age < 120 ? age + ' min' : Math.round(age / 60) + ' h'} · ${nLinked} articles reliés à un titre</span></div>
-    ${pn(`Fil d’actualités · ${L.length} articles`, 'TOP', L.slice(0, 300).map(x => newsRow2(x)).join('') || '<div class="empty">Aucun article pour ces filtres.</div>',
+    ${pn(`Fil d’actualités · ${L.length} articles`, 'NEWS', L.slice(0, 300).map(x => newsRow2(x)).join('') || '<div class="empty">Aucun article pour ces filtres.</div>',
       { lect: `Flux publics : ${Object.values(N.feeds || {}).filter((v, i, a) => a.indexOf(v) === i && !/brvm|sika/i.test(v)).join(', ')}. Chaque article est relié automatiquement aux sociétés citées (nom usuel, nom officiel ou code ; clic = actualités et historique de la société) et classé par type d’événement d’après son titre. Ce classement automatique peut se tromper : la source fait foi. Les articles restent la propriété de leurs éditeurs.` })}`;
   $('tpC').onchange = e => { st.c = e.target.value; render(); }; $('tpE').onchange = e => { st.ev = e.target.value; render(); }; $('tpF').onsubmit = e => { e.preventDefault(); st.q = $('tpQ').value.trim(); render(); };
 };
@@ -3402,7 +3402,7 @@ PAGES.CN = async (m, alive) => {
   const types = [...new Set(H.map(h => h.k.split(' · ')[0]))]; const st = ST.cnh = ST.cnh || { k: 'ALL' }; if (st.k !== 'ALL' && !types.includes(st.k)) st.k = 'ALL';
   const HL = H.filter(h => st.k === 'ALL' || h.k.split(' · ')[0] === st.k);
   m.innerHTML = `<div class="grid c2">${pn(`${esc(s.tk)} · articles qui citent la société (${its.length})`, 'CN', its.length ? its.slice(0, 150).map(x => newsRow2(x)).join('') : `<div class="empty">Aucun article récent ne cite ${esc(s.short || s.n)} dans les flux suivis (45 derniers jours).</div>`,
-      { lect: `Articles reliés automatiquement à la société (« ${al.map(esc).join(' », « ')} ») dans les flux d’actualités, mis à jour toutes les 15 minutes. Fil complet : TOP.` })}
+      { lect: `Articles reliés automatiquement à la société (« ${al.map(esc).join(' », « ')} ») dans les flux d’actualités, mis à jour toutes les 15 minutes. Fil complet : NEWS.` })}
     ${pn(`Historique des événements · ${H.length}`, 'CN', `<div class="tw" style="max-height:72vh"><table class="t" style="table-layout:fixed;width:100%"><colgroup><col style="width:82px"><col style="width:150px"><col>${brvm ? '' : '<col style="width:62px">'}</colgroup><thead><tr><th class="l">Date</th><th class="l">Type</th><th class="l">Événement</th>${brvm ? '' : '<th class="l">Source</th>'}</tr></thead><tbody>${HL.slice(0, 400).map(h => `<tr><td class="l" style="vertical-align:top">${fds(h.d)}</td><td class="l" style="white-space:normal;vertical-align:top;color:${h.an ? 'var(--dn)' : EV_COL[h.k] || 'var(--amber)'}">${esc(h.k)}</td><td class="l" style="white-space:normal;vertical-align:top">${h.u ? `<a href="${esc(h.u)}" target="_blank" rel="noopener" style="color:var(--white)">${esc(h.t || '')}</a>` : esc(h.t || '')}</td>${brvm ? '' : `<td class="l dm" style="vertical-align:top;overflow:hidden;text-overflow:ellipsis">${esc(h.s || '')}</td>`}</tr>`).join('') || '<tr><td class="l dm" colspan="4">Aucun événement.</td></tr>'}</tbody></table></div>`,
       { np: true, tools: `<span class="tlab">Type</span><select class="ofld" id="cnK"><option value="ALL">Tous</option>${types.map(t => `<option ${st.k === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`, lect: `Réunit les articles (typés automatiquement), ${brvm ? 'les avis officiels, les publications de la société, les détachements de dividendes et ' : ''}les anomalies statistiques détectées (ANOM).` })}</div>`;
   if ($('cnK')) $('cnK').onchange = e => { st.k = e.target.value; render(); };
@@ -3640,7 +3640,7 @@ PAGES.BMAP = async (m, alive) => {
       <div class="grid" style="align-content:start">${pn('Points clés', 'BMAP', `<div class="lectb">${facts.map(f => `<p>${f}</p>`).join('') || '<p class="dm">En attente des données.</p>'}</div>`)}
       ${mktPanel()}
       ${CP.y2026 ? pn(esc(CP.y2026.title), 'BMAP', `<table class="t"><tbody>${CP.y2026.pts.map(x => `<tr><td class="l am" style="vertical-align:top;white-space:nowrap">${esc(x.d.length === 7 ? mLab(x.d) : x.d)}</td><td class="l" style="white-space:normal">${esc(x.t)} <a href="${esc(x.u)}" target="_blank" rel="noopener" class="dm">${esc(x.src)}</a></td></tr>`).join('')}</tbody></table>`, { np: true, lect: esc(CP.y2026.note || '') }) : ''}
-      ${pn(`Actualités du pétrole (${onews.length})`, 'TOP', `<div style="max-height:360px;overflow:auto">${onews.map(x => newsRow2(x, { short: true })).join('') || '<div class="dm">Aucune dépêche récente.</div>'}</div>`)}</div></div>`;
+      ${pn(`Actualités du pétrole (${onews.length})`, 'NEWS', `<div style="max-height:360px;overflow:auto">${onews.map(x => newsRow2(x, { short: true })).join('') || '<div class="dm">Aucune dépêche récente.</div>'}</div>`)}</div></div>`;
     m.querySelectorAll('[data-yi]').forEach(b => b.onclick = () => { st.y = +b.dataset.yi; render(); }); m.querySelectorAll('[data-ly]').forEach(b => b.onclick = () => { st.lay[b.dataset.ly] = st.lay[b.dataset.ly] ? 0 : 1; render(); });
     bmapDraw($('bmC'), G, CP, yi, st.lay, EI);
     return;
@@ -4315,14 +4315,14 @@ PAGES.BETA = async (m, alive) => {
   if (o) scatter($('btS'), { pts: P.map(([y, x]) => [x, y]), line: [o.a, o.b], color: rgba(CL.cyan, .7), lineColor: CL.amber, fx: v => num(v, 1) + ' %', fy: v => num(v, 1) + ' %', xlab: `${st.bench} (%)`, ylab: `${s.id} (%) · y = ${num(o.b, 3)} x ${o.a >= 0 ? '+' : '−'} ${num(Math.abs(o.a), 3)}` });
 };
 
-/* ------------------------------------------------------------------ TOP : « Top News » du terminal (sections numérotées, colonne de droite) */
+/* ------------------------------------------------------------------ NEWS (ex-TOP) : « Top News » du terminal (sections numérotées, colonne de droite) */
 const TOP_PAGES = [['HOME', 'À la une', null], ['AF', 'Afrique, UEMOA et BRVM', x => ['Afrique', 'UEMOA', 'BRVM'].includes(x.c)], ['MKT', 'Marchés', x => x.c === 'Marchés'], ['TECH', 'Tech US', x => x.c === 'Tech US'],
   ['CMD', 'Matières premières', x => x.c === 'Matières premières' || x.ev === 'Matières premières'], ['CB', 'Banques centrales et macro', x => x.c === 'Banques centrales' || ['Banques centrales', 'Macro'].includes(x.ev)],
   ['CO', 'Sociétés citées', x => (x.tk || []).length], ['ERN', 'Résultats et analystes', x => ['Résultats', 'Analystes'].includes(x.ev)]];
-PAGES.TOP = async (m, alive) => {
+PAGES.NEWS = async (m, alive) => {
   const N = await getJSON('news.json').catch(() => null); if (!alive()) return; setTitle('Top News');
   const st = ST.top2 = ST.top2 || { pg: 'HOME', q: '', off: {} };
-  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Top News', 'TOP', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
+  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Top News', 'NEWS', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
   const q = st.q.trim().toLowerCase(), seenT = new Set(), all = N.items.filter(x => { const k = deent(x.ti || '').toLowerCase().replace(/[^a-z0-9àâçéèêëîïôûùüÿœ]+/g, ' ').trim().slice(0, 70); if (!k || seenT.has(k)) return false; seenT.add(k); return true; })
     .filter(x => !q || (x.ti + ' ' + (x.x || '') + ' ' + (x.s || '') + ' ' + (x.tk || []).join(' ')).toLowerCase().includes(q));
   const hm = t => new Date(t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' });
@@ -4487,7 +4487,7 @@ PAGES.CN = async (m, alive) => {
   const col = h => h.cat === 'X' ? 'var(--dn)' : EV_COL[h.k] || (h.cat === 'A' ? '#5fd0ea' : h.cat === 'P' ? '#f9a33a' : h.cat === 'D' ? '#2fd26a' : '#8a8a8a');
   m.innerHTML = `<div class="tools ttb"><span class="tnar"><input id="cnQ" value="${esc(st.q)}" placeholder="&lt;Filtrer&gt;"><b>⌕</b></span>${CAT.map(([k, l]) => `<button class="tb alt ${st.c === k ? 'on' : ''}" data-cc="${k}">${l} (${k === 'ALL' ? H.length : H.filter(h => h.cat === k).length})</button>`).join('')}<span class="gsp"></span><span class="dm">heure GMT (Abidjan) · mise à jour toutes les 15 min</span></div>
     ${pn(`${esc(ykey(s))} · ${esc(s.short || s.n)} · ${L.length} éléments`, 'CN', `<div class="tw" style="max-height:calc(100vh - 280px - var(--nwh, 90px))">${L.slice(0, 400).map((h, i) => `<div class="tn cnr" data-n="${i + 1}" data-u="${esc(h.u || '')}" title="${esc(h.x || '')}"><span class="no">${i + 1})</span><span class="h">${h.k ? `<b class="evb" style="background:${col(h)}">${esc(h.k.split(' · ')[0])}</b>` : ''}${esc(h.t || '')}</span><span class="s">${esc(h.s || '')}</span><span class="t">${when(h)}</span></div>`).join('') || '<div class="empty">Aucun élément pour ce filtre.</div>'}</div>`,
-      { np: true, lect: `Réunit les articles qui citent la société (« ${al.map(esc).join(' », « ')} »)${brvm ? ', ses avis officiels, ses publications et ses détachements de dividendes' : ''} et les anomalies statistiques détectées (ANOM). Clic : ouvre l’article ou le document. Fil général : TOP.` })}`;
+      { np: true, lect: `Réunit les articles qui citent la société (« ${al.map(esc).join(' », « ')} »)${brvm ? ', ses avis officiels, ses publications et ses détachements de dividendes' : ''} et les anomalies statistiques détectées (ANOM). Clic : ouvre l’article ou le document. Fil général : NEWS.` })}`;
   m.querySelectorAll('[data-cc]').forEach(b => b.onclick = () => { st.c = b.dataset.cc; render(); });
   m.querySelectorAll('.cnr[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
   $('cnQ').onkeydown = e => { if (e.key === 'Enter') { st.q = e.target.value; render(); } };
@@ -5105,7 +5105,7 @@ PAGES.BRIEF = async (m, alive) => {
       ${er.length ? `<tr class="grp"><td class="l" colspan="3">Résultats US des 7 prochains jours</td></tr>${er.slice(0, 8).map(r => `<tr data-sec="${r.id}" data-to="EE" style="cursor:pointer"><td class="l dm">${fds(r.d).slice(0, 5)}</td><td class="l"><b class="wh">${r.id}</b> <span class="am">${esc(Q.by[r.id].short || Q.by[r.id].n)}</span></td><td class="dm">${r.w}</td></tr>`).join('')}` : ''}
       ${dv.length ? `<tr class="grp"><td class="l" colspan="3">Détachements de dividendes BRVM (7 jours)</td></tr>${dv.map(x => `<tr data-sec="${x.t}" data-to="DVD" style="cursor:pointer"><td class="l dm">${fds(x.det).slice(0, 5)}</td><td class="l"><b class="wh">${x.t}</b> ${num(x.dps, 2)} XOF net</td><td>${Q.by[x.t] ? num(x.dps / Q.by[x.t].last * 100, 2) + ' %' : ''}</td></tr>`).join('')}` : ''}</tbody></table>`, { np: true });
   const it = (N && N.items ? N.items : []).slice().sort((a, b) => b.t - a.t).filter((x, i, a) => a.findIndex(y => y.ti === x.ti) === i).slice(0, 10);
-  const p8 = pn('8) À la une', 'TOP', `<div>${it.map((x, i) => `<div class="tn" data-u="${esc(x.u || '')}"><span class="no">${i + 1})</span><span class="h">${esc(x.ti)}</span><span class="s">${esc(x.s || '')}</span><span class="t">${new Date(x.t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' })}</span></div>`).join('')}</div>`, { np: true });
+  const p8 = pn('8) À la une', 'NEWS', `<div>${it.map((x, i) => `<div class="tn" data-u="${esc(x.u || '')}"><span class="no">${i + 1})</span><span class="h">${esc(x.ti)}</span><span class="s">${esc(x.s || '')}</span><span class="t">${new Date(x.t * 1000).toLocaleTimeString('fr-FR', { timeZone: 'Africa/Abidjan', hour: '2-digit', minute: '2-digit' })}</span></div>`).join('')}</div>`, { np: true });
   m.innerHTML = `<div class="grid c3"><div class="grid">${p1}${p2}${p3}</div><div class="grid">${p4}${p5}${p6}</div><div class="grid">${p7}${p8}</div></div>`;
   m.querySelectorAll('[data-fn]').forEach(r => { if (r.tagName === 'TR') r.onclick = () => go(r.dataset.fn); });
   m.querySelectorAll('.tn[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
@@ -5198,7 +5198,7 @@ const FN = {
   BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs', 'BRVM Overview'],
   IMAP: ['Carte de chaleur', 'mkt', 'Marchés', 'BRVM, États-Unis, Europe, Royaume-Uni, Asie : surface = capitalisation, couleur = variation', 'Intraday Market Map'],
   US: ['Marché US', 'mkt', 'Marchés', 'Nasdaq-100, ETF secteurs, facteurs, pays, matières, crypto ; pré-marché et après-bourse', 'US Market Overview'],
-  TOP: ['Actualités', 'mkt', 'Actualités', 'Fil d’actualités relié aux titres : BRVM, UEMOA, marchés mondiaux, banques centrales', 'Top News'],
+  NEWS: ['Actualités', 'mkt', 'Actualités', 'Fil d’actualités relié aux titres : BRVM, UEMOA, marchés mondiaux, banques centrales', 'Top News'],
   FG: ['Fear & Greed', 'mkt', 'Sentiment', 'Indice peur/avidité US (CNN + réplique) et BRVM (calculé)', 'Fear & Greed Index'],
   ECO: ['Calendrier éco', 'mkt', 'Macro', 'Calendrier économique mondial : publications, prévision du consensus, réel, précédent, importance', 'Economic Calendars'],
   ECST: ['Statistiques éco', 'mkt', 'Macro', 'Arbre des statistiques : États-Unis (FRED), UEMOA (BCEAO), 8 États et Afrique (Banque mondiale)', 'World Economic Statistics'],
@@ -5262,18 +5262,18 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['BRIEF', 'MON', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['BRIEF', 'MON', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 /* Fonctions associées (menu « Fonctions associées » de la barre d'outils) */
 const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HS: ['COMP', 'CORR', 'BETA', 'GP'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'SCREN'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'SCREN'],
-  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'TOP', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
-  BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
+  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'NEWS', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
+  BMAP: ['GLCO', 'MACRO', 'ECO', 'NEWS'], NEWS: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
-  ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'],
-  BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'TOP'], BRIEF: ['MON', 'PORT', 'ECO', 'TOP'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
+  ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'NEWS'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'],
+  BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'NEWS'], BRIEF: ['MON', 'PORT', 'ECO', 'NEWS'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
@@ -5353,7 +5353,7 @@ function parseCmd(txt) {
 function numCmd(t) { const el = document.querySelector(`[data-n="${t}"]`); if (el) { el.click(); return true; } return false; }
 function runCmd(txt) {
   const t = txt.trim(); if (/^\d{1,3}$/.test(t)) { if (numCmd(t)) return; if (ST.fn === 'MENU') { const it = menuItems(sec(ST.sec))[+t - 1]; if (it) { go(it, ST.sec); return; } } toast('Aucun élément numéroté ' + t + ' sur cet écran.'); return; }
-  const { fn, s } = parseCmd(txt); if (!fn && !s) { toast('Commande inconnue. Exemples : SNTS (menu du titre) · SNTS FA · AAPL GP · FG · TOP · IMAP'); return; }
+  const { fn, s } = parseCmd(txt); if (!fn && !s) { toast('Commande inconnue. Exemples : SNTS (menu du titre) · SNTS FA · AAPL GP · FG · NEWS · IMAP'); return; }
   if (fn && FN[fn][1] === 'mkt') { go(fn, s); return; }
   go(fn || 'MENU', s || ST.sec);
 }
@@ -5552,7 +5552,7 @@ async function renderNews() {
   p.className = 'nwp' + (ST.newsMin ? ' min' : '');
   p.innerHTML = `<div class="nh"><span class="nl">Actualités · heure GMT (Abidjan)</span><button data-n="300" id="nwTop">300) Toutes les actualités</button><button data-n="301" id="nwMin">301) ${ST.newsMin ? 'Agrandir' : 'Réduire'} le panneau</button></div>${rows || '<div class="nr"><span></span><span></span><span></span><span class="h">Aucune actualité chargée.</span></div>'}`;
   document.documentElement.style.setProperty('--nwh', (PREF.nonews ? 0 : p.offsetHeight) + 'px');
-  $('nwTop').onclick = () => go('TOP'); $('nwMin').onclick = () => { ST.newsMin = !ST.newsMin; try { localStorage.setItem('fqt.newsMin', ST.newsMin ? '1' : ''); } catch (e) { } renderNews().then(() => window.dispatchEvent(new Event('resize'))); };
+  $('nwTop').onclick = () => go('NEWS'); $('nwMin').onclick = () => { ST.newsMin = !ST.newsMin; try { localStorage.setItem('fqt.newsMin', ST.newsMin ? '1' : ''); } catch (e) { } renderNews().then(() => window.dispatchEvent(new Event('resize'))); };
   p.querySelectorAll('[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
 }
 const hideSrc = x => /brvm|sika/i.test((x.s || '') + ' ' + (x.f || '') + ' ' + (x.u || ''));
@@ -5562,14 +5562,14 @@ function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hi
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
-/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN */
+/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN, TOP s'appelle NEWS */
 /* écrans à onglets qui regroupent d'anciennes fonctions (onglet 1 = vue principale) : source unique pour les onglets, l'aide et l'autocomplétion */
 const FN_TABS = {
   EVTS: [['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['u', 'Sociétés US'], ['a', 'Agenda des sociétés']],
   FXC: [['m', 'Matrice des changes croisés'], ['w', 'Classement des devises']],
   RATES: [['f', 'Anticipations de la Fed'], ['w', 'Taux souverains mondiaux']] };
 const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
-const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
+const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
 function fnAlias(f) { const a = FN_ALIAS[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }
 function go(fn, s, o = {}) {
   fn = fnAlias(fn);
@@ -5592,7 +5592,7 @@ async function render() {
 /* rangée de touches comme la barre du terminal : GO, F1-F4 (gris), touches vertes du clavier Bloomberg, puis les fonctions de marché */
 const BBG_KEYS = [['F1', 'Aide (HELP)', () => go('HELP')], ['F2', 'Govt : obligations (SRCH)', () => go('SRCH')], ['F3', 'Equity : marché BRVM', () => go('BRVM')], ['F4', 'Index : indices mondiaux (WEI)', () => go('WEI')]];
 const BBG_GREEN = [['PRINT', 'Imprimer l’écran', () => window.print()], ['HELP', 'Aide', () => go('HELP')], ['SEARCH', 'Rechercher un titre ou une fonction', () => $('cmd').focus()],
-  ['QUOTE', 'Description du titre actif (DES)', () => go('DES', ST.sec)], ['MONITOR', 'Moniteur de marchés (MON)', () => go('MON')], ['NEWS', 'Actualités (TOP)', () => go('TOP')], ['MENU', 'Menu des fonctions du titre', () => go('MENU', ST.sec)],
+  ['QUOTE', 'Description du titre actif (DES)', () => go('DES', ST.sec)], ['MONITOR', 'Moniteur de marchés (MON)', () => go('MON')], ['NEWS', 'Actualités (Top News)', () => go('NEWS')], ['MENU', 'Menu des fonctions du titre', () => go('MENU', ST.sec)],
   ['PG BACK', 'Écran précédent', () => histGo(-1)], ['PG FWD', 'Écran suivant', () => histGo(1)]];
 function renderKeys() { const f = $('fkeys');
   f.innerHTML = `<button class="fk kgo" data-k="GO" title="Exécuter la commande">GO</button>${BBG_KEYS.map(([k, t]) => `<button class="fk kf" data-k="${k}" title="${esc(t)}">${k}</button>`).join('')}${BBG_GREEN.map(([k, t]) => `<button class="fk" data-k="${k}" title="${esc(t)}"><b>${k}</b></button>`).join('')}<button class="fk kw" data-k="CFG" title="Réglages">🔧</button><i class="fsep"></i>`
@@ -5622,7 +5622,7 @@ async function initFeed() {
   try { db.doc('feed/live').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.live || (d.ts || 0) >= (Q.live.ts || 0)) { Q.live = d; apply(); } } }, () => { }); } catch (e) { }
   try { db.doc('feed/quotes').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.quotes || (d.ts || 0) >= (Q.quotes.ts || 0)) { Q.quotes = d; apply(); } } }, () => { }); } catch (e) { }
   try { db.doc('feed/news').onSnapshot(async sn => { if (!sn.exists) return; const d = sn.data(); const cur = await (Q.json['news.json'] || Promise.resolve(null)).catch(() => null);
-    if (!cur || (d.ts || 0) > (cur.ts || 0)) { Q.json['news.json'] = Promise.resolve(d); renderNews(); if (['TOP', 'CN'].includes(ST.fn)) render(); } }, () => { }); } catch (e) { }
+    if (!cur || (d.ts || 0) > (cur.ts || 0)) { Q.json['news.json'] = Promise.resolve(d); renderNews(); if (['NEWS', 'CN'].includes(ST.fn)) render(); } }, () => { }); } catch (e) { }
 }
 async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.base + 'live.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null), fetch(Q.base + 'quotes.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)]);
   /* nouveau relevé publié (toutes les 15 min) : toutes les données en cache sont relues, la fiche de chaque titre comprise */
@@ -5630,7 +5630,7 @@ async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.ba
   if (fresh) { Q.gen = l.ts; Q.json = {}; try { const S = await fetch(Q.base + 'summary.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null); if (S && S.secs) { Q.sum = S; Q.json['summary.json'] = Promise.resolve(S); for (const s of S.secs) Q.by[s.id] = s; } } catch (e) { } }
   if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews();
   const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.id !== 'cmd';
-  if (!typing && (fresh || ['MON', 'BRVM', 'IMAP', 'US', 'TOP', 'BRIEF', 'WEIF'].includes(ST.fn)) && !(ST.fn === 'TOP' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
+  if (!typing && (fresh || ['MON', 'BRVM', 'IMAP', 'US', 'NEWS', 'BRIEF', 'WEIF'].includes(ST.fn)) && !(ST.fn === 'NEWS' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
 let SYNC_RUN = null;
 function bindSync() { const b = $('syncBtn'); if (!b || !SYNC_RUN) return; b.hidden = false; b.onclick = () => SYNC_RUN(b); }
 async function initSync() {

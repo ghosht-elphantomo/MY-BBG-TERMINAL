@@ -13,7 +13,7 @@ const FN = {
   BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs', 'BRVM Overview'],
   IMAP: ['Carte de chaleur', 'mkt', 'Marchés', 'BRVM, États-Unis, Europe, Royaume-Uni, Asie : surface = capitalisation, couleur = variation', 'Intraday Market Map'],
   US: ['Marché US', 'mkt', 'Marchés', 'Nasdaq-100, ETF secteurs, facteurs, pays, matières, crypto ; pré-marché et après-bourse', 'US Market Overview'],
-  TOP: ['Actualités', 'mkt', 'Actualités', 'Fil d’actualités relié aux titres : BRVM, UEMOA, marchés mondiaux, banques centrales', 'Top News'],
+  NEWS: ['Actualités', 'mkt', 'Actualités', 'Fil d’actualités relié aux titres : BRVM, UEMOA, marchés mondiaux, banques centrales', 'Top News'],
   FG: ['Fear & Greed', 'mkt', 'Sentiment', 'Indice peur/avidité US (CNN + réplique) et BRVM (calculé)', 'Fear & Greed Index'],
   ECO: ['Calendrier éco', 'mkt', 'Macro', 'Calendrier économique mondial : publications, prévision du consensus, réel, précédent, importance', 'Economic Calendars'],
   ECST: ['Statistiques éco', 'mkt', 'Macro', 'Arbre des statistiques : États-Unis (FRED), UEMOA (BCEAO), 8 États et Afrique (Banque mondiale)', 'World Economic Statistics'],
@@ -77,18 +77,18 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['BRIEF', 'MON', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'TOP', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
+const MKT_KEYS = ['BRIEF', 'MON', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'BTMM', 'RATES', 'GLCO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 /* Fonctions associées (menu « Fonctions associées » de la barre d'outils) */
 const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HS: ['COMP', 'CORR', 'BETA', 'GP'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'SCREN'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'SCREN'],
-  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'TOP', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
-  BMAP: ['GLCO', 'MACRO', 'ECO', 'TOP'], TOP: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
+  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'NEWS', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MON', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
+  BMAP: ['GLCO', 'MACRO', 'ECO', 'NEWS'], NEWS: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'GLCO'], GLCO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
   HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
-  ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'TOP'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'],
-  BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'TOP'], BRIEF: ['MON', 'PORT', 'ECO', 'TOP'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
+  ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'NEWS'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'],
+  BTMM: ['RATES', 'GC', 'ECWB', 'ECO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'NEWS'], BRIEF: ['MON', 'PORT', 'ECO', 'NEWS'], RATES: ['BTMM', 'GC', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
 /* Pourquoi une fonction n'est pas disponible pour un titre (null = disponible). */
@@ -168,7 +168,7 @@ function parseCmd(txt) {
 function numCmd(t) { const el = document.querySelector(`[data-n="${t}"]`); if (el) { el.click(); return true; } return false; }
 function runCmd(txt) {
   const t = txt.trim(); if (/^\d{1,3}$/.test(t)) { if (numCmd(t)) return; if (ST.fn === 'MENU') { const it = menuItems(sec(ST.sec))[+t - 1]; if (it) { go(it, ST.sec); return; } } toast('Aucun élément numéroté ' + t + ' sur cet écran.'); return; }
-  const { fn, s } = parseCmd(txt); if (!fn && !s) { toast('Commande inconnue. Exemples : SNTS (menu du titre) · SNTS FA · AAPL GP · FG · TOP · IMAP'); return; }
+  const { fn, s } = parseCmd(txt); if (!fn && !s) { toast('Commande inconnue. Exemples : SNTS (menu du titre) · SNTS FA · AAPL GP · FG · NEWS · IMAP'); return; }
   if (fn && FN[fn][1] === 'mkt') { go(fn, s); return; }
   go(fn || 'MENU', s || ST.sec);
 }
@@ -367,7 +367,7 @@ async function renderNews() {
   p.className = 'nwp' + (ST.newsMin ? ' min' : '');
   p.innerHTML = `<div class="nh"><span class="nl">Actualités · heure GMT (Abidjan)</span><button data-n="300" id="nwTop">300) Toutes les actualités</button><button data-n="301" id="nwMin">301) ${ST.newsMin ? 'Agrandir' : 'Réduire'} le panneau</button></div>${rows || '<div class="nr"><span></span><span></span><span></span><span class="h">Aucune actualité chargée.</span></div>'}`;
   document.documentElement.style.setProperty('--nwh', (PREF.nonews ? 0 : p.offsetHeight) + 'px');
-  $('nwTop').onclick = () => go('TOP'); $('nwMin').onclick = () => { ST.newsMin = !ST.newsMin; try { localStorage.setItem('fqt.newsMin', ST.newsMin ? '1' : ''); } catch (e) { } renderNews().then(() => window.dispatchEvent(new Event('resize'))); };
+  $('nwTop').onclick = () => go('NEWS'); $('nwMin').onclick = () => { ST.newsMin = !ST.newsMin; try { localStorage.setItem('fqt.newsMin', ST.newsMin ? '1' : ''); } catch (e) { } renderNews().then(() => window.dispatchEvent(new Event('resize'))); };
   p.querySelectorAll('[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
 }
 const hideSrc = x => /brvm|sika/i.test((x.s || '') + ' ' + (x.f || '') + ' ' + (x.u || ''));
@@ -377,14 +377,14 @@ function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hi
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
-/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN */
+/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, WB un onglet de RATES (ex-WIRP), EQS s'appelle SCREN, TOP s'appelle NEWS */
 /* écrans à onglets qui regroupent d'anciennes fonctions (onglet 1 = vue principale) : source unique pour les onglets, l'aide et l'autocomplétion */
 const FN_TABS = {
   EVTS: [['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['u', 'Sociétés US'], ['a', 'Agenda des sociétés']],
   FXC: [['m', 'Matrice des changes croisés'], ['w', 'Classement des devises']],
   RATES: [['f', 'Anticipations de la Fed'], ['w', 'Taux souverains mondiaux']] };
 const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
-const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
+const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'] };
 function fnAlias(f) { const a = FN_ALIAS[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }
 function go(fn, s, o = {}) {
   fn = fnAlias(fn);
@@ -407,7 +407,7 @@ async function render() {
 /* rangée de touches comme la barre du terminal : GO, F1-F4 (gris), touches vertes du clavier Bloomberg, puis les fonctions de marché */
 const BBG_KEYS = [['F1', 'Aide (HELP)', () => go('HELP')], ['F2', 'Govt : obligations (SRCH)', () => go('SRCH')], ['F3', 'Equity : marché BRVM', () => go('BRVM')], ['F4', 'Index : indices mondiaux (WEI)', () => go('WEI')]];
 const BBG_GREEN = [['PRINT', 'Imprimer l’écran', () => window.print()], ['HELP', 'Aide', () => go('HELP')], ['SEARCH', 'Rechercher un titre ou une fonction', () => $('cmd').focus()],
-  ['QUOTE', 'Description du titre actif (DES)', () => go('DES', ST.sec)], ['MONITOR', 'Moniteur de marchés (MON)', () => go('MON')], ['NEWS', 'Actualités (TOP)', () => go('TOP')], ['MENU', 'Menu des fonctions du titre', () => go('MENU', ST.sec)],
+  ['QUOTE', 'Description du titre actif (DES)', () => go('DES', ST.sec)], ['MONITOR', 'Moniteur de marchés (MON)', () => go('MON')], ['NEWS', 'Actualités (Top News)', () => go('NEWS')], ['MENU', 'Menu des fonctions du titre', () => go('MENU', ST.sec)],
   ['PG BACK', 'Écran précédent', () => histGo(-1)], ['PG FWD', 'Écran suivant', () => histGo(1)]];
 function renderKeys() { const f = $('fkeys');
   f.innerHTML = `<button class="fk kgo" data-k="GO" title="Exécuter la commande">GO</button>${BBG_KEYS.map(([k, t]) => `<button class="fk kf" data-k="${k}" title="${esc(t)}">${k}</button>`).join('')}${BBG_GREEN.map(([k, t]) => `<button class="fk" data-k="${k}" title="${esc(t)}"><b>${k}</b></button>`).join('')}<button class="fk kw" data-k="CFG" title="Réglages">🔧</button><i class="fsep"></i>`
@@ -437,7 +437,7 @@ async function initFeed() {
   try { db.doc('feed/live').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.live || (d.ts || 0) >= (Q.live.ts || 0)) { Q.live = d; apply(); } } }, () => { }); } catch (e) { }
   try { db.doc('feed/quotes').onSnapshot(sn => { if (sn.exists) { const d = sn.data(); if (!Q.quotes || (d.ts || 0) >= (Q.quotes.ts || 0)) { Q.quotes = d; apply(); } } }, () => { }); } catch (e) { }
   try { db.doc('feed/news').onSnapshot(async sn => { if (!sn.exists) return; const d = sn.data(); const cur = await (Q.json['news.json'] || Promise.resolve(null)).catch(() => null);
-    if (!cur || (d.ts || 0) > (cur.ts || 0)) { Q.json['news.json'] = Promise.resolve(d); renderNews(); if (['TOP', 'CN'].includes(ST.fn)) render(); } }, () => { }); } catch (e) { }
+    if (!cur || (d.ts || 0) > (cur.ts || 0)) { Q.json['news.json'] = Promise.resolve(d); renderNews(); if (['NEWS', 'CN'].includes(ST.fn)) render(); } }, () => { }); } catch (e) { }
 }
 async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.base + 'live.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null), fetch(Q.base + 'quotes.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null)]);
   /* nouveau relevé publié (toutes les 15 min) : toutes les données en cache sont relues, la fiche de chaque titre comprise */
@@ -445,7 +445,7 @@ async function pollStatic() { try { const [l, q] = await Promise.all([fetch(Q.ba
   if (fresh) { Q.gen = l.ts; Q.json = {}; try { const S = await fetch(Q.base + 'summary.json', { cache: 'no-store' }).then(r => r.ok ? r.json() : null); if (S && S.secs) { Q.sum = S; Q.json['summary.json'] = Promise.resolve(S); for (const s of S.secs) Q.by[s.id] = s; } } catch (e) { } }
   if (l) Q.live = l; if (q) { Q.quotes = q; applyQuotes(); Q.ser = {}; Q.M = {}; } delete Q.json['news.json']; feedState(); renderSech(); renderStatus(); renderNews();
   const typing = document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && document.activeElement.id !== 'cmd';
-  if (!typing && (fresh || ['MON', 'BRVM', 'IMAP', 'US', 'TOP', 'BRIEF', 'WEIF'].includes(ST.fn)) && !(ST.fn === 'TOP' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
+  if (!typing && (fresh || ['MON', 'BRVM', 'IMAP', 'US', 'NEWS', 'BRIEF', 'WEIF'].includes(ST.fn)) && !(ST.fn === 'NEWS' && ST.top2 && ST.top2.pause)) render(); } catch (e) { } }
 let SYNC_RUN = null;
 function bindSync() { const b = $('syncBtn'); if (!b || !SYNC_RUN) return; b.hidden = false; b.onclick = () => SYNC_RUN(b); }
 async function initSync() {

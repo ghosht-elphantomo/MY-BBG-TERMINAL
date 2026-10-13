@@ -8,10 +8,10 @@ function newsRow2(x, o = {}) {
   return `<div class="nw${o.short ? ' s' : ''}"><span class="d">${d.toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span><span class="c">${esc(srcCode(x))}</span><span>${evBadge(x.ev)}<a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(deent(x.ti))}</a> ${hideSrc(x) ? '' : `<span class="src">${esc(deent(x.s || ''))}</span>`}${tk.length ? `<span class="tags">${tk.map(t => `<b data-sec="${t}" data-to="CN" title="${esc(Q.by[t].n)}">${t}</b>`).join('')}</span>` : ''}${x.x && !o.short ? `<small>${esc(deent(x.x))}</small>` : ''}</span></div>`;
 }
 
-/* ------------------------------------------------------------------ TOP : fil relié aux titres, typé par événement */
-PAGES.TOP = async (m, alive) => {
+/* ------------------------------------------------------------------ NEWS (ex-TOP) : fil relié aux titres, typé par événement */
+PAGES.NEWS = async (m, alive) => {
   const N = await getJSON('news.json').catch(() => null); if (!alive()) return; const st = ST.top = ST.top || { c: 'ALL', ev: 'ALL', mk: 'ALL', q: '' }; setTitle('Top News');
-  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'TOP', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
+  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'NEWS', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
   const its = N.items, cats = [...new Set(its.map(x => x.c).filter(Boolean))], evs = Object.keys(EV_COL).filter(e => its.some(x => x.ev === e));
   const mkOf = x => (x.tk || []).map(t => Q.by[t] && Q.by[t].mkt).filter(Boolean);
   let L = its.filter(x => (st.c === 'ALL' || x.c === st.c) && (st.ev === 'ALL' || x.ev === st.ev) && (st.mk === 'ALL' || (st.mk === 'LINK' ? (x.tk || []).length : mkOf(x).includes(st.mk))));
@@ -21,7 +21,7 @@ PAGES.TOP = async (m, alive) => {
   m.innerHTML = `<div class="tools"><span class="tlab">Rubrique</span><select class="ofld" id="tpC"><option value="ALL">Toutes (${its.length})</option>${cats.map(c => `<option value="${esc(c)}" ${st.c === c ? 'selected' : ''}>${esc(c)} (${its.filter(x => x.c === c).length})</option>`).join('')}</select>
       <span class="tlab">Événement</span><select class="ofld" id="tpE"><option value="ALL">Tous</option>${evs.map(e => `<option value="${esc(e)}" ${st.ev === e ? 'selected' : ''}>${esc(e)} (${its.filter(x => x.ev === e).length})</option>`).join('')}</select>
       <form id="tpF" style="display:inline-flex;gap:4px;margin-left:6px"><input id="tpQ" value="${esc(st.q)}" placeholder="mot-clé, ticker…" style="width:200px"><button class="tb">Filtrer</button></form><span class="tlab">relevé il y a ${age < 120 ? age + ' min' : Math.round(age / 60) + ' h'} · ${nLinked} articles reliés à un titre</span></div>
-    ${pn(`Fil d’actualités · ${L.length} articles`, 'TOP', L.slice(0, 300).map(x => newsRow2(x)).join('') || '<div class="empty">Aucun article pour ces filtres.</div>',
+    ${pn(`Fil d’actualités · ${L.length} articles`, 'NEWS', L.slice(0, 300).map(x => newsRow2(x)).join('') || '<div class="empty">Aucun article pour ces filtres.</div>',
       { lect: `Flux publics : ${Object.values(N.feeds || {}).filter((v, i, a) => a.indexOf(v) === i && !/brvm|sika/i.test(v)).join(', ')}. Chaque article est relié automatiquement aux sociétés citées (nom usuel, nom officiel ou code ; clic = actualités et historique de la société) et classé par type d’événement d’après son titre. Ce classement automatique peut se tromper : la source fait foi. Les articles restent la propriété de leurs éditeurs.` })}`;
   $('tpC').onchange = e => { st.c = e.target.value; render(); }; $('tpE').onchange = e => { st.ev = e.target.value; render(); }; $('tpF').onsubmit = e => { e.preventDefault(); st.q = $('tpQ').value.trim(); render(); };
 };
@@ -43,7 +43,7 @@ PAGES.CN = async (m, alive) => {
   const types = [...new Set(H.map(h => h.k.split(' · ')[0]))]; const st = ST.cnh = ST.cnh || { k: 'ALL' }; if (st.k !== 'ALL' && !types.includes(st.k)) st.k = 'ALL';
   const HL = H.filter(h => st.k === 'ALL' || h.k.split(' · ')[0] === st.k);
   m.innerHTML = `<div class="grid c2">${pn(`${esc(s.tk)} · articles qui citent la société (${its.length})`, 'CN', its.length ? its.slice(0, 150).map(x => newsRow2(x)).join('') : `<div class="empty">Aucun article récent ne cite ${esc(s.short || s.n)} dans les flux suivis (45 derniers jours).</div>`,
-      { lect: `Articles reliés automatiquement à la société (« ${al.map(esc).join(' », « ')} ») dans les flux d’actualités, mis à jour toutes les 15 minutes. Fil complet : TOP.` })}
+      { lect: `Articles reliés automatiquement à la société (« ${al.map(esc).join(' », « ')} ») dans les flux d’actualités, mis à jour toutes les 15 minutes. Fil complet : NEWS.` })}
     ${pn(`Historique des événements · ${H.length}`, 'CN', `<div class="tw" style="max-height:72vh"><table class="t" style="table-layout:fixed;width:100%"><colgroup><col style="width:82px"><col style="width:150px"><col>${brvm ? '' : '<col style="width:62px">'}</colgroup><thead><tr><th class="l">Date</th><th class="l">Type</th><th class="l">Événement</th>${brvm ? '' : '<th class="l">Source</th>'}</tr></thead><tbody>${HL.slice(0, 400).map(h => `<tr><td class="l" style="vertical-align:top">${fds(h.d)}</td><td class="l" style="white-space:normal;vertical-align:top;color:${h.an ? 'var(--dn)' : EV_COL[h.k] || 'var(--amber)'}">${esc(h.k)}</td><td class="l" style="white-space:normal;vertical-align:top">${h.u ? `<a href="${esc(h.u)}" target="_blank" rel="noopener" style="color:var(--white)">${esc(h.t || '')}</a>` : esc(h.t || '')}</td>${brvm ? '' : `<td class="l dm" style="vertical-align:top;overflow:hidden;text-overflow:ellipsis">${esc(h.s || '')}</td>`}</tr>`).join('') || '<tr><td class="l dm" colspan="4">Aucun événement.</td></tr>'}</tbody></table></div>`,
       { np: true, tools: `<span class="tlab">Type</span><select class="ofld" id="cnK"><option value="ALL">Tous</option>${types.map(t => `<option ${st.k === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`, lect: `Réunit les articles (typés automatiquement), ${brvm ? 'les avis officiels, les publications de la société, les détachements de dividendes et ' : ''}les anomalies statistiques détectées (ANOM).` })}</div>`;
   if ($('cnK')) $('cnK').onchange = e => { st.k = e.target.value; render(); };
@@ -281,7 +281,7 @@ PAGES.BMAP = async (m, alive) => {
       <div class="grid" style="align-content:start">${pn('Points clés', 'BMAP', `<div class="lectb">${facts.map(f => `<p>${f}</p>`).join('') || '<p class="dm">En attente des données.</p>'}</div>`)}
       ${mktPanel()}
       ${CP.y2026 ? pn(esc(CP.y2026.title), 'BMAP', `<table class="t"><tbody>${CP.y2026.pts.map(x => `<tr><td class="l am" style="vertical-align:top;white-space:nowrap">${esc(x.d.length === 7 ? mLab(x.d) : x.d)}</td><td class="l" style="white-space:normal">${esc(x.t)} <a href="${esc(x.u)}" target="_blank" rel="noopener" class="dm">${esc(x.src)}</a></td></tr>`).join('')}</tbody></table>`, { np: true, lect: esc(CP.y2026.note || '') }) : ''}
-      ${pn(`Actualités du pétrole (${onews.length})`, 'TOP', `<div style="max-height:360px;overflow:auto">${onews.map(x => newsRow2(x, { short: true })).join('') || '<div class="dm">Aucune dépêche récente.</div>'}</div>`)}</div></div>`;
+      ${pn(`Actualités du pétrole (${onews.length})`, 'NEWS', `<div style="max-height:360px;overflow:auto">${onews.map(x => newsRow2(x, { short: true })).join('') || '<div class="dm">Aucune dépêche récente.</div>'}</div>`)}</div></div>`;
     m.querySelectorAll('[data-yi]').forEach(b => b.onclick = () => { st.y = +b.dataset.yi; render(); }); m.querySelectorAll('[data-ly]').forEach(b => b.onclick = () => { st.lay[b.dataset.ly] = st.lay[b.dataset.ly] ? 0 : 1; render(); });
     bmapDraw($('bmC'), G, CP, yi, st.lay, EI);
     return;
