@@ -280,7 +280,8 @@ PAGES.PEER = async (m, alive) => {
 
 /* ------------------------------------------------------------------ RV : onglets (pairs et historique / juste valeur et marge de sécurité) */
 PAGES.RV = async (m, alive) => {
-  const s = sec(ST.sec); const tab = tabState('RV', 'p'); setTabs([['p', 'Pairs et historique'], ['f', 'Juste valeur']], tab, k => { ST.tab.RV = k; render(); });
+  const s = sec(ST.sec); const tab = tabState('RV', 'c'); setTabs([['c', 'Comparables'], ['p', 'Pairs et historique'], ['f', 'Juste valeur']], tab, k => { ST.tab.RV = k; render(); });
+  if (tab === 'c') return RV_COMPS(m, alive);
   if (tab === 'p') return RV_main(m, alive);
   const [F, IDX] = await Promise.all([faJSON(s.id).catch(() => null), getJSON('fa_index.json')]); if (!alive()) return;
   if (!F || !F.Y) { m.innerHTML = pn('Juste valeur', 'RV', '<div class="empty">Comptes non disponibles.</div>'); return; }

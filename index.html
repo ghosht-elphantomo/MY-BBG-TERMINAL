@@ -547,6 +547,9 @@ table.t.hp td:first-child{color:var(--amber)}
 .mst{border:1px solid #1f1f1f;gap:4px}
 .t .gfi,.t .gfi0{display:inline-block;width:14px;margin-right:4px;cursor:pointer;vertical-align:-1px}.t .gfi:hover svg rect{stroke:#fff}
 table.t.acc tr.h2 th{background:#141414;color:#bdbdbd;font-size:11.5px;top:20px}
+.rvt{border:1px solid #1f1f1f;gap:4px}
+table.t.rvc tr.rvme td{background:#2a1c05!important;color:#fff;font-weight:600}
+table.t.rvc tr.rvs td{background:#141414!important;color:#ffd200}
 
 </style>
 </head><body>
@@ -3248,7 +3251,8 @@ PAGES.PEER = async (m, alive) => {
 
 /* ------------------------------------------------------------------ RV : onglets (pairs et historique / juste valeur et marge de sécurité) */
 PAGES.RV = async (m, alive) => {
-  const s = sec(ST.sec); const tab = tabState('RV', 'p'); setTabs([['p', 'Pairs et historique'], ['f', 'Juste valeur']], tab, k => { ST.tab.RV = k; render(); });
+  const s = sec(ST.sec); const tab = tabState('RV', 'c'); setTabs([['c', 'Comparables'], ['p', 'Pairs et historique'], ['f', 'Juste valeur']], tab, k => { ST.tab.RV = k; render(); });
+  if (tab === 'c') return RV_COMPS(m, alive);
   if (tab === 'p') return RV_main(m, alive);
   const [F, IDX] = await Promise.all([faJSON(s.id).catch(() => null), getJSON('fa_index.json')]); if (!alive()) return;
   if (!F || !F.Y) { m.innerHTML = pn('Juste valeur', 'RV', '<div class="empty">Comptes non disponibles.</div>'); return; }
@@ -4303,6 +4307,27 @@ PAGES.MOST = async (m, alive) => {
 /* FA : petite icône graphique devant chaque ligne (comme le terminal) → GF sur l'indicateur */
 const GF_ICO = '<svg width="11" height="9" viewBox="0 0 11 9"><rect x=".5" y=".5" width="10" height="8" fill="none" stroke="#8a8a8a"/><path d="M2 7V5M4.5 7V3M7 7V4.5M9 7V2" stroke="#ffa028" stroke-width="1.4"/></svg>';
 document.addEventListener('click', e => { const g = e.target.closest('[data-gf]'); if (!g) return; e.stopPropagation(); ST.gf = { k: g.dataset.gf, k2: '' }; go('GF', ST.sec); });
+
+/* ------------------------------------------------------------------ RV, onglet 1 : tableau de comparables comme l'écran Relative Valuation */
+async function RV_COMPS(m, alive) {
+  const s = sec(ST.sec); setTitle('Relative Valuation'); const IDX = await getJSON('fa_index.json').catch(() => null); if (!alive()) return;
+  const FI = Object.fromEntries(((IDX && IDX.rows) || []).map(r => [r.id, r]));
+  const peers = secsWhere(x => x.id !== s.id && x.mkt === s.mkt && x.cls === 'Equity' && x.typ !== 'ETF' && x.grp === s.grp && !legacy(x)).sort((a, b) => (b.mcap || 0) - (a.mcap || 0)).slice(0, 24);
+  const C = [['mcap', 'Capi.', x => x.mcap, v => big(v)], ['last', 'Dernier', x => x.last, (v, x) => px(x, v)], ['pct', 'Var. 1J', x => x.pct, v => pc(v)], ['ytd', 'Var. YTD', x => x.ytd, v => pc(v, 1)],
+    ['rev_g', 'Croiss. CA 1 an', x => (FI[x.id] || {}).rev_g, v => pc(v, 1)], ['eps_g', 'Croiss. BPA 1 an', x => (FI[x.id] || {}).eps_g, v => pc(v, 1)], ['pe', 'PER', x => (FI[x.id] || {}).pe ?? x.per, v => num(v, 1)],
+    ['pb', 'Cours / actif net', x => (FI[x.id] || {}).pb, v => num(v, 2)], ['ev_ebitda', 'VE / EBITDA', x => (FI[x.id] || {}).ev_ebitda, v => num(v, 1)], ['roe', 'ROE', x => (FI[x.id] || {}).roe, v => P1(v, 1)],
+    ['nm', 'Marge nette', x => (FI[x.id] || {}).nm, v => P1(v, 1)], ['dy', 'Rdt div.', x => (FI[x.id] || {}).dy ?? x.yld, v => P1(v, 2)]];
+  const st = ST.rvc = ST.rvc || { k: 'mcap', d: -1 }; const sorted = peers.slice().sort((a, b) => { const c = C.find(c => c[0] === st.k), A = c[2](a), B = c[2](b); if (A == null) return 1; if (B == null) return -1; return (A - B) * st.d; });
+  const ok = v => v != null && isFinite(v), stat = (f, x) => { const v = peers.concat([s]).map(x).filter(ok).sort((a, b) => a - b); if (!v.length) return null; return f === 'avg' ? v.reduce((a, b) => a + b, 0) / v.length : v[Math.floor((v.length - 1) / 2)] * (v.length % 2 ? 1 : .5) + (v.length % 2 ? 0 : v[v.length / 2] * .5); };
+  const cell = (c, x) => { const v = c[2](x); return ok(v) ? c[3](v, x) : '<span class="dm">—</span>'; };
+  const sRow = (lab, f) => `<tr class="rvs"><td class="l">${lab}</td><td class="l"></td>${C.map(c => { const v = ['last', 'mcap'].includes(c[0]) ? null : stat(f, c[2]); return `<td>${ok(v) ? c[3](v, s) : ''}</td>`; }).join('')}</tr>`;
+  m.innerHTML = `<div class="tools rvt"><span class="tlab">Comparables</span><span class="wh">${esc(s.grp || '—')} · ${s.mkt === 'BRVM' ? 'BRVM' : 'États-Unis'} (${peers.length})</span><span class="tlab">Devise</span><span class="wh">${esc(s.ccy || '')}</span><span class="gsp"></span><span class="dm">Tri : cliquer un en-tête</span></div>
+    ${pn(`${esc(ykey(s))} · valorisation relative`, 'RV', `<div class="tw" style="max-height:calc(100vh - 290px - var(--nwh, 90px))"><table class="t rvc"><thead><tr><th class="l">Titre</th><th class="l">Nom</th>${C.map(c => `<th data-rk="${c[0]}" class="${st.k === c[0] ? 'on' : ''}" style="cursor:pointer">${c[1]}${st.k === c[0] ? (st.d > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>
+      <tr class="rvme"><td class="l"><b>${s.id}</b></td><td class="l">${esc(s.short || s.n)}</td>${C.map(c => `<td>${cell(c, s)}</td>`).join('')}</tr>${sRow('Moyenne', 'avg')}${sRow('Médiane', 'med')}
+      ${sorted.map((x, i) => `<tr data-sec="${x.id}" data-to="RV" style="cursor:pointer"><td class="l"><span class="rn">${i + 1})</span><b class="wh">${x.id}</b></td><td class="l am">${esc(x.short || x.n)}</td>${C.map(c => `<td>${cell(c, x)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`,
+      { np: true, lect: `Sociétés du même secteur sur le même marché, classées par capitalisation. Ratios sur le dernier exercice publié ; moyenne et médiane incluent ${esc(s.id)}. Analyse des multiples dans le temps : onglet 2 ; juste valeur : onglet 3.` })}`;
+  m.querySelectorAll('[data-rk]').forEach(th => th.onclick = () => { const k = th.dataset.rk; st.d = st.k === k ? -st.d : -1; st.k = k; render(); });
+}
 
 </script>
 <script>

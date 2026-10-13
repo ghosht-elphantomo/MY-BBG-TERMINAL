@@ -539,3 +539,6 @@ table.t.hp td:first-child{color:var(--amber)}
 .mst{border:1px solid #1f1f1f;gap:4px}
 .t .gfi,.t .gfi0{display:inline-block;width:14px;margin-right:4px;cursor:pointer;vertical-align:-1px}.t .gfi:hover svg rect{stroke:#fff}
 table.t.acc tr.h2 th{background:#141414;color:#bdbdbd;font-size:11.5px;top:20px}
+.rvt{border:1px solid #1f1f1f;gap:4px}
+table.t.rvc tr.rvme td{background:#2a1c05!important;color:#fff;font-weight:600}
+table.t.rvc tr.rvs td{background:#141414!important;color:#ffd200}
