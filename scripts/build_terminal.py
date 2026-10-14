@@ -383,17 +383,6 @@ def main():
                 if rec.get("cfo") is not None:
                     pdf_cf.setdefault(t, {})[y] = {"cfo": rec["cfo"], "capex": rec.get("capex", 0), "fcf": rec.get("fcf", rec["cfo"] - (rec.get("capex") or 0)), "src": rec.get("src")}
     divs = json.load(open(os.path.join(src, "dividendes.json"), encoding="utf8"))["all"]
-    # contrôle contre le calendrier officiel des dividendes de la BRVM : un montant net qui ne correspond ni au montant du calendrier,
-    # ni à son brut diminué de l'impôt (IRVM 5 à 20 %), est remplacé par le montant de la BRVM (ex. ABJC 2025 : avis n°193, 124 FCFA net)
-    div_fix = []
-    for x in divs:
-        cal, net, br = x.get("dividende_calendrier"), x.get("dividende"), x.get("dividende_brut")
-        if not (cal and net) or abs(net - cal) / cal < .02 or (br and abs(br - cal) / cal < .02 and .80 < net / br < .95):
-            continue
-        div_fix.append(f'{x.get("ticker")} {x.get("exercice")} : {net} -> {cal}')
-        x["dividende"], x["cal"] = cal, 1
-    if div_fix:
-        log("dividendes corrigés d'après le calendrier BRVM :", "; ".join(div_fix))
     # avis lus directement sur brvm.org (relevés toutes les 15 min) : secours si la base d'avis tierce s'arrête
     AV = []
     try:
@@ -403,7 +392,35 @@ def main():
             log("avis brvm.org :", len(AV), "lus" + (", sociétés non rattachées : " + ", ".join(sorted(nomap)) if nomap else ""))
     except Exception as e:  # noqa: BLE001
         log("avis brvm.org illisibles :", e)
-    av_chk = {"div": 0, "split": 0, "ev": 0, "ag": 0}
+    av_chk = {"div": 0, "split": 0, "ev": 0, "ag": 0, "div_fix": 0}
+    # montant du dividende lu dans l'avis officiel le plus récent de la BRVM pour chaque titre et exercice (un avis « modification du
+    # montant du dividende » remplace le précédent) ; le calendrier de la BRVM n'est pas toujours mis à jour après un rectificatif
+    AVD = {}
+    for r in AV:
+        o = r.get("ocr") or {}
+        ex_ = o.get("ex") or r.get("ex")
+        if r.get("t") and o.get("net") and o["net"] > 0 and ex_ and (r.get("k") == "div" or r.get("c") == "Modification du dividende"):
+            k_ = (r["t"], int(ex_))
+            if k_ not in AVD or (r.get("d") or "") > (AVD[k_].get("d") or ""):
+                AVD[k_] = {**o, "d": r.get("d"), "u": r["u"], "mod": r.get("c") == "Modification du dividende"}
+    if AVD:
+        fixes = []
+        for x in divs:
+            a_ = AVD.get((x.get("ticker"), x.get("exercice")))
+            if not a_ or not x.get("dividende"):
+                continue
+            if not a_["mod"] and re.search(r"rectif|modif", str(x.get("dividende_remarque") or ""), re.I):
+                continue  # la base a déjà appliqué un avis rectificatif plus récent que celui qui a été lu
+            q_ = a_["net"] / x["dividende"]
+            if abs(q_ - 1) > .005 and .2 < q_ < 5:  # lecture plausible et différente : l'avis officiel l'emporte
+                fixes.append(f'{x["ticker"]} {x["exercice"]} : {x["dividende"]} -> {a_["net"]}{" (rectificatif)" if a_["mod"] else ""}')
+                x["dividende"], x["avis"] = a_["net"], 1
+                av_chk["div_fix"] += 1
+            for kk, kd in (("date_detachement", "det"), ("date_paiement", "pay")):
+                if not x.get(kk) and a_.get(kd):
+                    x[kk] = a_[kd]
+        if fixes:
+            log("dividendes d'après les avis officiels :", "; ".join(fixes))
     if AV:  # dividendes annoncés sur brvm.org (montant net, détachement, paiement) absents de la base : ajoutés
       try:
         have = collections.defaultdict(list)
@@ -423,7 +440,9 @@ def main():
                    or near(x.get("date_detachement"), r.get("det")) or near(x.get("date_paiement"), r.get("pay")) for x in have[r["t"]]):
                 continue
             # montant de la colonne du calendrier brvm.org : net pour certaines sociétés, brut pour d'autres (l'avis PDF précise le net) -> signalé
-            nx = {"ticker": r["t"], "dividende": r["dps"], "exercice": r.get("ex"), "date_annonce": r.get("d"), "date_detachement": r.get("det"), "date_paiement": r.get("pay"), "source": "BRVM", "cal": 1}
+            a_ = AVD.get((r["t"], r.get("ex")))
+            nx = {"ticker": r["t"], "dividende": a_["net"] if a_ else r["dps"], "exercice": r.get("ex"), "date_annonce": r.get("d"), "date_detachement": r.get("det"),
+                  "date_paiement": r.get("pay"), "source": "BRVM", **({} if a_ else {"cal": 1})}
             divs.append(nx)
             have[r["t"]].append(nx)
             av_chk["div"] += 1
@@ -832,7 +851,7 @@ def main():
     if split_log:
         log("fractionnements :", "; ".join(split_log[:40]))
     ev = json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"]
-    emeta = [{"d": x.get("published_at") or x.get("event_at"), "e": x.get("event_at"), "t": x.get("ticker"), "c": x.get("category_label"),
+    emeta = [{"d": x.get("published_at") or x.get("event_at"), "e": x.get("event_at"), "t": x.get("ticker"), "c": "Modification du dividende" if x.get("category") == "dividend_amount_change" else x.get("category_label"),
               "ti": x.get("title"), "u": x.get("document_url")} for x in ev if (x.get("published_at") or x.get("event_at"))]
     try:
         avd = {}

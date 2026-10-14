@@ -2575,7 +2575,7 @@ def fr_parity(txt):
 
 def _avis_market_cat(ti):
     t = _nrm(ti)
-    return ("Marché fermé (jour férié)" if "ferie" in t else "Composition d'un indice BRVM mise à jour" if "composition" in t and "indice" in t
+    return ("Modification du dividende" if "dividende" in t and re.search(r"modif|rectif", t) else "Marché fermé (jour férié)" if "ferie" in t else "Composition d'un indice BRVM mise à jour" if "composition" in t and "indice" in t
             else "Valeur théorique publiée" if "valeur theorique" in t else "Transaction annulée par la BRVM" if "annulation de transaction" in t else "Avis de la BRVM")
 
 
@@ -2635,7 +2635,7 @@ def run_avis(site_data):
                     recs.append({"k": key, "soc": soc or None, "c": c, "u": u, "d": d or pub(u), "e": d or pub(u), "ti": ti})
         return key, recs, None
 
-    jobs = [(k, p_, c, pg) for k, p_, c in AVIS_PAGES for pg in (range(3) if deep else (0,))]
+    jobs = [(k, p_, c, pg) for k, p_, c in AVIS_PAGES for pg in (range(10 if k == "marche" else 3) if deep else (0,))]
     n_new = 0
     with ThreadPoolExecutor(6) as ex:
         for key, recs, err in ex.map(one, jobs):
@@ -2647,26 +2647,131 @@ def run_avis(site_data):
                 if r["u"] not in items:
                     n_new += 1
                 items[r["u"]] = {**items.get(r["u"], {}), **r, "seen": items.get(r["u"], {}).get("seen") or TODAY.isoformat()}
-    # date de l'assemblée lue dans les convocations récentes (le soir seulement : il faut l'outil PDF)
-    todo = [r for r in items.values() if r.get("k") == "ag" and "convocation" in _nrm(r.get("ti") or "") and "ag" not in r and r.get("d") and _doc_recent(r["d"].replace("-", ""), 90)]
-    if todo and os.environ.get("FQT_MODE") == "eod":
-        import shutil, subprocess, tempfile
-        if not shutil.which("pdftotext"):
-            os.system("sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1")
-        if shutil.which("pdftotext"):
-            for r in todo[:15]:
-                try:
-                    with tempfile.NamedTemporaryFile(suffix=".pdf") as fh:
-                        fh.write(get(r["u"], tries=2, timeout=40))
-                        fh.flush()
-                        txt = subprocess.run(["pdftotext", "-layout", fh.name, "-"], capture_output=True, timeout=60).stdout.decode("utf8", "replace")
-                    r["ag"] = ag_date(txt, r["d"]) or ""
-                except Exception as e:  # noqa: BLE001
-                    note("avis-brvm", False, f"convocation {r['u'][-60:]}: {e}")
     st["ts"] = int(time.time())
     save(path, st)
     log(f"avis brvm.org : {len(items)} connus, {n_new} nouveaux")
 
+
+
+def run_avisocr(site_data):
+    """Le soir : lit dans les PDF de la BRVM le montant des dividendes (net, ou brut et IRVM), les rectificatifs « modification du
+    montant du dividende » et la date des assemblées. Écrit le résultat dans avis_brvm.json (utilisé par build_terminal.py)."""
+    if not site_data:
+        return
+    path = os.path.join(site_data, "avis_brvm.json")
+    if not os.path.exists(path):
+        return
+    st = json.load(open(path, encoding="utf8"))
+    items = st.get("items") or {}
+    # avis lus dans le PDF (le soir) : montant du dividende (net, ou brut et IRVM), dates, et rectificatifs « modification du montant du dividende » ;
+    # date de l'assemblée dans les convocations. Les avis de la BRVM sont souvent scannés : reconnaissance de caractères si le PDF n'a pas de texte.
+    if True:
+        divs_ = sorted([r for r in items.values() if (r.get("k") == "div" or r.get("c") == "Modification du dividende") and "ocr" not in r and r.get("d")
+                        and _doc_recent(r["d"].replace("-", ""), 500)], key=lambda r: r["d"], reverse=True)
+        ags_ = [r for r in items.values() if r.get("k") == "ag" and "convocation" in _nrm(r.get("ti") or "") and "ag" not in r and r.get("d") and _doc_recent(r["d"].replace("-", ""), 90)]
+        todo = divs_[:30] + ags_[:15]
+        if todo and pdf_tools():
+            for r in todo:
+                try:
+                    txt = avis_text(r["u"])
+                except Exception as e:  # noqa: BLE001
+                    note("avis-brvm", False, f"lecture {r['u'][-60:]}: {e}")
+                    continue
+                if r.get("k") == "ag":
+                    r["ag"] = ag_date(txt, r["d"]) or ""
+                    continue
+                prev = [x for x in items.values() if x is not r and x.get("soc") == r.get("soc") and (x.get("ocr") or {}).get("net") and (x.get("d") or "") <= r["d"]]
+                old = max(prev, key=lambda x: x["d"])["ocr"]["net"] if prev else r.get("dps")
+                o = div_parse(txt, old if r.get("c") == "Modification du dividende" else None) or {}
+                o["v"] = 1
+                r["ocr"] = o
+                log(f"avis lu : {r.get('soc')} {r['u'][-70:]} -> {o}")
+    save(path, st)
+    log(f"avis lus dans les PDF : {sum(1 for r in items.values() if r.get('ocr'))} dividendes, {sum(1 for r in items.values() if r.get('ag'))} assemblées")
+
+
+def pdf_tools():
+    """Outils de lecture des avis (texte du PDF, images de pages, reconnaissance de caractères), installés à la demande."""
+    import shutil
+    if not (shutil.which("pdftotext") and shutil.which("pdftoppm") and shutil.which("tesseract")):
+        os.system("sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-fra >/dev/null 2>&1")
+    return bool(shutil.which("pdftotext") and shutil.which("pdftoppm") and shutil.which("tesseract"))
+
+
+def avis_text(u):
+    """Texte d'un avis PDF : couche texte quand elle existe, sinon reconnaissance de caractères des deux premières pages."""
+    import glob, subprocess, tempfile
+    pdf = get(u, tries=2, timeout=40)
+    with tempfile.TemporaryDirectory() as td:
+        p_ = os.path.join(td, "a.pdf")
+        open(p_, "wb").write(pdf)
+        t = subprocess.run(["pdftotext", "-layout", p_, "-"], capture_output=True, timeout=60).stdout.decode("utf8", "replace")
+        if len(t.strip()) > 200:
+            return t
+        subprocess.run(["pdftoppm", "-r", "200", "-png", "-f", "1", "-l", "2", p_, os.path.join(td, "pg")], capture_output=True, timeout=120)
+        langs = subprocess.run(["tesseract", "--list-langs"], capture_output=True, timeout=30).stdout.decode()
+        lang = "fra" if "\nfra" in langs else "eng"
+        return "\n".join(subprocess.run(["tesseract", f, "-", "-l", lang], capture_output=True, timeout=120).stdout.decode("utf8", "replace")
+                         for f in sorted(glob.glob(os.path.join(td, "pg*.png"))))
+
+
+def _amt_fr(x):
+    x = re.sub(r"[\s \xa0]", "", x)
+    if "," in x:
+        x = x.replace(".", "").replace(",", ".")
+    elif re.fullmatch(r"\d{1,3}(\.\d{3})+", x):
+        x = x.replace(".", "")
+    return float(x)
+
+
+def div_parse(txt, old=None):
+    """Montant du dividende d'un avis de la BRVM : net (« 124 FCFA net par action », « dividende net annuel de 0,9 FCFA »)
+    ou brut avec l'IRVM des personnes physiques (« 800 FCFA par action (IRVM applicable de 12 % ...) ») ; exercice, détachement, paiement.
+    Pour un rectificatif, `old` = ancien montant : le nouveau montant est le premier montant cité qui en diffère."""
+    n = re.sub(r"\s+", " ", _nrm(txt))
+    # la reconnaissance de caractères lit souvent « à » comme « 4 » : « s'élève à 229 » -> « s'eleve 4 229 »
+    n = re.sub(r"(eleve|elevera|elevait|porte|portee|ramene|ramenee|fixe|fixee|etablit|etablira|passe|passera|egal|egale) [4a] (?=\d)", r"\1 a ", n)
+    am = [(m.start(), m.end(), _amt_fr(m.group(1)), m.group(2) or "") for m in re.finditer(r"(\d[\d ., \xa0]*\d|\d)\s*f\s?cfa\s*(net|brut)?", n)]
+    am = [a for a in am if "dividende" in n[max(0, a[0] - 220):a[0]] and a[2] > 0]
+    if not am:
+        return None
+    # rectificatif : « Ce montant vient en rectification de celui de 124 FCFA net précédemment communiqué »
+    rect = re.search(r"(?:rectification|remplacement|lieu et place|au lieu) (?:de )?(?:celui de )?(\d[\d .,]*\d|\d) ?f ?cfa ?(net|brut)?", n)
+    if rect and not old:
+        old = _amt_fr(rect.group(1))
+    pick = am[0]
+    if old:
+        diff = [a for a in am if abs(a[2] / old - 1) > .005]
+        if diff:
+            pick = diff[0]
+    st_, en_, amt, kind = pick
+    before, after = n[max(0, st_ - 40):st_], n[en_:en_ + 40]
+    if not kind and (re.search(r"net (annuel )?de $", before) or after.lstrip().startswith("net")):
+        kind = "net"
+    if not kind and re.search(r"brut (annuel )?de $", before):
+        kind = "brut"
+    r = {"amt": amt}
+    if old and not kind and not re.search(r"irvm", n[st_:st_ + 260]) and (not rect or (rect.group(2) or "net") == "net"):
+        kind = "net"  # rectificatif sans précision : même nature que le montant rectifié (publié net)
+    irvm = re.search(r"irvm[^%]{0,60}?(\d{1,2}(?:[.,]\d+)?) ?%", n[st_:st_ + 260])
+    if kind == "net":
+        r["net"] = amt
+    elif irvm:
+        r["brut"], r["irvm"] = amt, float(irvm.group(1).replace(",", "."))
+        r["net"] = round(amt * (1 - r["irvm"] / 100), 2)
+    elif kind == "brut":
+        r["brut"] = amt
+    ex = re.search(r"exercice (20\d\d)", n)
+    r["ex"] = int(ex.group(1)) if ex else None
+    mois = "|".join(FR_MOIS)
+    for key, pat in (("pay", r"en paiement,? le (?:\w+ )?(\d{1,2})(?:er)? (" + mois + r") (20\d\d)"), ("det", r"ex-? ?dividende a partir du (?:\w+ )?(\d{1,2})(?:er)? (" + mois + r") (20\d\d)")):
+        m = re.search(pat, n)
+        if m:
+            try:
+                r[key] = dt.date(int(m.group(3)), FR_MOIS[m.group(2)], int(m.group(1))).isoformat()
+            except ValueError:
+                pass
+    return r
 
 FR_MOIS = {"janvier": 1, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6, "juillet": 7, "aout": 8, "septembre": 9, "octobre": 10, "novembre": 11, "decembre": 12}
 
@@ -2736,7 +2841,7 @@ def main():
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
-             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("ussplit", lambda: run_ussplit(a.out)), ("ei", lambda: run_ei(a.out))]
+             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("ussplit", lambda: run_ussplit(a.out)), ("avisocr", lambda: run_avisocr(a.site)), ("ei", lambda: run_ei(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")
