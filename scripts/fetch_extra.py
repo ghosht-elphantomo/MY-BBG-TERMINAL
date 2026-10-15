@@ -1697,6 +1697,19 @@ def run_probe(out):
             note("probe")
         except Exception as e:  # noqa: BLE001
             note("probe", False, f"{k}: {e}")
+    # historique des cours SikaFinance avant novembre 2006 ? (api/general/GetHistos, fenêtres de trois mois au plus)
+    for k, (d0, d1) in {"sika_histos_1998": ("1998-09-16", "1998-12-15"), "sika_histos_2002": ("2002-01-02", "2002-03-29"),
+                        "sika_histos_2006": ("2006-08-01", "2006-10-31"), "sika_histos_2007": ("2007-01-02", "2007-03-30")}.items():
+        try:
+            body = json.dumps({"ticker": "SNTS", "datedeb": d0, "datefin": d1, "xperiod": "0"}).encode()
+            req = urllib.request.Request("https://www.sikafinance.com/api/general/GetHistos", data=body, method="POST",
+                                         headers={"Content-Type": "application/json;charset=UTF-8", "User-Agent": UA, "Accept": "application/json",
+                                                  "Referer": "https://www.sikafinance.com/marches/historiques/SNTS.sn", "X-Requested-With": "XMLHttpRequest"})
+            with urllib.request.urlopen(req, timeout=40) as r_:
+                open(os.path.join(dd, k + ".json"), "wb").write(r_.read()[:400000])
+            note("probe")
+        except Exception as e:  # noqa: BLE001
+            note("probe", False, f"{k}: {e}")
     sec_t = {}
     for ua in (SEC_UA, "FQT Terminal research contact@fqt-terminal.app", "Mozilla/5.0 (compatible; research-bot)", UA):
         try:

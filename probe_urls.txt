@@ -1,4 +1,4 @@
-sika_histo_js.txt|https://www.sikafinance.com/scripts2/historiques9.min.js
-sika_snts_hist_2000.html|https://www.sikafinance.com/marches/historiques/SNTS.sn?datefrom=1998-09-16&dateto=2007-12-31
-sika_societe_aspx_snts_cdx.json|http://web.archive.org/cdx/search/cdx?url=sikafinance.com/marches/societe.aspx?s=SNTS*&output=json&fl=timestamp,original,statuscode&filter=statuscode:200&collapse=timestamp:6&limit=200
-sika_societe_q_snts_cdx.json|http://web.archive.org/cdx/search/cdx?url=sikafinance.com/marches/societe?s=SNTS*&output=json&fl=timestamp,original,statuscode&filter=statuscode:200&collapse=timestamp:6&limit=200
+brvm_rap_sonatel.html|https://www.brvm.org/fr/rapports-societe-cotes/sonatel
+brvm_rap_sonatel_p1.html|https://www.brvm.org/fr/rapports-societe-cotes/sonatel?page=1
+brvm_rap_index.html|https://www.brvm.org/fr/rapports-societes-cotees
+brvm_rap_saph.html|https://www.brvm.org/fr/rapports-societe-cotes/saph-ci

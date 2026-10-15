@@ -1251,6 +1251,11 @@ def _doc_rank(r, y):
     final = 0 if re.search(r"provisoire|non audite|efp\b|_efp_|- efp -", ti) else 1
     if re.search(r"certifi|approuv|audite|definiti|efa\b|_efa_|- efa -|annule et remplace", ti):
         final = 2
+    # rapports (annuels, d'activité), communiqués, résolutions, procès-verbaux : des états y figurent parfois, mais les états
+    # financiers publiés comme tels restent préférés à rang égal
+    if r.get("cat") not in (None, "financial_statements", "auditor_report") and final == 1 and \
+            re.search(r"rapport|communique|resolution|proces.?verbal|assemblee|presentation|activite", ti):
+        final = 0.5
     return (own, final, r.get("d") or "")
 
 
