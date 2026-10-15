@@ -110,7 +110,10 @@ jobs:
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
           FQT_MODE: ${{ steps.mode.outputs.mode }}
-        run: timeout 360 python3 scripts/fetch_extra.py --out /tmp/raw --only avis,watch,obl,cmc,cal --site /tmp/site/data --news /tmp/site/data/news.json
+        run: |
+          # Fear & Greed de CNN relevé à chaque passage en semaine (le soir, il est déjà relevé avec les sources complémentaires)
+          ONLY=avis,watch,obl,cmc,cal; if [ "$(date -u +%u)" -le 5 ] && [ "$FQT_MODE" != "eod" ]; then ONLY=$ONLY,cnn; fi
+          timeout 360 python3 scripts/fetch_extra.py --out /tmp/raw --only $ONLY --site /tmp/site/data --news /tmp/site/data/news.json
 
       - name: Outils PDF (EOD)
         if: steps.mode.outputs.mode == 'eod'

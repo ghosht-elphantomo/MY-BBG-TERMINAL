@@ -384,10 +384,12 @@ def run_cboe(out):
 
 def run_cnn(out):
     h = {"Accept": "application/json, text/plain, */*", "Referer": "https://edition.cnn.com/", "Origin": "https://edition.cnn.com"}
-    for start in ("2020-07-15", "2021-01-01", "2023-01-01", None):
+    # relevé de 15 minutes : un seul essai court, pour ne jamais retarder les autres relevés (le soir : essais complets)
+    quick = os.environ.get("FQT_MODE", "eod") != "eod"
+    for start in (("2020-07-15",) if quick else ("2020-07-15", "2021-01-01", "2023-01-01", None)):
         url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata" + (f"/{start}" if start else "")
         try:
-            j = json.loads(get(url, headers=h, tries=2))
+            j = json.loads(get(url, headers=h, tries=1, timeout=20) if quick else get(url, headers=h, tries=2))
             if j.get("fear_and_greed"):
                 save(os.path.join(out, "cnn_fg.json"), j)
                 note("cnn")

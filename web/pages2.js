@@ -295,6 +295,9 @@ PAGES.MACRO = async (m, alive) => {
 
 /* ------------------------------------------------------------------ FX */
 PAGES.FX = async (m, alive) => {
+  const fxt = tabState('FX', 'x'); setTabs(FN_TABS.FX, fxt, k => { ST.tab.FX = k; render(); });
+  if (fxt === 'm') return fxcView(m, alive); if (fxt === 'w') return wcrsView(m, alive);
+  setTitle('FX Monitor');
   const ids = ['USDXOF', 'EURUSD', 'QQQ', 'VTI', 'SOXX', 'NVDA', 'BRVMC', 'SNTS', 'ORAC', 'SGBC'];
   const SS = Object.fromEntries(await Promise.all(ids.map(async id => [id, await series(id)]))); if (!alive()) return;
   const FX = SS.USDXOF, fxMap = new Map(FX.x.map((d, i) => [d, FX.c[i]])); const fxOn = S => { let lv = null; return S.x.map(d => { if (fxMap.has(d)) lv = fxMap.get(d); return lv; }); };

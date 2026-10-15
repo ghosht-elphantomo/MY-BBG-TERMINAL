@@ -613,3 +613,20 @@ table.t.eqt td{line-height:24px}
 
 /* ---- SGI : annuaire ---- */
 .t.sgi td{vertical-align:top}.t.sgi td.l.am{line-height:1.25}.t.sgi td:nth-child(5){max-width:120px}.t.sgi td:nth-child(6){max-width:150px}.t.sgi td:nth-child(7),.t.sgi td:nth-child(8){max-width:150px}.t.sgi td:nth-child(n+5){overflow:hidden;text-overflow:ellipsis}.t.sgi td:nth-child(2){max-width:260px;overflow:hidden;text-overflow:ellipsis}
+/* HELP : aide structurée */
+.hls{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px}
+.hls>div{border:1px solid var(--line2);background:#0c0c0c;padding:8px 10px 9px;display:flex;flex-direction:column;gap:4px}
+.hls b{color:var(--amber);font-size:16px;font-weight:700;letter-spacing:.3px}.hls b i{font-style:normal;color:#4caf50;font-size:11px;font-weight:400;margin-left:6px}
+.hls span{color:var(--txt);font-size:12.5px;line-height:1.45}
+.hlm{column-width:380px;column-gap:24px}
+.hlg{margin-bottom:12px}.hlg h4{break-after:avoid}.hli{break-inside:avoid}
+.hlg h4{margin:0 0 3px;background:#333639;color:#fff;font-weight:var(--fw);font-size:12.5px;padding:2px 7px}
+.hli{display:grid;grid-template-columns:100px 1fr;gap:0 10px;padding:5px 4px;border-bottom:1px solid #171717;cursor:pointer}
+.hli:hover{background:var(--sel)}.hli:hover small{color:#ddd}
+.hli>b{color:var(--amber);font-weight:700;font-size:12.5px;white-space:nowrap;padding-top:1px}
+.hli .hn{color:#fff;font-size:12.5px;display:block}
+.hli small{color:var(--dim);font-size:11.5px;line-height:1.4;display:block;margin-top:1px}
+.hlt{display:flex;flex-wrap:wrap;gap:3px 4px;margin-top:4px}
+.hlt span{font-size:11px;color:var(--link);border:1px solid #26384d;padding:0 5px;cursor:pointer;white-space:nowrap}
+.hlt span:hover{background:#1b2a3c;color:#fff}
+.t.hlk td{padding-top:3px;padding-bottom:3px;white-space:normal}.t.hlk td.tk{white-space:nowrap;width:1%}

@@ -47,14 +47,14 @@ PAGES.DES = async (m, alive) => {
     const inst = P.inst, hold = P.holders;
     m.innerHTML = `<div class="pn">${head}
       <div class="desh" style="font-size:12.5px;padding-top:0;justify-content:flex-end;gap:14px"><span class="am">${P.sector || s.grp ? 'Classification' : ''}</span><span>${esc(brvm ? (s.grp || '') + (s.bank ? ' · banque' : '') : (P.sector ? P.sector + (P.ind ? ' · ' + P.ind : '') : s.grp || ''))}</span></div>
-      <div class="desd" id="desD">${P.desc ? esc(P.desc) : eq ? `<span class="dm">Description non encore collectée (fiche ${brvm ? '' : 'Nasdaq '}relevée chaque soir).</span>` : esc(s.n) + ' · ' + esc(s.cls) + (s.grp ? ' · ' + esc(s.grp) : '')}</div>
+      <div class="desd" id="desD">${P.desc ? esc(P.desc) : eq ? `<span class="dm">Description non encore collectée (fiche relevée chaque soir).</span>` : esc(s.n) + ' · ' + esc(s.cls) + (s.grp ? ' · ' + esc(s.grp) : '')}</div>
       <div class="dcols">
         <div>${dsec(1, 'Graphique des cours', 'GP', s.id)}<div class="cv" id="desG" style="height:150px"></div>
           ${dkv([[`Cours / var. 1J (${esc(ccy)})`, `${px(s, last)} / ${pctS(s.pct) || '—'}`], [`Plus haut 52s (${fd(L.hiD).slice(0, 8)}${fd(L.hiD).slice(8)})`, px(s, L.hi)], [`Plus bas 52s (${fd(L.loD).slice(0, 8)}${fd(L.loD).slice(8)})`, px(s, L.lo)],
             ['Var. depuis le 1er janv. / %', `${px(s, last - yb)} / ${pctS(last / yb - 1) || '—'}`], eq || etf ? [`Capitalisation (${esc(ccy)})`, s.mcap ? big(s.mcap) : P.mcap ? big(nqNum2(P.mcap)) : null] : null,
-            eq ? ['Titres / flottant', shares ? `${big(shares)}${flt != null ? ' / ' + num(flt, 2) + '%' : ''}` : null] : null, etf ? ['Encours (AUM)', P.aum ? big(nqNum2(P.aum) * 1e3) + ' USD' : null, 'Nasdaq, en milliers de dollars'] : null, etf ? ['Frais de gestion', P.er || null] : null,
+            eq ? ['Titres / flottant', shares ? `${big(shares)}${flt != null ? ' / ' + num(flt, 2) + '%' : ''}` : null] : null, etf ? ['Encours (AUM)', P.aum ? big(nqNum2(P.aum) * 1e3) + ' USD' : null, 'en milliers de dollars'] : null, etf ? ['Frais de gestion', P.er || null] : null,
             ['Échanges moyens / séance', s.liq ? big(s.liq) + ' ' + ccy : null, 'montant moyen échangé par séance sur 3 mois'], ['Volatilité 1 an', s.vol != null ? num(s.vol * 100, 1) + '%' : null]])}</div>
-        <div>${eq ? dsec(2, 'Estimations', 'EE', s.id) + (est ? dkv([['Prochaine publication', est.date], ['PER (12 mois)', xMul(est.pe)], [`PER estimé (${esc(est.fyl)})`, xMul(est.epe)], ['BPA 12 mois glissants', nOr(est.ttm)], [`BPA estimé (${esc(est.fyl)})`, nOr(est.eeps)], ['PEG estimé', nOr(est.peg)],
+        <div>${eq ? dsec(2, 'Estimations', 'EE', s.id) + (est ? dkv([['Prochaine publication', est.date && /vendor|zacks|provided/i.test(est.date) ? 'non annoncée' : est.date], ['PER (12 mois)', xMul(est.pe)], [`PER estimé (${esc(est.fyl)})`, xMul(est.epe)], ['BPA 12 mois glissants', nOr(est.ttm)], [`BPA estimé (${esc(est.fyl)})`, nOr(est.eeps)], ['PEG estimé', nOr(est.peg)],
               est.tp ? ['Objectif de cours moyen', `${num(est.tp.priceTarget, 2)} (${num(est.tp.lowPriceTarget, 0)}–${num(est.tp.highPriceTarget, 0)})`] : null, est.tp ? ['Achat / Conserver / Vente', `${est.tp.buy} / ${est.tp.hold} / ${est.tp.sell}`] : null])
               : dkv([['PER (dernier exercice)', xMul(s.per || (F && F.pe))], ['BPA dernier exercice', s.bnpa ? num(s.bnpa, 0) + ' ' + ccy : null], ['PER estimé', null, 'aucun consensus d’analystes publié pour la BRVM'], ['BPA estimé', null, 'aucun consensus d’analystes publié pour la BRVM']]) + `<div class="src">${brvm ? 'BRVM : aucun consensus d’analystes public — rien n’est estimé ici.' : 'Pas de consensus publié pour ce titre.'}</div>`) : ''}
           ${eq || etf ? dsec(eq ? 3 : 2, 'Dividende', 'DVD', s.id) + dkv([[divLab, yld ? num(yld * 100, 2) + '%' : null, brvm ? 'dernier dividende net ÷ cours' : 'dividende annualisé ÷ cours'], ['Croissance sur 5 ans (TCAM)', pctS(dpsG5, 2), 'taux de croissance annuel moyen du dividende par action'],
@@ -65,7 +65,7 @@ PAGES.DES = async (m, alive) => {
           ${eq ? dsec(6, 'Dirigeants', '') + (mg.length ? dkv(mg.slice(0, 5).map(([r, nm]) => [esc(r), esc(nm)])) : `<div class="src">${brvm ? 'Non publiés.' : 'Non collectés pour les sociétés US.'}</div>`) : ''}
           ${eq ? dsec(7, 'Actionnariat', 'HDS', s.id) + (hold && hold.length ? dkv(hold.slice(0, 4).map(([nm, p]) => [esc(nm), num(p, 2) + '%'])) : inst && inst.pct ? dkv([['Détention institutionnelle', esc(inst.pct)], ['Nombre d’institutions', inst.n ? num(+inst.n, 0) : null], inst.rows && inst.rows[0] ? ['1er détenteur', esc(inst.rows[0][0])] : null]) : '<div class="src">Actionnariat non encore collecté.</div>') : ''}</div>
       </div>
-      <div class="src">${brvm ? (P.d ? 'Fiche relevée le ' + fds(P.d) : 'Fiche société') : 'Sources : Nasdaq (profil, consensus Zacks, objectifs), SEC EDGAR (comptes, adresse)'} · cours ${fd(s.dt)}${s.live ? ' (séance en cours)' : ''}.</div></div>`;
+      <div class="src">${brvm ? (P.d ? 'Fiche relevée le ' + fds(P.d) : 'Fiche société') : 'Fiche société'} · cours ${fd(s.dt)}${s.live ? ' (séance en cours)' : ''}.</div></div>`;
     miniBbg($('desG'), S);
     return;
   }
@@ -80,7 +80,7 @@ PAGES.DES = async (m, alive) => {
       <div>${dsec(2, 'Capital', 'HDS', s.id)}${dkv([['Nombre de titres', shares ? num(shares, 0) : null], ['Flottant', flt != null ? num(flt, 2) + '%' : null], ['Titres flottants', shares && flt != null ? num(shares * flt / 100, 0) : null], [`Capitalisation (${esc(ccy)})`, s.mcap ? big(s.mcap) : null], ['Capitalisation flottante', s.mcap && flt != null ? big(s.mcap * flt / 100) : null], ['Valeur d’entreprise', F.ev ? big(F.ev) : null], P.val_m ? ['Valorisation (fiche société)', big(P.val_m * 1e6)] : null])}
         ${dsec(3, 'Indices', '')}${dkv(idxs.map(x => [esc(x), '✓']))}</div>
       <div>${dsec(4, 'Négociation', 'LQA', s.id)}${dkv([['Première donnée de cours', fd(s.first), 'début de l’historique disponible, pas la date d’introduction'], ['Volume moyen 20 séances', v20 ? num(v20, 0) : null], ['Montant moyen 60 séances', val60 ? big(val60) + ' ' + ccy : s.liq ? big(s.liq) + ' ' + ccy : null], ['Séances sans échange (60)', S.v.length >= 60 ? `${zero} / 60` : null], ['Volatilité 1 an', s.vol != null ? num(s.vol * 100, 1) + '%' : null], ['Plage 52 semaines', `${px(s, s.lo52)} – ${px(s, s.hi52)}`]])}</div></div>
-      ${brvm ? '' : '<div class="src">Sources : Nasdaq, SEC EDGAR.</div>'}</div>`;
+      </div>`;
     return;
   }
   if (tab === 'r') {
@@ -111,7 +111,7 @@ PAGES.DES = async (m, alive) => {
 </tbody></table></div>
       ${E && E.yr ? `<div style="padding:4px">${dsec(3, 'Consensus du BPA (estimations, pas des résultats publiés)', 'EE', s.id)}<table class="t"><thead><tr><th class="l">Exercice</th><th>BPA estimé</th><th>Bas</th><th>Haut</th><th>Analystes</th></tr></thead><tbody>${E.yr.map(r => `<tr><td class="l est">${esc(r.fiscalEnd)}</td><td class="est">${num(r.consensusEPSForecast, 2)}</td><td>${num(r.lowEPSForecast, 2)}</td><td>${num(r.highEPSForecast, 2)}</td><td>${r.noOfEstimates}</td></tr>`).join('')}</tbody></table></div>` : ''}
       ${q ? `<div style="padding:4px">${dsec(4, 'BPA sur 12 mois glissants, trimestre par trimestre', 'FA', s.id)}<div class="cv" id="desQ" style="height:170px"></div></div>` : ''}
-      <div class="src">${faSrcNote(F)}${brvm ? ' BRVM : aucun consensus d’analystes publié.' : ' Estimations : consensus Zacks via Nasdaq, en bleu clair.'}</div></div>`;
+      <div class="src">${faSrcNote(F)}${brvm ? ' BRVM : aucun consensus d’analystes publié.' : ' Estimations : consensus des analystes, en bleu clair.'}</div></div>`;
     barChart($('desR'), { labels: labs.map(l => l.slice(2)), values: rev.map(v => v == null ? NaN : v * U.k), fmt: v => num(v, U.d), labelsOnBars: true, pos: '#3d7cc9' });
     barChart($('desE'), { labels: labs.map(l => l.slice(2)), values: eps.map(v => v == null ? NaN : v), fmt: v => num(v, 2), labelsOnBars: true, pos: '#f9a33a' });
     if (q) barChart($('desQ'), { labels: q.q.map(d => String(d).slice(2, 4) + '/' + String(d).slice(4, 6)), values: q.eps.map(v => v == null ? NaN : v), fmt: v => num(v, 2), labelsOnBars: true, pos: '#f9a33a', extra: i => 'CA 12 mois ' + num((q.rev[i] || 0) * U.k, U.d) + ' ' + U.lab });
@@ -167,9 +167,9 @@ PAGES.HDS = async (m, alive) => {
     return;
   }
   const I = P.inst; setTabs([['i', 'Institutionnels']], 'i', () => { });
-  if (!I) { m.innerHTML = pn(`${esc(s.n)} · détenteurs`, 'HDS', '<div class="empty">Détenteurs non encore collectés (relevé Nasdaq chaque soir).</div>'); return; }
+  if (!I) { m.innerHTML = pn(`${esc(s.n)} · détenteurs`, 'HDS', '<div class="empty">Détenteurs non encore collectés (relevé chaque soir).</div>'); return; }
   m.innerHTML = `<div class="grid c2">${pn(`${esc(s.n)} · principaux détenteurs institutionnels`, 'HDS', `<div class="tw"><table class="t"><thead><tr><th class="l">#</th><th class="l">Détenteur</th><th class="l">Déclaration</th><th>Titres</th><th>Variation</th><th>Var. %</th><th>Valeur (k$)</th></tr></thead><tbody>
       ${(I.rows || []).map((r, i) => { const ch = nqv(r[3]), pv = nqv(r[4]); return `<tr><td class="l">${i + 1})</td><td class="l nm">${esc(r[0])}</td><td class="l">${usDate(r[1]) || esc(r[1] || '')}</td><td>${nqf(r[2], 0)}</td><td class="${cls(ch)}">${ch != null ? (ch > 0 ? '+' : '') + num(ch, 0) : '—'}</td><td>${pv != null ? sgn(pv / 100, 2) : '—'}</td><td>${nqf(r[5], 0)}</td></tr>`; }).join('')}</tbody></table></div>`,
-      { np: true, lect: `Source : déclarations 13F agrégées par Nasdaq (relevé du ${fds(P.d)}). Les dates de déclaration diffèrent selon les institutions ; seuls les gérants de plus de 100 M$ déclarent.` })}
+      { np: true, lect: `Déclarations 13F des gérants institutionnels (relevé du ${fds(P.d)}). Les dates de déclaration diffèrent selon les institutions ; seuls les gérants de plus de 100 M$ déclarent.` })}
     ${pn('Synthèse', 'HDS', dkv([['Détention institutionnelle', nqv(I.pct) != null ? num(nqv(I.pct), 2) + ' %' : '—'], ['Institutions déclarantes', I.n ? num(+I.n, 0) : null], ['Titres en circulation (M)', nqf(I.sh_m, 0)]].concat((I.pos || []).map(r => [esc(HDS_POS[r[0]] || r[0]), `${nqf(r[1], 0)} inst. · ${nqf(r[2], 0)} titres`]))))}</div>`;
 };

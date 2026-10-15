@@ -156,7 +156,7 @@ def ingest(extra, add, have, log):
         b = body("crypto", sid)
         if not b:
             continue
-        add({"id": sid, "tk": "XBTUSD Curncy" if sid == "BTC" else f"{sid}USD Curncy", "n": n + " (USD, Coinbase)", "cls": "Crypto", "typ": "Crypto", "mkt": "CRYPTO", "grp": "Crypto",
+        add({"id": sid, "tk": "XBTUSD Curncy" if sid == "BTC" else f"{sid}USD Curncy", "n": n + " (USD)", "cls": "Crypto", "typ": "Crypto", "mkt": "CRYPTO", "grp": "Crypto",
              "ccy": "USD", "bench": "BTC"}, b["d"], b["c"], b["o"], b["h"], b["l"], b["v"], ann=365)
     log(f"sources complémentaires : {n0[0]} titres ajoutés")
     return info

@@ -1,6 +1,6 @@
 /* ================= FQT — pages: MONITOR, BRVM, GP, DES, HELP ================= */
 'use strict';
-const codeAttr = code => { const w = String(code || '').trim().split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
+const codeAttr = code => { const c0 = String(code || '').trim(); if (FN[c0]) return c0 === ST.fn ? '' : ` data-fn="${c0}"`; const w = c0.split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
 /* dividende par action : marqué « a » quand il a été ajusté d'un fractionnement (montant publié en infobulle) */
 const adjMark = x => (x && x.adj ? `<i class="qd" title="montant publié : ${num(x.dps0, 2)} par action ancienne ; ajusté du fractionnement (1 → ${num(x.adj, 0)})">a</i>` : '')
   + (x && x.cal ? '<i class="qd" title="montant du calendrier des dividendes de la BRVM (net ou brut selon la société) : l’avis officiel détaille le net">c</i>' : '');
@@ -52,6 +52,7 @@ PAGES.MONITOR = async (m, alive) => {
 PAGES.BRVM = async (m, alive) => {
   const tab = tabState('BRVM', 'm'); setTabs(FN_TABS.BRVM, tab, k => { ST.tab.BRVM = k; render(); });
   if (tab === 'f') return brvmFloat(m, alive);
+  if (tab === 'p') { setTitle('BRVM Market Valuation'); return PAGES.PER(m, alive); }
   const all = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity'), sectors = [...new Set(all.map(s => s.grp))].sort();
   const idx = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Index').sort((a, b) => legacy(a) - legacy(b));
   const st = ST.brvm, rows0 = st.sector === 'ALL' ? all : all.filter(s => s.grp === st.sector);
@@ -103,7 +104,7 @@ async function brvmFloat(m, alive) {
         <td>${x.sh != null ? num(x.sh, 0) : '<span class="dm" title="ligne illisible dans l’avis">n.d.</span>'}</td><td>${x.flt != null ? num(x.flt, 0) : '<span class="dm">n.d.</span>'}</td><td class="wh">${x.pct != null ? num(x.pct, 2) + ' %' : '<span class="dm">n.d.</span>'}</td>
         <td>${x.ok15 == null ? '<span class="dm">—</span>' : x.ok15 ? '<span class="up">respecté</span>' : '<span class="dn">non respecté</span>'}</td><td class="dm">${x.fnow != null ? num(x.fnow, 2) + ' %' : '—'}</td><td>${x.capf ? num(x.capf / 1e9, 1) : '—'}</td></tr>`).join('')}</tbody></table></div>`,
       { np: true, sel: `avis publié le ${fds(F.d)} · ${R.length - nd.length} sociétés lues sur ${R.length}`, tools: F.u ? `<a href="${esc(F.u)}" target="_blank" rel="noopener" class="tb alt">Avis officiel (PDF)</a>` : '',
-        lect: `Flottant = part du capital détenue par le public, déclarée par les émetteurs et les SGI registraires, publiée par la BRVM (Instruction n° 01-2022/BRVM/DG) ; le seuil réglementaire est de 15 % du capital. <b>Flottant du jour</b> = capitalisation flottante ÷ capitalisation globale de la séance (brvm.org). <b>Capi. flottante</b> = titres flottants de l’avis × dernier cours. ${nd.length ? 'Lignes <b>n.d.</b> : illisibles dans le document scanné (' + nd.map(x => x.id).join(', ') + ') — rien n’est estimé.' : ''}` })}
+        lect: `Flottant = part du capital détenue par le public, déclarée par les émetteurs et les SGI registraires (Instruction n° 01-2022/BRVM/DG) ; le seuil réglementaire est de 15 % du capital. <b>Flottant du jour</b> = capitalisation flottante ÷ capitalisation globale de la séance. <b>Capi. flottante</b> = titres flottants de l’avis × dernier cours. ${nd.length ? 'Lignes <b>n.d.</b> : illisibles dans le document scanné (' + nd.map(x => x.id).join(', ') + ') — rien n’est estimé.' : ''}` })}
     <div class="grid" style="align-content:start">
       ${pn('Synthèse', 'BRVM', `<div class="kv2"><span>Sociétés sous le seuil de 15 %</span><b class="${nok.length ? 'dn' : ''}">${nok.length}${nok.length ? ' · ' + nok.map(x => x.id).join(', ') : ''}</b><span>Flottant médian</span><b>${(() => { const v = R.map(x => x.pct).filter(x => x != null).sort((a, b) => a - b); return v.length ? num(v[Math.floor(v.length / 2)], 1) + ' %' : '—'; })()}</b><span>Capitalisation flottante totale</span><b>${big(capF)} XOF</b><span>Capitalisation totale du marché</span><b>${big(capT)} XOF</b><span>Flottant global pondéré</span><b>${capT ? num(capF / capT * 100, 1) + ' %' : '—'}</b></div>`)}
       ${pn('Flottant par société (%)', 'BRVM', cvb('floB', Math.max(300, R.length * 15)))}

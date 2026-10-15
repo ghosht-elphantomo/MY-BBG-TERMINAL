@@ -15,20 +15,25 @@ PAGES.MENU = async m => {
   new TSChart($('mnS'), { panes: [{ h: 1 }], padR: 50, padB: 16 }).set({ x: S.x.slice(k), series: [{ type: 'area', y: S.c.slice(k), color: CL.amber }] });
 };
 
-/* ------------------------------------------------------------------ HELP */
+/* ------------------------------------------------------------------ HELP : démarrage, fonctions par thème (avec leurs onglets), raccourcis, repères */
+const HELP_MKT = () => [['BRVM et UEMOA', MKT_BRVM], ['Vue d’ensemble', ['BRIEF', 'MONITOR', 'NEWS']], ['Portefeuille et sélection', ['PORTF', 'SCREENER', 'ALRT']],
+  ['Marchés mondiaux', ['MAP', 'INDX', 'FG', 'CORP RESULT']], ['Macro, taux et changes', ['NEWS ECO', 'ECWB', 'RATES', 'FX', 'MACRO']], ['Matières premières', ['COMMO', 'BMAP']], ['Analyse quantitative', ['CORR', 'RRG']]];
 PAGES.HELP = async m => {
-  const row = k => `<tr data-fn="${k}" style="cursor:pointer"><td class="l tk">${k}</td><td class="l wh">${FN[k][0]}</td><td class="l nm">${esc(FN[k][3])}</td><td class="l am">${FN[k][1] === 'sec' ? 'SNTS ' + k : k} &lt;GO&gt;</td></tr>`;
-  const t = (title, keys) => pn(title, 'HELP', `<table class="t"><thead><tr><th class="l">Code</th><th class="l">Fonction</th><th class="l">Contenu</th><th class="l">À taper</th></tr></thead><tbody>${keys.map(row).join('')}</tbody></table>`, { np: true });
-  /* écrans regroupés : onglets (cliquables) et anciens codes encore acceptés */
-  const exOf = (f, k) => Object.entries(FN_ALIAS).filter(([, a]) => a[0] === f && (k == null ? !a[1] : a[1] === k)).map(([c]) => c);
-  const grp = Object.entries(FN_TABS).map(([f, L]) => `<tr><td class="l tk" data-fn="${f}" style="cursor:pointer">${f}</td><td class="l wh">${esc(FN[f][4])}</td><td class="l">${L.map(([k, l], i) => { const ex = exOf(f, k); const sc = Object.entries(FN_SHORT).filter(([, a]) => a[0] === f && a[1] === k).map(([c]) => c); return `<span class="cfl" data-fn="${f}" data-t="${k}" style="cursor:pointer">${i + 1}) ${esc(l)}</span>${ex.length ? ` <span class="dm">(ex-${ex.join(', ex-')})</span>` : ''}${sc.length ? ` <span class="dm">· raccourci ${sc.join(', ')}</span>` : ''}`; }).join('<br>')}</td></tr>`).join('')
-    + Object.keys(FN).filter(f => !FN_TABS[f] && exOf(f).length).map(f => `<tr><td class="l tk" data-fn="${f}" style="cursor:pointer">${f}</td><td class="l wh">${esc(FN[f][4])}</td><td class="l"><span class="dm">nouveau nom de ${exOf(f).join(', ')}</span></td></tr>`).join('');
-  m.innerHTML = `<div class="grid c2">${t('Fonctions de marché (touches du haut)', ['MONITOR', 'NEWS'].concat(MKT_KEYS.filter(k => k !== 'NEWS' && k !== 'MONITOR')))}${t('Fonctions d’un titre (onglets sous la cotation)', ['MENU'].concat(SEC_TABS))}</div>
-    ${pn('Écrans regroupés · onglets et anciens codes', 'HELP', `<table class="t"><thead><tr><th class="l">Code</th><th class="l">Écran</th><th class="l">Onglets (clic pour ouvrir)</th></tr></thead><tbody>${grp}</tbody></table>`, { np: true, lect: `Ces écrans réunissent des fonctions qui faisaient doublon : l’onglet 1 est la vue principale, les autres sont des options. Les anciens codes (${Object.keys(FN_ALIAS).join(', ')}) restent acceptés dans la ligne de commande et dans les liens : ils ouvrent directement le bon écran et le bon onglet. Dans un écran à onglets, le numéro de l’onglet + Entrée l’ouvre aussi.` })}
-    ${pn('Utilisation', 'HELP', `<div class="lectb">
-      <p><b>Ligne de commande.</b> Tapez n’importe où : le texte va dans la ligne de commande. <b>SNTS</b> + Entrée ouvre le menu du titre ; <b>SNTS</b> + espace (ou Tab) affiche ses fonctions ; <b>SNTS FA</b> + Entrée ouvre directement l’analyse financière. Une fonction de marché seule (<b>FG</b>, <b>NEWS</b>, <b>CORR</b>…) s’ouvre telle quelle. Dans un menu, un numéro + Entrée ouvre la fonction correspondante. <b>Échap</b> revient à MONITOR.</p>
-      <p><b>Graphiques.</b> Trackpad : deux doigts à l’horizontale = défilement, à la verticale = zoom doux, pincer = zoom. Souris : molette = zoom, glisser = défilement. Double-clic = vue initiale.</p>
-      <p><b>Données.</b> Chaque écran indique sa source et sa date. Une donnée absente est marquée « n.d. » avec la raison ; aucune valeur n’est extrapolée sans être signalée comme estimation.</p></div>`)}`;
+  setTitle('Help');
+  const tabs = f => FN_TABS[f] ? `<div class="hlt">${FN_TABS[f].map(([k, l], i) => `<span data-fn="${esc(f)}" data-t="${esc(k)}" title="Ouvrir ${esc(f)}, onglet ${i + 1}">${i + 1}) ${esc(l)}</span>`).join('')}</div>` : '';
+  const item = (f, ex) => has(f) ? `<div class="hli" data-fn="${esc(f)}"${ex ? ` data-s="${ex}"` : ''}><b>${esc(f)}</b><div><span class="hn">${esc(FN[f][0])}</span><small>${esc(FN[f][3])}</small>${tabs(f)}</div></div>` : '';
+  const grp = (title, list, ex) => { const h = list.map(f => item(f, ex)).join(''); return h ? `<div class="hlg"><h4>${esc(title)}</h4>${h}</div>` : ''; };
+  const ex = ST.sec && Q.by[ST.sec] ? ST.sec : 'SNTS';
+  const start = [['SNTS', 'Le menu du titre : toutes ses fonctions, classées par thème.'], ['SNTS GP', 'Une fonction d’un titre : le ticker, un espace, le code.'], ['BRVM', 'Une fonction de marché : son code seul, ou la touche du haut.'], ['2', 'Un numéro : l’onglet ou la ligne qui porte ce numéro à l’écran.']];
+  const keys = [['F1', 'Cette aide'], ['F2', 'Obligations UEMOA (UEMOA BONDS)'], ['F3', 'Marché BRVM'], ['F4', 'Indices mondiaux (INDX)'], ['Échap', 'Retour au menu du titre ou à MONITOR'], ['◀ ▶', 'Écran précédent / suivant'], ['⤢', 'Plein écran'], ['+', 'Nouvel onglet de fenêtre'], ['Espace / Tab', 'Après un ticker : liste de ses fonctions']];
+  const marks = [['n.d.', 'Donnée non publiée : rien n’est inventé.'], ['≈', 'Estimation, toujours signalée comme telle.'], ['GMT', 'Heures d’Abidjan.'], ['15 min', 'Actualisation des cours en séance ; base complète chaque soir.'], ['a', 'Dividende ajusté d’un fractionnement (montant publié en infobulle).'], ['Graphiques', 'Molette ou pincer = zoom, glisser = déplacer, double-clic = vue initiale.']];
+  const old = Object.entries(FN_ALIAS).filter(([, a]) => has(a[0])).map(([o, [f, t]]) => `<tr data-fn="${esc(o)}" style="cursor:pointer"><td class="l dm">${esc(o)}</td><td class="l">→</td><td class="l tk">${esc(f)}</td><td class="l nm">${t ? 'onglet « ' + esc(tabLabel(f, t) || '') + ' »' : ''}</td></tr>`).join('');
+  const kv = L => `<table class="t hlk"><tbody>${L.map(([a, b]) => `<tr><td class="l tk">${esc(a)}</td><td class="l">${esc(b)}</td></tr>`).join('')}</tbody></table>`;
+  m.innerHTML = `${pn('Démarrer · tout se tape dans la ligne de commande, puis Entrée', 'HELP', `<div class="hls">${start.map(([c, l]) => `<div><b>${esc(c)}<i>&lt;GO&gt;</i></b><span>${esc(l)}</span></div>`).join('')}</div>`)}
+    ${pn('Fonctions de marché · touches du haut, dans cet ordre', 'HELP', `<div class="hlm">${HELP_MKT().map(([t, l]) => grp(t, l)).join('')}</div>`, { lect: 'Clic sur une fonction pour l’ouvrir ; clic sur un onglet (1), 2)…) pour ouvrir directement cette option.' })}
+    ${pn(`Fonctions d’un titre · après le ticker (ex. ${esc(ex)} DES)`, 'HELP', `<div class="hlm">${MENU_GROUPS.map(([t, l]) => grp(t, l, ex)).join('')}</div>`)}
+    <div class="grid c3">${pn('Raccourcis', 'HELP', kv(keys), { np: true })}${pn('Repères', 'HELP', kv(marks), { np: true })}
+      ${pn('Anciens codes · toujours acceptés', 'HELP', `<div class="tw" style="max-height:300px"><table class="t hlk"><tbody>${old}</tbody></table></div>`, { np: true })}</div>`;
 };
 
 /* ------------------------------------------------------------------ CORR (BRVM × monde, paire au choix, valeur de référence) */
