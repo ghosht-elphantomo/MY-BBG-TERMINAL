@@ -206,14 +206,27 @@ def capital_stated(txt):
 
 
 def fiscal_year(txt, hint=None):
+    """Exercice du document : date de clôture écrite, sinon la plus récente des années d'en-tête des tableaux (N / N-1),
+    sinon « exercice AAAA », sinon l'exercice annoncé par le titre (souvent l'année de publication, d'où la prudence)."""
     t = nrm(txt[:15000])
-    for rx in (r"(?:au|clos le|arrete au|exercice clos le|cloture au|clos au)\s+31[ -/.]+(?:decembre|12)[ -/.]+(20\d\d|19\d\d)",
-               r"exercice\s+(20\d\d)", r"(?:bilan|comptes? de resultats?|etats financiers)[^\n]{0,40}?\b(20\d\d)\b"):
+    rxs = (r"(?:au|clos le|arrete au|exercice clos le|cloture au|clos au)\s+31[ -/.]+(?:decembre|12)[ -/.]+(20\d\d|19\d\d)",
+           r"exercice\s+(20\d\d)", r"(?:bilan|comptes? de resultats?|etats financiers)[^\n]{0,40}?\b(20\d\d)\b")
+    ys = [int(y) for y in re.findall(rxs[0], t)]
+    if ys:
+        return hint if hint and hint in ys else max(set(ys), key=ys.count)
+    hy = {}  # en-têtes de colonnes « N | N-1 » (deux années qui se suivent sur la même ligne) : vote pour N
+    for ln in txt.splitlines()[:600]:
+        ys_ = sorted({y for _, _, y in _hdr(ln) if isinstance(y, int) and 1995 <= y <= 2040})
+        if len(ys_) >= 2 and ys_[-1] - 1 in ys_:
+            hy[ys_[-1]] = hy.get(ys_[-1], 0) + 1
+    if hy:
+        y_h = max(hy, key=lambda y: (hy[y], y))
+        if hy[y_h] >= 2 and (not hint or abs(y_h - hint) <= 1):
+            return y_h
+    for rx in rxs[1:]:
         ys = [int(y) for y in re.findall(rx, t)]
         if ys:
-            if hint and hint in ys:
-                return hint
-            return max(set(ys), key=ys.count)
+            return hint if hint and hint in ys else max(set(ys), key=ys.count)
     return hint
 
 
@@ -246,9 +259,15 @@ def doc_kind(txt, title=""):
         return "semestre"
     if re.search(r"trimestr|quarter", ti) and not annual_t:
         return "trimestre"
+    t = nrm(txt[:6000])
+    # titre annuel mais colonnes arrêtées au 30 juin (situation semestrielle déposée sous un titre d'exercice) : semestriel
+    t30 = nrm(txt[:40000])
+    n_juin = len(re.findall(r"(?:^|\s)30 ?(?:juin|/0?6/|-0?6-|\.0?6\.) ?(?:20|19)?\d{2}(?=\s|$)", t30, re.M))
+    n_dec = len(re.findall(r"(?:^|\s)3[14] ?(?:decembre|/12/|-12-|\.12\.) ?(?:20|19)?\d{2}(?=\s|$)", t30, re.M))
+    if annual_t and n_juin >= 2 and n_juin * 2 >= n_dec:
+        return "semestre"
     if annual_t:
         return "annuel"
-    t = nrm(txt[:6000])
     if re.search(r"(?:au |clos le |arrete au |situation au )?30 ?(?:juin|/06/|-06-|\.06\.)\s*\d{2,4}|1er semestre|premier semestre|semestriel", t) and not re.search(r"31 ?(?:decembre|/12/|-12-)\s*\d{2,4}", t[:3000]):
         return "semestre"
     if re.search(r"(?:31 ?(?:mars|/03/)|30 ?(?:septembre|/09/))\s*\d{2,4}", t) and not re.search(r"31 ?(?:decembre|/12/|-12-)\s*\d{2,4}", t[:3000]):
