@@ -1322,17 +1322,20 @@ def brvm_company(sid, s, fd_, fcf, dps_hist, b, tax):
     # états financiers publiés (postes vérifiés) et ratios détaillés, sur tous les exercices lus
     if cc.get("y"):
         Ys = sorted(int(y) for y in cc["y"])
-        secs_ = []
-        for sk, title in ((("bis" if bank else "is"), "Compte de résultat"), (("bbs" if bank else "bs"), "Bilan"), ("cf", "Flux de trésorerie")):
-            rows = []
-            seen = set()
-            for k, lab in CPT_ROWS[sk]:
-                vals = [((cc["y"].get(y) or cc["y"].get(str(y)) or {}).get("v") or {}).get(k) for y in Ys]
-                if any(v is not None for v in vals) and lab not in seen:
-                    seen.add(lab)
-                    rows.append([k, lab, vals])
-            if rows:
-                secs_.append([sk, title, rows])
+        def sections(cc_, Ys_):
+            secs = []
+            for sk, title in ((("bis" if bank else "is"), "Compte de résultat"), (("bbs" if bank else "bs"), "Bilan"), ("cf", "Flux de trésorerie")):
+                rows = []
+                seen = set()
+                for k, lab in CPT_ROWS[sk]:
+                    vals = [((cc_["y"].get(y) or cc_["y"].get(str(y)) or {}).get("v") or {}).get(k) for y in Ys_]
+                    if any(v is not None for v in vals) and lab not in seen:
+                        seen.add(lab)
+                        rows.append([k, lab, vals])
+                if rows:
+                    secs.append([sk, title, rows])
+            return secs
+        secs_ = sections(cc, Ys)
         eps_y = {int(y): v for y, v in (S.get("bnpa") or {}).items() if v is not None}
         dps_y = {int(y): v for y, v in (S.get("dividende") or {}).items() if v}
         dps_y.update({int(y): v for y, v in dps_hist.items() if v})
@@ -1343,9 +1346,26 @@ def brvm_company(sid, s, fd_, fcf, dps_hist, b, tax):
                     px_y[d_ // 10000] = c_
             last_y = b["d"][-1] // 10000
             px_y.pop(last_y, None)  # exercice en cours : pas de « dernier cours de l'exercice »
-        Yr, groups = brvm_ratios(cc, bank, eps_y, dps_y, px_y)
+        # exercices sans comptes détaillés lus : ratios calculés sur les chiffres clés publiés (marqués comme tels)
+        KF = (("ca", "b_pnb" if bank else "chiffre_affaires"), ("resultat_net", "resultat_net"), ("total_bilan", "total_actif"),
+              ("capitaux_propres", "capitaux_propres"), ("ebit", "resultat_exploitation"), ("ebitda", "ebe"),
+              ("depots_clientele", "b_dettes_clientele"), ("credits_clientele", "b_creances_clientele"))
+        ccr, yk = {"y": {str(y): v for y, v in cc["y"].items()}}, []
+        for y in yrs:
+            if str(y) in ccr["y"]:
+                continue
+            v_ = {ck: (S.get(sk) or {}).get(str(y)) for sk, ck in KF}
+            v_ = {k: x for k, x in v_.items() if x is not None}
+            if len(v_) >= 2:
+                ccr["y"][str(y)] = {"v": v_}
+                yk.append(y)
+        Yr, groups = brvm_ratios(ccr, bank, eps_y, dps_y, px_y)
         r["C"] = {"y": Ys, "per": cc.get("per"), "std": cc.get("std"), "s": secs_}
-        r["R"] = {"y": Yr, "g": groups}
+        r["R"] = {"y": Yr, "g": groups, "k": [y for y in yk if y in Yr]}
+        alt = cc.get("alt") or {}
+        if len(alt.get("y") or {}) >= 2:  # l'autre référentiel publié par la société (sociaux / consolidés, SYSCOHADA / IFRS)
+            Ya = sorted(int(y) for y in alt["y"])
+            r["C2"] = {"y": Ya, "per": alt.get("per"), "std": alt.get("std"), "s": sections(alt, Ya)}
     return r
 
 

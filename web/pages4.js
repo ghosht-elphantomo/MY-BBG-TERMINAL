@@ -82,7 +82,7 @@ function ratioFmt(f, v) { if (v == null || !isFinite(v)) return null; return f =
 function ratioTable(F, all) {
   const R = F.R; if (!R || !R.g || !R.g.length) return '<div class="empty">Ratios non calculables (comptes insuffisants).</div>';
   const cols = cptYears({ C: { y: R.y } }, all), ix = y => R.y.indexOf(y); let n = 0;
-  const head = `<tr><th class="l">Ratio</th>${cols.map(y => `<th>FY ${y}</th>`).join('')}</tr>`;
+  const kf = new Set(R.k || []), head = `<tr><th class="l">Ratio</th>${cols.map(y => `<th>FY ${y}${kf.has(y) ? '<sup>a</sup>' : ''}</th>`).join('')}</tr>`;
   const body = R.g.map(([g, rows]) => `<tr class="sec"><td class="l" colspan="${cols.length + 1}">${esc(g)}</td></tr>` + rows.map(([k, lab, f, vals]) => { n++;
     return `<tr><td class="l am">${esc(lab)}${f === 'm' ? ' <span class="dm">(M FCFA)</span>' : ''}</td>${cols.map(y => { const i = ix(y), t = i >= 0 ? ratioFmt(f, vals[i]) : null; return `<td class="${t == null ? '' : (f === 'p' && vals[i] < 0) || (f === 'm' && vals[i] < 0) ? 'dn' : 'wh'}">${t == null ? '<span class="dm">—</span>' : t}</td>`; }).join('')}</tr>`; }).join('')).join('');
   return { html: `<div class="tw"><table class="t acc"><thead>${head}</thead><tbody>${body}</tbody></table></div>`, n };
@@ -98,12 +98,15 @@ PAGES.FA = async (m, alive) => {
   const tab = tabState('FA', 'k'); setTabs([['k', 'Chiffres clés'], ['is', 'Compte de résultat'], ['bs', 'Bilan'], ['cf', 'Flux de trésorerie'], ['r', 'Ratios']], tab, k => { ST.tab.FA = k; render(); });
   setActs([{ n: 97, l: 'Sortie', menu: () => [{ l: 'Exporter le tableau (CSV)', run: exportCSV }, { l: 'Imprimer / PDF', run: () => window.print() }] }]);
   if (tab !== 'k' && isBRVM(F) && F.C && F.C.y && F.C.y.length) {
-    const all = !!st.all, y0 = F.C.y[0], per = F.C.per === 'conso' ? 'consolidés' : 'sociaux', std = F.C.std === 'ifrs' ? 'IFRS' : 'SYSCOHADA';
-    const tools = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Exercices</span><button class="tb ${all ? '' : 'on'}" data-all="0">10 derniers</button><button class="tb ${all ? 'on' : ''}" data-all="1">Tout l’historique (depuis ${y0})</button></div>`;
+    const refL = C => `${C.per === 'conso' ? 'Consolidés' : 'Sociaux'} ${C.std === 'ifrs' ? 'IFRS' : 'SYSCOHADA'}`;
+    const F0 = F, useAlt = !!(st.alt && F.C2 && tab !== 'r'), Fv = useAlt ? Object.assign({}, F, { C: F.C2 }) : F;
+    const all = !!st.all, y0 = Fv.C.y[0], per = Fv.C.per === 'conso' ? 'consolidés' : 'sociaux', std = Fv.C.std === 'ifrs' ? 'IFRS' : 'SYSCOHADA';
+    const tools = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Exercices</span><button class="tb ${all ? '' : 'on'}" data-all="0">10 derniers</button><button class="tb ${all ? 'on' : ''}" data-all="1">Tout l’historique (depuis ${y0})</button>${F0.C2 && tab !== 'r' ? `<span class="tlab" style="margin-left:14px">Comptes</span><button class="tb ${useAlt ? '' : 'on'}" data-alt="0">${refL(F0.C)}</button><button class="tb ${useAlt ? 'on' : ''}" data-alt="1">${refL(F0.C2)}</button>` : ''}</div>`;
     const lect = `Comptes ${per} (${std}) publiés par la société, en millions de FCFA. Un exercice n’est repris que si ses totaux se vérifient dans le document (total actif = total passif, résultat du compte de résultat = résultat du bilan, soldes intermédiaires) ; n.d. = non disponible. Chaque exercice vient de ses propres comptes de préférence (sinon de la colonne « exercice précédent » des comptes suivants).`;
-    if (tab === 'r') { const T = ratioTable(F, all); m.innerHTML = tools + pn(`${esc(s.tk)} · ${T.n || ''} ratios calculés sur les comptes publiés`, 'FA', T.html || T, { np: true, lect: 'Ratios calculés uniquement à partir des postes publiés (aucune estimation) ; « — » = un poste nécessaire manque. Moyennes = (début + fin d’exercice) / 2. BNPA et dividende tels que publiés ; PER et rendement au dernier cours de chaque exercice. ' + lect }); }
-    else { const lab = { is: 'Compte de résultat', bs: 'Bilan', cf: 'Flux de trésorerie' }[tab]; m.innerHTML = tools + pn(`${esc(s.tk)} · ${lab} · comptes publiés`, 'FA', cptTable(F, tab, all), { np: true, lect }); }
+    if (tab === 'r') { const T = ratioTable(F, all); m.innerHTML = tools + pn(`${esc(s.tk)} · ${T.n || ''} ratios calculés sur les comptes publiés`, 'FA', T.html || T, { np: true, lect: 'Ratios calculés uniquement à partir des postes publiés (aucune estimation) ; « — » = un poste nécessaire manque ; <sup>a</sup> = exercice dont les comptes détaillés ne sont pas (encore) lus : ratios calculés sur ses chiffres clés publiés. Moyennes = (début + fin d’exercice) / 2. BNPA et dividende tels que publiés ; PER et rendement au dernier cours de chaque exercice. ' + lect }); }
+    else { const lab = { is: 'Compte de résultat', bs: 'Bilan', cf: 'Flux de trésorerie' }[tab]; m.innerHTML = tools + pn(`${esc(s.tk)} · ${lab} · comptes publiés`, 'FA', cptTable(Fv, tab, all), { np: true, lect }); }
     m.querySelectorAll('[data-all]').forEach(b => b.onclick = () => { st.all = b.dataset.all === '1'; render(); });
+    m.querySelectorAll('[data-alt]').forEach(b => b.onclick = () => { st.alt = b.dataset.alt === '1'; render(); });
     return; }
   if (tab !== 'k') { const ONLY = F.bank ? { is: ['rev', 'ni', 'nm', 'eps', 'dps', 'payout', 'cir', 'cor'], bs: ['eq', 'assets', 'deposits', 'loans', 'ld', 'solv'], cf: ['dps', 'payout'], r: ['roe', 'roa_s', 'nm', 'ld', 'cir', 'cor_l', 'solv', 'payout'] }[tab]
       : { is: ['rev', 'gm', 'ebitda', 'opi', 'ebit', 'om', 'ni', 'nm', 'eps', 'dps', 'payout'], bs: ['cashx', 'cash', 'debt', 'nd', 'eq', 'assets', 'sh'], cf: ['ocf', 'capex', 'fcf', 'fcfm', 'sbc', 'div', 'buy', 'fpay'], r: ['om', 'nm', 'fcfm', 'roe', 'roic', 'nd_ebitda', 'payout', 'fpay'] }[tab];

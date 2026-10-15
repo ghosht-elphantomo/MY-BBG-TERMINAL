@@ -14,6 +14,7 @@ Utilisation en ligne de commande : comptes.py --dir DOSSIER  (index.json + txt/ 
 import gzip
 import json
 import os
+import math
 import re
 import sys
 import unicodedata
@@ -170,6 +171,9 @@ def unit_of(txt):
     if m:
         w = m.group(1)
         return 1e9 if w.startswith("milliard") or w.startswith("md") else 1e6 if w.startswith("million") or w in ("mxof", "mfcfa", "mf", "m fcfa") else 1e3
+    m = re.search(r"(?:\ben|\(|\{)\s*(k|m) ?(?:fcfa|xof|f\.? ?cfa)\b", t)  # « (chiffres en KFCFA) », « en MFCFA »
+    if m:
+        return 1e3 if m.group(1) == "k" else 1e6
     if re.search(r"\(?en (?:millions|milliers)\)?", t):
         return 1e6 if re.search(r"\(?en millions\)?", t) else 1e3
     if re.search(r"en (?:francs? cfa|fcfa|f\.? ?cfa|xof)\b|montants? en f\.? ?cfa", t):
@@ -429,6 +433,9 @@ def parse(txt, fy_hint=None, title="", ocr=False):
         len(re.findall(r"(?<![\d.,])\d{1,2}\.\d{1,2}(?![\d,.])", txt)) < len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) / 2
     fy = fiscal_year(txt, fy_hint)
     lines = txt.splitlines()
+    # montants à quatre groupes de chiffres ou plus : rares dans un document en millions (sinon le document est en francs)
+    grp_ = [len(m_.group(0).split(" ")) for m_ in re.finditer(r"(?<![\d,.])\d{1,3}(?: \d{3})+(?![\d,.])", txt)]
+    few_big = bool(grp_) and sum(1 for g_ in grp_ if g_ >= 4) <= max(6, len(grp_) * 0.1)
     nt_ = nrm(txt)
     revised = bool(re.search(r"^\s*xb\s+chiffre d.affaires|^\s*xi\s+resultat net \(xg", nt_, re.M))
     brut_tbl = False
@@ -528,6 +535,31 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 if s_ == S_PAS:
                     brut_tbl = False
         cells = _cells(ln, skip={e for e, _, _ in h} if h else set())
+        # deux colonnes collées par un seul espace (« 99 149 106 898 » dans un tableau en millions) : un montant impossible dans
+        # l'unité du tableau (un milliard de millions…) est recoupé en deux montants de même ordre de grandeur
+        if not ocr and few_big and any(c[0] == "N" for c in cells):
+            cells2 = []
+            for c in cells:
+                u_c = (unit_side[1] if split and c[3] >= split[0] - 2 else unit_side[0]) or \
+                    (max(set(units_seen), key=units_seen.count) if units_seen else None)
+                tok = ln[c[3]:c[2]]
+                g = re.findall(r"\d+", tok)
+                maxg = {1e6: 3, 1e3: 4}.get(u_c)
+                if c[0] == "N" and maxg and len(g) > maxg and re.fullmatch(r"\d{1,3}(?: \d{3})+", tok.strip()):
+                    best = None
+                    for k_ in range(1, len(g)):
+                        a_, b_ = int("".join(g[:k_])), int("".join(g[k_:]))
+                        if len(g[k_]) == 3 and 1 <= len(g[k_]) and a_ and b_:
+                            sc_ = abs(math.log10(a_) - math.log10(b_))
+                            if best is None or sc_ < best[0]:
+                                best = (sc_, k_, a_, b_)
+                    if best and best[0] <= 1.5 and len(" ".join(g[best[1]:])) and str(g[best[1]]).isdigit() and len(g[best[1]]) <= 3:
+                        _, k_, a_, b_ = best
+                        e1 = c[3] + len(" ".join(g[:k_]))
+                        cells2 += [("N", float(a_), e1, c[3]), ("N", float(b_), c[2], e1 + 1)]
+                        continue
+                cells2.append(c)
+            cells = cells2
         code = cells[0][1] if cells and cells[0][0] == "C" else None
         segs = []  # [(code, libellé, [(valeur, fin)], début)]
         k = 0
@@ -630,7 +662,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 if key is None and cands:
                     t0 = cands[0]
                     if re.fullmatch(r"total(?: general| bilan)?|total general \(?[ivx0-9 +]+\)?", t0):
-                        key = {S_ACT: "total_actif", S_PAS: "total_passif"}.get(s_here, None if s_here in (S_CR, S_FLX) else "_total")
+                        key = {S_ACT: "total_actif~", S_PAS: "total_passif~"}.get(s_here, None if s_here in (S_CR, S_FLX) else "_total")
                 if key is None:
                     if os.environ.get("CPT_DEBUG2"):
                         print("   nokey", i, s_here, cands[:3], [v for v, _ in vals], split, st_)
@@ -668,6 +700,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     guess = set()
     single = single_hint.count(1) > 2 * single_hint.count(2)
     found, alt, ranks = {}, {}, {}
+    secmap = {}  # état d'où vient chaque poste retenu
     # unités par tableau : un montant prend l'unité annoncée en tête de son tableau ; un tableau sans unité annoncée prend
     # l'unité qui rend son total de bilan plausible (0,3 à 60 000 milliards de FCFA), de préférence celle du document
     norm = bool(units_seen)
@@ -676,7 +709,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
         u_doc = unit_of(txt)
         tots, f_stmt = {}, {}
         for key, s_here, per, i, yrs, how, vals, u_occ in occ:
-            if u_occ is None and key in ("total_actif", "total_passif", "_total"):
+            if u_occ is None and key in ("total_actif", "total_passif", "_total", "total_actif~", "total_passif~"):
                 for v, _ in vals:
                     if v:
                         tots[per] = max(tots.get(per, 0), abs(v))
@@ -716,19 +749,21 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             continue
         pk = per
         d = found.setdefault(pk, {})
-        if key in ("total_actif", "total_passif", "_total"):
+        if key in ("total_actif", "total_passif", "_total", "total_actif~", "total_passif~"):
             alt.setdefault(pk, {}).setdefault(key, []).append(yrs)
             continue
         rank = 0 if s_here in SECS.get(key, ()) else 1
         if key not in d:
             d[key] = yrs
             ranks[(pk, key)] = rank
+            secmap[(pk, key)] = s_here
         elif key == "resultat_net" and "resultat_bilan" not in d and s_here is None:
             d["resultat_bilan"] = yrs
             ranks[(pk, "resultat_bilan")] = 1
         elif rank < ranks.get((pk, key), 1):  # le poste figure dans son état : cette occurrence l'emporte
             d[key] = yrs
             ranks[(pk, key)] = rank
+            secmap[(pk, key)] = s_here
         elif rank == ranks.get((pk, key), 1) and all(abs(d[key][y] - v) <= 0.5 for y, v in yrs.items() if y in d[key]) and any(y in d[key] for y in yrs):
             for y, v in yrs.items():  # même poste, mêmes montants : exercices complétés
                 d[key].setdefault(y, v)
@@ -740,16 +775,51 @@ def parse(txt, fy_hint=None, title="", ocr=False):
         d = found.setdefault(pk, {})
         tots = a.get("_total", [])
         for key in ("total_actif", "total_passif"):
-            cand = a.get(key, [])
-            if not cand and len(tots) >= 2:  # « TOTAL » sans état connu : 1re occurrence = actif, 2e = passif
-                cand = [tots[0]] if key == "total_actif" else [tots[1]]
-            if cand:
-                ys = {}
+            ys = {}
+            # libellé explicite d'abord, puis « TOTAL » de l'état pour les exercices qui manquent, puis « TOTAL » sans état connu
+            # (1re occurrence = actif, 2e = passif)
+            for cand in (a.get(key, []), a.get(key + "~", []), ([tots[0]] if key == "total_actif" else [tots[1]]) if len(tots) >= 2 else []):
+                ys_c = {}
                 for c in cand:
                     for y, v in c.items():
-                        if y not in ys or abs(v) > abs(ys[y]):
-                            ys[y] = v
+                        if y not in ys_c or abs(v) > abs(ys_c[y]):
+                            ys_c[y] = v
+                for y, v in ys_c.items():
+                    ys.setdefault(y, v)
+            if ys:
                 d[key] = ys
+    # états d'un même document dans des unités différentes (un tableau en milliers, l'autre en millions) : une identité exacte à un
+    # facteur 1 000 près remet à l'échelle l'état dont le total n'est pas plausible (bilan) ou le compte de résultat face au bilan
+    def plaus(v):
+        return v is not None and 3e8 <= abs(v) <= 3e13
+
+    def ratio_f(a_, b_):
+        ys_ = [y for y in a_ if y in b_ and a_[y] and b_[y]]
+        if not ys_:
+            return None, None
+        f = next((f for f in (1e3, 1e6, 1e-3, 1e-6) if abs(a_[ys_[0]] / b_[ys_[0]] / f - 1) < 0.002), None)
+        return (f, ys_[0]) if f and all(abs(a_[y] / b_[y] / f - 1) < 0.002 for y in ys_) else (None, None)
+
+    def rescale(pk, d, sec_, fac):
+        for k_ in list(d):
+            if secmap.get((pk, k_)) == sec_ or (k_ == "total_actif" and sec_ == S_ACT) or (k_ == "total_passif" and sec_ == S_PAS):
+                d[k_] = {y: v * fac for y, v in d[k_].items()}
+    for pk, d in found.items():
+        f, y0 = ratio_f(d.get("total_actif") or {}, d.get("total_passif") or {})
+        if f:
+            ta0, tp0 = d["total_actif"][y0], d["total_passif"][y0]
+            if plaus(tp0) and not plaus(ta0):
+                rescale(pk, d, S_ACT, 1 / f)
+            elif plaus(ta0) and not plaus(tp0):
+                rescale(pk, d, S_PAS, f)
+        f, y0 = ratio_f(d.get("resultat_net") or {}, d.get("resultat_bilan") or {})
+        if f and secmap.get((pk, "resultat_net")) == S_CR and secmap.get((pk, "resultat_bilan")) == S_PAS:
+            rn0, rb0 = abs(d["resultat_net"][y0]), abs(d["resultat_bilan"][y0])
+            ok_n, ok_b = 1e6 <= rn0 <= 1e12, 1e6 <= rb0 <= 1e12  # (résultat plausible en francs)
+            if ok_b and not ok_n:
+                rescale(pk, d, S_CR, 1 / f)
+            elif ok_n and not ok_b:
+                d["resultat_bilan"] = {y: v * f for y, v in d["resultat_bilan"].items()}
     items = found.get("conso") or {}
     perims = {k: v for k, v in found.items() if v}
     for suf in ("", "_ifrs"):  # périmètre non annoncé : comptes de la société (sociaux), sauf vocabulaire des comptes consolidés
@@ -774,12 +844,12 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 break
     nt = nrm(txt[:8000])
     cur = "USD" if re.search(r"(?:milliers|millions) de dollars|en (?:k|m)?usd\b|us\$|\busd ?(?:000|thousand|million)|thousands of us dollars|in thousands of usd", nt) or \
-        re.search(r"(?:milliers|millions) de dollars (?:eu|us|americains)|(?:milliers|millions) (?:de )?\$ ?eu\b", nrm(txt)) else "XOF"
+        re.search(r"(?:milliers|millions) de dollars? ?(?:eu|us|americains)|(?:milliers|millions) (?:de )?\$ ?(?:eu|us)\b|(?:milliers|millions) d.us ?\$|en (?:k|m)?us ?\$", nrm(txt)) else "XOF"
     std = "ifrs" if main.endswith("_ifrs") else "syscohada"
     KEYS_G = ("total_actif", "total_passif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres", "_total")
     dfl_ = "conso" if conso_hint else "social"
     guess_p = sorted({(dfl_ if p_ == "_" else dfl_ + "_ifrs" if p_ == "__ifrs" else p_) for p_, k_ in guess if k_ in KEYS_G})
-    return {"guess": guess_p, "items": items, "perims": perims, "main": main, "unit": unit, "cap": cap, "fy": fy, "type": "banque" if bank else "entreprise",
+    return {"guess": guess_p, "items": items, "perims": perims, "main": main, "unit": unit, "norm": norm, "cap": cap, "fy": fy, "type": "banque" if bank else "entreprise",
             "cur": cur, "per": doc_kind(txt, title), "std": std, "revised": revised}
 
 
@@ -931,12 +1001,48 @@ def checks(items, year, bank=False):
                 res.append((nm, r_))
     if g("b_pnb") is not None and g("b_charges_generales") is not None and g("b_rbe") is not None:
         res.append(("RBE ≤ PNB", 0.0 if abs(g("b_rbe")) <= abs(g("b_pnb")) else 1.0))
-    if g("capitaux_propres") is not None and g("total_passif") is not None:
-        res.append(("capitaux propres ≤ total", 0.0 if abs(g("capitaux_propres")) <= abs(g("total_passif")) * 1.0001 else 1.0))
+    if g("capitaux_propres") is not None and g("total_passif") is not None and g("capitaux_propres") > 0:
+        # (des capitaux propres négatifs peuvent dépasser le total du bilan en valeur absolue)
+        res.append(("capitaux propres ≤ total", 0.0 if g("capitaux_propres") <= abs(g("total_passif")) * 1.0001 else 1.0))
     if g("chiffre_affaires") is not None and g("ventes_marchandises") is not None and g("ventes_produits") is not None and g("travaux_services") is not None:
         s_ = g("ventes_marchandises") + g("ventes_produits") + g("travaux_services") + (g("produits_accessoires") or 0)
-        res.append(("CA = somme des ventes", rel(s_, g("chiffre_affaires"))))
+        r_ = rel(s_, g("chiffre_affaires"))
+        if r_ is not None and r_ <= 0.001:  # retenue seulement si elle se vérifie (le chiffre d'affaires publié n'inclut pas toujours tout)
+            res.append(("CA = somme des ventes", r_))
     return res
+
+
+# état que chaque identité, vérifiée, confirme (B : bilan, R : compte de résultat) ; « résultat CR = bilan » rapproche deux lectures
+# du seul résultat net et ne confirme aucun état entier
+ID_SEC = {"actif = passif": "B", "actif = somme des postes": "B", "actif = somme des masses": "B", "passif = somme des masses": "B",
+          "passif = ressources stables + dettes": "B", "capitaux propres ≤ total": "B", "RN = RAO + HAO - impôt": "R",
+          "RN = RE + RF + HAO - impôt": "R", "RN = résultat avant impôt - impôt": "R", "RN = RAO - impôt": "R", "RAO = RE + RF": "R",
+          "EBE = VA - personnel": "R", "CA = somme des ventes": "R", "RBE ≤ PNB": "R"}
+CONFIRMS = {n for n in ID_SEC if n not in ("capitaux propres ≤ total", "RBE ≤ PNB")}
+
+
+def _sec_of(k):
+    s_ = SECS.get(k, ())
+    return "B" if (S_ACT in s_ or S_PAS in s_) else "R" if S_CR in s_ else "F" if S_FLX in s_ else None
+
+
+def partial(items, year, c):
+    """Exercice dont une identité forte se vérifie mais une autre échoue : seuls sont gardés les états entièrement confirmés (une
+    identité vérifiée, aucune fausse) et les postes des identités vérifiées ; tout doit alors se vérifier de nouveau.
+    (postes gardés, contrôles) ou None."""
+    fk = dict(IDENT_KEYS, **{"capitaux propres ≤ total": ("capitaux_propres",), "RBE ≤ PNB": ("b_rbe",)})
+    ok_n = [n for n, r in c if r is not None and r <= 0.001]
+    if not any(n in STRONG for n in ok_n):
+        return None
+    ok_keys = {k for n in ok_n if n in CONFIRMS or n in STRONG for k in fk.get(n, ())}
+    ok_sec = {ID_SEC[n] for n in ok_n if n in CONFIRMS}
+    bad_sec = {ID_SEC[n] for n, r in c if r is not None and r > 0.01 and ID_SEC.get(n)}
+    keep = {k for k in items if k in ok_keys or (_sec_of(k) in ok_sec and _sec_of(k) not in bad_sec)}
+    c2 = checks({k: items[k] for k in keep}, year)
+    strong2 = [r for n, r in c2 if n in STRONG and r is not None]
+    if strong2 and min(strong2) <= 0.001 and all(r <= 0.01 for _, r in c2 if r is not None):
+        return keep, c2
+    return None
 
 
 def validate(parsed, year, items=None):
@@ -973,6 +1079,10 @@ def unit_choice(P, items, y):
         cands = [u for u in cands if max(allv) * u <= 1e14]
     if P.get("unit") in cands:
         return P["unit"], cands
+    # petite société (bilan de moins de 300 millions de FCFA) : l'unité annoncée par le document l'emporte (montants en milliers
+    # annoncés « KFCFA » d'une société en sommeil, par exemple)
+    if P.get("unit") and tot and 1e7 <= abs(tot) * P["unit"] < 3e8 and max(allv or [0]) * P["unit"] <= 1e14:
+        return P["unit"], [P["unit"]]
     if len(cands) == 1:
         return cands[0], cands
     return None, cands
@@ -1038,7 +1148,11 @@ def read_doc(texts, meta):
             for y in yrs[:2]:
                 ok, c = validate(P, y, items)
                 if ok:
-                    res.setdefault(per, {})[y] = [(n, round(r, 5)) for n, r in c]
+                    res.setdefault(per, {})[y] = ([(n, round(r, 5)) for n, r in c], None)
+                else:
+                    pr = partial(items, y, c)  # une identité vérifiée, une autre fausse : seul ce qui reste sûr est gardé
+                    if pr:
+                        res.setdefault(per, {})[y] = ([(n, round(r, 5)) for n, r in pr[1]], pr[0])
         score = sum(len(v) for v in res.values()) * 100 + len(P["items"])
         if best is None or score > best[0]:
             best = (score, src, P, res)
@@ -1055,25 +1169,31 @@ def read_doc(texts, meta):
     others = [P_ for s_, P_ in parsed.items() if s_ != src and s_ in OCR_SRC]
     for per, yrs in res.items():
         items = P["perims"][per]
-        for y, chk in yrs.items():
+        for y, (chk, keep) in yrs.items():
             ok_id = {k for n, r in chk if r <= 0.001 for k in IDENT_KEYS.get(n, ())}
             rec = {}
+            cf = []  # montants lus à l'identique par deux reconnaissances de caractères (hors identités)
             for k, v in items.items():
-                if y not in v:
+                if y not in v or (keep is not None and k not in keep):
                     continue
                 x = v[y]
                 if src in OCR_SRC and k not in ok_id:
                     ovs = [((o_["perims"].get(per) or {}).get(k) or {}).get(y) for o_ in others]
                     if not any(ov is not None and abs(ov - x) <= 0.5 for ov in ovs):
                         continue
+                    cf.append(k)
                     # chiffres tronqués par la lecture (les deux lectures butent sur la même image) : un poste habituellement stable
                     # vingt fois plus petit que l'autre exercice du même document n'est pas gardé
                     oy = [v_ for y_, v_ in v.items() if y_ != y and v_]
                     if k in STABLE and x and oy and abs(oy[0]) >= 1e6 and abs(x / oy[0]) < 0.05:
                         continue
                 rec[k] = abs(x) if k in CHARGES else x
-            unit, cands = unit_choice(P, items, y)
+            unit, cands = unit_choice(P, items if keep is None else {k: v for k, v in items.items() if k in keep}, y)
             out["y"].setdefault(per, {})[str(y)] = {"v": rec, "c": chk, "u": unit, "uc": cands, "vk": sorted(k for k in ok_id if k in rec)}
+            if cf:
+                out["y"][per][str(y)]["cf"] = sorted(k for k in cf if k in rec)
+            if keep is not None:
+                out["y"][per][str(y)]["part"] = 1  # états partiellement retenus (une identité fausse a écarté un état)
     return out
 
 
@@ -1091,6 +1211,9 @@ IDENT_KEYS = {"actif = passif": ("total_actif", "total_passif"), "résultat CR =
 
 
 # ---------------------------------------------------------------- consolidation : un jeu de comptes par société et par exercice
+# documents d'une autre entité classés sous le titre : PH-CI (sous Palm CI), SDA CI (sous Bolloré Transport & Logistics CI),
+# SARI CI (sous CFAO Motors CI)
+OTHER_ENTITY = {"PALC": r"\bph ?ci\b|\bphci\b", "SDSC": r"\bsda\b", "CFAC": r"\bsari\b"}
 def _doc_rank(r, y):
     """Préférence entre documents pour un exercice : comptes de l'exercice lui-même (plutôt que la colonne N-1 du suivant),
     définitifs (certifiés, approuvés) plutôt que provisoires, puis le plus récent (un document qui « annule et remplace »)."""
@@ -1121,12 +1244,19 @@ def consolidate(cj, mirror=None):
             continue
         if re.search(r"par secteur|sectoriel|segment|par activite|par pays", nrm((r.get("ti") or "") + " " + u)):
             continue
+        # comptes d'une autre société publiés sous le même titre (filiale, société absorbée) : écartés
+        if r["t"] in OTHER_ENTITY and re.search(OTHER_ENTITY[r["t"]], nrm((r.get("ti") or "") + " " + u.rsplit("/", 1)[-1].replace("_", " "))):
+            continue
+        # présentations (diapositives) : chiffres arrondis ou mis en forme, colonnes et années mal repérables -> jamais retenues
+        if re.search(r"presentation|slides?\b|webinar|roadshow|investor.?day|conference.?(?:des )?analystes", nrm((r.get("ti") or "") + " " + u)):
+            continue
         for per, ys in r["y"].items():
             for y, x in ys.items():
                 recs.append({"t": r["t"], "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"),
                              "uc": x.get("uc") or [], "v": x.get("v") or {}, "vk": set(x.get("vk") or []), "c": x.get("c"), "doc": u,
                              "rank": _doc_rank(r, int(y)), "d": r.get("d"), "ocr": r.get("src") in OCR_SRC,
-                             "guess": per in (r.get("guess") or [])})
+                             "guess": per in (r.get("guess") or []), "cf": set(x.get("cf") or []),
+                             "strong": len({c_[0] for c_ in (x.get("c") or []) if c_[0] in STRONG and c_[1] is not None and c_[1] <= 0.001})})
     known = {}
     for x in recs:
         if x["u"]:
@@ -1152,24 +1282,79 @@ def consolidate(cj, mirror=None):
             if hit:
                 x["u"] = cand
                 break
+    # unité encore indécise (montants en francs ou en milliers ?) : la taille connue de la société la tranche quand une seule des
+    # unités possibles la redonne à moins d'un facteur 10 et que l'autre s'en écarte d'au moins 100 fois de plus
+    import math
+    import statistics
+    scale = {}
+    for x in recs:
+        if x["u"]:
+            for k in ("total_actif", "chiffre_affaires", "b_pnb"):
+                if x["v"].get(k) and x["v"][k] > 0:
+                    scale.setdefault((x["t"], k), []).append(math.log10(x["v"][k] * x["u"] / 1e6))
+    for t_, ser_ in (mirror or {}).items():
+        for k, mk in (("total_actif", "total_bilan"), ("chiffre_affaires", "ca"), ("b_pnb", "ca")):
+            for y_, mv in (ser_.get(mk) or {}).items():
+                if mv and mv > 0:
+                    scale.setdefault((t_, k), []).append(math.log10(mv))
+    for x in recs:
+        if x["u"] or len(x["uc"]) < 2:
+            continue
+        dist = {}
+        for cand in x["uc"]:
+            ds = [abs(math.log10(x["v"][k] * cand / 1e6) - statistics.median(scale[(x["t"], k)]))
+                  for k in ("total_actif", "chiffre_affaires", "b_pnb") if x["v"].get(k) and x["v"][k] > 0 and scale.get((x["t"], k))]
+            if ds:
+                dist[cand] = max(ds)
+        if len(dist) >= 2:
+            o_ = sorted(dist, key=dist.get)
+            if dist[o_[0]] <= 1.0 and dist[o_[1]] - dist[o_[0]] >= 2.0:
+                x["u"] = o_[0]
     recs = [x for x in recs if x["u"]]
     for x in recs:
         x["m"] = {k: round(v * x["u"] / 1e6, 3) for k, v in x["v"].items()}
-    # erreurs d'unité : un poste qui vaut exactement 1 000 fois (ou un millième) la valeur d'une autre source est écarté
-    pool = {}
-    for x in recs:
-        for k, v in x["m"].items():
-            if v:
-                pool.setdefault((x["t"], x["y"], k), []).append(v)
     MK = {"chiffre_affaires": "ca", "b_pnb": "ca", "resultat_net": "resultat_net", "total_actif": "total_bilan", "capitaux_propres": "capitaux_propres",
           "resultat_exploitation": "ebit", "ebe": "ebitda"}
 
     def mirror_v(t, y, k):
         mk = MK.get(k)
         return (((mirror or {}).get(t) or {}).get(mk) or {}).get(str(y)) if mk else None
+
+    def drop_docs(rs, bad_):
+        # un jeu d'états dont une partie est fausse (unité, années, ordre de grandeur) n'est plus cru pour rien : tous ses exercices
+        # sont écartés (un document qui publie des états SYSCOHADA et IFRS compte pour deux jeux)
+        return [x for x in rs if (x["doc"], x["per"]) not in bad_]
+    # reconnaissance de caractères vérifiée par une seule identité (souvent « actif = passif ») : seuls les montants de cette identité,
+    # ceux lus à l'identique par deux reconnaissances (français, anglais), ou ceux qu'un autre document (ou la base de référence)
+    # donne à l'identique, sont gardés
+    idx0 = {}
+    for x in recs:
+        idx0.setdefault((x["t"], x["y"]), []).append(x)
+    dels = []
+    for x in recs:
+        if not x["ocr"] or x["strong"] >= 2:
+            continue
+        for k, v in x["m"].items():
+            if k in x["vk"] or k in x["cf"] or v is None:
+                continue
+            mv = mirror_v(x["t"], x["y"], k)
+            if any(o["doc"] != x["doc"] and o["m"].get(k) is not None and abs(o["m"][k] - v) <= max(0.5, abs(v) * 0.001) for o in idx0[(x["t"], x["y"])]) \
+                    or (mv is not None and abs(v - mv) <= max(0.5, abs(mv) * 0.005)):
+                continue
+            dels.append((x, k))
+    for x, k in dels:
+        x["m"].pop(k, None)
+    recs = [x for x in recs if x["m"]]
+    # erreurs d'unité : un poste qui vaut exactement 1 000 fois (ou un millième) la valeur d'une autre source est écarté
+    pool = {}
+    for x in recs:
+        for k, v in x["m"].items():
+            if v:
+                pool.setdefault((x["t"], x["y"], k), []).append(v)
+
     def scaled(v, o):
         return any(abs(abs(v / o) - f) <= f * 0.005 for f in (1e3, 1e-3, 1e6, 1e-6))
-    keep_ = []
+    bad = set()
     for x in recs:
         # tout l'exercice dans une autre unité que les autres sources (identités vérifiées quelle que soit l'unité) : écarté
         # (seulement face à une valeur confirmée par deux autres sources)
@@ -1186,10 +1371,29 @@ def consolidate(cj, mirror=None):
             elif any(scaled(v, o) and sum(1 for o2 in os_ if abs(o2 - o) <= max(0.5, abs(o) * 0.005)) >= 2 for o in os_):
                 n_sc += 1
         if n_sc >= 2 and n_eq == 0:
-            continue
-        keep_.append(x)
-    recs = keep_
+            bad.add((x["doc"], x["per"]))
+    recs = drop_docs(recs, bad)
+    # ordre de grandeur de la société : un exercice dont le total du bilan (ou le chiffre d'affaires) s'écarte de plus de 300 fois
+    # de la médiane de ses autres exercices est une erreur d'unité (milliers annoncés pour des montants en francs, ou l'inverse)
+    import math
+    import statistics
+    by_t_ = {}
     for x in recs:
+        by_t_.setdefault(x["t"], []).append(x)
+    for t_, xs in by_t_.items():
+        for k_ in ("total_actif", "chiffre_affaires", "b_pnb"):
+            lv = sorted(math.log10(abs(x["m"][k_])) for x in xs if x["m"].get(k_))
+            if len(lv) >= 3:
+                med = lv[len(lv) // 2]
+                bad |= {(x["doc"], x["per"]) for x in xs if x["m"].get(k_) and abs(math.log10(abs(x["m"][k_])) - med) > 2.5}
+    recs = drop_docs(recs, bad)
+    pool = {}  # (sources encore crues seulement)
+    for x in recs:
+        for k, v in x["m"].items():
+            if v:
+                pool.setdefault((x["t"], x["y"], k), []).append(v)
+    for x in recs:
+        n_del = 0
         for k in list(x["m"]):
             v = x["m"][k]
             if not v or k in x["vk"]:
@@ -1200,8 +1404,12 @@ def consolidate(cj, mirror=None):
                 others.append(mv)
             if any(abs(abs(v / o) - f) <= f * 0.005 for o in others if o for f in (1e3, 1e-3, 1e6, 1e-6)):
                 del x["m"][k]
-    # année de chaque colonne : un exercice dont les montants sont ceux d'une autre année dans d'autres sources (colonnes inversées)
-    # est écarté ; un exercice dont le sens des colonnes a été supposé doit être confirmé par une autre source pour la même année
+                n_del += 1
+        if n_del >= 2:
+            bad.add((x["doc"], x["per"]))  # plusieurs postes dans une autre unité : l'unité du document est en cause
+    recs = drop_docs(recs, bad)
+    # année de chiffres : un exercice dont les montants sont ceux d'une autre année dans d'autres sources (colonnes inversées)
+    # discrédite le document ; un exercice dont le sens des colonnes a été supposé doit être confirmé par une autre source
     KEYC = ("total_actif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres")
     idx_ty = {}
     for x in recs:
@@ -1228,11 +1436,55 @@ def consolidate(cj, mirror=None):
         s0 = support(x, x["y"])
         sh = max(support(x, x["y"] - 1, True), support(x, x["y"] + 1, True))
         if sh >= 2 and s0 == 0:
-            continue  # montants d'une autre année
+            bad.add((x["doc"], x["per"]))  # montants d'une autre année
+            continue
         if x["guess"] and s0 == 0:
             continue  # sens des colonnes non confirmé
         keep.append(x)
-    recs = keep
+    recs = drop_docs(keep, bad)
+    # reconnaissance de caractères vérifiée par une seule identité : un total du bilan qui change de plus de 3 fois d'une colonne à
+    # l'autre du même document trahit une lecture fautive
+    by_d = {}
+    for x in recs:
+        if x["ocr"] and x["strong"] < 2 and x["m"].get("total_actif"):
+            by_d.setdefault((x["doc"], x["per"]), []).append(x["m"]["total_actif"])
+    for dk, tas in by_d.items():
+        if len(tas) >= 2 and min(tas) > 0 and max(tas) / min(tas) > 3:
+            bad.add(dk)
+    recs = drop_docs(recs, bad)
+    # cohérence dans le temps : un total du bilan ou un chiffre d'affaires non confirmé par une autre source, plus de 4 fois plus grand
+    # (ou plus petit) que ceux des exercices voisins donnés par les autres sources, discrédite le document
+    NBK = ("total_actif", "chiffre_affaires", "b_pnb")
+    ref_ = {}
+    for x in recs:
+        for k in NBK:
+            v = x["m"].get(k)
+            if v and v > 0:
+                ref_.setdefault((x["t"], k, x["y"]), []).append((x["doc"], v))
+
+    def ref_vals(x, k, y):
+        ws = [w for d_, w in ref_.get((x["t"], k, y), []) if d_ != x["doc"]]
+        mv = mirror_v(x["t"], y, k)
+        return ws + ([mv] if mv and mv > 0 else [])
+    for x in recs:
+        for k in NBK:
+            v = x["m"].get(k)
+            if not v or v <= 0:
+                continue
+            nb_o = [statistics.median(math.log10(w) for w in ref_vals(x, k, y)) for y in range(x["y"] - 2, x["y"] + 3)
+                    if y != x["y"] and ref_vals(x, k, y)]
+            if any(abs(w - v) <= max(0.5, w * 0.005) for w in ref_vals(x, k, x["y"])):
+                # confirmé par une autre source du même exercice : seule une erreur d'unité commune à ces sources (plus de 30 fois
+                # l'ordre de grandeur des exercices voisins) le discrédite
+                if len(nb_o) >= 2 and abs(math.log10(v) - statistics.median(nb_o)) > 1.5:
+                    bad.add((x["doc"], x["per"]))
+                continue
+            same_ = ref_vals(x, k, x["y"])
+            nb = nb_o + ([statistics.median(math.log10(w) for w in same_)] if same_ else [])
+            if len(nb) >= 2 and abs(math.log10(v) - statistics.median(nb)) > math.log10(4):
+                bad.add((x["doc"], x["per"]))
+    recs = drop_docs(recs, bad)
+    consolidate.bad = bad  # (documents écartés, pour contrôle)
     out = {}
     by_t = {}
     for x in recs:
@@ -1252,88 +1504,184 @@ def consolidate(cj, mirror=None):
                         n += 1
                         ok += abs(x["m"][k] - mv) <= abs(mv) * 0.01 + 0.5
             return (ok / n if n else 0, len({x["y"] for x in g}), g[0]["std"] == "syscohada", n)
-        main = max(groups, key=lambda k: agree(groups[k])[:3])
-        ag = agree(groups[main])
-        res = {}
-        for y in sorted({x["y"] for x in groups[main]}):
-            cand = sorted([x for x in groups[main] if x["y"] == y], key=lambda x: x["rank"], reverse=True)
-            # document principal de l'exercice : en couche texte, ses propres comptes, définitifs de préférence ; ses montants
-            # sont gardés ensemble (un exercice cohérent), les autres documents complètent les postes qu'il n'a pas
-            prim = max(cand, key=lambda x: (not x["ocr"], x["rank"][0], x["rank"][1], len(x["vk"]), x["rank"][2]))
-            v, nsrc = {}, {}
-            for k in sorted({k for x in cand for k in x["m"]}):
-                vals = {}
+        def years_of(gk_):
+            res = {}
+            for y in sorted({x["y"] for x in groups[gk_]}):
+                cand = sorted([x for x in groups[gk_] if x["y"] == y], key=lambda x: x["rank"], reverse=True)
+                # document principal de l'exercice : en couche texte, ses propres comptes, définitifs de préférence ; ses montants
+                # sont gardés ensemble (un exercice cohérent), les autres documents complètent les postes qu'il n'a pas
+                prim = max(cand, key=lambda x: (not x["ocr"], x["rank"][0], x["rank"][1], len(x["vk"]), x["rank"][2]))
+                # un autre document (comptes au moins aussi définitifs, en couche texte) dont les chiffres clés vérifiés sont repris
+                # par plus de sources (documents distincts, base de référence) que ceux du document principal, sans jamais l'être
+                # moins : ce sont les chiffres retenus par la société après coup (exercice corrigé) ; il devient le document principal
+                def votes(x, k):
+                    v_ = x["m"][k]
+                    n_ = len({o["doc"] for o in cand if o["m"].get(k) is not None and abs(o["m"][k] - v_) <= max(0.5, abs(v_) * 0.001)})
+                    mv_ = mirror_v(t, y, k)
+                    return n_ + (1 if mv_ and abs(v_ - mv_) <= abs(mv_) * 0.005 + 0.5 else 0)
+                better = []
                 for x in cand:
-                    if k not in x["m"]:
+                    if x is prim or x["ocr"] or x["rank"][1] < prim["rank"][1]:
                         continue
-                    val = x["m"][k]
-                    key_ = next((z for z in vals if abs(z - val) <= max(0.5, abs(z) * 0.001)), val)
-                    o = vals.setdefault(key_, {"ver": False, "txt": False, "n": 0, "rank": (0, 0, "")})
-                    o["ver"] |= k in x["vk"]
-                    o["txt"] |= not x["ocr"]
-                    o["n"] += 1
-                    o["rank"] = max(o["rank"], x["rank"])
-                mv = mirror_v(t, y, k)
-                fin_ = max(o["rank"][:2] for o in vals.values())
-                for z, o in vals.items():
-                    # la base de référence départage des comptes de même rang, mais ne fait préférer ni des comptes
-                    # provisoires à des comptes définitifs, ni la colonne N-1 de l'exercice suivant aux comptes de l'exercice
-                    o["m"] = 1 if mv and abs(z - mv) <= abs(mv) * 0.005 + 0.5 and o["rank"][:2] >= fin_ else 0
-                best_v = max(vals, key=lambda z: (vals[z]["ver"], vals[z]["txt"], vals[z]["n"] + vals[z]["m"], vals[z]["rank"]))
-                if k in prim["m"] and k in prim["vk"]:
-                    # montant vérifié du document principal : gardé avec les autres membres de ses identités
-                    best_v = next(z for z in vals if abs(z - prim["m"][k]) <= max(0.5, abs(z) * 0.001))
-                v[k] = best_v
-                nsrc[k] = vals[best_v]["n"]
-            # les deux membres d'une identité (total de l'actif et du passif, résultat du compte de résultat et du bilan) viennent
-            # d'un même document quand les sources divergent ; sinon le second est retiré
-            for a_k, b_k in (("total_actif", "total_passif"), ("resultat_net", "resultat_bilan")):
-                if v.get(a_k) is None or v.get(b_k) is None or abs(v[a_k] - v[b_k]) <= max(0.5, abs(v[a_k]) * 0.001):
-                    continue
-                both = [x for x in cand if x["m"].get(a_k) is not None and x["m"].get(b_k) is not None
-                        and abs(x["m"][a_k] - x["m"][b_k]) <= max(0.5, abs(x["m"][a_k]) * 0.001)]
-                if a_k in prim["m"] and b_k not in prim["m"]:
-                    del v[b_k]  # (le document principal n'a que le premier membre)
-                elif both:
-                    x0 = max(both, key=lambda x: (x is prim, a_k in x["vk"], not x["ocr"], x["rank"]))
-                    v[a_k], v[b_k] = x0["m"][a_k], x0["m"][b_k]
-                else:
-                    del v[b_k]
-            # contrôle final de l'exercice reconstitué : une identité qui ne se vérifie plus (montants de documents différents)
-            # -> les montants du document principal reprennent la main ; les postes d'autres documents encore en cause sont retirés
-            def bad_ids(v_):
-                it_ = {k_: {0: val_} for k_, val_ in v_.items()}
-                return [n_ for n_, r_ in checks(it_, 0) if r_ is not None and r_ > 0.002 and n_ in IDENT_KEYS]
-            if bad_ids(v):
-                for k_ in prim["m"]:
-                    if k_ in v:
-                        v[k_] = prim["m"][k_]
-                for n_ in bad_ids(v):
-                    for k_ in IDENT_KEYS[n_]:
-                        if k_ in v and k_ not in prim["m"]:
-                            del v[k_]
-            best = cand[0]
-            res[y] = {"v": v, "n": max(nsrc.get(k, 1) for k in ("total_actif", "resultat_net") if k in nsrc) if any(k in nsrc for k in ("total_actif", "resultat_net")) else 1,
-                      "d": best["d"], "own": best["rank"][0], "ns": nsrc}
+                    win = lose = 0
+                    for k in ("total_actif", "resultat_net", "chiffre_affaires", "b_pnb"):
+                        if k not in x["vk"] or k not in prim["vk"] or abs(x["m"][k] - prim["m"][k]) <= max(0.5, abs(x["m"][k]) * 0.001):
+                            continue
+                        if votes(x, k) > votes(prim, k):
+                            win += 1
+                        else:
+                            lose += 1
+                    if win and not lose:
+                        better.append(x)
+                if better:
+                    prim = max(better, key=lambda x: (x["rank"][1], len(x["vk"]), x["rank"][2]))
+                v, nsrc = {}, {}
+                for k in sorted({k for x in cand for k in x["m"]}):
+                    vals = {}
+                    for x in cand:
+                        if k not in x["m"]:
+                            continue
+                        val = x["m"][k]
+                        key_ = next((z for z in vals if abs(z - val) <= max(0.5, abs(z) * 0.001)), val)
+                        o = vals.setdefault(key_, {"ver": False, "txt": False, "n": 0, "rank": (0, 0, ""), "fin": 0, "docs": set()})
+                        o["ver"] |= k in x["vk"]
+                        o["txt"] |= not x["ocr"]
+                        o["docs"].add(x["doc"])
+                        o["n"] = len(o["docs"])
+                        o["rank"] = max(o["rank"], x["rank"])
+                        o["fin"] = max(o["fin"], x["rank"][1])
+                    mv = mirror_v(t, y, k)
+                    fin_ = max(o["rank"][:2] for o in vals.values())
+                    for z, o in vals.items():
+                        # la base de référence départage des comptes de même rang, mais ne fait préférer ni des comptes
+                        # provisoires à des comptes définitifs, ni la colonne N-1 de l'exercice suivant aux comptes de l'exercice
+                        o["mr"] = 1 if mv and abs(z - mv) <= abs(mv) * 0.005 + 0.5 else 0
+                        o["m"] = o["mr"] if o["rank"][:2] >= fin_ else 0
+                    best_v = max(vals, key=lambda z: (vals[z]["ver"], vals[z]["txt"], vals[z]["n"] + vals[z]["m"], vals[z]["rank"]))
+                    if k in prim["m"] and k in prim["vk"]:
+                        # montant vérifié du document principal : gardé avec les autres membres de ses identités, sauf si un autre
+                        # montant vérifié, de comptes au moins aussi définitifs, est donné par plus de sources (documents distincts
+                        # et base de référence) : chiffre repris et corrigé dans les publications suivantes
+                        zp = next(z for z in vals if abs(z - prim["m"][k]) <= max(0.5, abs(z) * 0.001))
+                        sp_ = vals[zp]["n"] + vals[zp]["mr"]
+                        alt_ = [z for z, o in vals.items() if z != zp and o["ver"] and o["fin"] >= prim["rank"][1] and o["n"] + o["mr"] > sp_]
+                        best_v = max(alt_, key=lambda z: (vals[z]["n"] + vals[z]["mr"], vals[z]["txt"], vals[z]["rank"])) if alt_ else zp
+                    v[k] = best_v
+                    nsrc[k] = vals[best_v]["n"]
+                # les deux membres d'une identité (total de l'actif et du passif, résultat du compte de résultat et du bilan) viennent
+                # d'un même document quand les sources divergent ; sinon le second est retiré
+                for a_k, b_k in (("total_actif", "total_passif"), ("resultat_net", "resultat_bilan")):
+                    if v.get(a_k) is None or v.get(b_k) is None or abs(v[a_k] - v[b_k]) <= max(0.5, abs(v[a_k]) * 0.001):
+                        continue
+                    both = [x for x in cand if x["m"].get(a_k) is not None and x["m"].get(b_k) is not None
+                            and abs(x["m"][a_k] - x["m"][b_k]) <= max(0.5, abs(x["m"][a_k]) * 0.001)]
+                    if a_k in prim["m"] and b_k not in prim["m"]:
+                        del v[b_k]  # (le document principal n'a que le premier membre)
+                    elif both:
+                        x0 = max(both, key=lambda x: (x is prim, a_k in x["vk"], not x["ocr"], x["rank"]))
+                        v[a_k], v[b_k] = x0["m"][a_k], x0["m"][b_k]
+                    else:
+                        del v[b_k]
+                # contrôle final de l'exercice reconstitué : une identité qui ne se vérifie plus (montants de documents différents)
+                # -> les montants du document principal reprennent la main ; les postes d'autres documents encore en cause sont retirés
+                def bad_ids(v_):
+                    it_ = {k_: {0: val_} for k_, val_ in v_.items()}
+                    return [n_ for n_, r_ in checks(it_, 0) if r_ is not None and r_ > 0.002 and n_ in IDENT_KEYS]
+                if bad_ids(v):
+                    for k_ in prim["m"]:
+                        if k_ in v:
+                            v[k_] = prim["m"][k_]
+                    for n_ in bad_ids(v):
+                        for k_ in IDENT_KEYS[n_]:
+                            if k_ in v and k_ not in prim["m"]:
+                                del v[k_]
+                # solidité de chaque montant retenu : membre d'une identité vérifiée de son document, ou donné à l'identique par au
+                # moins deux documents, ou par la base de référence. Un montant isolé qui contredit la base de référence n'est pas
+                # affiché (un seul document, rien pour départager)
+                weak = []
+                for k_ in list(v):
+                    if k_ not in v:
+                        continue
+                    sup_ = [x for x in cand if x["m"].get(k_) is not None and abs(x["m"][k_] - v[k_]) <= max(0.5, abs(v[k_]) * 0.001)]
+                    # (une identité vérifiée ne compte que lue dans la couche texte, ou par reconnaissance de caractères avec au moins
+                    # deux identités : une page numérisée qui juxtapose plusieurs tableaux peut donner « actif = passif » d'un autre état)
+                    if any(k_ in x["vk"] and (not x["ocr"] or x["strong"] >= 2) for x in sup_) or len({x["doc"] for x in sup_}) >= 2:
+                        continue
+                    mv = mirror_v(t, y, k_)
+                    if mv is not None and abs(v[k_] - mv) <= abs(mv) * 0.005 + 0.5:
+                        continue
+                    if mv and scaled(v[k_], mv) and k_ in ("total_actif", "total_passif", "chiffre_affaires", "b_pnb"):
+                        # écart d'un facteur 1 000 : erreur d'unité d'un côté ; l'ordre de grandeur de la société tranche
+                        sc_ = scale.get((t, "total_actif" if k_ == "total_passif" else k_), [])
+                        if len(sc_) >= 2 and abs(math.log10(abs(v[k_])) - statistics.median(sc_)) <= 1 \
+                                and abs(math.log10(abs(mv)) - statistics.median(sc_)) > 2:
+                            continue  # (c'est la base qui se trompe d'unité)
+                    if mv:  # (un zéro de la base de référence est une donnée manquante)
+                        for k2_ in {"total_actif": ("total_passif",), "resultat_net": ("resultat_bilan",)}.get(k_, ()):
+                            if v.get(k2_) is not None and abs(v[k2_] - v[k_]) <= max(0.5, abs(v[k_]) * 0.001):
+                                del v[k2_]  # (l'autre membre de l'identité, même montant)
+                        del v[k_]
+                    else:
+                        weak.append(k_)
+                # vraisemblance entre postes : un montant isolé impossible face aux autres (capitaux propres ou résultat supérieurs au
+                # total du bilan, produit net bancaire supérieur à la moitié du bilan, chiffre d'affaires de plus de 20 fois le bilan)
+                for k_ in ("chiffre_affaires", "b_pnb", "total_actif", "total_passif", "ventes_marchandises", "ventes_produits", "travaux_services"):
+                    if v.get(k_) is not None and v[k_] < 0:
+                        del v[k_]  # (un chiffre d'affaires ou un total négatif est une erreur de lecture)
+                ta_ = v.get("total_actif") or v.get("total_passif")
+                if ta_ and ta_ > 0:
+                    for k_, lim_ in (("capitaux_propres", 1.001), ("resultat_net", 1.0), ("b_pnb", 0.5), ("chiffre_affaires", 20.0)):
+                        if v.get(k_) is not None and abs(v[k_]) > ta_ * lim_:
+                            if k_ in weak or "total_actif" not in v:
+                                del v[k_]
+                            elif "total_actif" in weak:
+                                v.pop("total_actif", None)
+                                v.pop("total_passif", None)
+                            else:
+                                del v[k_]
+                weak = [k_ for k_ in weak if k_ in v]
+                best = cand[0]
+                res[y] = {"v": v, "n": max(nsrc.get(k, 1) for k in ("total_actif", "resultat_net") if k in nsrc) if any(k in nsrc for k in ("total_actif", "resultat_net")) else 1,
+                          "d": best["d"], "own": best["rank"][0], "ns": nsrc}
+                if weak:
+                    res[y]["w"] = sorted(weak)
+            return res
+        # référentiel principal : celui qui couvre le mieux les exercices récents, puis qui concorde le mieux avec la base de
+        # référence, puis qui couvre le plus d'exercices (comptes SYSCOHADA à égalité) ; l'autre référentiel publié reste proposé
+        y_max = max(x["y"] for x in xs)
+        main = max(groups, key=lambda k: (len({x["y"] for x in groups[k] if x["y"] >= y_max - 4}),) + agree(groups[k])[:3])
+        res = years_of(main)
+
         # concordance avec la base de référence (même périmètre, mêmes normes ?) : un écart confirmé par au moins deux documents
         # officiels est une erreur de la base, pas un autre périmètre
-        a_ok = a_n = rn_ok = rn_n = 0
-        for y, r in res.items():
-            for k in ("chiffre_affaires", "b_pnb", "resultat_net", "total_actif"):
-                mv = mirror_v(t, y, k)
-                if not mv or r["v"].get(k) is None:
-                    continue  # (un zéro de la base de référence est une donnée manquante)
-                ok_ = abs(r["v"][k] - mv) <= abs(mv) * 0.01 + 0.5 or r["ns"].get(k, 1) >= 2
-                a_n += 1
-                a_ok += ok_
-                if k == "resultat_net":
-                    rn_n += 1
-                    rn_ok += ok_
+        def agree_res(res_):
+            a_ok = a_n = rn_ok = rn_n = 0
+            for y, r in res_.items():
+                for k in ("chiffre_affaires", "b_pnb", "resultat_net", "total_actif"):
+                    mv = mirror_v(t, y, k)
+                    if not mv or r["v"].get(k) is None:
+                        continue  # (un zéro de la base de référence est une donnée manquante)
+                    ok_ = abs(r["v"][k] - mv) <= abs(mv) * 0.01 + 0.5 or r["ns"].get(k, 1) >= 2
+                    a_n += 1
+                    a_ok += ok_
+                    if k == "resultat_net":
+                        rn_n += 1
+                        rn_ok += ok_
+            return (a_ok / a_n if a_n else 0, a_n, round(rn_ok / rn_n, 3) if rn_n else None, rn_n)
+        ag = agree_res(res)
         for r in res.values():
             r.pop("ns", None)
-        ag = (a_ok / a_n if a_n else 0, 0, 0, a_n)
-        out[t] = {"y": res, "per": main[0].replace("_ifrs", ""), "std": main[1], "agree": round(ag[0], 3), "ncmp": ag[3],
-                  "agree_rn": round(rn_ok / rn_n, 3) if rn_n else None, "n_rn": rn_n}
+        out[t] = {"y": res, "per": main[0].replace("_ifrs", ""), "std": main[1], "agree": round(ag[0], 3), "ncmp": ag[1],
+                  "agree_rn": ag[2], "n_rn": ag[3]}
+        alts = [k for k in groups if k != main and len({x["y"] for x in groups[k]}) >= 2]
+        if alts:  # autre référentiel publié (comptes sociaux / consolidés, SYSCOHADA / IFRS) : le plus complet
+            k2 = max(alts, key=lambda k: (len({x["y"] for x in groups[k] if x["y"] >= y_max - 4}), len({x["y"] for x in groups[k]})))
+            r2 = years_of(k2)
+            a2 = agree_res(r2)
+            for r in r2.values():
+                r.pop("ns", None)
+            out[t]["alt"] = {"y": r2, "per": k2[0].replace("_ifrs", ""), "std": k2[1], "agree": round(a2[0], 3), "ncmp": a2[1],
+                             "agree_rn": a2[2], "n_rn": a2[3]}
     return out
 
 

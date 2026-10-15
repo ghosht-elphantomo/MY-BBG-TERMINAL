@@ -356,14 +356,19 @@ def main():
                 f["cpt"] = cc
                 cpt_chk["t"] += 1
                 # même périmètre et mêmes normes que la base : la plupart des montants communs concordent, et le résultat net aussi
-                # (des écarts isolés sont des erreurs ou des chiffres provisoires de la base, corrigés par les comptes publiés)
-                same_basis = cc["ncmp"] < 3 or (cc["agree"] >= .5 and (cc.get("n_rn", 0) < 2 or (cc.get("agree_rn") or 0) >= .5))
-                if not same_basis:
+                # (des écarts isolés sont des erreurs ou des chiffres provisoires de la base, corrigés par les comptes publiés) ;
+                # sinon l'autre référentiel publié par la société, s'il est celui de la base, sert aux chiffres clés
+                def same_basis(g_):
+                    return g_["ncmp"] < 3 or (g_["agree"] >= .5 and (g_.get("n_rn", 0) < 2 or (g_.get("agree_rn") or 0) >= .5))
+                src_g = cc if same_basis(cc) else (cc["alt"] if cc.get("alt") and cc["alt"].get("ncmp", 0) >= 3 and same_basis(cc["alt"]) else None)
+                if src_g is None:
                     cpt_chk["detail_only"].append(f'{t} ({cc["per"]}, {cc["agree"]:.0%} de {cc["ncmp"]})')
                     continue
+                if src_g is not cc:
+                    cpt_chk.setdefault("alt_used", []).append(f'{t} ({src_g["per"]} {src_g["std"]})')
                 ser = f.setdefault("series", {})
-                bank = bank_t.get(t) or any("b_pnb" in r["v"] for r in cc["y"].values())
-                for y, r in cc["y"].items():
+                bank = bank_t.get(t) or any("b_pnb" in r["v"] for r in src_g["y"].values())
+                for y, r in src_g["y"].items():
                     v, ys = r["v"], str(y)
                     cpt_chk["y"] += 1
                     pairs = [("ca", "b_pnb" if bank else "chiffre_affaires")] + list(MAPC)
@@ -378,6 +383,7 @@ def main():
                         if "_cdr" in v:
                             pairs.append(("cout_du_risque", "_cdr"))
                     changed = False
+                    weak_ = set(r.get("w") or ())
                     for sk, ck in pairs:
                         if v.get(ck) is None:
                             continue
@@ -386,6 +392,8 @@ def main():
                         new = round(v[ck], 1)
                         if old is not None and abs(old - new) <= 0.6:
                             continue  # même montant (arrondi au million près)
+                        if old is not None and ck in weak_:
+                            continue  # montant d'un seul document, sans identité vérifiée : ne remplace pas un montant existant
                         if old is None:
                             cpt_chk["fill"] += 1
                         elif abs(old - new) > max(1.0, abs(old) * .005):
@@ -398,8 +406,9 @@ def main():
                     if changed:  # ratios de la base tierce calculés sur les montants corrigés : retirés (recalculés plus loin)
                         for dk in DERIVED:
                             (ser.get(dk) or {}).pop(ys, None)
-            log("comptes publiés BRVM :", {k: v for k, v in cpt_chk.items() if k not in ("ex", "detail_only")},
-                ("; périmètre différent de la base, détail seulement : " + ", ".join(cpt_chk["detail_only"])) if cpt_chk["detail_only"] else "")
+            log("comptes publiés BRVM :", {k: v for k, v in cpt_chk.items() if k not in ("ex", "detail_only", "alt_used")},
+                ("; périmètre différent de la base, détail seulement : " + ", ".join(cpt_chk["detail_only"])) if cpt_chk["detail_only"] else "",
+                ("; chiffres clés pris dans l'autre référentiel publié : " + ", ".join(cpt_chk["alt_used"])) if cpt_chk.get("alt_used") else "")
             if cpt_chk["ex"]:
                 log("comptes corrigés d'après les états publiés :", "; ".join(cpt_chk["ex"]))
         except Exception as e:  # noqa: BLE001

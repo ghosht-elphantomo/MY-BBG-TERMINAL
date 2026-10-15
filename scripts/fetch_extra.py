@@ -1083,18 +1083,29 @@ def run_comptes(out):
     except Exception as e:  # noqa: BLE001
         note("comptes", False, f"liste des publications : {e}")
         return
-    cats = {"financial_statements": 0, "financial_results": 1, "annual_report": 2}
+    # états financiers d'abord ; puis communiqués de résultats et rapports des commissaires aux comptes (souvent accompagnés des
+    # états, ex. Sonatel), rapports annuels, enfin rapports de la société et rapports d'activité qui contiennent des états
+    cats = {"financial_statements": 0, "financial_results": 1, "auditor_report": 1, "annual_report": 2, "company_report": 3, "activity_report": 3}
+    fin_rx = re.compile(r"(?i)etats?[_ -]+financ|etat[_ -]+financ|comptes|bilan|resultats|rapport[_ -]+annuel|_ra_|_ef[acpn]_|annual|financial")
     cand = {}
     for e in evs:
         u = (e.get("document_url") or "").strip()
         if e.get("category") not in cats or not e.get("ticker") or not u.lower().endswith(".pdf") or "brvm.org" not in u:
+            continue
+        if cats[e["category"]] >= 1 and e["category"] in ("auditor_report", "company_report", "activity_report") and \
+                not fin_rx.search(u.rsplit("/", 1)[-1] + " " + (e.get("title") or "")):
             continue
         cand.setdefault(u, e)
     todo = sorted(cand.values(), key=lambda e: (cats[e["category"]], -int(re.sub(r"\D", "", e.get("published_at") or "0")[:8] or 0)))
     def again(m):  # document à reprendre : erreur de téléchargement, ou long scan pas encore lu par reconnaissance de caractères
         if str(m.get("st", "")).startswith("erreur"):
             return m.get("n_err", 0) < 3
-        return m.get("q", 99) < 40 and not m.get("ocr") and "found" not in m and 0 < (m.get("pages") or 0) <= 120
+        if m.get("q", 99) < 40 and not m.get("ocr") and "found" not in m and 0 < (m.get("pages") or 0) <= 120:
+            return True
+        # document court dont la couche texte n'a rien donné de vérifiable et dont une partie seulement des pages a été lue par
+        # reconnaissance de caractères (couche texte garnie mais illisible : police sans table de caractères) : toutes les pages
+        return (m.get("st0") not in (None, "ok") and 0 < (m.get("pages") or 0) <= 20 and m.get("ocr") is not None
+                and 0 < m["ocr"] < m["pages"] and not m.get("ocr_all"))
     todo = [e for e in todo if e["document_url"] not in docs or again(docs[e["document_url"]])]
     if not pdf_tools():
         note("comptes", False, "outils PDF absents")
@@ -1225,13 +1236,16 @@ def cpt_ocr_pages(p_, pages, keep, rec, td):
     """Pages à lire par reconnaissance de caractères : toutes (scan court), celles des états repérées à basse résolution (long scan,
     gardées dans rec["found"]), sinon celles de la couche texte qui parlent des états sans être lisibles."""
     q = len(CPT_AMT.findall("\f".join(pages[i] for i in keep)))
-    if q < 40 and len(pages) <= 20:
+    if len(pages) <= 20:  # document court : toutes les pages (une couche texte garnie peut être illisible : police sans table)
+        rec["ocr_all"] = 1
         return [i + 1 for i in range(len(pages))]
     if q < 40 and len(pages) <= 120:
         if not rec.get("found"):
             rec["found"] = cpt_find_pages(p_, len(pages), td)  # long document scanné : pages des états repérées à basse résolution
         return rec["found"]
-    return [i + 1 for i in keep if CPT_KW.search(pages[i]) and len(pages[i].strip()) < 6000][:8]
+    # document long : pages qui parlent des états, les moins lisibles (couche texte pauvre ou cassée) d'abord
+    cand_ = [i for i in keep if CPT_KW.search(pages[i])]
+    return [i + 1 for i in sorted(cand_, key=lambda i: (len(CPT_AMT.findall(pages[i])) >= 15, len(pages[i].strip())))][:10]
 
 
 # ---------------------------------------------------------------- consensus des analystes (Nasdaq)
