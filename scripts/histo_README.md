@@ -44,5 +44,9 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
 - Les ratios (marges, ROE…) ne sont pas stockés : ils se recalculent à partir de `resultats.csv` et `etats_financiers.csv`.
 - Un exercice pas encore clos (comptes semestriels) n'a pas sa place dans `resultats.csv` : une telle ligne est retirée et consignée.
 - `etats_financiers.csv` : un exercice provient de ses propres comptes de préférence (définitifs plutôt que provisoires), sinon de la colonne
-  « exercice précédent » des comptes de l'année suivante ; les états lus par reconnaissance de caractères ne gardent que les montants
-  confirmés par deux lectures ou par une identité comptable.
+  « exercice précédent » des comptes de l'année suivante ; un chiffre repris et corrigé par la société dans une publication ultérieure
+  l'emporte. Les états lus par reconnaissance de caractères ne gardent que les montants confirmés par deux lectures ou par une
+  identité comptable. Un jeu d'états dont un chiffre est faux (unité, année, ordre de grandeur) est écarté en entier ; les
+  présentations de résultats et les notations ne servent jamais de source.
+- Capitaux propres d'un bilan de synthèse sans ligne de total : somme des composantes publiées (capital, primes, réserves, report à
+  nouveau, résultat, autres), retenue seulement si le passif la vérifie (total − dettes financières − passif circulant − trésorerie passif).

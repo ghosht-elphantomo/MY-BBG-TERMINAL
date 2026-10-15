@@ -835,7 +835,7 @@ def run_sikah(out):
         for pat in (f"sikafinance.com/marches/societe/{code}*", f"sikafinance.com/marches/societe?s={code}*",
                     f"sikafinance.com/marches/societe.aspx?s={code}*"):
             try:
-                r_ = json.loads(get_wb("http://web.archive.org/cdx/search/cdx?url=" + urllib.parse.quote(pat, safe="*/?=") +
+                r_ = json.loads(get_wb("http://web.archive.org/cdx/search/cdx?url=" + urllib.parse.quote(pat, safe="*/=") +
                                        "&output=json&fl=timestamp,original,statuscode&filter=statuscode:200&collapse=timestamp:6&limit=200") or b"[]")
                 rows += [x for x in r_[1:] if x and re.search(r"(?i)[?/=]" + re.escape(code) + r"(?:\.[a-z]{2})?(?:$|&|/|\?)", x[1])]
             except Exception as e:  # noqa: BLE001
