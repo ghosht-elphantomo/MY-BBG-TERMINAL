@@ -196,13 +196,41 @@ def fiscal_year(txt, hint=None):
     return hint
 
 
+UNIT_LINE = re.compile(r"(?:\(|\ben\b|montants?|donnees|chiffres|valeurs|unite ?:?)\s*(?:en\s+|de\s+)?(milliards?|millions?|milliers?|mds?|mxof|kxof|mfcfa|kfcfa|"
+                       r"francs? cfa|fcfa|f\.? ?cfa|xof)\b")
+
+
+def line_units(n):
+    """Unités annoncées par un en-tête de tableau (« (en millions de FCFA) », « Données en milliers ») : [(position, facteur)].
+    Une ligne qui porte des montants n'est pas un en-tête (sauf les années)."""
+    rest = re.sub(r"\b(?:19|20)\d\d\b|(?<![\d ,])[12][ ,]0\d\d\b", " ", n)
+    if re.search(r"\d{1,3}(?:[ .,]\d{3})+|\b\d{3,}\b|\d,\d", rest) or re.search(r"par action|nominal|dividende|cours", n):
+        return []
+    out = []
+    for m in UNIT_LINE.finditer(n):
+        w = m.group(1)
+        f = 1e9 if w.startswith("milliard") or w.startswith("md") else 1e6 if w.startswith("million") or w in ("mxof", "mfcfa") \
+            else 1e3 if w.startswith("millier") or w in ("kxof", "kfcfa") else 1.0
+        out.append((m.start(), f))
+    return out
+
+
 def doc_kind(txt, title=""):
-    """Annuel ou semestriel / trimestriel, d'après le titre et l'en-tête."""
-    t = nrm(title or "") + " " + nrm(txt[:4000])
-    if re.search(r"(?:1er|premier|2e|2eme|deuxieme|second|1st|first) semestre|semestriel|30 juin|30/06|30-06|half.year|six mois", t) \
-            and not re.search(r"exercice (?:clos le )?31 decembre|annuel|exercice 20\d\d\b(?! *-)", nrm(title or "")):
+    """Annuel, semestriel ou trimestriel : d'après le titre de la publication d'abord (« 1er semestre 2026 »), sinon d'après
+    les dates de clôture des colonnes (30 juin, 31 mars, 30 septembre). Un document qui joint aux comptes annuels l'activité
+    du premier trimestre suivant reste annuel."""
+    ti = re.sub(r"[_]+", " ", nrm(title or ""))
+    annual_t = re.search(r"exercice\s*\d{4}|etats financiers(?: provisoires?| definitifs?| certifies| approuves| annuels)*\s*\d{4}|annuel", ti)
+    if re.search(r"semestr|half.year", ti) and not (annual_t and re.search(r"et (?:le |du )?(?:rapport|activite).*semestr", ti)):
         return "semestre"
-    if re.search(r"trimestr|31 mars|30 septembre|quarter", t) and not re.search(r"31 decembre", t[:2000]):
+    if re.search(r"trimestr|quarter", ti) and not annual_t:
+        return "trimestre"
+    if annual_t:
+        return "annuel"
+    t = nrm(txt[:6000])
+    if re.search(r"(?:au |clos le |arrete au |situation au )?30 ?(?:juin|/06/|-06-|\.06\.)\s*\d{2,4}|1er semestre|premier semestre|semestriel", t) and not re.search(r"31 ?(?:decembre|/12/|-12-)\s*\d{2,4}", t[:3000]):
+        return "semestre"
+    if re.search(r"(?:31 ?(?:mars|/03/)|30 ?(?:septembre|/09/))\s*\d{2,4}", t) and not re.search(r"31 ?(?:decembre|/12/|-12-)\s*\d{2,4}", t[:3000]):
         return "trimestre"
     return "annuel"
 
@@ -322,6 +350,10 @@ def _hdr(line):
         y = int(m.group(1)) if len(m.group(1)) == 4 else 2000 + int(m.group(1))  # « Dec.-24 », « déc. 2024 »
         if 1990 <= y <= 2039 and not any(s0 <= m.start() < e0 for e0, s0, _ in hs):
             hs.append((m.end(), m.start(), y))
+    for m in re.finditer(r"(?<![\d,.])(19[89]|20[0-3]) (\d)(?![\d,.%])", n):  # « 202 4 » (année coupée par la couche texte)
+        y = int(m.group(1) + m.group(2))
+        if not any(s0 <= m.start() < e0 for e0, s0, _ in hs):
+            hs.append((m.end(), m.start(), y))
     for m in re.finditer(r"(?<=[\s(])(\d)[, ](\d{3})(?=\s|$)", n):  # « 2,009 », « 2 013 » (année imprimée avec séparateur de milliers)
         y = int(m.group(1) + m.group(2))
         if 1990 <= y <= 2039:
@@ -372,8 +404,10 @@ SEC_HEAD = [
 def parse(txt, fy_hint=None, title="", ocr=False):
     """{postes: {poste: {exercice: montant (unité du document)}}, unité, exercice, type, norme, périmètre, période…}"""
     txt = clean(txt, ocr)
-    _COMMA_K[0] = len(re.findall(r"(?<![\d,.])\d{1,3}(?:,\d{3}){2,}(?![\d,])", txt)) >= 5 and \
-        len(re.findall(r"(?<![\d,.])\d+,\d{1,2}(?![\d,])", txt)) <= len(re.findall(r"(?<![\d,.])\d{1,3}(?:,\d{3}){2,}(?![\d,])", txt)) // 10
+    n_k2 = len(re.findall(r"(?<![\d,.])\d{1,3}(?:,\d{3}){2,}(?![\d,])", txt))
+    n_k1 = len(re.findall(r"(?<![\d,.\s])\d{1,3},\d{3}(?![\d,])", txt))
+    n_dec = len(re.findall(r"(?<![\d,.])\d+,\d{1,2}(?![\d,])", txt))
+    _COMMA_K[0] = (n_k2 >= 5 and n_dec <= n_k2 // 10) or (n_k1 >= 15 and n_dec <= n_k1 // 10 and not re.search(r"\d \d{3},\d", txt))
     _NOTE_DOT[0] = not _COMMA_K[0] and len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) >= 20 and \
         len(re.findall(r"(?<![\d.,])\d{1,2}\.\d{1,2}(?![\d,.])", txt)) < len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) / 2
     fy = fiscal_year(txt, fy_hint)
@@ -389,11 +423,20 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     order_votes = []
     pend = []
     single_hint = []
+    unit_side, units_seen = [None, None], []
     for i, ln in enumerate(lines):
         if "\f" in ln:
             ln = ln.replace("\f", "")
         h = _hdr(ln)
         n_ = nrm(ln).strip()
+        for pos_u, f_u in line_units(nrm(ln)):  # unité de chaque tableau (de chaque côté quand deux tableaux se font face)
+            if split and pos_u >= split[0] - 5:
+                unit_side[1] = f_u
+            else:
+                unit_side[0] = f_u
+                if not split:
+                    unit_side[1] = f_u
+            units_seen.append(f_u)
         if h:
             # en-tête sur deux lignes (« EXERCICE 2025 » / « EXERCICE 2024 ») : regroupé avec la précédente
             if len(h) == 1 and heads and i - heads[-1][0] <= 3 and len(heads[-1][1]) == 1 and heads[-1][1][0][2] != h[0][2]:
@@ -407,10 +450,11 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             nb_ = nb_[:s0_] + " " * (e_ - s0_) + nb_[e_:]
         if not re.search(r"\d{3}", re.sub(r"(?:19|20)\d\d", "", nb_)):
             # titres d'états et sous-titres (actif / passif côte à côte, consolidé / social)
-            titre_ = len(n_) <= 110 and re.search(r"bilan|compte|etat|tableau|resultat|flux|situation financiere", n_)
-            if titre_ and re.search(r"consolid", n_) and not re.search(r"sociaux|individuel", n_):
+            if re.search(r"(?:bilan|comptes?|etats?(?: de synthese| financiers)?|compte de resultat|tableau des flux(?: de tresorerie)?|resultats?|situation financiere|"
+                         r"etat du resultat global|flux de tresorerie)\s+(?:[a-z']+\s+){0,3}consolid", n_) and not re.search(r"sociaux|individuel", n_):
                 perim = "conso"
-            elif titre_ and re.search(r"comptes? sociaux|etats financiers sociaux|individuels?|bilan social|compte de resultat social|societe mere", n_):
+            elif re.search(r"(?:bilan|comptes?|etats?(?: de synthese| financiers)?|compte de resultat|tableau des flux)\s+(?:[a-z']+\s+){0,2}(?:sociaux|individuels?|social)\b|"
+                           r"societe mere|comptes sociaux", n_):
                 perim = "social"
             if re.search(r"\bifrs\b|normes? internationales?", n_) and not re.search(r"syscohada", n_):
                 std_cur = "ifrs"
@@ -477,12 +521,15 @@ def parse(txt, fy_hint=None, title="", ocr=False):
         new_pend = []
         for si, (code_, lab, vals, st_) in enumerate(segs):
             s_here = sec
+            side_ = 0
             if split and st_ is not None:
                 if si > 0 and segs[si - 1][2] and st_ > 20:  # libellé qui suit des montants : tableau de droite
                     split[0] = min(split[0], st_)
                     s_here = split[2]
+                    side_ = 1
                 else:
                     s_here = split[2] if st_ >= split[0] - 2 else split[1]
+                    side_ = 1 if st_ >= split[0] - 2 else 0
             if code_ and re.fullmatch(r"[A-Z]{2}", code_) and code_[0] in CODE_SEC:
                 s_here = CODE_SEC[code_[0]]
             labn = re.sub(r"\s+", " ", nrm(lab)).strip(" :.-*•")
@@ -536,7 +583,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 single_hint.append(1)
             elif len(vals) >= 2:
                 single_hint.append(2)
-            occ.append((key, s_here, (perim or "_") + ("_ifrs" if std_cur == "ifrs" else ""), i, yrs, how, vals))
+            occ.append((key, s_here, (perim or "_") + ("_ifrs" if std_cur == "ifrs" else ""), i, yrs, how, vals, unit_side[side_]))
             if os.environ.get("CPT_DEBUG"):
                 print("   occ", i, key, s_here, perim, how, yrs, [v for v, _ in vals], repr(labn[:40]), code_)
         pend = new_pend[-2:] if new_pend else ([] if segs else pend)
@@ -549,11 +596,17 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             hv[seq[0] == fy - 1] += 1
     if hv[0] or hv[1]:
         asc = hv[1] > hv[0]
+        basis = "entete"
     else:
         asc = sum(1 for o in order_votes if o.get("asc")) > sum(1 for o in order_votes if o.get("desc"))
+        basis = "variation" if order_votes else "defaut"
+    guess = set()
     single = single_hint.count(1) > 2 * single_hint.count(2)
     found, alt, ranks = {}, {}, {}
-    for key, s_here, per, i, yrs, how, vals in occ:
+    # unités par tableau : un montant prend l'unité de l'en-tête de son tableau (avant le premier en-tête : celle du premier)
+    norm = bool(units_seen)
+    for key, s_here, per, i, yrs, how, vals, u_occ in occ:
+        f_u = (u_occ or units_seen[0]) if norm else 1.0
         if how in ("order", "single"):
             nums = [v for v, _ in vals if v is not None]
             if how == "single" and not single:
@@ -565,7 +618,9 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             else:
                 pair = (nums[0], nums[1])
                 yrs = {fy: pair[1], fy - 1: pair[0]} if asc else {fy: pair[0], fy - 1: pair[1]}
-        yrs = {y: v for y, v in yrs.items() if isinstance(y, int)}
+                if basis == "defaut":
+                    guess.add((per, key))  # sens des colonnes supposé (ni en-tête d'années, ni colonne de variation)
+        yrs = {y: v * f_u for y, v in yrs.items() if isinstance(y, int)}
         if not yrs:
             continue
         pk = per
@@ -616,11 +671,11 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     main = max(perims, key=lambda k: len(perims[k])) if perims else "social"
     items = perims.get(main, {})
     bank = sum(1 for k in items if k.startswith("b_")) >= 3
-    unit = unit_of(txt)
+    unit = 1.0 if norm else unit_of(txt)  # montants déjà ramenés en FCFA par les en-têtes de tableaux
     cap = capital_stated(txt)
     cv = (items.get("capital") or items.get("b_capital") or {})
     cv = cv.get(fy) if fy in cv else (next(iter(cv.values())) if cv else None)
-    if cap and cv:  # le capital du bilan, multiplié par l'unité, doit redonner le capital annoncé
+    if cap and cv and not norm:  # le capital du bilan, multiplié par l'unité, doit redonner le capital annoncé
         for u in (1.0, 1e3, 1e6):
             if abs(cv * u / cap - 1) < 0.005:
                 unit = u
@@ -628,7 +683,9 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     nt = nrm(txt[:8000])
     cur = "USD" if re.search(r"(?:milliers|millions) de dollars|en (?:k|m)?usd\b|us\$|\busd ?(?:000|thousand|million)|thousands of us dollars|in thousands of usd", nt) else "XOF"
     std = "ifrs" if main.endswith("_ifrs") else "syscohada"
-    return {"items": items, "perims": perims, "main": main, "unit": unit, "cap": cap, "fy": fy, "type": "banque" if bank else "entreprise",
+    KEYS_G = ("total_actif", "total_passif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres", "_total")
+    guess_p = sorted({("social" if p_ == "_" else "social_ifrs" if p_ == "__ifrs" else p_) for p_, k_ in guess if k_ in KEYS_G})
+    return {"guess": guess_p, "items": items, "perims": perims, "main": main, "unit": unit, "cap": cap, "fy": fy, "type": "banque" if bank else "entreprise",
             "cur": cur, "per": doc_kind(txt, title), "std": std, "revised": revised}
 
 
@@ -795,7 +852,7 @@ def read_doc(texts, meta):
         return {"st": "illisible"}
     _, src, P, res = best
     out = {"st": "ok" if res else "non vérifié", "src": src, "fy": P["fy"], "per": P["per"], "std": P["std"], "type": P["type"],
-           "cur": P["cur"], "main": P["main"], "n": len(P["items"]), "y": {}}
+           "cur": P["cur"], "main": P["main"], "n": len(P["items"]), "y": {}, "guess": P.get("guess") or []}
     if P["cur"] != "XOF":
         out["st"] = "devise " + P["cur"]
         return out
@@ -823,7 +880,7 @@ def read_doc(texts, meta):
                         continue
                 rec[k] = abs(x) if k in CHARGES else x
             unit, cands = unit_choice(P, items, y)
-            out["y"].setdefault(per, {})[str(y)] = {"v": rec, "c": chk, "u": unit, "uc": cands}
+            out["y"].setdefault(per, {})[str(y)] = {"v": rec, "c": chk, "u": unit, "uc": cands, "vk": sorted(k for k in ok_id if k in rec)}
     return out
 
 
@@ -855,16 +912,27 @@ def _doc_rank(r, y):
 def consolidate(cj, mirror=None):
     """comptes.json (documents lus) -> {titre: {"y": {exercice: {"v": {poste: millions de FCFA}, "n", "d", "own"}}, "per", "std",
     "agree" (part des montants communs égaux à ceux de la base de référence), "ncmp" (nombre de montants comparés)}}.
-    Unité : celle du document quand elle est sûre, sinon celle qui fait concorder ses montants avec un autre document de la
-    même société (même exercice), sinon avec la base de référence (mirror : {titre: {série: {exercice: millions}}})."""
+
+    Consolidation poste par poste quand plusieurs documents couvrent un même exercice (comptes de l'exercice, colonne N-1 des
+    comptes suivants, versions provisoire et définitive, texte ou reconnaissance de caractères) :
+      1. un montant qui entre dans une identité vérifiée de son document l'emporte sur un montant non vérifié ;
+      2. puis un montant lu dans la couche texte l'emporte sur une reconnaissance de caractères ;
+      3. puis le montant donné par le plus de sources concordantes (documents, et la base de référence) ;
+      4. puis celui du document le plus probant (comptes de l'exercice, définitifs, le plus récent).
+    Un montant décalé d'un facteur 1 000 (ou 1 000 000) par rapport à une autre source est une erreur d'unité : écarté.
+    Les états par secteur d'activité ne sont pas des comptes de la société : ignorés."""
     recs = []
     for u, r in (cj.get("docs") or {}).items():
         if not r.get("y") or r.get("per") != "annuel" or r.get("cur", "XOF") != "XOF" or not r.get("t"):
             continue
+        if re.search(r"par secteur|sectoriel|segment|par activite|par pays", nrm((r.get("ti") or "") + " " + u)):
+            continue
         for per, ys in r["y"].items():
             for y, x in ys.items():
-                recs.append({"t": r["t"], "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"), "uc": x.get("uc") or [],
-                             "v": x.get("v") or {}, "c": x.get("c"), "doc": u, "rank": _doc_rank(r, int(y)), "d": r.get("d")})
+                recs.append({"t": r["t"], "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"),
+                             "uc": x.get("uc") or [], "v": x.get("v") or {}, "vk": set(x.get("vk") or []), "c": x.get("c"), "doc": u,
+                             "rank": _doc_rank(r, int(y)), "d": r.get("d"), "ocr": r.get("src") in ("fra", "eng"),
+                             "guess": per in (r.get("guess") or [])})
     known = {}
     for x in recs:
         if x["u"]:
@@ -891,10 +959,65 @@ def consolidate(cj, mirror=None):
                 x["u"] = cand
                 break
     recs = [x for x in recs if x["u"]]
+    for x in recs:
+        x["m"] = {k: round(v * x["u"] / 1e6, 3) for k, v in x["v"].items()}
+    # erreurs d'unité : un poste qui vaut exactement 1 000 fois (ou un millième) la valeur d'une autre source est écarté
+    pool = {}
+    for x in recs:
+        for k, v in x["m"].items():
+            if v:
+                pool.setdefault((x["t"], x["y"], k), []).append(v)
+    MK = {"chiffre_affaires": "ca", "b_pnb": "ca", "resultat_net": "resultat_net", "total_actif": "total_bilan", "capitaux_propres": "capitaux_propres",
+          "resultat_exploitation": "ebit", "ebe": "ebitda"}
+
+    def mirror_v(t, y, k):
+        mk = MK.get(k)
+        return (((mirror or {}).get(t) or {}).get(mk) or {}).get(str(y)) if mk else None
+    for x in recs:
+        for k in list(x["m"]):
+            v = x["m"][k]
+            if not v or k in x["vk"]:
+                continue
+            others = [o for o in pool.get((x["t"], x["y"], k), []) if o != v]
+            mv = mirror_v(x["t"], x["y"], k)
+            if mv:
+                others.append(mv)
+            if any(abs(abs(v / o) - f) <= f * 0.005 for o in others if o for f in (1e3, 1e-3, 1e6, 1e-6)):
+                del x["m"][k]
+    # année de chaque colonne : un exercice dont les montants sont ceux d'une autre année dans d'autres sources (colonnes inversées)
+    # est écarté ; un exercice dont le sens des colonnes a été supposé doit être confirmé par une autre source pour la même année
+    KEYC = ("total_actif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres")
+    idx_ty = {}
+    for x in recs:
+        idx_ty.setdefault((x["t"], x["y"]), []).append(x)
+
+    def same(a_, b_):
+        return a_ is not None and b_ is not None and abs(a_ - b_) <= max(0.5, abs(b_) * 0.001)
+
+    def support(x, y):
+        n_ = 0
+        for k in KEYC:
+            v = x["m"].get(k)
+            if v is None:
+                continue
+            if any(o is not x and o["doc"] != x["doc"] and same(v, o["m"].get(k)) for o in idx_ty.get((x["t"], y), [])):
+                n_ += 1
+            elif same(v, mirror_v(x["t"], y, k)) or (mirror_v(x["t"], y, k) is not None and abs(v - mirror_v(x["t"], y, k)) <= abs(mirror_v(x["t"], y, k)) * 0.005):
+                n_ += 1
+        return n_
+    keep = []
+    for x in recs:
+        s0 = support(x, x["y"])
+        sh = max(support(x, x["y"] - 1), support(x, x["y"] + 1))
+        if sh >= 2 and s0 == 0:
+            continue  # montants d'une autre année
+        if x["guess"] and s0 == 0:
+            continue  # sens des colonnes non confirmé
+        keep.append(x)
+    recs = keep
     out = {}
     by_t = {}
     for x in recs:
-        x["m"] = {k: round(v * x["u"] / 1e6, 3) for k, v in x["v"].items()}
         by_t.setdefault(x["t"], []).append(x)
     for t, xs in by_t.items():
         # périmètre et norme : ceux qui concordent le mieux avec la base de référence, sinon ceux qui couvrent le plus d'exercices
@@ -905,8 +1028,8 @@ def consolidate(cj, mirror=None):
         def agree(g):
             ok = n = 0
             for x in g:
-                for k, mk in (("chiffre_affaires", "ca"), ("b_pnb", "ca"), ("resultat_net", "resultat_net"), ("total_actif", "total_bilan")):
-                    mv = (((mirror or {}).get(t) or {}).get(mk) or {}).get(str(x["y"]))
+                for k in ("chiffre_affaires", "b_pnb", "resultat_net", "total_actif"):
+                    mv = mirror_v(t, x["y"], k)
                     if mv and x["m"].get(k) is not None:
                         n += 1
                         ok += abs(x["m"][k] - mv) <= abs(mv) * 0.01 + 0.5
@@ -916,16 +1039,28 @@ def consolidate(cj, mirror=None):
         res = {}
         for y in sorted({x["y"] for x in groups[main]}):
             cand = sorted([x for x in groups[main] if x["y"] == y], key=lambda x: x["rank"], reverse=True)
+            v, nsrc = {}, {}
+            for k in sorted({k for x in cand for k in x["m"]}):
+                vals = {}
+                for x in cand:
+                    if k not in x["m"]:
+                        continue
+                    val = x["m"][k]
+                    key_ = next((z for z in vals if abs(z - val) <= max(0.5, abs(z) * 0.001)), val)
+                    o = vals.setdefault(key_, {"ver": False, "txt": False, "n": 0, "rank": (0, 0, "")})
+                    o["ver"] |= k in x["vk"]
+                    o["txt"] |= not x["ocr"]
+                    o["n"] += 1
+                    o["rank"] = max(o["rank"], x["rank"])
+                mv = mirror_v(t, y, k)
+                for z, o in vals.items():
+                    o["m"] = 1 if mv is not None and abs(z - mv) <= abs(mv) * 0.005 + 0.5 else 0
+                best_v = max(vals, key=lambda z: (vals[z]["ver"], vals[z]["txt"], vals[z]["n"] + vals[z]["m"], vals[z]["rank"]))
+                v[k] = best_v
+                nsrc[k] = vals[best_v]["n"]
             best = cand[0]
-            v = dict(best["m"])
-            n_ok = 1
-            for o in cand[1:]:  # autres documents : confirmation, et postes complétés s'ils donnent les mêmes montants communs
-                com = [k for k in ("total_actif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres") if k in v and k in o["m"]]
-                if com and all(abs(v[k] - o["m"][k]) <= max(0.5, abs(v[k]) * 0.001) for k in com):
-                    n_ok += 1
-                    for k, val in o["m"].items():
-                        v.setdefault(k, val)
-            res[y] = {"v": v, "n": n_ok, "d": best["d"], "own": best["rank"][0]}
+            res[y] = {"v": v, "n": max(nsrc.get(k, 1) for k in ("total_actif", "resultat_net") if k in nsrc) if any(k in nsrc for k in ("total_actif", "resultat_net")) else 1,
+                      "d": best["d"], "own": best["rank"][0]}
         out[t] = {"y": res, "per": main[0].replace("_ifrs", ""), "std": main[1], "agree": round(ag[0], 3), "ncmp": ag[3]}
     return out
 
