@@ -2760,17 +2760,29 @@ def run_flottant(raw, site_data):
 
 # ------------------------------------------------------------------ notations financières (Bloomfield, WARA / EMR, GCR) publiées sur brvm.org
 GRADE = r"(?:AAA|AA\+|AA-|AA|A\+|A-|A|BBB\+|BBB-|BBB|BB\+|BB-|BB|B\+|B-|B|CCC\+|CCC-|CCC|CC|C|D|SD)"
-GRADE_ST = r"(?:A1\+|A1-|A1|A2\+|A2-|A2|A3\+|A3-|A3|B|C|D)"
-SUFFIX = r"(?:\s*\((?:WU|WA|SN|CI|BF|ML|NE|TG|BJ|GW|UEMOA|SF|EL)\)){0,3}"
+GRADE_ST = r"(?:A1\+|A1-|A1|A2\+|A2-|A2|A3\+|A3-|A3|B|C|D|w-[1-6])"
+SUFFIX = r"(?:\s*\((?i:WU|WA|SN|CI|BF|ML|NE|TG|BJ|GW|UEMOA|SF|EL)\)){0,3}"
 
 
-RATING_PV = 2  # version du lecteur : une fiche lue par une version antérieure est relue
+RATING_PV = 3  # version du lecteur : une fiche lue par une version antérieure est relue
+
+
+NB_ = r"(?<![\w/'])"  # une note n'est jamais collée à une lettre, une barre (N/A) ou une apostrophe (d'émetteur)
+NA_ = r"(?![\w/'])"
+
+
+def _gnorm(g):
+    """« sfAAA(WU) » -> « AAA(WU)(SF) » ; espaces retirés ; suffixe en majuscules."""
+    g = re.sub(r"\s+", "", g)
+    sf = g.startswith("sf")
+    g = re.sub(r"\(([a-zA-Z]+)\)", lambda m: "(" + m.group(1).upper() + ")", g[2:] if sf else g)
+    return g + "(SF)" if sf and "(SF)" not in g else g
 
 
 def _grades(x, g_re):
-    """Notes présentes dans un texte, sans confondre une initiale (« Câbles », « Côte », « N/A ») avec une note."""
-    gs = re.findall(r"(?<![\w/])(" + g_re + SUFFIX + r")(?![\w/])", x, re.I)
-    return [g.upper().replace(" ", "") for g in gs if not re.fullmatch(r"(?i)(CFA|SF)", g)]
+    """Notes présentes dans un texte, sans confondre une initiale (« Câbles », « Côte », « N/A », « d'… ») avec une note."""
+    gs = re.findall(NB_ + "((?:sf)?" + g_re + SUFFIX + ")" + NA_, x)
+    return [_gnorm(g) for g in gs if not re.fullmatch(r"(?i)(CFA|SF)", g)]
 
 
 def rating_parse(txt):
@@ -2809,27 +2821,58 @@ def rating_parse(txt):
                 break
     else:
         # communiqués (GCR, WARA) : la phrase d'action fait foi (« rehausse … de A(WU) à AA-(WU) », « affirme … de A+(WU) »),
-        # puis, à défaut, la première ligne du tableau « Emetteur de long terme | Régionale | AA-(WU) | Stable »
-        flat = re.sub(r"\s+", " ", n)
+        # puis, à défaut, la première ligne du tableau « Emetteur de long terme | Régionale | AA-(WU) | Stable ».
+        # Les notes sont en majuscules : les mots « a », « à », « de », « d' » du texte ne peuvent pas être pris pour une note.
+        flat = re.sub(r"\s+", " ", t)
+        flat = re.sub(r"[«\"']\s*((?:sf)?(?:" + GRADE + "|" + GRADE_ST + ")" + SUFFIX + r")\s*[»\"']", r" \1 ", flat)
+        A_, DE_ = r"\s+(?i:à|a)\s+", r"(?i:\bde)\s+"
+        VERB = r"(?i:assign|affirm|attribu|rehauss|réhauss|abaiss|r[ée]vis|plac|confirm|maint|retir)"
+        if re.search(r"(?i:\bretir)\w*\s+(?i:les notations|la notation|les notes|la note)", flat[:900]):
+            return {**r, "lt": "WD", "st": "WD", "out": "retiree"}  # notation retirée (« WD ») : aucune note en vigueur
+        # phrase-titre du communiqué (première phrase portant l'action) : la plus fiable, surtout pour les communiqués en colonnes (WARA)
+        hl = next((x for x in re.split(r"(?<=[a-zé\)»'])\.\s", flat[:900]) if re.search(VERB, x)), "")
+        if hl and not (re.search(r"(?i:court terme)", hl) and not re.search(r"(?i:long terme)", hl)):
+            G = NB_ + "((?:sf)?" + GRADE + SUFFIX + ")" + NA_
+            one = lambda m, k=1: (_grades(m.group(k), GRADE) or [None])[0]
+            m = re.search(DE_ + G + A_ + G, hl)
+            if m:
+                r["lt0"], r["lt"] = one(m), one(m, 2)
+            elif re.search(A_ + G + r"\s+" + DE_ + G, hl):
+                m = re.search(A_ + G + r"\s+" + DE_ + G, hl)
+                r["lt"], r["lt0"] = one(m), one(m, 2)
+            else:
+                m = re.search(VERB + r"[^.]{0,140}?(?:" + DE_ + r"|" + A_ + r"|(?i:terme)\s+)" + G, hl)
+                if m:
+                    r["lt"] = one(m)
+                    if re.search(r"(?i:affirm|confirm|maint|plac)", hl):
+                        r["lt0"] = r["lt"]
         for key, word, g_re in (("lt", "long", GRADE), ("st", "court", GRADE_ST)):
-            G = "(" + g_re + SUFFIX + ")"
-            head = r"de " + word + r" terme[^.]{0,160}?"
-            m = re.search(head + r"\bde " + G + r"(?![\w/]) a " + G + r"(?![\w/])", flat, re.I)
-            if m:
-                r[key + "0"], r[key] = (_grades(m.group(1), g_re) or [None])[0], (_grades(m.group(2), g_re) or [None])[0]
+            if key in r:
                 continue
-            m = re.search(head + r"\ba " + G + r"(?![\w/]) de " + G + r"(?![\w/])", flat, re.I)
+            G = NB_ + "((?:sf)?" + g_re + SUFFIX + ")" + NA_
+            head = r"(?i:de " + word + r"\s+terme)[^.]{0,160}?"
+            one = lambda m, k=1, g_re=g_re: (_grades(m.group(k), g_re) or [None])[0]
+            m = re.search(head + DE_ + G + A_ + G, flat)
             if m:
-                r[key], r[key + "0"] = (_grades(m.group(1), g_re) or [None])[0], (_grades(m.group(2), g_re) or [None])[0]
+                r[key + "0"], r[key] = one(m), one(m, 2)
                 continue
-            m = re.search(head + r"\bde " + G + r"(?![\w/])", flat, re.I) or re.search(r"de " + word + r" terme\s+" + G + r"(?![\w/])", flat, re.I)
+            m = re.search(head + A_ + G + r"\s+" + DE_ + G, flat)
             if m:
-                r[key] = (_grades(m.group(1), g_re) or [None])[0]
-                if re.search(r"(affirm|confirm|maint|plac)[^.]{0,80}" + head, flat, re.I):
+                r[key], r[key + "0"] = one(m), one(m, 2)
+                continue
+            m = re.search(head + r"(?i:affirm|confirm|maintenu)\w*\s+(?i:à|a)\s+" + G, flat)
+            if m:
+                r[key] = r[key + "0"] = one(m)
+                continue
+            m = (re.search(head + DE_ + G, flat) or re.search(head + r"(?i:\best)\s+" + G, flat)
+                 or re.search(r"(?i:de " + word + r"\s+terme)\s+" + G, flat) or re.search(head + A_ + G, flat))
+            if m:
+                r[key] = one(m)
+                if re.search(r"(?i:affirm|confirm|maint|plac)[^.]{0,80}" + head, flat):
                     r[key + "0"] = r[key]
                 continue
             for x in lines:
-                if re.search(r"(?i)(e|é)metteur de " + word + r" terme|note de " + word + r" terme", x) and not re.search(r"(?i)(rehauss|abaiss|affirm|attribu|relev|plac)", x):
+                if re.search(r"(?i)(e|é)metteur de " + word + r" terme|note de " + word + r" terme", x) and not re.search(r"(?i)(rehauss|abaiss|affirm|attribu|relev|plac|r[ée]vis)", x):
                     gs = _grades(x, g_re)
                     if gs:
                         r[key] = gs[-1]
@@ -2838,7 +2881,7 @@ def rating_parse(txt):
             if not r.get(k):
                 r.pop(k, None)
     if "out" not in r:  # « la perspective passe de positive à stable » : la nouvelle perspective est la seconde
-        m = re.search(r"perspective[^.]{0,60}?passe (?:de |d')\s*\w+ a (stable|positive|negative)\b", n) or \
+        m = re.search(r"perspective[^.]{0,60}?passe[^.]{0,30}?(?:\bde|d')\s*\w+\s+a\s+(stable|positive|negative)\b", n) or \
             re.search(r"perspective[^.]{0,80}?\b(stable|positive|negative)\b", n)
         if m:
             r["out"] = m.group(1)

@@ -7,7 +7,7 @@ const NOT_LT = ['AAA', 'AA+', 'AA', 'AA-', 'A+', 'A', 'A-', 'BBB+', 'BBB', 'BBB-
 const notRank = g => { const k = NOT_LT.indexOf(String(g || '').replace(/\(.*$/, '').trim()); return k < 0 ? 99 : k; };
 const notCls = g => { const k = notRank(g); return k <= 2 ? 'up' : k <= 6 ? '' : k <= 9 ? 'am' : k >= 99 ? 'dm' : 'dn'; };
 const notGrade = g => g ? `<b class="${notCls(g)}">${esc(g)}</b>` : '<span class="dm">—</span>';
-const notOut = o => !o ? '<span class="dm">—</span>' : o === 'stable' ? 'stable' : o === 'positive' ? '<span class="up">positive</span>' : o === 'negative' ? '<span class="dn">négative</span>' : esc(o);
+const notOut = o => !o ? '<span class="dm">—</span>' : o === 'stable' ? 'stable' : o === 'positive' ? '<span class="up">positive</span>' : o === 'negative' ? '<span class="dn">négative</span>' : o === 'retiree' ? '<span class="dm">notation retirée</span>' : esc(o);
 const NOT_AG = { Bloomfield: 'Bloomfield Investment Corporation (Abidjan)', WARA: 'West Africa Rating Agency · EMR (Dakar)', GCR: 'GCR Ratings (Afrique ; échelle régionale UEMOA « WU »)', "Moody's": "Moody's", 'S&P': 'S&P Global', Fitch: 'Fitch' };
 PAGES.NOT = async (m, alive) => {
   setTitle('Credit Ratings · BRVM'); const R = await getJSON('ratings.json').catch(() => null); if (!alive()) return;

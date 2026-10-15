@@ -5277,7 +5277,7 @@ const NOT_LT = ['AAA', 'AA+', 'AA', 'AA-', 'A+', 'A', 'A-', 'BBB+', 'BBB', 'BBB-
 const notRank = g => { const k = NOT_LT.indexOf(String(g || '').replace(/\(.*$/, '').trim()); return k < 0 ? 99 : k; };
 const notCls = g => { const k = notRank(g); return k <= 2 ? 'up' : k <= 6 ? '' : k <= 9 ? 'am' : k >= 99 ? 'dm' : 'dn'; };
 const notGrade = g => g ? `<b class="${notCls(g)}">${esc(g)}</b>` : '<span class="dm">—</span>';
-const notOut = o => !o ? '<span class="dm">—</span>' : o === 'stable' ? 'stable' : o === 'positive' ? '<span class="up">positive</span>' : o === 'negative' ? '<span class="dn">négative</span>' : esc(o);
+const notOut = o => !o ? '<span class="dm">—</span>' : o === 'stable' ? 'stable' : o === 'positive' ? '<span class="up">positive</span>' : o === 'negative' ? '<span class="dn">négative</span>' : o === 'retiree' ? '<span class="dm">notation retirée</span>' : esc(o);
 const NOT_AG = { Bloomfield: 'Bloomfield Investment Corporation (Abidjan)', WARA: 'West Africa Rating Agency · EMR (Dakar)', GCR: 'GCR Ratings (Afrique ; échelle régionale UEMOA « WU »)', "Moody's": "Moody's", 'S&P': 'S&P Global', Fitch: 'Fitch' };
 PAGES.NOT = async (m, alive) => {
   setTitle('Credit Ratings · BRVM'); const R = await getJSON('ratings.json').catch(() => null); if (!alive()) return;
@@ -5779,7 +5779,7 @@ function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hi
 /* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
 /* ---------- mise à jour silencieuse du terminal : quand une nouvelle version est en ligne, la page se recharge d'elle-même
    au premier moment calme (onglet en arrière-plan, retour sur l'onglet, ou une minute sans action), en gardant l'écran et ses onglets ---------- */
-const APP_V = 'f3c911bda389';
+const APP_V = '7d6928de3315';
 let APP_NEW = false, APP_ACT = Date.now();
 function appReload() { try { sessionStorage.setItem('fqt_tabs', JSON.stringify(ST.tab)); } catch (e) { } location.reload(); }
 function appMaybe(now) { if (!APP_NEW) return; const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value; if (document.hidden || now || (!typing && Date.now() - APP_ACT > 60000)) appReload(); }
