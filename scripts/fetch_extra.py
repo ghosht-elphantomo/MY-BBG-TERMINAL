@@ -1116,7 +1116,10 @@ def run_comptes(out):
         if not e.get("ticker") or not u.lower().endswith(".pdf") or "brvm.org" not in u:
             continue
         cand.setdefault(u, e)
-    todo = sorted(cand.values(), key=lambda e: (cats.get(e["category"], 4), -int(re.sub(r"\D", "", e.get("published_at") or "0")[:8] or 0)))
+    # (à catégorie égale, les rapports annuels / d'exercice avant les rapports trimestriels, puis les plus récents d'abord)
+    todo = sorted(cand.values(), key=lambda e: (cats.get(e["category"], 4),
+                                                0 if re.search(r"annuel|exercice|annual", (e.get("document_url") or "").rsplit("/", 1)[-1].lower() + " " + (e.get("title") or "").lower()) else 1,
+                                                -int(re.sub(r"\D", "", e.get("published_at") or "0")[:8] or 0)))
     def again(m):  # document à reprendre : erreur de téléchargement, ou long scan pas encore lu par reconnaissance de caractères
         if str(m.get("st", "")).startswith("erreur"):
             return m.get("n_err", 0) < 3
