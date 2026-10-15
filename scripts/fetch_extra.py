@@ -991,6 +991,26 @@ def cpt_ocr(pdf_path, pages, td):
     return {k: "\f".join(v) for k, v in out.items() if v}
 
 
+def cpt_find_pages(pdf_path, n_pages, td, top=8):
+    """Document scanné de plusieurs dizaines de pages : chaque page est lue vite (100 dpi) pour repérer celles des états
+    financiers (mots des états et nombre de montants) ; renvoie les numéros des meilleures pages (au plus `top`)."""
+    import glob, subprocess
+    sc = []
+    for pg in range(1, n_pages + 1):
+        for f in glob.glob(os.path.join(td, "f*.png")):
+            os.remove(f)
+        subprocess.run(["pdftoppm", "-r", "100", "-gray", "-png", "-f", str(pg), "-l", str(pg), pdf_path, os.path.join(td, "f")], capture_output=True, timeout=120)
+        imgs = glob.glob(os.path.join(td, "f*.png"))
+        if not imgs:
+            continue
+        t = subprocess.run(["tesseract", imgs[0], "-", "-l", "eng", "--psm", "6"], capture_output=True, timeout=120).stdout.decode("utf8", "replace")
+        s_ = len(re.findall(r"(?i)\b(?:total|actif|passif|capital|r[ée]sultat|charges|produits|bilan|exercice|cr[ée]ances|dettes)\b", t)) \
+            + len(re.findall(r"\d[\d .,]{5,}\d", t)) // 2
+        sc.append((s_, pg))
+    best = sorted(sc, reverse=True)[:top]
+    return sorted(pg for s_, pg in best if s_ >= 15)
+
+
 def run_comptes(out):
     """États financiers des sociétés cotées publiés sur brvm.org (depuis 1998) : chaque document est téléchargé et lu une seule fois
     (couche texte, sinon reconnaissance de caractères des pages des états), son texte gardé en cache (txt/). La lecture des postes
@@ -1017,8 +1037,11 @@ def run_comptes(out):
             continue
         cand.setdefault(u, e)
     todo = sorted(cand.values(), key=lambda e: (cats[e["category"]], -int(re.sub(r"\D", "", e.get("published_at") or "0")[:8] or 0)))
-    todo = [e for e in todo if e["document_url"] not in docs or (str(docs[e["document_url"]].get("st", "")).startswith("erreur")
-                                                                  and docs[e["document_url"]].get("n_err", 0) < 3)]
+    def again(m):  # document à reprendre : erreur de téléchargement, ou long scan pas encore lu par reconnaissance de caractères
+        if str(m.get("st", "")).startswith("erreur"):
+            return m.get("n_err", 0) < 3
+        return m.get("q", 99) < 40 and not m.get("ocr") and "found" not in m and 20 < (m.get("pages") or 0) <= 120
+    todo = [e for e in todo if e["document_url"] not in docs or again(docs[e["document_url"]])]
     if not pdf_tools():
         note("comptes", False, "outils PDF absents")
         return
@@ -1074,10 +1097,11 @@ def run_comptes(out):
             if not ok_text:
                 if rec["q"] < 40 and len(pages) <= 20:
                     ocr_pages = [i + 1 for i in range(len(pages))]
+                elif rec["q"] < 40 and len(pages) <= 120:
+                    ocr_pages = cpt_find_pages(p_, len(pages), td)  # long document scanné : pages des états repérées à basse résolution
+                    rec["found"] = ocr_pages
                 else:
                     ocr_pages = [i + 1 for i in keep if CPT_KW.search(pages[i]) and len(pages[i].strip()) < 6000][:8]
-                    if len(pages) > 20 and rec["q"] < 40:
-                        ocr_pages = []  # long document scanné : rapport annuel sans couche texte, non lu
                 if ocr_pages:
                     try:
                         o = cpt_ocr(p_, ocr_pages, td)
@@ -1094,7 +1118,7 @@ def run_comptes(out):
         note("comptes")
         if n_new % 10 == 0:
             save(ip, idx)
-    left = sum(1 for e in cand.values() if e["document_url"] not in docs)
+    left = sum(1 for e in cand.values() if e["document_url"] not in docs or again(docs[e["document_url"]]))
     idx.update(v=1, left=left, total=len(cand), last_new=n_new, ts=int(time.time()))
     save(ip, idx)
     log(f"états financiers : {n_new} documents lus ({n_ocr} par reconnaissance de caractères), {left} restent, {len(docs)} en cache")
