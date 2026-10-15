@@ -259,18 +259,26 @@ def clean(txt, ocr=False):
     if len(re.findall(r"\d ,\d|(?<!\d)\d{1,2} \d{1,2} ?,\d", txt)) >= 8:
         txt = BROKEN.sub(_join_broken, txt)
         txt = re.sub(r"(?<=\d) ,(?=\d{1,2}(?!\d))", ",", txt)
-    if not ocr:
-        return txt
-    txt = re.sub(r"[|\[\]{}¦]", " ", txt)
-    # reconnaissance de caractères : espaces des milliers perdus ou déplacés (« 1673 272 », « 50 701178 ») ->
-    # groupes recollés quand ils ne forment pas déjà un montant régulier (1 à 3 chiffres puis groupes de 3)
+
+    # espaces des milliers perdus ou déplacés (« 1673 272 », « 50 701178 », « 2 05 4 491 ») -> groupes recollés quand ils ne
+    # forment pas déjà un montant régulier (1 à 3 chiffres puis groupes de 3) ; toujours après reconnaissance de caractères,
+    # et dans la couche texte quand le document en compte plusieurs
+    def _irr(g):
+        return not (len(g[0]) <= 3 and all(len(x) == 3 for x in g[1:]))
+
     def _run(m):
         g = m.group(0).split(" ")
-        if len(g[0]) <= 3 and all(len(x) == 3 for x in g[1:]):
+        if not _irr(g):
             return m.group(0)
         j = "".join(g)
         return j if len(j) <= 13 else m.group(0)
-    txt = re.sub(r"(?<![\d,.])\d+(?: \d+)+(?![\d,.])", _run, txt)
+    RUN = r"(?<![\d,.])\d+(?: \d+)+(?![\d,.])"
+    if not ocr:
+        if sum(1 for m in re.finditer(RUN, txt) if _irr(m.group(0).split(" ")) and len(m.group(0).split(" ")[-1]) < 3) >= 5:
+            txt = re.sub(RUN, _run, txt)
+        return txt
+    txt = re.sub(r"[|\[\]{}¦]", " ", txt)
+    txt = re.sub(RUN, _run, txt)
     txt = re.sub(r"(?<=\d)[)](?=\s|$)", " ", txt)
     txt = re.sub(r"(?<=\d) ?[.:;](?=\s{2,}|$)", " ", txt)
     return txt
@@ -423,7 +431,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     order_votes = []
     pend = []
     single_hint = []
-    unit_side, units_seen = [None, None], []
+    unit_side, units_seen, unit_at = [None, None], [], -99
     for i, ln in enumerate(lines):
         if "\f" in ln:
             ln = ln.replace("\f", "")
@@ -437,6 +445,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 if not split:
                     unit_side[1] = f_u
             units_seen.append(f_u)
+            unit_at = i
         if h:
             # en-tête sur deux lignes (« EXERCICE 2025 » / « EXERCICE 2024 ») : regroupé avec la précédente
             if len(h) == 1 and heads and i - heads[-1][0] <= 3 and len(heads[-1][1]) == 1 and heads[-1][1][0][2] != h[0][2]:
@@ -470,6 +479,15 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                     found_all.append((mm.start(), s_))
                 if s_ and (not found_s or found_s[-1][1] != s_):
                     found_s.append((mm.start(), s_))
+            if i - unit_at > 4:  # nouvel état sans unité annoncée à côté : unité à déterminer (du côté du titre)
+                for pos_h, s_h in found_all:
+                    if s_h in (S_ACT, S_PAS, S_CR, S_FLX, "bilan"):
+                        if split and pos_h >= split[0] - 5:
+                            unit_side[1] = None
+                        else:
+                            unit_side[0] = None
+                            if not split:
+                                unit_side[1] = None
             if len(found_all) >= 2 and len({x[1] for x in found_all}) == 1 and found_all[0][1] not in ("bilan", "hb"):
                 sec, split = found_all[0][1], None  # même état des deux côtés (« PRODUITS … CHARGES »)
             elif len(found_s) >= 2 and found_s[0][1] != found_s[1][1] and found_s[1][1] != "bilan":
@@ -603,10 +621,36 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     guess = set()
     single = single_hint.count(1) > 2 * single_hint.count(2)
     found, alt, ranks = {}, {}, {}
-    # unités par tableau : un montant prend l'unité de l'en-tête de son tableau (avant le premier en-tête : celle du premier)
+    # unités par tableau : un montant prend l'unité annoncée en tête de son tableau ; un tableau sans unité annoncée prend
+    # l'unité qui rend son total de bilan plausible (0,3 à 60 000 milliards de FCFA), de préférence celle du document
     norm = bool(units_seen)
+    f_unk = {}
+    if norm:
+        u_doc = unit_of(txt)
+        tots, f_stmt = {}, {}
+        for key, s_here, per, i, yrs, how, vals, u_occ in occ:
+            if u_occ is None and key in ("total_actif", "total_passif", "_total"):
+                for v, _ in vals:
+                    if v:
+                        tots[per] = max(tots.get(per, 0), abs(v))
+            elif u_occ and key in ("total_actif", "total_passif") and s_here in (S_ACT, S_PAS):
+                f_stmt.setdefault(per, u_occ)  # unité du bilan de ce périmètre
+        for per, f_ in f_stmt.items():
+            if per not in tots:
+                f_unk[per] = f_
+        for per, T in tots.items():
+            pl = [f for f in (1.0, 1e3, 1e6, 1e9) if 3e8 <= T * f <= 6e13]
+            if f_stmt.get(per) in pl:
+                f_unk[per] = f_stmt[per]
+                continue
+            f_unk[per] = (units_seen[0] if units_seen[0] in pl else u_doc if u_doc in pl else pl[0] if len(pl) == 1 else None)
     for key, s_here, per, i, yrs, how, vals, u_occ in occ:
-        f_u = (u_occ or units_seen[0]) if norm else 1.0
+        if norm:
+            f_u = u_occ or f_unk.get(per) or (units_seen[0] if per not in f_unk else None)
+            if f_u is None:
+                continue  # unité introuvable pour ce tableau : montant non retenu
+        else:
+            f_u = 1.0
         if how in ("order", "single"):
             nums = [v for v, _ in vals if v is not None]
             if how == "single" and not single:
@@ -702,26 +746,34 @@ def _assign(vals, heads, i, fy, brut):
             return ({fy: v[2], fy - 1: v[3]} if v[3] is not None else {fy: v[2]}), "brut"
         if len(v) == 3 and v[2] is not None and abs(z[0] - abs(z[1]) - z[2]) <= max(2, abs(z[0]) * 1e-6) and fy:
             return {fy: v[2]}, "brut"
-    recent = [h for h in heads if 0 <= i - h[0] < 160][-3:]
+    recent = [h for h in heads if 0 <= i - h[0] < 160][-4:]
     out = {}
     if recent:
-        for v, xe in nums:
-            best = None
-            for _, hs in reversed(recent):
+        # l'en-tête retenu est celui dont les colonnes s'alignent le mieux sur tous les montants de la ligne
+        # (plusieurs tableaux se suivent avec des mises en page différentes)
+        best_h = None
+        for rk, (_, hs) in enumerate(reversed(recent)):
+            got, dist = {}, []
+            for v, xe in nums:
+                bb = None
                 for he, hs_, yr in hs:
                     d = min(abs(he - xe), abs((he + hs_) / 2 - (xe - len(str(abs(int(v)))) * 0.66)))
-                    if d <= 12 and (best is None or d < best[0]):
-                        best = (d, yr)
-                if best:
-                    break
-            if best:
-                yr = best[1]
-                if isinstance(yr, tuple):
-                    if not fy:
-                        continue
-                    yr = fy + yr[1]
-                if yr not in out:
-                    out[yr] = v
+                    if d <= 12 and (bb is None or d < bb[0]):
+                        bb = (d, yr)
+                if bb:
+                    yr = bb[1]
+                    if isinstance(yr, tuple):
+                        if not fy:
+                            continue
+                        yr = fy + yr[1]
+                    if yr not in got:
+                        got[yr] = v
+                        dist.append(bb[0])
+            if got:
+                sc = (len(got), -sum(dist) / len(dist), -rk)
+                if best_h is None or sc > best_h[0]:
+                    best_h = (sc, got)
+        out = best_h[1] if best_h else {}
         if out:
             if fy and not any(y in (fy, fy - 1) for y in out):
                 return {}, None
