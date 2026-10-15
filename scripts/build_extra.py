@@ -969,7 +969,12 @@ def brvm_ratios(cc, bank, eps_y, dps_y, px_y):
     if not Ys:
         return [], []
     V = {y: (cc["y"].get(y) or cc["y"].get(str(y)) or {}).get("v", {}) for y in Ys}
-    g = lambda k, y: V.get(y, {}).get(k)  # noqa: E731
+
+    def g(k, y):
+        v_ = V.get(y, {})
+        if k == "resultat_net" and v_.get(k) is None:
+            return v_.get("resultat_bilan")  # (résultat de l'exercice au bilan : même montant publié)
+        return v_.get(k)
 
     def ratio(a, b_, pos=False):
         if a is None or b_ in (None, 0):

@@ -372,6 +372,8 @@ def main():
                     v, ys = r["v"], str(y)
                     cpt_chk["y"] += 1
                     pairs = [("ca", "b_pnb" if bank else "chiffre_affaires")] + list(MAPC)
+                    if v.get("resultat_net") is None and v.get("resultat_bilan") is not None:
+                        v = dict(v, resultat_net=v["resultat_bilan"])  # (résultat de l'exercice au bilan : même montant publié)
                     # coût du risque (charge comptée positivement) : signe lu d'après le compte de résultat
                     # (résultat brut d'exploitation ± coût du risque = résultat d'exploitation)
                     if bank and v.get("b_cout_risque") is not None and v.get("b_rbe") is not None and v.get("resultat_exploitation") is not None:

@@ -440,7 +440,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     """{postes: {poste: {exercice: montant (unité du document)}}, unité, exercice, type, norme, périmètre, période…}"""
     txt = clean(txt, ocr)
     n_k2 = len(re.findall(r"(?<![\d,.])\d{1,3}(?:,\d{3}){2,}(?![\d,])", txt))
-    n_k1 = len(re.findall(r"(?<![\d,.\s])\d{1,3},\d{3}(?![\d,])", txt))
+    n_k1 = len(re.findall(r"(?<!\d )(?<![\d,.])\d{1,3},\d{3}(?![\d,])", txt))  # « 54,232 » (virgule des milliers, à l'anglaise)
     n_dec = len(re.findall(r"(?<![\d,.])\d+,\d{1,2}(?![\d,])", txt))
     _COMMA_K[0] = (n_k2 >= 5 and n_dec <= n_k2 // 10) or (n_k1 >= 15 and n_dec <= n_k1 // 10 and not re.search(r"\d \d{3},\d", txt))
     _NOTE_DOT[0] = not _COMMA_K[0] and len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) >= 20 and \
