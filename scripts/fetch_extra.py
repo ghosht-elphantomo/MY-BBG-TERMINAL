@@ -808,35 +808,53 @@ def sika_table(html_):
     return out
 
 
+SIKAH_V = 2
+
+
 def run_sikah(out):
+    """Chiffres clés publiés (chiffre d'affaires, résultat net, BNPA, dividende) des pages société archivées : chaque adresse
+    qu'a eue la page (societe.aspx?s=, societe?s=, societe/), une capture par année civile, la plus ancienne de l'année
+    (fenêtres de cinq exercices les plus anciennes) ; pour un exercice donné, la capture la plus récente l'emporte."""
     path = os.path.join(out, "sika_hist.json")
     db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"t": {}, "miss": {}}
+    if db.get("v") != SIKAH_V:  # nouvelle lecture : tous les titres sont repris
+        db = {"v": SIKAH_V, "t": {}, "miss": {}, "old": db.get("t", {})}
     try:
         fund = harzat_json("fundamentals.json")
     except Exception as e:  # noqa: BLE001
         note("sikah", False, f"fundamentals: {e}")
         return
     todo = [(t, v.get("source_url")) for t, v in fund.items() if t != "_meta" and v.get("source_url") and t not in db["t"] and db["miss"].get(t, 0) < 3]
-    t_end = time.time() + 900
+    t_end = time.time() + float(os.environ.get("SIKAH_BUDGET", "900"))
     for t, url in todo:
         if time.time() > t_end:
             break
-        base = url.split("://", 1)[1].replace("www.", "")
-        try:
-            rows = json.loads(get_wb("http://web.archive.org/cdx/search/cdx?url=" + urllib.parse.quote(base) + "&output=json&fl=timestamp,original,statuscode&filter=statuscode:200&collapse=timestamp:6&limit=60") or b"[]")
-        except Exception as e:  # noqa: BLE001
-            note("sikah", False, f"{t} cdx: {e}")
+        m_ = re.search(r"societe/([A-Z0-9]+)(\.[a-z]{2})?", url)
+        code = (m_.group(1) if m_ else t).upper()
+        rows = []
+        for pat in (f"sikafinance.com/marches/societe/{code}*", f"sikafinance.com/marches/societe?s={code}*",
+                    f"sikafinance.com/marches/societe.aspx?s={code}*"):
+            try:
+                r_ = json.loads(get_wb("http://web.archive.org/cdx/search/cdx?url=" + urllib.parse.quote(pat, safe="*/?=") +
+                                       "&output=json&fl=timestamp,original,statuscode&filter=statuscode:200&collapse=timestamp:6&limit=200") or b"[]")
+                rows += [x for x in r_[1:] if x and re.search(r"(?i)[?/=]" + re.escape(code) + r"(?:\.[a-z]{2})?(?:$|&|/|\?)", x[1])]
+            except Exception as e:  # noqa: BLE001
+                note("sikah", False, f"{t} cdx: {e}")
+                time.sleep(3)
+        if not rows:
             db["miss"][t] = db["miss"].get(t, 0) + 1
-            time.sleep(3)
+            note("sikah", False, f"{t}: aucune capture")
+            save(path, db)
             continue
-        snaps = sorted([r for r in rows[1:] if r and r[0] < "2025"], key=lambda r: r[0])
+        # une capture par année civile : la plus ancienne de l'année (exercices les plus anciens), lues de la plus récente à la
+        # plus ancienne (un exercice déjà lu dans une capture plus récente n'est pas remplacé)
+        by_y = {}
+        for ts, orig, _ in sorted(rows, key=lambda r: r[0]):
+            by_y.setdefault(ts[:4], (ts, orig))
         got = {}
-        # la plus ancienne capture donne les exercices les plus anciens ; une capture par année au plus
-        seen_y = set()
-        for ts, orig, _ in snaps:
-            if ts[:4] in seen_y or len(seen_y) >= 3:
-                continue
-            seen_y.add(ts[:4])
+        for ts, orig in sorted(by_y.values(), reverse=True):
+            if time.time() > t_end + 120:
+                break
             try:
                 h_ = get_wb(f"http://web.archive.org/web/{ts}id_/{orig}").decode("utf8", "replace")
                 tb = sika_table(h_)
@@ -1083,20 +1101,18 @@ def run_comptes(out):
     except Exception as e:  # noqa: BLE001
         note("comptes", False, f"liste des publications : {e}")
         return
-    # états financiers d'abord ; puis communiqués de résultats et rapports des commissaires aux comptes (souvent accompagnés des
-    # états, ex. Sonatel), rapports annuels, enfin rapports de la société et rapports d'activité qui contiennent des états
-    cats = {"financial_statements": 0, "financial_results": 1, "auditor_report": 1, "annual_report": 2, "company_report": 3, "activity_report": 3}
-    fin_rx = re.compile(r"(?i)etats?[_ -]+financ|etat[_ -]+financ|comptes|bilan|resultats|rapport[_ -]+annuel|_ra_|_ef[acpn]_|annual|financial")
+    # tout ce que les sociétés déposent à la BRVM est lu : états financiers d'abord ; puis communiqués de résultats, rapports des
+    # commissaires aux comptes et rapports annuels ; rapports de la société et d'activité ; communiqués, projets de résolutions,
+    # assemblées et notations ; enfin tout le reste (avis, calendriers…), dans l'ordre des dates les plus récentes
+    cats = {"financial_statements": 0, "financial_results": 1, "auditor_report": 1, "annual_report": 1, "company_report": 2, "activity_report": 2,
+            "communique": 3, "resolution_project": 3, "ag_meeting": 3, "rating": 3}
     cand = {}
     for e in evs:
         u = (e.get("document_url") or "").strip()
-        if e.get("category") not in cats or not e.get("ticker") or not u.lower().endswith(".pdf") or "brvm.org" not in u:
-            continue
-        if cats[e["category"]] >= 1 and e["category"] in ("auditor_report", "company_report", "activity_report") and \
-                not fin_rx.search(u.rsplit("/", 1)[-1] + " " + (e.get("title") or "")):
+        if not e.get("ticker") or not u.lower().endswith(".pdf") or "brvm.org" not in u:
             continue
         cand.setdefault(u, e)
-    todo = sorted(cand.values(), key=lambda e: (cats[e["category"]], -int(re.sub(r"\D", "", e.get("published_at") or "0")[:8] or 0)))
+    todo = sorted(cand.values(), key=lambda e: (cats.get(e["category"], 4), -int(re.sub(r"\D", "", e.get("published_at") or "0")[:8] or 0)))
     def again(m):  # document à reprendre : erreur de téléchargement, ou long scan pas encore lu par reconnaissance de caractères
         if str(m.get("st", "")).startswith("erreur"):
             return m.get("n_err", 0) < 3

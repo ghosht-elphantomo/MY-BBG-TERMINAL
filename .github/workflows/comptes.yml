@@ -3,7 +3,7 @@ name: Comptes des sociétés cotées
 # États financiers publiés sur brvm.org depuis 1998 (bilan, compte de résultat, flux) : chaque PDF est lu une seule fois
 # (couche texte, sinon reconnaissance de caractères) et son texte gardé en cache sur la branche `comptes` ; les postes sont
 # relus à chaque passage et ne sont retenus que si les identités comptables du document se vérifient.
-# Tant qu'il reste des documents à lire, le passage suivant est lancé aussitôt (30 au plus d'affilée) ; ensuite un passage par jour.
+# Tant qu'il reste des documents à lire, le passage suivant est lancé aussitôt (60 au plus d'affilée) ; ensuite un passage par jour.
 # N'écrit que la branche `comptes` (aucun déploiement) : ni le site ni son actualisation ne sont touchés.
 on:
   schedule:
@@ -62,4 +62,4 @@ jobs:
           read left new <<< "$(python3 -c "import json;d=json.load(open('/tmp/cpt/index.json'));print(d.get('left',0),d.get('last_new',0))" 2>/dev/null || echo '0 0')"
           chain="${{ inputs.chain || '0' }}"
           echo "Documents lus : $new ; restant à lire : $left (passage $chain)"
-          if [ "${left:-0}" -gt 0 ] && [ "${new:-0}" -gt 0 ] && [ "$chain" -lt 30 ]; then gh workflow run comptes.yml --ref main -f chain=$((chain + 1)); fi
+          if [ "${left:-0}" -gt 0 ] && [ "${new:-0}" -gt 0 ] && [ "$chain" -lt 60 ]; then gh workflow run comptes.yml --ref main -f chain=$((chain + 1)); fi

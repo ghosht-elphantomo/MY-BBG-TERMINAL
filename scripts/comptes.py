@@ -1237,6 +1237,9 @@ SOFT_SUMS = ((("ventes_marchandises", "ventes_produits", "travaux_services", "pr
 
 
 # ---------------------------------------------------------------- consolidation : un jeu de comptes par société et par exercice
+# catégories de publications qui contiennent des états financiers (les autres sont lues mais ne servent pas aux comptes)
+CAT_STATEMENTS = {"financial_statements", "financial_results", "auditor_report", "annual_report", "company_report", "activity_report",
+                  "communique", "resolution_project", "ag_meeting"}
 # documents d'une autre entité classés sous le titre : PH-CI (sous Palm CI), SDA CI (sous Bolloré Transport & Logistics CI),
 # SARI CI (sous CFAO Motors CI)
 OTHER_ENTITY = {"PALC": r"\bph ?ci\b|\bphci\b", "SDSC": r"\bsda\b", "CFAC": r"\bsari\b"}
@@ -1269,6 +1272,9 @@ def consolidate(cj, mirror=None):
         if not r.get("y") or r.get("per") != "annuel" or r.get("cur", "XOF") != "XOF" or not r.get("t"):
             continue
         if re.search(r"par secteur|sectoriel|segment|par activite|par pays", nrm((r.get("ti") or "") + " " + u)):
+            continue
+        # notations, avis et calendriers : résumés ou chiffres arrondis, jamais des états financiers -> pas de consolidation
+        if r.get("cat") and r["cat"] not in CAT_STATEMENTS:
             continue
         # comptes d'une autre société publiés sous le même titre (filiale, société absorbée) : écartés
         if r["t"] in OTHER_ENTITY and re.search(OTHER_ENTITY[r["t"]], nrm((r.get("ti") or "") + " " + u.rsplit("/", 1)[-1].replace("_", " "))):

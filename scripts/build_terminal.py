@@ -417,8 +417,12 @@ def main():
     # exercices plus anciens : pages SikaFinance archivées (web.archive.org), ajoutés seulement là où la source actuelle n'a rien
     sh_path = os.path.join(a.extra, "sika_hist.json") if a.extra else None
     if sh_path and os.path.exists(sh_path):
-        hist = json.load(open(sh_path, encoding="utf8")).get("t", {})
-        kmap = {"ca": "ca", "rn": "resultat_net", "bnpa": "bnpa", "div": "dividende", "per": "per"}
+        sh_ = json.load(open(sh_path, encoding="utf8"))
+        hist = {}
+        for src_ in (sh_.get("old") or {}, sh_.get("t") or {}):  # (lecture précédente conservée tant que la nouvelle n'est pas faite)
+            for t, yrs in src_.items():
+                hist.setdefault(t, {}).update(yrs)
+        kmap = {"ca": "ca", "rn": "resultat_net", "bnpa": "bnpa", "div": "dividende"}  # (chiffres publiés seulement, pas de ratio)
         for t, yrs in hist.items():
             f = fund.get(t)
             if not f:
