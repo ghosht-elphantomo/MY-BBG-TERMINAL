@@ -1,0 +1,65 @@
+name: Comptes des sociétés cotées
+
+# États financiers publiés sur brvm.org depuis 1998 (bilan, compte de résultat, flux) : chaque PDF est lu une seule fois
+# (couche texte, sinon reconnaissance de caractères) et son texte gardé en cache sur la branche `comptes` ; les postes sont
+# relus à chaque passage et ne sont retenus que si les identités comptables du document se vérifient.
+# Tant qu'il reste des documents à lire, le passage suivant est lancé aussitôt (30 au plus d'affilée) ; ensuite un passage par jour.
+# N'écrit que la branche `comptes` (aucun déploiement) : ni le site ni son actualisation ne sont touchés.
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      chain:
+        description: "rang dans une suite de passages (interne)"
+        default: "0"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: comptes
+  cancel-in-progress: false
+
+jobs:
+  comptes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v4
+      - name: Outils PDF et reconnaissance de caractères
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-fra >/dev/null
+          python3 -c "import PIL" 2>/dev/null || pip install -q --break-system-packages pillow || true
+      - name: Restaurer la branche comptes
+        run: |
+          mkdir -p /tmp/cpt
+          if git fetch -q --depth 1 origin comptes; then git archive FETCH_HEAD | tar -x -C /tmp/cpt; fi
+      - name: Lire les documents pas encore lus
+        continue-on-error: true
+        env:
+          CPT_BUDGET: "3300"
+        run: timeout 3900 python3 scripts/fetch_extra.py --out /tmp/cpt --only comptes
+      - name: Relire tout le cache (postes et contrôles)
+        run: python3 scripts/comptes.py --dir /tmp/cpt
+      - name: Publier (branche comptes)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/cpt/vercel.json
+          rm -f /tmp/cpt/report_*.json
+          URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          export GIT_DIR=/tmp/cpt.git GIT_WORK_TREE=/tmp/cpt
+          rm -rf "$GIT_DIR"; git init -q -b comptes
+          git config user.name "fqt-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Comptes $(date -u +'%d/%m/%Y %H:%M') UTC" && git push -q -f "$URL" HEAD:comptes
+      - name: Passage suivant si des documents restent à lire
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          read left new <<< "$(python3 -c "import json;d=json.load(open('/tmp/cpt/index.json'));print(d.get('left',0),d.get('last_new',0))" 2>/dev/null || echo '0 0')"
+          chain="${{ inputs.chain || '0' }}"
+          echo "Documents lus : $new ; restant à lire : $left (passage $chain)"
+          if [ "${left:-0}" -gt 0 ] && [ "${new:-0}" -gt 0 ] && [ "$chain" -lt 30 ]; then gh workflow run comptes.yml --ref main -f chain=$((chain + 1)); fi

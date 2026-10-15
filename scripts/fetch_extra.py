@@ -943,6 +943,161 @@ def run_pdffin(out, budget=600):
     save(path, db)
 
 
+# ---------------------------------------------------------------- états financiers publiés à la BRVM : textes lus une seule fois
+CPT_KW = re.compile(r"bilan|actif|passif|compte de r[ée]sultat|comptes? de r[ée]sultats|tableau des flux|tableau financier|tafire|"
+                    r"produit net bancaire|chiffre d.affaires|r[ée]sultat net", re.I)
+CPT_AMT = re.compile(r"(?<![\d.,])\d{1,3}(?:[ .,  ]\d{3})+(?![\d])")
+
+
+def cpt_ocr(pdf_path, pages, td):
+    """Reconnaissance de caractères (300 dpi, gris) des pages données, en français puis en anglais : {"fra": texte, "eng": texte}.
+    Une page illisible dans le sens où elle est imprimée (tableau à l'italienne) est relue tournée d'un quart de tour."""
+    import glob, subprocess
+    langs = subprocess.run(["tesseract", "--list-langs"], capture_output=True, timeout=30).stdout.decode()
+    have = [lang for lang in ("fra", "eng") if "\n" + lang in "\n" + langs]
+
+    def ocr(img, lang):
+        return subprocess.run(["tesseract", img, "-", "-l", lang, "--psm", "6", "-c", "preserve_interword_spaces=1"],
+                              capture_output=True, timeout=240).stdout.decode("utf8", "replace")
+
+    def score(t):
+        return len(CPT_AMT.findall(t)) * 3 + len(re.findall(r"(?i)\b(?:total|capital|resultat|résultat|charges|produits|actif|passif|stocks|dettes|exercice)\b", t))
+    out = {lang: [] for lang in have}
+    for pg in pages:
+        for f in glob.glob(os.path.join(td, "o*.png")):
+            os.remove(f)
+        subprocess.run(["pdftoppm", "-r", "300", "-gray", "-png", "-f", str(pg), "-l", str(pg), pdf_path, os.path.join(td, "o")], capture_output=True, timeout=180)
+        imgs = sorted(glob.glob(os.path.join(td, "o*.png")))
+        if not imgs or not have:
+            continue
+        img = imgs[0]
+        first = ocr(img, have[0])
+        if score(first) < 40:  # page tournée ? essai à +90° et -90°
+            try:
+                from PIL import Image
+                best = (score(first), img, first)
+                for ang in (-90, 90):
+                    p2 = os.path.join(td, f"r{ang}.png")
+                    Image.open(img).rotate(ang, expand=True).save(p2)
+                    t2 = ocr(p2, have[0])
+                    if score(t2) > best[0] * 1.5 + 10:
+                        best = (score(t2), p2, t2)
+                img, first = best[1], best[2]
+            except Exception:  # noqa: BLE001
+                pass
+        out[have[0]].append(first)
+        for lang in have[1:]:
+            out[lang].append(ocr(img, lang))
+    return {k: "\f".join(v) for k, v in out.items() if v}
+
+
+def run_comptes(out):
+    """États financiers des sociétés cotées publiés sur brvm.org (depuis 1998) : chaque document est téléchargé et lu une seule fois
+    (couche texte, sinon reconnaissance de caractères des pages des états), son texte gardé en cache (txt/). La lecture des postes
+    et le contrôle des identités comptables sont refaits à chaque passage sur tout le cache par comptes.py.
+    Dans la limite de CPT_BUDGET secondes ; états financiers d'abord (les plus récents en premier), puis rapports annuels."""
+    import hashlib, subprocess, tempfile
+    import comptes
+    budget = float(os.environ.get("CPT_BUDGET", "1500"))
+    t0 = time.time()
+    ip = os.path.join(out, "index.json")
+    idx = json.load(open(ip, encoding="utf8")) if os.path.exists(ip) else {"docs": {}}
+    docs = idx.setdefault("docs", {})
+    os.makedirs(os.path.join(out, "txt"), exist_ok=True)
+    try:
+        evs = harzat_json("events.json")["events"]
+    except Exception as e:  # noqa: BLE001
+        note("comptes", False, f"liste des publications : {e}")
+        return
+    cats = {"financial_statements": 0, "financial_results": 1, "annual_report": 2}
+    cand = {}
+    for e in evs:
+        u = (e.get("document_url") or "").strip()
+        if e.get("category") not in cats or not e.get("ticker") or not u.lower().endswith(".pdf") or "brvm.org" not in u:
+            continue
+        cand.setdefault(u, e)
+    todo = sorted(cand.values(), key=lambda e: (cats[e["category"]], -int(re.sub(r"\D", "", e.get("published_at") or "0")[:8] or 0)))
+    todo = [e for e in todo if e["document_url"] not in docs or (str(docs[e["document_url"]].get("st", "")).startswith("erreur")
+                                                                  and docs[e["document_url"]].get("n_err", 0) < 3)]
+    if not pdf_tools():
+        note("comptes", False, "outils PDF absents")
+        return
+    n_new = n_ocr = 0
+    for e in todo:
+        if time.time() - t0 > budget:
+            break
+        u = e["document_url"]
+        h = hashlib.sha1(u.encode()).hexdigest()[:16]
+        rec = {"t": e["ticker"], "fy": e.get("fiscal_year"), "ti": (e.get("title") or "")[:200], "d": (e.get("published_at") or "")[:10],
+               "cat": e["category"], "h": h, "ts": int(time.time())}
+        try:
+            b = get(u, tries=2, timeout=120)
+        except Exception as ex:  # noqa: BLE001
+            rec.update(st=f"erreur {str(ex)[:80]}", n_err=(docs.get(u) or {}).get("n_err", 0) + 1)
+            docs[u] = rec
+            note("comptes", False, f"{e['ticker']} {u.rsplit('/', 1)[-1][:60]} : {ex}")
+            continue
+        if b[:4] != b"%PDF":
+            rec["st"] = "pas un PDF"
+            docs[u] = rec
+            continue
+        with tempfile.TemporaryDirectory() as td:
+            p_ = os.path.join(td, "a.pdf")
+            open(p_, "wb").write(b)
+            try:
+                txt = subprocess.run(["pdftotext", "-layout", p_, "-"], capture_output=True, timeout=180).stdout.decode("utf8", "replace")
+            except Exception:  # noqa: BLE001
+                txt = ""
+            pages = txt.split("\f")
+            if pages and not pages[-1].strip():
+                pages = pages[:-1]
+            rec["pages"] = len(pages)
+            keep = list(range(len(pages)))
+            if len(pages) > 30:  # rapport annuel : pages des états financiers (et leurs voisines) seulement
+                hit = [i for i, pg in enumerate(pages) if len(CPT_KW.findall(pg)) >= 2 and len(CPT_AMT.findall(pg)) >= 15]
+                keep = sorted({j for i in hit for j in (i - 1, i, i + 1) if 0 <= j < len(pages)})[:40]
+                rec["kept"] = len(keep)
+            body = "\f".join(pages[i] for i in keep)
+            rec["q"] = len(CPT_AMT.findall(body))
+            with gzip.open(os.path.join(out, "txt", h + ".txt.gz"), "wt", encoding="utf8") as f:
+                f.write(body)
+            ok_text = False
+            try:
+                r = comptes.read_doc({"txt": (body, False)}, rec)
+                ok_text = r.get("st") == "ok" and r.get("n", 0) >= 10
+                rec["st0"] = r.get("st")
+            except Exception as ex:  # noqa: BLE001
+                rec["st0"] = f"lecture : {str(ex)[:60]}"
+            # couche texte absente, illisible ou incomplète : reconnaissance de caractères des pages des états
+            if not ok_text and time.time() - t0 < budget:
+                if rec["q"] < 40 and len(pages) <= 20:
+                    ocr_pages = [i + 1 for i in range(len(pages))]
+                else:
+                    ocr_pages = [i + 1 for i in keep if CPT_KW.search(pages[i]) and len(pages[i].strip()) < 6000][:8]
+                    if len(pages) > 20 and rec["q"] < 40:
+                        ocr_pages = []  # long document scanné : rapport annuel sans couche texte, non lu
+                if ocr_pages:
+                    try:
+                        o = cpt_ocr(p_, ocr_pages, td)
+                        for lang, t_ in o.items():
+                            with gzip.open(os.path.join(out, "txt", f"{h}.{lang}.gz"), "wt", encoding="utf8") as f:
+                                f.write(t_)
+                        rec["ocr"] = len(ocr_pages)
+                        n_ocr += 1
+                    except Exception as ex:  # noqa: BLE001
+                        rec["ocr_err"] = str(ex)[:80]
+        rec["st"] = "lu"
+        docs[u] = rec
+        n_new += 1
+        note("comptes")
+        if n_new % 10 == 0:
+            save(ip, idx)
+    left = sum(1 for e in cand.values() if e["document_url"] not in docs)
+    idx.update(v=1, left=left, total=len(cand), last_new=n_new, ts=int(time.time()))
+    save(ip, idx)
+    log(f"états financiers : {n_new} documents lus ({n_ocr} par reconnaissance de caractères), {left} restent, {len(docs)} en cache")
+
+
 # ---------------------------------------------------------------- consensus des analystes (Nasdaq)
 def us_equities(out):
     nd = os.path.join(out, "nasdaq_meta.json")
@@ -3297,7 +3452,7 @@ def main():
     steps = [("cal", lambda: run_cal(a.out, a.site)), ("avis", lambda: run_avis(a.site)), ("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
-             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
+             ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("comptes", lambda: run_comptes(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
              ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("ussplit", lambda: run_ussplit(a.out)), ("avisocr", lambda: run_avisocr(a.site)), ("flottant", lambda: run_flottant(a.out, a.site)), ("ratings", lambda: run_ratings(a.out, a.site)), ("sgi", lambda: run_sgi(a.out)), ("usdiv", lambda: run_usdiv(a.out)), ("ei", lambda: run_ei(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
