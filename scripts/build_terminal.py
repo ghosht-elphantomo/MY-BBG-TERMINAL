@@ -965,11 +965,12 @@ def main():
         RT = (json.load(open(rp_, encoding="utf8")).get("docs") or {}) if rp_ and os.path.exists(rp_) else {}
         if RT:
             tick = {s_["id"] for s_ in secs if s_.get("mkt") == "BRVM"}
+            ev_t = {x.get("u"): x.get("t") for x in emeta if x.get("u") and x.get("t") in tick}  # avis rattachés à une société cotée
             rows_ = []
             for u_, r_ in RT.items():
                 if not (r_.get("lt") or r_.get("st")):
                     continue
-                rows_.append({"u": u_, "t": r_.get("t") if r_.get("t") in tick else None, "soc": r_.get("soc"), "ti": r_.get("ti"), "d": r_.get("d"), "ag": r_.get("ag"), "lt": r_.get("lt"), "lt0": r_.get("lt0"),
+                rows_.append({"u": u_, "t": r_.get("t") if r_.get("t") in tick else ev_t.get(u_), "soc": r_.get("soc"), "ti": r_.get("ti"), "d": r_.get("d"), "ag": r_.get("ag"), "lt": r_.get("lt"), "lt0": r_.get("lt0"),
                               "st": r_.get("st"), "st0": r_.get("st0"), "out": r_.get("out"), "exp": r_.get("exp"), "val": r_.get("val"), "scale": r_.get("scale")})
             rows_.sort(key=lambda x: x.get("d") or "", reverse=True)
             last_ = {}

@@ -1,0 +1,46 @@
+name: Base historique BRVM
+
+# Archive cumulative (jamais effacée) des cours officiels, indices, dividendes, fractionnements, événements, résultats,
+# flottant et notations, contrôlée chaque soir. Lit seulement les branches `data` et `boc` ; écrit seulement la branche `histo`.
+# Ne touche ni au site, ni à son actualisation : aucun déploiement (vercel.json de la branche), aucune écriture ailleurs.
+on:
+  schedule:
+    - cron: "55 23 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: histo
+  cancel-in-progress: false
+
+jobs:
+  histo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lire les données du terminal et les bulletins officiels
+        run: |
+          mkdir -p /tmp/in /tmp/boc
+          git fetch -q --depth 1 origin data && git archive FETCH_HEAD | tar -x -C /tmp/in
+          git fetch -q --depth 1 origin boc && git archive FETCH_HEAD | tar -x -C /tmp/boc
+          test -f /tmp/in/data/summary.json && test -d /tmp/boc/boc_px
+      - name: Mettre à jour et contrôler la base (branche histo)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          export GIT_DIR=/tmp/histo.git GIT_WORK_TREE=/tmp/histo
+          mkdir -p /tmp/histo && git init -q -b histo
+          git config user.name "fqt-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch -q --depth 1 "$URL" histo; then git reset -q --hard FETCH_HEAD; fi
+          python3 scripts/histo.py --data /tmp/in/data --boc /tmp/boc/boc_px --out /tmp/histo
+          cp scripts/histo_README.md /tmp/histo/README.md
+          printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/histo/vercel.json
+          git add -A
+          if git diff --cached --quiet -- . ':!etat.json'; then echo "Base inchangée"; exit 0; fi
+          git commit -qm "Base historique $(date -u +'%d/%m/%Y')"
+          git push -q "$URL" HEAD:histo
