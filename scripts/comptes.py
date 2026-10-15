@@ -40,7 +40,16 @@ ITEMS = [
     ("total_actif", (S_ACT, None), r"^total ?(?:general ?)?(?:de ?l.? ?)?actif$|^total general actif$|^total bilan actif$|^total (?:des )?actifs$|^total assets$|^actif total$"),
     # ---- bilan passif (SYSCOHADA)
     ("capital", (S_PAS,), r"^capital(?: social| souscrit(?: appele)?)?$"),
-    ("primes_reserves", (S_PAS,), r"^primes et reserves$"),
+    ("primes_reserves", (S_PAS,), r"^primes (?:et|&) reserves$"),
+    ("primes_capital", (S_PAS,), r"^primes liees au capital social$|^primes d.apport,? d.emission,? de fusion$|^primes d.emission(?: et de fusion)?$"),
+    ("ecart_reevaluation", (S_PAS,), r"^ecarts? de reevaluation$"),
+    ("reserves_indisponibles", (S_PAS,), r"^reserves indisponibles$"),
+    ("reserves_libres", (S_PAS,), r"^reserves libres$"),
+    ("autres_cp", (S_PAS,), r"^autres capitaux propres(?: et assimiles)?$"),
+    ("subventions", (S_PAS,), r"^subventions d.investissement$"),
+    ("provisions_reglementees", (S_PAS,), r"^provisions reglementees(?: et fonds assimiles)?$"),
+    ("ecart_conversion_passif", (S_PAS,), r"^ecarts? de conversion ?-? ?passif$"),
+    ("autres_passifs_circulants", (S_PAS,), r"^autres passifs? circulants?$"),
     ("reserves", (S_PAS,), r"^reserves$"),
     ("report_nouveau", (S_PAS,), r"^report a nouveau"),
     ("capitaux_propres", (S_PAS,), r"^(?:total )?capitaux propres(?: et ressources assimilees| et assimiles)?(?: et)?$|^total des capitaux propres$|^total equity$"),
@@ -49,7 +58,7 @@ ITEMS = [
     ("dettes_financieres", (S_PAS,), r"^(?:total )?dettes financieres(?: et ressources assimilees)?(?: et)?$|^total dettes et res\. assimilees$"),
     ("ressources_stables", (S_PAS,), r"^(?:total )?ressources stables$"),
     ("passif_circulant", (S_PAS,), r"^(?:total )?passif circulant$"),
-    ("fournisseurs", (S_PAS,), r"^fournisseurs(?: d.exploitation)?$"),
+    ("fournisseurs", (S_PAS,), r"^(?:dettes )?fournisseurs(?: d.exploitation| et comptes rattaches)?$"),
     ("tresorerie_passif", (S_PAS,), r"^(?:total )?tresorerie ?- ?passif$|^(?:total )?tresorerie passif$"),
     ("total_passif", (S_PAS, None), r"^total ?(?:general ?)?(?:du ?)?passif$|^total general passif$|^total bilan passif$|^total (?:des |du )?(?:capitaux propres et (?:des )?passifs?|passifs? et (?:des )?capitaux propres)$|^total liabilities and (?:shareholders. )?equity$|^passif total$|^total capitaux propres et passifs$"),
     ("actif_non_courant", (S_ACT,), r"^total (?:de l.|des )?actifs? non courants?$"),
@@ -846,6 +855,27 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             else:
                 for k, v in perims.pop("_" + suf).items():
                     perims[dflt].setdefault(k, v)
+    # bilan de synthèse sans ligne de total des capitaux propres : la somme des composantes publiées (capital, primes, réserves,
+    # report à nouveau, résultat, autres) est retenue si elle se vérifie par le passif (total - dettes financières - passif
+    # circulant - trésorerie passif - écart de conversion)
+    CP_PARTS = ("capital", "primes_reserves", "primes_capital", "ecart_reevaluation", "reserves", "reserves_indisponibles", "reserves_libres",
+                "report_nouveau", "resultat_bilan", "autres_cp", "subventions", "provisions_reglementees")
+    for it_ in perims.values():
+        if "capitaux_propres" in it_ or "resultat_bilan" not in it_ or "capital" not in it_:
+            continue
+        for y_ in list(it_["resultat_bilan"]):
+            g_ = lambda k_: (it_.get(k_) or {}).get(y_)  # noqa: E731
+            pc_ = g_("passif_circulant")
+            if pc_ is None and g_("fournisseurs") is not None and g_("autres_passifs_circulants") is not None:
+                pc_ = g_("fournisseurs") + g_("autres_passifs_circulants")  # (bilan de synthèse : fournisseurs + autres passifs circulants)
+            if g_("capital") is None or pc_ is None or any(g_(k_) is None for k_ in ("total_passif", "dettes_financieres", "tresorerie_passif")):
+                continue
+            cp_sum = sum(g_(k_) for k_ in CP_PARTS if g_(k_) is not None)
+            cp_der = g_("total_passif") - g_("dettes_financieres") - pc_ - g_("tresorerie_passif") - (g_("ecart_conversion_passif") or 0)
+            if cp_sum and abs(cp_sum - cp_der) <= max(2.0, abs(cp_der) * 0.001):
+                it_.setdefault("capitaux_propres", {})[y_] = cp_sum
+                if g_("passif_circulant") is None:
+                    it_.setdefault("passif_circulant", {})[y_] = pc_
     main = max(perims, key=lambda k: len(perims[k])) if perims else "social"
     items = perims.get(main, {})
     bank = sum(1 for k in items if k.startswith("b_")) >= 3
@@ -1112,6 +1142,10 @@ LABELS = {
     "total_actif": "Total actif", "capital": "Capital", "primes_reserves": "Primes et réserves", "reserves": "Réserves", "report_nouveau": "Report à nouveau",
     "resultat_bilan": "Résultat de l'exercice (bilan)", "capitaux_propres": "Capitaux propres", "cp_groupe": "Capitaux propres part du groupe",
     "interets_minoritaires": "Intérêts minoritaires", "dettes_financieres": "Dettes financières", "ressources_stables": "Ressources stables",
+    "primes_capital": "Primes liées au capital", "ecart_reevaluation": "Écarts de réévaluation", "reserves_indisponibles": "Réserves indisponibles",
+    "reserves_libres": "Réserves libres", "autres_cp": "Autres capitaux propres", "subventions": "Subventions d'investissement",
+    "provisions_reglementees": "Provisions réglementées", "ecart_conversion_passif": "Écart de conversion passif",
+    "autres_passifs_circulants": "Autres passifs circulants",
     "passif_circulant": "Passif circulant", "fournisseurs": "Fournisseurs", "tresorerie_passif": "Trésorerie passif", "total_passif": "Total passif",
     "actif_non_courant": "Actifs non courants", "actif_courant": "Actifs courants", "passif_non_courant": "Passifs non courants",
     "passif_courant": "Passifs courants", "ventes_marchandises": "Ventes de marchandises", "marge_commerciale": "Marge commerciale",

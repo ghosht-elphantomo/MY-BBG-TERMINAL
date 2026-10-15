@@ -15,7 +15,7 @@ semaines d'une série déjà présente, sauf si un ajustement (split) est détec
 
 Usage : fetch_extra.py --out RAW_DIR [--only nasdaq,fred,cboe,cnn,crypto,wb,sec,analyst,boc,probe] [--news FILE]
 """
-import argparse, csv, datetime as dt, gzip, html as HTML, io, json, math, os, re, sys, time, urllib.parse, urllib.request
+import argparse, collections, csv, datetime as dt, gzip, html as HTML, io, json, math, os, re, sys, time, urllib.parse, urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -1101,6 +1101,10 @@ def run_comptes(out):
     except Exception as e:  # noqa: BLE001
         note("comptes", False, f"liste des publications : {e}")
         return
+    try:
+        evs = evs + brvm_reports(out, evs)  # (pages « rapports des sociétés cotées » relues directement : rien n'échappe à la liste)
+    except Exception as e:  # noqa: BLE001
+        note("comptes", False, f"pages des rapports : {e}")
     # tout ce que les sociétés déposent à la BRVM est lu : états financiers d'abord ; puis communiqués de résultats, rapports des
     # commissaires aux comptes et rapports annuels ; rapports de la société et d'activité ; communiqués, projets de résolutions,
     # assemblées et notations ; enfin tout le reste (avis, calendriers…), dans l'ordre des dates les plus récentes
@@ -1249,6 +1253,76 @@ def run_comptes(out):
     idx.update(v=1, left=left, total=len(cand), last_new=n_new + n_re, ts=int(time.time()))
     save(ip, idx)
     log(f"états financiers : {n_new} documents lus ({n_ocr} par reconnaissance de caractères), {n_re} relus, {left} restent, {len(docs)} en cache")
+
+
+def brvm_reports(out, evs, budget=420):
+    """Pages « rapports des sociétés cotées » de brvm.org relues directement (une page de 20 documents à la fois, jusqu'à ce qu'une
+    page n'apporte plus rien de nouveau) : les documents absents de la liste tierce sont ajoutés, rattachés au titre par la page
+    de la société et classés d'après leur intitulé. Cache dans brvm_rapports.json."""
+    path = os.path.join(out, "brvm_rapports.json")
+    db = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"slug": {}, "docs": {}}
+    known = {(e.get("document_url") or "").strip().lower() for e in evs}
+    # page de chaque société -> titre (d'après les publications déjà rattachées)
+    slug_t = {}
+    for e in evs:
+        m = re.search(r"/rapports-societe-cotes/([^/?#]+)", e.get("source_page") or "")
+        if m and e.get("ticker"):
+            slug_t.setdefault(m.group(1), collections.Counter())[e["ticker"]] += 1
+    slugs = {sl: c.most_common(1)[0][0] for sl, c in slug_t.items()}
+    db["slug"].update(slugs)
+    t0 = time.time()
+    rx = re.compile(r'href="(https://www\.brvm\.org/sites/default/files/[^"]+\.pdf)"[^>]*>|<a[^>]*href="(/sites/default/files/[^"]+\.pdf)"')
+    added = []
+    for sl, t in sorted(db["slug"].items()):
+        if time.time() - t0 > budget:
+            break
+        page = 0
+        while page < 40 and time.time() - t0 < budget:
+            try:
+                h_ = get(f"https://www.brvm.org/fr/rapports-societe-cotes/{sl}?page={page}", tries=1, timeout=40).decode("utf8", "replace")
+            except Exception as e:  # noqa: BLE001
+                note("rapports", False, f"{sl} p{page}: {e}")
+                break
+            urls = []
+            for a, b in rx.findall(h_):
+                u = a or ("https://www.brvm.org" + b)
+                if u not in urls:
+                    urls.append(u)
+            # intitulé dans la cellule <strong> qui précède le lien de téléchargement
+            titles = {(a or "https://www.brvm.org" + b): ti_ for ti_, a, b in
+                      re.findall(r'<strong>\s*([^<]{3,200}?)\s*</strong>.*?href="(?:(https://www\.brvm\.org/sites/default/files/[^"]+\.pdf)|(/sites/default/files/[^"]+\.pdf))"', h_, re.S)}
+            new_ = [u for u in urls if u not in db["docs"]]
+            for u in new_:
+                db["docs"][u] = {"t": t, "sl": sl, "ti": re.sub(r"\s+", " ", HTML.unescape(titles.get(u, ""))).strip()[:200], "seen": TODAY.isoformat()}
+            if not urls or not new_:
+                break  # (page vide, ou tout y est déjà connu : les pages suivantes aussi)
+            page += 1
+            time.sleep(0.5)
+    save(path, db)
+    for u, m in db["docs"].items():
+        if u.lower() in known:
+            continue
+        fn = u.rsplit("/", 1)[-1].lower()
+        ti = (m.get("ti") or "") + " " + fn
+        tn = nrm_(ti)
+        cat = ("financial_statements" if re.search(r"etats? financ|comptes (?:annuels|sociaux|consolides)|bilan", tn) else
+               "annual_report" if re.search(r"rapport annuel", tn) else
+               "activity_report" if re.search(r"rapport d.activit|trimestre|semestre", tn) else
+               "financial_results" if re.search(r"resultats?", tn) else "company_report")
+        ti_n = nrm_(m.get("ti") or "")
+        m_ = re.search(r"exercice[s]? (?:clos (?:au|le) \d\d?[ /-]\d\d?[ /-])?(20[0-3]\d|19[89]\d)", ti_n) or re.search(r"(?<!\d)(20[0-3]\d|19[89]\d)(?!\d)", ti_n)
+        fy = int(m_.group(1)) if m_ else None  # (sinon l'exercice sera lu dans le document)
+        d_ = f"{fn[:4]}-{fn[4:6]}-{fn[6:8]}" if re.match(r"20\d{6}_", fn) else m.get("seen")
+        added.append({"ticker": m["t"], "category": cat, "title": m.get("ti") or fn, "published_at": d_, "document_url": u, "fiscal_year": fy,
+                      "source": "BRVM", "source_page": f"https://www.brvm.org/fr/rapports-societe-cotes/{m['sl']}", "origin": "rapports"})
+    if added:
+        log(f"rapports des sociétés cotées : {len(added)} documents absents de la liste tierce ajoutés")
+    return added
+
+
+def nrm_(x):
+    import unicodedata
+    return unicodedata.normalize("NFKD", x).encode("ascii", "ignore").decode().lower()
 
 
 def cpt_ocr_pages(p_, pages, keep, rec, td):
