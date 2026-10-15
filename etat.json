@@ -1,0 +1,141 @@
+{
+ "version": 1,
+ "maj": "2026-10-15T13:42:14Z",
+ "derniere_seance": "2026-10-14",
+ "fichiers": {
+  "cours/2014.csv": {
+   "lignes": 0,
+   "ajoutees": 0,
+   "corrigees": 0
+  },
+  "cours/2015.csv": {
+   "lignes": 0,
+   "ajoutees": 0,
+   "corrigees": 0
+  },
+  "cours/2016.csv": {
+   "lignes": 0,
+   "ajoutees": 0,
+   "corrigees": 0
+  },
+  "cours/2017.csv": {
+   "lignes": 303,
+   "ajoutees": 303,
+   "corrigees": 0
+  },
+  "cours/2018.csv": {
+   "lignes": 9387,
+   "ajoutees": 9387,
+   "corrigees": 0
+  },
+  "cours/2019.csv": {
+   "lignes": 9509,
+   "ajoutees": 9509,
+   "corrigees": 0
+  },
+  "cours/2020.csv": {
+   "lignes": 9321,
+   "ajoutees": 9321,
+   "corrigees": 0
+  },
+  "cours/2021.csv": {
+   "lignes": 10639,
+   "ajoutees": 10639,
+   "corrigees": 0
+  },
+  "cours/2022.csv": {
+   "lignes": 10764,
+   "ajoutees": 10764,
+   "corrigees": 0
+  },
+  "cours/2023.csv": {
+   "lignes": 10536,
+   "ajoutees": 10536,
+   "corrigees": 0
+  },
+  "cours/2024.csv": {
+   "lignes": 10854,
+   "ajoutees": 10854,
+   "corrigees": 0
+  },
+  "cours/2025.csv": {
+   "lignes": 11575,
+   "ajoutees": 11575,
+   "corrigees": 0
+  },
+  "cours/2026.csv": {
+   "lignes": 9174,
+   "ajoutees": 9174,
+   "corrigees": 0
+  },
+  "indices.csv": {
+   "lignes": 41704,
+   "ajoutees": 41704,
+   "corrigees": 0
+  },
+  "dividendes.csv": {
+   "lignes": 415,
+   "ajoutees": 415,
+   "corrigees": 0
+  },
+  "fractionnements.csv": {
+   "lignes": 37,
+   "ajoutees": 37,
+   "corrigees": 0
+  },
+  "evenements.csv": {
+   "lignes": 7289,
+   "ajoutees": 7289,
+   "corrigees": 0
+  },
+  "resultats.csv": {
+   "lignes": 535,
+   "ajoutees": 535,
+   "corrigees": 0
+  },
+  "flottant.csv": {
+   "lignes": 46,
+   "ajoutees": 46,
+   "corrigees": 0
+  },
+  "notations.csv": {
+   "lignes": 80,
+   "ajoutees": 80,
+   "corrigees": 0
+  }
+ },
+ "bulletins_lignes_non_retenues": {
+  "2014": 45,
+  "2015": 3317,
+  "2016": 6708,
+  "2017": 7696
+ },
+ "bulletins_lignes_lues": {
+  "2014": 45,
+  "2015": 3317,
+  "2016": 6708,
+  "2017": 7999,
+  "2018": 9389,
+  "2019": 9513,
+  "2020": 9321,
+  "2021": 10639,
+  "2022": 10828,
+  "2023": 10542,
+  "2024": 11033,
+  "2025": 11575,
+  "2026": 9178
+ },
+ "corrections_total": 0,
+ "corrections_du_jour": 0,
+ "controles": {
+  "variation_hors_seuil": 15,
+  "variation_incoherente": 29,
+  "seance_incomplete": 13,
+  "prix_moyen_hors_fourchette": 23,
+  "precedent_different": 69,
+  "cloture_absente": 1,
+  "avis_different_bulletin": 4,
+  "dates_incoherentes": 8,
+  "bnpa_signe_oppose": 1
+ }
+}
