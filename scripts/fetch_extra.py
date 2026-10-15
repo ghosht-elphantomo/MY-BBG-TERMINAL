@@ -1069,7 +1069,9 @@ def run_comptes(out):
             except Exception as ex:  # noqa: BLE001
                 rec["st0"] = f"lecture : {str(ex)[:60]}"
             # couche texte absente, illisible ou incomplète : reconnaissance de caractères des pages des états
-            if not ok_text and time.time() - t0 < budget:
+            if not ok_text and time.time() - t0 > budget - 240:
+                break  # plus le temps de lire ce document par reconnaissance de caractères : il sera repris au passage suivant
+            if not ok_text:
                 if rec["q"] < 40 and len(pages) <= 20:
                     ocr_pages = [i + 1 for i in range(len(pages))]
                 else:

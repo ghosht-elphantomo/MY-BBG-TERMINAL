@@ -48,7 +48,11 @@ ITEMS = [
     ("passif_circulant", (S_PAS,), r"^(?:total )?passif circulant$"),
     ("fournisseurs", (S_PAS,), r"^fournisseurs(?: d.exploitation)?$"),
     ("tresorerie_passif", (S_PAS,), r"^(?:total )?tresorerie ?- ?passif$|^(?:total )?tresorerie passif$"),
-    ("total_passif", (S_PAS, None), r"^total (?:general )?(?:du )?passif$|^total general passif$|^total bilan passif$|^total (?:des )?(?:capitaux propres et passifs|passifs et capitaux propres)$|^total liabilities and (?:shareholders. )?equity$|^passif total$"),
+    ("total_passif", (S_PAS, None), r"^total (?:general )?(?:du )?passif$|^total general passif$|^total bilan passif$|^total (?:des |du )?(?:capitaux propres et (?:des )?passifs?|passifs? et (?:des )?capitaux propres)$|^total liabilities and (?:shareholders. )?equity$|^passif total$|^total capitaux propres et passifs$"),
+    ("actif_non_courant", (S_ACT,), r"^total (?:de l.|des )?actifs? non courants?$"),
+    ("actif_courant", (S_ACT,), r"^total (?:de l.|des )?actifs? courants?$"),
+    ("passif_non_courant", (S_PAS,), r"^total (?:du |des )?passifs? non courants?$"),
+    ("passif_courant", (S_PAS,), r"^total (?:du |des )?passifs? courants?$"),
     # ---- compte de résultat (SYSCOHADA)
     ("ventes_marchandises", (S_CR,), r"^ventes? de marchandises$"),
     ("marge_commerciale", (S_CR,), r"^marge (?:commerciale|brute sur marchandises)$"),
@@ -67,12 +71,12 @@ ITEMS = [
     ("rao", (S_CR,), r"^resultat des activites ordinaires$|^resultat activites ordinaires$"),
     ("rhao", (S_CR,), r"^resultat hors activites? ordinaires?$|^resultat h\.? ?a\.? ?o\.?$"),
     ("participation", (S_CR,), r"^participation des travailleurs$"),
-    ("impots_resultat", (S_CR,), r"^impots? sur (?:le |les )?(?:resultats?|benefices?|societes)$|^impot sur le resultat$"),
+    ("impots_resultat", (S_CR,), r"^impots? sur (?:le |les )?(?:resultats?|benefices?|societes)$|^impot sur le resultat$|^charges? d.impots?(?: sur le resultat)?$|^impots? exigibles? et differes?$"),
     ("perte_nette", (S_CR,), r"^perte(?: nette)?(?: de l.exercice)?$"),
-    ("resultat_avant_impot", (S_CR,), r"^resultat avant impots?$"),
+    ("resultat_avant_impot", (S_CR,), r"^resultat avant impots?(?: sur le resultat| et participation)?$|^resultat (?:net )?avant impots?$"),
     # « Résultat net » : compte de résultat ou bilan selon l'état où il figure
-    ("resultat_net", (S_CR, S_PAS, None), r"^(?:resultat net(?: de l.exercice| de la periode| consolide| comptable)?|resultat de l.exercice|benefice(?: net)?(?: de l.exercice)?|benefice ou perte|resultat net \(?benefice.*|profit for the (?:year|period))$"),
-    ("resultat_net_pg", (S_CR,), r"^resultat net[ ,-]+part (?:du )?groupe$|^resultat net attribuable aux (?:actionnaires|proprietaires) de la (?:societe|mere)$"),
+    ("resultat_net", (S_CR, S_PAS, None), r"^(?:resultat net(?: de l.exercice| de la periode| consolide| comptable| de l.ensemble consolide| total)?|resultat de l.exercice|benefice(?: net)?(?: de l.exercice)?|benefice ou perte|resultat net \(?benefice.*|profit for the (?:year|period))$"),
+    ("resultat_net_pg", (S_CR,), r"^resultat net[ ,-]+part (?:du )?groupe$|^resultat net attribuable aux (?:actionnaires|proprietaires) de la (?:societe|maison)? ?mere$|^resultat net attribuable aux (?:actionnaires|proprietaires) de la societe$"),
     # ---- flux de trésorerie (TFT révisé) / TAFIRE
     ("cafg", (S_FLX, None), r"^capacite d.autofinancement globale(?: \(?cafg\)?)?$|^cafg$|^capacite d.autofinancement$"),
     ("flux_operationnels", (S_FLX,), r"^flux de tresorerie (?:nets? )?(?:provenant|provenants|issus?|generes?) (?:des|de l.|par les) ?activites? (?:operationnelles|d.exploitation)$"),
@@ -119,7 +123,7 @@ REF_CODES_REV = {"XB": "chiffre_affaires", "CJ": "resultat_bilan", "RK": "charge
                  "ZH": "tresorerie_fin", "FF": "capex_incorp", "FG": "capex_corp"}
 CODE_SEC = {"A": S_ACT, "B": S_ACT, "C": S_PAS, "D": S_PAS, "T": S_CR, "R": S_CR, "X": S_CR, "F": S_FLX, "Z": S_FLX}
 
-NUM = re.compile(r"\(?[-−–‐‑]?\s?\d{1,3}(?:(?:[    ]|,|\.)\d{3})+(?:,\d{1,3})?\)?|\(?[-−–‐‑]?\d+(?:,\d{1,3})?\)?")
+NUM = re.compile(r"\(?[-−–‐‑]?\s?\d{1,3}(?:(?:[    ]|,|\.)\d{3})+(?:,\d{1,3})?\)?|\d{1,2}\.\d{1,2}(?![\d.,])|\(?[-−–‐‑]?\d+(?:,\d{1,3})?\)?")
 MOIS = {"janvier": 1, "janv": 1, "jan": 1, "fevrier": 2, "fevr": 2, "fev": 2, "mars": 3, "avril": 4, "avr": 4, "mai": 5, "juin": 6,
         "juillet": 7, "juil": 7, "aout": 8, "septembre": 9, "sept": 9, "sep": 9, "octobre": 10, "oct": 10, "novembre": 11, "nov": 11,
         "decembre": 12, "dec": 12}
@@ -134,6 +138,7 @@ def nrm(x):
 
 
 _COMMA_K = [False]  # document où la virgule sépare les milliers (« 435,697 » = 435 697)
+_NOTE_DOT = [False]  # document à virgule décimale : « 5.3 » est un renvoi de note, pas un montant
 
 
 def num_val(tok):
@@ -157,11 +162,11 @@ def num_val(tok):
 def unit_of(txt):
     """Unité annoncée des montants : 1 (FCFA), 1e3 (milliers), 1e6 (millions) ; None si rien d'explicite."""
     t = nrm(txt[:40000])
-    m = re.search(r"(?:en|donnees en|montants? en|chiffres en|\()\s*(millions?|milliers|mxof|kxof|mfcfa|kfcfa|millier|mf|kf|m fcfa|k fcfa)\b[^\n]{0,25}"
+    m = re.search(r"(?:en|donnees en|montants? en|chiffres en|\()\s*(milliards?|millions?|milliers|mxof|kxof|mfcfa|kfcfa|millier|mf|kf|m fcfa|k fcfa|mds?)\b[^\n]{0,25}"
                   r"(?:fcfa|f\.? ?cfa|francs?(?: cfa)?|xof|de francs|de f)", t)
     if m:
         w = m.group(1)
-        return 1e6 if w.startswith("million") or w in ("mxof", "mfcfa", "mf", "m fcfa") else 1e3
+        return 1e9 if w.startswith("milliard") or w.startswith("md") else 1e6 if w.startswith("million") or w in ("mxof", "mfcfa", "mf", "m fcfa") else 1e3
     if re.search(r"\(?en (?:millions|milliers)\)?", t):
         return 1e6 if re.search(r"\(?en millions\)?", t) else 1e3
     if re.search(r"en (?:francs? cfa|fcfa|f\.? ?cfa|xof)\b|montants? en f\.? ?cfa", t):
@@ -202,11 +207,35 @@ def doc_kind(txt, title=""):
     return "annuel"
 
 
+BROKEN = re.compile(r"(?<![\d,.])(\d{1,3}(?: \d{1,3})+) ?,(\d{1,2})(?![\d])")
+
+
+def _join_broken(m):
+    """« 2 3 09 ,1 » -> « 2309,1 » ; « 1 084,1 » reste « 1 084,1 » (groupes de milliers réguliers)."""
+    g = m.group(1).split(" ")
+    if all(len(x) == 3 for x in g[1:]) and " ," not in m.group(0):
+        return m.group(0)
+    return "".join(g) + "," + m.group(2)
+
+
 def clean(txt, ocr=False):
-    """Caractères parasites de la reconnaissance de caractères (barres, crochets) autour des montants."""
+    """Caractères parasites de la reconnaissance de caractères (barres, crochets) autour des montants ; montants dont la
+    couche texte a cassé les chiffres (« 1 19 9 ,2 ») recollés quand le document en compte beaucoup."""
+    if len(re.findall(r"\d ,\d|(?<!\d)\d{1,2} \d{1,2} ?,\d", txt)) >= 8:
+        txt = BROKEN.sub(_join_broken, txt)
+        txt = re.sub(r"(?<=\d) ,(?=\d{1,2}(?!\d))", ",", txt)
     if not ocr:
         return txt
     txt = re.sub(r"[|\[\]{}¦]", " ", txt)
+    # reconnaissance de caractères : espaces des milliers perdus ou déplacés (« 1673 272 », « 50 701178 ») ->
+    # groupes recollés quand ils ne forment pas déjà un montant régulier (1 à 3 chiffres puis groupes de 3)
+    def _run(m):
+        g = m.group(0).split(" ")
+        if len(g[0]) <= 3 and all(len(x) == 3 for x in g[1:]):
+            return m.group(0)
+        j = "".join(g)
+        return j if len(j) <= 13 else m.group(0)
+    txt = re.sub(r"(?<![\d,.])\d+(?: \d+)+(?![\d,.])", _run, txt)
     txt = re.sub(r"(?<=\d)[)](?=\s|$)", " ", txt)
     txt = re.sub(r"(?<=\d) ?[.:;](?=\s{2,}|$)", " ", txt)
     return txt
@@ -249,6 +278,10 @@ def _cells(line, skip=()):
                 or after.strip()[:1] == "%" or mm.end() in skip:
             continue
         gap = line[pos:mm.start()]
+        if _NOTE_DOT[0] and re.fullmatch(r"\d{1,2}\.\d{1,2}", tok.strip()):
+            labels(gap, pos, mm.start())
+            pos = mm.end()
+            continue  # renvoi de note « 5.3 » dans un document où la virgule est le séparateur décimal
         if re.search(r"(?:^|\s)notes?\s*$", gap, re.I) and re.fullmatch(r"\d{1,2}(?:[.,]\d{1,2})?[a-z]?", tok.strip()):
             labels(gap[:re.search(r"(?:^|\s)notes?\s*$", gap, re.I).start()], pos, mm.start())
             pos = mm.end()
@@ -330,6 +363,8 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     txt = clean(txt, ocr)
     _COMMA_K[0] = len(re.findall(r"(?<![\d,.])\d{1,3}(?:,\d{3}){2,}(?![\d,])", txt)) >= 5 and \
         len(re.findall(r"(?<![\d,.])\d+,\d{1,2}(?![\d,])", txt)) <= len(re.findall(r"(?<![\d,.])\d{1,3}(?:,\d{3}){2,}(?![\d,])", txt)) // 10
+    _NOTE_DOT[0] = not _COMMA_K[0] and len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) >= 20 and \
+        len(re.findall(r"(?<![\d.,])\d{1,2}\.\d{1,2}(?![\d,.])", txt)) < len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) / 2
     fy = fiscal_year(txt, fy_hint)
     lines = txt.splitlines()
     nt_ = nrm(txt)
@@ -338,6 +373,8 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     occ = []  # (poste, état, périmètre, ligne, {année: valeur}, ordre déduit ?)
     heads = []  # [(ligne, [(fin, début, année)])]
     sec, split, perim = None, None, None
+    tt_ = nrm(title or "") + " " + nrm(txt[:3000])
+    std_cur = "ifrs" if re.search(r"\bifrs\b|normes? internationales?", tt_) and not re.search(r"syscohada", nrm(title or "")) else "syscohada"
     order_votes = []
     pend = []
     single_hint = []
@@ -363,15 +400,23 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 perim = "conso"
             elif re.search(r"comptes? sociaux|etats financiers sociaux|individuels|bilan social|societe mere", n_):
                 perim = "social"
+            if re.search(r"\bifrs\b|normes? internationales?", n_) and not re.search(r"syscohada", n_):
+                std_cur = "ifrs"
+            elif re.search(r"syscohada", n_) and not re.search(r"\bifrs\b", n_):
+                std_cur = "syscohada"
             if re.search(r"\bbrut\b.*amort|amortissements?.*\bnet|\bbrut\b.*\bnet\b", n_):
                 brut_tbl = True
             nl = nrm(ln)
-            found_s = []
+            found_s, found_all = [], []
             for mm in re.finditer(r"\S+(?:\s{1,2}\S+)*", nl):
                 s_ = head_sec(mm.group(0).strip(" :-"))
+                if s_:
+                    found_all.append((mm.start(), s_))
                 if s_ and (not found_s or found_s[-1][1] != s_):
                     found_s.append((mm.start(), s_))
-            if len(found_s) >= 2 and found_s[0][1] != found_s[1][1] and found_s[1][1] != "bilan":
+            if len(found_all) >= 2 and len({x[1] for x in found_all}) == 1 and found_all[0][1] not in ("bilan", "hb"):
+                sec, split = found_all[0][1], None  # même état des deux côtés (« PRODUITS … CHARGES »)
+            elif len(found_s) >= 2 and found_s[0][1] != found_s[1][1] and found_s[1][1] != "bilan":
                 left = [e for e, _, _ in h if e < found_s[1][0]] if h else []
                 s0 = S_ACT if found_s[0][1] == "bilan" else found_s[0][1]
                 split = [(max(left) + 1) if left else max(0, found_s[1][0] - 12), s0, found_s[1][1]]
@@ -380,6 +425,11 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 s_ = found_s[0][1]
                 if s_ == "bilan":
                     sec = S_ACT if sec not in (S_ACT, S_PAS) else sec
+                elif split and s_ not in ("hb",):  # deux tableaux côte à côte : seul le côté du titre change d'état
+                    if found_s[0][0] < split[0] - 5:
+                        split[1] = sec = s_
+                    else:
+                        split[2] = s_
                 elif s_ != sec or split:
                     sec, split = s_, None
                 if s_ == S_PAS:
@@ -431,7 +481,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             labn = re.sub(r"\s+\d{1,2}(?:\.\d)?$", "", labn)  # numéro de note en fin de libellé
             nn_ = [v for v, _ in vals if v is not None]
             if len(nn_) >= 2 and vals[0][0] is not None and float(vals[0][0]).is_integer() and 0 < vals[0][0] < 100 \
-                    and all(abs(x) >= 10000 for x in nn_[1:]):
+                    and (all(abs(x) >= 10000 for x in nn_[1:]) or (_NOTE_DOT[0] and all(not float(x).is_integer() for x in nn_[1:3]))):
                 vals = vals[1:]  # colonne des notes
             if not any(v is not None for v, _ in vals):
                 if labn:
@@ -474,7 +524,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 single_hint.append(1)
             elif len(vals) >= 2:
                 single_hint.append(2)
-            occ.append((key, s_here, perim, i, yrs, how, vals))
+            occ.append((key, s_here, (perim or "_") + ("_ifrs" if std_cur == "ifrs" else ""), i, yrs, how, vals))
             if os.environ.get("CPT_DEBUG"):
                 print("   occ", i, key, s_here, perim, how, yrs, [v for v, _ in vals], repr(labn[:40]), code_)
         pend = new_pend[-2:] if new_pend else ([] if segs else pend)
@@ -506,7 +556,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
         yrs = {y: v for y, v in yrs.items() if isinstance(y, int)}
         if not yrs:
             continue
-        pk = per or "_"
+        pk = per
         d = found.setdefault(pk, {})
         if key in ("total_actif", "total_passif", "_total"):
             alt.setdefault(pk, {}).setdefault(key, []).append(yrs)
@@ -544,12 +594,14 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 d[key] = ys
     items = found.get("conso") or {}
     perims = {k: v for k, v in found.items() if v}
-    if "_" in perims and "social" not in perims:
-        perims["social"] = perims.pop("_")
-    elif "_" in perims:
-        for k, v in perims.pop("_").items():
-            perims["social"].setdefault(k, v)
-    main = "conso" if "conso" in perims and len(perims["conso"]) >= len(perims.get("social", {})) / 2 else "social"
+    for suf in ("", "_ifrs"):  # périmètre non annoncé : comptes de la société (sociaux)
+        if "_" + suf in perims:
+            if "social" + suf not in perims:
+                perims["social" + suf] = perims.pop("_" + suf)
+            else:
+                for k, v in perims.pop("_" + suf).items():
+                    perims["social" + suf].setdefault(k, v)
+    main = max(perims, key=lambda k: len(perims[k])) if perims else "social"
     items = perims.get(main, {})
     bank = sum(1 for k in items if k.startswith("b_")) >= 3
     unit = unit_of(txt)
@@ -563,7 +615,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 break
     nt = nrm(txt[:8000])
     cur = "USD" if re.search(r"(?:milliers|millions) de dollars|en (?:k|m)?usd\b|us\$|\busd ?(?:000|thousand|million)|thousands of us dollars|in thousands of usd", nt) else "XOF"
-    std = "ifrs" if re.search(r"\bifrs\b|normes internationales|international financial reporting", nt + " " + nrm(title or "")) and not re.search(r"syscohada", nt) else "syscohada"
+    std = "ifrs" if main.endswith("_ifrs") else "syscohada"
     return {"items": items, "perims": perims, "main": main, "unit": unit, "cap": cap, "fy": fy, "type": "banque" if bank else "entreprise",
             "cur": cur, "per": doc_kind(txt, title), "std": std, "revised": revised}
 
@@ -619,7 +671,8 @@ def _assign(vals, heads, i, fy, brut):
 
 
 # ---------------------------------------------------------------- contrôle : identités comptables
-STRONG = ("actif = passif", "résultat CR = bilan", "RN = RAO + HAO - impôt", "RN = résultat avant impôt - impôt", "RN = RE + RF + HAO - impôt")
+ACT_PARTS = ("charges_immobilisees", "immo_incorp", "immo_corp", "immo_fin", "actif_circulant_hao", "stocks", "creances", "tresorerie_actif")
+STRONG = ("actif = passif", "résultat CR = bilan", "RN = RAO + HAO - impôt", "RN = résultat avant impôt - impôt", "RN = RE + RF + HAO - impôt", "RN = RAO - impôt")
 
 
 def checks(items, year, bank=False):
@@ -643,10 +696,23 @@ def checks(items, year, bank=False):
         res.append(("RN = RAO + HAO - impôt", rel(g("rao") + g("rhao") - imp, g("resultat_net"))))
     elif g("resultat_exploitation") is not None and g("resultat_financier") is not None and g("rhao") is not None and g("resultat_net") is not None:
         res.append(("RN = RE + RF + HAO - impôt", rel(g("resultat_exploitation") + g("resultat_financier") + g("rhao") - imp, g("resultat_net"))))
+    if g("rao") is not None and g("rhao") is None and g("impots_resultat") is not None and g("resultat_net") is not None:
+        r_ = rel(g("rao") - imp, g("resultat_net"))  # comptes sans éléments hors activités ordinaires (IFRS) : retenue si elle se vérifie
+        if r_ is not None and r_ <= 0.001:
+            res.append(("RN = RAO - impôt", r_))
     if g("rao") is not None and g("resultat_exploitation") is not None and g("resultat_financier") is not None:
         res.append(("RAO = RE + RF", rel(g("resultat_exploitation") + g("resultat_financier"), g("rao"))))
     if g("resultat_avant_impot") is not None and g("impots_resultat") is not None and g("resultat_net") is not None:
         res.append(("RN = résultat avant impôt - impôt", rel(g("resultat_avant_impot") - abs(g("impots_resultat")), g("resultat_net"))))
+    # sommes des postes du bilan : retenues seulement quand elles se vérifient (elles confirment alors chaque poste lu)
+    for nm, tot, parts, need in (("actif = somme des postes", "total_actif", ACT_PARTS, ("immo_corp", "tresorerie_actif")),
+                                 ("actif = somme des masses", "total_actif", ("actif_immobilise", "actif_circulant", "tresorerie_actif"), ("actif_immobilise", "actif_circulant", "tresorerie_actif")),
+                                 ("passif = somme des masses", "total_passif", ("capitaux_propres", "dettes_financieres", "passif_circulant", "tresorerie_passif"), ("capitaux_propres", "dettes_financieres", "passif_circulant", "tresorerie_passif")),
+                                 ("passif = ressources stables + dettes", "total_passif", ("ressources_stables", "passif_circulant", "tresorerie_passif"), ("ressources_stables", "passif_circulant", "tresorerie_passif"))):
+        if g(tot) is not None and all(g(k) is not None for k in need):
+            r_ = rel(sum(g(k) or 0 for k in parts), g(tot))
+            if r_ is not None and r_ <= 0.0005:
+                res.append((nm, r_))
     if g("b_pnb") is not None and g("b_charges_generales") is not None and g("b_rbe") is not None:
         res.append(("RBE ≤ PNB", 0.0 if abs(g("b_rbe")) <= abs(g("b_pnb")) else 1.0))
     if g("capitaux_propres") is not None and g("total_passif") is not None:
@@ -676,9 +742,9 @@ def unit_choice(P, items, y):
     tot = (items.get("total_actif") or {}).get(y) or (items.get("total_passif") or {}).get(y)
     ca = (items.get("chiffre_affaires") or items.get("b_pnb") or {}).get(y)
     if tot:
-        cands = [u for u in (1.0, 1e3, 1e6) if 3e8 <= abs(tot) * u <= 6e13]
+        cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 3e8 <= abs(tot) * u <= 6e13]
     elif ca:
-        cands = [u for u in (1.0, 1e3, 1e6) if 5e7 <= abs(ca) * u <= 1e13]
+        cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 5e7 <= abs(ca) * u <= 1e13]
     else:
         cands = []
     if P.get("unit") in cands:
@@ -751,8 +817,103 @@ IDENT_KEYS = {"actif = passif": ("total_actif", "total_passif"), "résultat CR =
               "RN = RAO + HAO - impôt": ("rao", "rhao", "impots_resultat", "participation", "resultat_net"),
               "RN = RE + RF + HAO - impôt": ("resultat_exploitation", "resultat_financier", "rhao", "impots_resultat", "participation", "resultat_net"),
               "RN = résultat avant impôt - impôt": ("resultat_avant_impot", "impots_resultat", "resultat_net"),
+              "RN = RAO - impôt": ("rao", "impots_resultat", "participation", "resultat_net"),
+              "actif = somme des postes": ("total_actif",) + ACT_PARTS,
+              "actif = somme des masses": ("total_actif", "actif_immobilise", "actif_circulant", "tresorerie_actif"),
+              "passif = somme des masses": ("total_passif", "capitaux_propres", "dettes_financieres", "passif_circulant", "tresorerie_passif"),
+              "passif = ressources stables + dettes": ("total_passif", "ressources_stables", "passif_circulant", "tresorerie_passif"),
               "EBE = VA - personnel": ("valeur_ajoutee", "charges_personnel", "ebe"), "RAO = RE + RF": ("rao", "resultat_exploitation", "resultat_financier"),
               "CA = somme des ventes": ("chiffre_affaires", "ventes_marchandises", "ventes_produits", "travaux_services", "produits_accessoires")}
+
+
+# ---------------------------------------------------------------- consolidation : un jeu de comptes par société et par exercice
+def _doc_rank(r, y):
+    """Préférence entre documents pour un exercice : comptes de l'exercice lui-même (plutôt que la colonne N-1 du suivant),
+    définitifs (certifiés, approuvés) plutôt que provisoires, puis le plus récent (un document qui « annule et remplace »)."""
+    ti = nrm(r.get("ti") or "")
+    own = 1 if r.get("fy") == y else 0
+    final = 0 if re.search(r"provisoire|non audite|efp\b|_efp_|- efp -", ti) else 1
+    if re.search(r"certifi|approuv|audite|definiti|efa\b|_efa_|- efa -|annule et remplace", ti):
+        final = 2
+    return (own, final, r.get("d") or "")
+
+
+def consolidate(cj, mirror=None):
+    """comptes.json (documents lus) -> {titre: {"y": {exercice: {"v": {poste: millions de FCFA}, "n", "d", "own"}}, "per", "std",
+    "agree" (part des montants communs égaux à ceux de la base de référence), "ncmp" (nombre de montants comparés)}}.
+    Unité : celle du document quand elle est sûre, sinon celle qui fait concorder ses montants avec un autre document de la
+    même société (même exercice), sinon avec la base de référence (mirror : {titre: {série: {exercice: millions}}})."""
+    recs = []
+    for u, r in (cj.get("docs") or {}).items():
+        if not r.get("y") or r.get("per") != "annuel" or r.get("cur", "XOF") != "XOF" or not r.get("t"):
+            continue
+        for per, ys in r["y"].items():
+            for y, x in ys.items():
+                recs.append({"t": r["t"], "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"), "uc": x.get("uc") or [],
+                             "v": x.get("v") or {}, "c": x.get("c"), "doc": u, "rank": _doc_rank(r, int(y)), "d": r.get("d")})
+    known = {}
+    for x in recs:
+        if x["u"]:
+            for k in ("total_actif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres"):
+                if x["v"].get(k):
+                    known.setdefault((x["t"], x["y"], x["per"], x["std"], k), []).append(x["v"][k] * x["u"])
+    MS = {"total_actif": "total_bilan", "resultat_net": "resultat_net", "chiffre_affaires": "ca", "b_pnb": "ca", "capitaux_propres": "capitaux_propres"}
+    for x in recs:
+        if x["u"]:
+            continue
+        for cand in x["uc"]:
+            hit = 0
+            for k, mk in MS.items():
+                v = x["v"].get(k)
+                if not v:
+                    continue
+                for kv in known.get((x["t"], x["y"], x["per"], x["std"], k), []):
+                    if abs(v * cand - kv) <= abs(kv) * 0.002:
+                        hit += 1
+                mv = (((mirror or {}).get(x["t"]) or {}).get(mk) or {}).get(str(x["y"]))
+                if mv and abs(v * cand / 1e6 - mv) <= abs(mv) * 0.01 + 0.5:
+                    hit += 1
+            if hit:
+                x["u"] = cand
+                break
+    recs = [x for x in recs if x["u"]]
+    out = {}
+    by_t = {}
+    for x in recs:
+        x["m"] = {k: round(v * x["u"] / 1e6, 3) for k, v in x["v"].items()}
+        by_t.setdefault(x["t"], []).append(x)
+    for t, xs in by_t.items():
+        # périmètre et norme : ceux qui concordent le mieux avec la base de référence, sinon ceux qui couvrent le plus d'exercices
+        groups = {}
+        for x in xs:
+            groups.setdefault((x["per"], x["std"]), []).append(x)
+
+        def agree(g):
+            ok = n = 0
+            for x in g:
+                for k, mk in (("chiffre_affaires", "ca"), ("b_pnb", "ca"), ("resultat_net", "resultat_net"), ("total_actif", "total_bilan")):
+                    mv = (((mirror or {}).get(t) or {}).get(mk) or {}).get(str(x["y"]))
+                    if mv and x["m"].get(k) is not None:
+                        n += 1
+                        ok += abs(x["m"][k] - mv) <= abs(mv) * 0.01 + 0.5
+            return (ok / n if n else 0, len({x["y"] for x in g}), g[0]["std"] == "syscohada", n)
+        main = max(groups, key=lambda k: agree(groups[k])[:3])
+        ag = agree(groups[main])
+        res = {}
+        for y in sorted({x["y"] for x in groups[main]}):
+            cand = sorted([x for x in groups[main] if x["y"] == y], key=lambda x: x["rank"], reverse=True)
+            best = cand[0]
+            v = dict(best["m"])
+            n_ok = 1
+            for o in cand[1:]:  # autres documents : confirmation, et postes complétés s'ils donnent les mêmes montants communs
+                com = [k for k in ("total_actif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres") if k in v and k in o["m"]]
+                if com and all(abs(v[k] - o["m"][k]) <= max(0.5, abs(v[k]) * 0.001) for k in com):
+                    n_ok += 1
+                    for k, val in o["m"].items():
+                        v.setdefault(k, val)
+            res[y] = {"v": v, "n": n_ok, "d": best["d"], "own": best["rank"][0]}
+        out[t] = {"y": res, "per": main[0].replace("_ifrs", ""), "std": main[1], "agree": round(ag[0], 3), "ncmp": ag[3]}
+    return out
 
 
 def run_dir(d):
