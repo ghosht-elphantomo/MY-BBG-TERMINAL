@@ -276,6 +276,7 @@ def clean(txt, ocr=False):
         j = "".join(g)
         return j if len(j) <= 13 else m.group(0)
     RUN = r"(?<![\d,.])\d+(?: \d+)+(?![\d,.])"
+
     if not ocr:
         if sum(1 for m in re.finditer(RUN, txt) if _irr(m.group(0).split(" ")) and len(m.group(0).split(" ")[-1]) < 3) >= 5:
             txt = re.sub(RUN, _run, txt)
@@ -485,7 +486,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 std_cur = "ifrs"
             elif re.search(r"syscohada", n_) and not re.search(r"\bifrs\b", n_):
                 std_cur = "syscohada"
-            if re.search(r"\bbrut\b.*amort|amortissements?.*\bnet|\bbrut\b.*\bnet\b", n_):
+            if re.search(r"\bbruts?\b.*amort|amortissements?.*\bnet|\bbruts?\b.*\bnets?\b", n_):
                 brut_tbl = True
             nl = nrm(ln)
             found_s, found_all = [], []
@@ -832,8 +833,8 @@ def _assign(vals, heads, i, fy, brut):
                         continue
             if l_h == -1:
                 continue
-            got, dist = {}, []
-            for v, xe in nums:
+            got, dist, dk = {}, [], {}
+            for vi_, (v, xe) in enumerate(nums):
                 bb = None
                 for he, hs_, yr in hs:
                     d = min(abs(he - xe), abs((he + hs_) / 2 - (xe - len(str(abs(int(v)))) * 0.66)))
@@ -848,6 +849,11 @@ def _assign(vals, heads, i, fy, brut):
                     if yr not in got:
                         got[yr] = v
                         dist.append(bb[0])
+                        dk[yr] = (bb[0], len(dist) - 1, vi_)
+                    elif bb[0] < dk[yr][0] and vi_ == dk[yr][2] + 1 and float(got[yr]).is_integer() and 0 < abs(got[yr]) < 100 and abs(v) >= 100:
+                        got[yr] = v  # renvoi de note juste à gauche du montant : la colonne revient au montant le plus proche
+                        dist[dk[yr][1]] = bb[0]
+                        dk[yr] = (bb[0], dk[yr][1], vi_)
             if got:
                 sc = (len(got), -rk, -sum(dist) / len(dist))  # à nombre égal de colonnes, l'en-tête le plus proche au-dessus
                 if best_h is None or sc > best_h[0]:
@@ -969,12 +975,18 @@ def unit_choice(P, items, y):
     return None, cands
 
 
+# lectures par reconnaissance de caractères : français et anglais, page lue comme un bloc (fra, eng) ou ligne par ligne
+# (fra4, eng4 : mode « colonne de texte » de tesseract, qui garde mieux les lignes des tableaux numérisés)
+OCR_SRC = ("fra", "eng", "fra4", "eng4")
+
+
 def read_doc(texts, meta):
     """Lecture d'un document (texte, et OCR français / anglais le cas échéant) : exercices vérifiés, montants dans l'unité
     du document (unit = 1, 1e3 ou 1e6 FCFA ; None si l'ordre de grandeur reste à confirmer par une autre source)."""
     fy_hint = meta.get("fy")
     title = meta.get("ti") or ""
     best = None
+    parsed = {}
     for src, (txt, ocr) in texts.items():
         if not txt or len(txt.strip()) < 200:
             continue
@@ -982,6 +994,7 @@ def read_doc(texts, meta):
             P = parse(txt, fy_hint=fy_hint, title=title, ocr=ocr)
         except Exception:  # noqa: BLE001
             continue
+        parsed[src] = P
         res = {}
         for per, items in P["perims"].items():
             yrs = sorted({y for v in items.values() for y in v}, reverse=True)
@@ -1000,15 +1013,9 @@ def read_doc(texts, meta):
     if P["cur"] != "XOF":
         out["st"] = "devise " + P["cur"]
         return out
-    # OCR : un montant n'est gardé que si les deux lectures (français, anglais) donnent le même chiffre,
+    # OCR : un montant n'est gardé que si une autre lecture (autre langue, autre mode) donne le même chiffre,
     # ou s'il entre dans une identité comptable vérifiée
-    other = None
-    alt_src = "eng" if src == "fra" else "fra"
-    if src in ("fra", "eng") and texts.get(alt_src, (None,))[0]:
-        try:
-            other = parse(texts[alt_src][0], fy_hint=fy_hint, title=title, ocr=True)
-        except Exception:  # noqa: BLE001
-            other = None
+    others = [P_ for s_, P_ in parsed.items() if s_ != src and s_ in OCR_SRC]
     for per, yrs in res.items():
         items = P["perims"][per]
         for y, chk in yrs.items():
@@ -1018,9 +1025,9 @@ def read_doc(texts, meta):
                 if y not in v:
                     continue
                 x = v[y]
-                if src in ("fra", "eng"):
-                    ov = ((other["perims"].get(per) or {}).get(k) or {}).get(y) if other else None
-                    if k not in ok_id and (ov is None or abs(ov - x) > 0.5):
+                if src in OCR_SRC and k not in ok_id:
+                    ovs = [((o_["perims"].get(per) or {}).get(k) or {}).get(y) for o_ in others]
+                    if not any(ov is not None and abs(ov - x) <= 0.5 for ov in ovs):
                         continue
                 rec[k] = abs(x) if k in CHARGES else x
             unit, cands = unit_choice(P, items, y)
@@ -1076,7 +1083,7 @@ def consolidate(cj, mirror=None):
             for y, x in ys.items():
                 recs.append({"t": r["t"], "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"),
                              "uc": x.get("uc") or [], "v": x.get("v") or {}, "vk": set(x.get("vk") or []), "c": x.get("c"), "doc": u,
-                             "rank": _doc_rank(r, int(y)), "d": r.get("d"), "ocr": r.get("src") in ("fra", "eng"),
+                             "rank": _doc_rank(r, int(y)), "d": r.get("d"), "ocr": r.get("src") in OCR_SRC,
                              "guess": per in (r.get("guess") or [])})
     known = {}
     for x in recs:
@@ -1243,7 +1250,7 @@ def run_dir(d):
         if not h:
             continue
         texts = {}
-        for src, ocr in (("txt", False), ("fra", True), ("eng", True)):
+        for src, ocr in (("txt", False),) + tuple((x, True) for x in OCR_SRC):
             p_ = os.path.join(d, "txt", f"{h}.{src}.gz" if src != "txt" else f"{h}.txt.gz")
             if os.path.exists(p_):
                 texts[src] = (gzip.open(p_, "rt", encoding="utf8").read(), ocr)

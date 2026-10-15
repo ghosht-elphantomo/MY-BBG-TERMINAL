@@ -949,16 +949,17 @@ CPT_KW = re.compile(r"bilan|actif|passif|compte de r[ée]sultat|comptes? de r[é
 CPT_AMT = re.compile(r"(?<![\d.,])\d{1,3}(?:[ .,  ]\d{3})+(?![\d])")
 
 
-def cpt_ocr(pdf_path, pages, td):
-    """Reconnaissance de caractères (300 dpi, gris) des pages données, en français puis en anglais : {"fra": texte, "eng": texte}.
+def cpt_ocr(pdf_path, pages, td, psm=6, dpi=300):
+    """Reconnaissance de caractères (gris) des pages données, en français puis en anglais : {"fra": texte, "eng": texte}.
+    psm 6 : la page comme un seul bloc ; psm 4 : une colonne de lignes (garde mieux les lignes des tableaux numérisés).
     Une page illisible dans le sens où elle est imprimée (tableau à l'italienne) est relue tournée d'un quart de tour."""
     import glob, subprocess
     langs = subprocess.run(["tesseract", "--list-langs"], capture_output=True, timeout=30).stdout.decode()
     have = [lang for lang in ("fra", "eng") if "\n" + lang in "\n" + langs]
 
     def ocr(img, lang):
-        return subprocess.run(["tesseract", img, "-", "-l", lang, "--psm", "6", "-c", "preserve_interword_spaces=1"],
-                              capture_output=True, timeout=240).stdout.decode("utf8", "replace")
+        return subprocess.run(["tesseract", img, "-", "-l", lang, "--psm", str(psm), "-c", "preserve_interword_spaces=1"],
+                              capture_output=True, timeout=400).stdout.decode("utf8", "replace")
 
     def score(t):
         return len(CPT_AMT.findall(t)) * 3 + len(re.findall(r"(?i)\b(?:total|capital|resultat|résultat|charges|produits|actif|passif|stocks|dettes|exercice)\b", t))
@@ -966,7 +967,7 @@ def cpt_ocr(pdf_path, pages, td):
     for pg in pages:
         for f in glob.glob(os.path.join(td, "o*.png")):
             os.remove(f)
-        subprocess.run(["pdftoppm", "-r", "300", "-gray", "-png", "-f", str(pg), "-l", str(pg), pdf_path, os.path.join(td, "o")], capture_output=True, timeout=180)
+        subprocess.run(["pdftoppm", "-r", str(dpi), "-gray", "-png", "-f", str(pg), "-l", str(pg), pdf_path, os.path.join(td, "o")], capture_output=True, timeout=180)
         imgs = sorted(glob.glob(os.path.join(td, "o*.png")))
         if not imgs or not have:
             continue
@@ -1095,13 +1096,7 @@ def run_comptes(out):
             if not ok_text and time.time() - t0 > budget - 240:
                 break  # plus le temps de lire ce document par reconnaissance de caractères : il sera repris au passage suivant
             if not ok_text:
-                if rec["q"] < 40 and len(pages) <= 20:
-                    ocr_pages = [i + 1 for i in range(len(pages))]
-                elif rec["q"] < 40 and len(pages) <= 120:
-                    ocr_pages = cpt_find_pages(p_, len(pages), td)  # long document scanné : pages des états repérées à basse résolution
-                    rec["found"] = ocr_pages
-                else:
-                    ocr_pages = [i + 1 for i in keep if CPT_KW.search(pages[i]) and len(pages[i].strip()) < 6000][:8]
+                ocr_pages = cpt_ocr_pages(p_, pages, keep, rec, td)
                 if ocr_pages:
                     try:
                         o = cpt_ocr(p_, ocr_pages, td)
@@ -1110,6 +1105,14 @@ def run_comptes(out):
                                 f.write(t_)
                         rec["ocr"] = len(ocr_pages)
                         n_ocr += 1
+                        # première lecture insuffisante : seconde lecture tout de suite (400 dpi, ligne par ligne)
+                        r1 = comptes.read_doc({"txt": (body, False), **{k: (v, True) for k, v in o.items()}}, rec)
+                        if not (r1.get("st") == "ok" and r1.get("n", 0) >= 15) and time.time() - t0 < budget - 120:
+                            o4 = cpt_ocr(p_, ocr_pages, td, psm=4, dpi=400)
+                            for lang, t_ in o4.items():
+                                with gzip.open(os.path.join(out, "txt", f"{h}.{lang}4.gz"), "wt", encoding="utf8") as f:
+                                    f.write(t_)
+                            rec["ocr4"] = len(ocr_pages)
                     except Exception as ex:  # noqa: BLE001
                         rec["ocr_err"] = str(ex)[:80]
         rec["st"] = "lu"
@@ -1118,10 +1121,64 @@ def run_comptes(out):
         note("comptes")
         if n_new % 10 == 0:
             save(ip, idx)
-    left = sum(1 for e in cand.values() if e["document_url"] not in docs or again(docs[e["document_url"]]))
-    idx.update(v=1, left=left, total=len(cand), last_new=n_new, ts=int(time.time()))
+    # seconde lecture des documents numérisés (une fois chacun) : 400 dpi, ligne par ligne (fra4, eng4) ; ceux dont aucun
+    # exercice ne se vérifie encore d'abord, les plus récents en premier
+    n_re = 0
+    try:
+        st_ = {u: r.get("st") for u, r in json.load(open(os.path.join(out, "comptes.json"), encoding="utf8")).get("docs", {}).items()}
+    except Exception:  # noqa: BLE001
+        st_ = {}
+
+    def re_q():
+        q_ = [u for u, m in docs.items() if m.get("ocr") and not m.get("ocr4") and m.get("st") == "lu" and m.get("n_err4", 0) < 2]
+        return sorted(q_, key=lambda u: (st_.get(u) == "ok", -int(re.sub(r"\D", "", docs[u].get("d") or "0")[:8] or 0)))
+    for u in (re_q() if time.time() - t0 < budget - 600 else []):
+        if time.time() - t0 > budget - 600:
+            break  # (un long document lu à 400 dpi peut prendre plusieurs minutes)
+        m = docs[u]
+        try:
+            b = get(u, tries=2, timeout=120)
+            with tempfile.TemporaryDirectory() as td:
+                p_ = os.path.join(td, "a.pdf")
+                open(p_, "wb").write(b)
+                txt = subprocess.run(["pdftotext", "-layout", p_, "-"], capture_output=True, timeout=180).stdout.decode("utf8", "replace")
+                pages = txt.split("\f")
+                if pages and not pages[-1].strip():
+                    pages = pages[:-1]
+                keep = list(range(len(pages)))
+                if len(pages) > 30:
+                    hit = [i for i, pg in enumerate(pages) if len(CPT_KW.findall(pg)) >= 2 and len(CPT_AMT.findall(pg)) >= 15]
+                    keep = sorted({j for i in hit for j in (i - 1, i, i + 1) if 0 <= j < len(pages)})[:40]
+                ocr_pages = cpt_ocr_pages(p_, pages, keep, m, td)
+                if ocr_pages:
+                    o = cpt_ocr(p_, ocr_pages, td, psm=4, dpi=400)
+                    for lang, t_ in o.items():
+                        with gzip.open(os.path.join(out, "txt", f"{m['h']}.{lang}4.gz"), "wt", encoding="utf8") as f:
+                            f.write(t_)
+                m["ocr4"] = len(ocr_pages) or -1
+                n_re += 1
+        except Exception as ex:  # noqa: BLE001
+            m["n_err4"] = m.get("n_err4", 0) + 1
+            note("comptes", False, f"seconde lecture {u.rsplit('/', 1)[-1][:60]} : {str(ex)[:80]}")
+        if n_re % 5 == 0:
+            save(ip, idx)
+    left = sum(1 for e in cand.values() if e["document_url"] not in docs or again(docs[e["document_url"]])) + len(re_q())
+    idx.update(v=1, left=left, total=len(cand), last_new=n_new + n_re, ts=int(time.time()))
     save(ip, idx)
-    log(f"états financiers : {n_new} documents lus ({n_ocr} par reconnaissance de caractères), {left} restent, {len(docs)} en cache")
+    log(f"états financiers : {n_new} documents lus ({n_ocr} par reconnaissance de caractères), {n_re} relus, {left} restent, {len(docs)} en cache")
+
+
+def cpt_ocr_pages(p_, pages, keep, rec, td):
+    """Pages à lire par reconnaissance de caractères : toutes (scan court), celles des états repérées à basse résolution (long scan,
+    gardées dans rec["found"]), sinon celles de la couche texte qui parlent des états sans être lisibles."""
+    q = len(CPT_AMT.findall("\f".join(pages[i] for i in keep)))
+    if q < 40 and len(pages) <= 20:
+        return [i + 1 for i in range(len(pages))]
+    if q < 40 and len(pages) <= 120:
+        if not rec.get("found"):
+            rec["found"] = cpt_find_pages(p_, len(pages), td)  # long document scanné : pages des états repérées à basse résolution
+        return rec["found"]
+    return [i + 1 for i in keep if CPT_KW.search(pages[i]) and len(pages[i].strip()) < 6000][:8]
 
 
 # ---------------------------------------------------------------- consensus des analystes (Nasdaq)
