@@ -8,7 +8,7 @@ Fichiers CSV en UTF-8, séparateur virgule, décimales avec un point
 
 | Fichier | Contenu | Clé |
 |---|---|---|
-| `cours/AAAA.csv` | Cours des actions tels que publiés dans le bulletin officiel de la cote : précédent, ouverture, clôture, variation %, volume, valeur échangée (FCFA), cours de référence, variation annuelle %, dernier dividende, sa date, rendement %, PER | date, titre |
+| `cours/AAAA.csv` | Cours des actions tels que publiés dans le bulletin officiel de la cote : précédent, ouverture, clôture, variation %, volume, valeur échangée (FCFA), cours de référence, variation annuelle %, dernier dividende, sa date, rendement %, PER, cours moyen (bulletins 2013-2017) | date, titre |
 | `indices.csv` | Clôture des indices BRVM (séances terminées) | date, indice |
 | `dividendes.csv` | Dividendes nets par action, d'après les avis (`avis`) et les bulletins de la cote (`bulletin`) ; montant publié, montant ramené au nombre d'actions actuel et facteur d'ajustement ; dates d'annonce, de détachement et de paiement | titre, exercice, origine |
 | `fractionnements.csv` | Fractionnements et regroupements (ratio) | titre, date |

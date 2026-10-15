@@ -138,9 +138,9 @@ def load(p, default=None):
 
 
 COURS = ["date", "titre", "precedent", "ouverture", "cloture", "variation_pct", "volume", "valeur", "reference",
-         "variation_annuelle_pct", "dernier_dividende", "date_dividende", "rendement_pct", "per"]
+         "variation_annuelle_pct", "dernier_dividende", "date_dividende", "rendement_pct", "per", "cours_moyen"]
 BOC_MAP = {"prev": "precedent", "o": "ouverture", "c": "cloture", "var": "variation_pct", "vol": "volume", "val": "valeur", "ref": "reference",
-           "ytd": "variation_annuelle_pct", "div": "dernier_dividende", "div_d": "date_dividende", "yld": "rendement_pct", "per": "per"}
+           "ytd": "variation_annuelle_pct", "div": "dernier_dividende", "div_d": "date_dividende", "yld": "rendement_pct", "per": "per", "avg": "cours_moyen"}
 RESULTATS = [("ca", "chiffre_affaires"), ("resultat_net", "resultat_net"), ("bnpa", "bnpa"), ("dividende", "dividende"),
              ("capitaux_propres", "capitaux_propres"), ("total_bilan", "total_bilan"), ("tresorerie", "tresorerie"), ("ebit", "ebit"),
              ("ebitda", "ebitda"), ("dette_nette", "dette_nette"), ("depots_clientele", "depots_clientele"),

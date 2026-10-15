@@ -1049,9 +1049,104 @@ BOC_TOK = re.compile(r"SP|\d{1,2}-[a-zéûA-Z]+\.?-\d{2}|-?\d+(?: \d{3})*,\d+ ?%
 BOC_MON = {"janv": 1, "févr": 2, "fevr": 2, "mars": 3, "avr": 4, "mai": 5, "juin": 6, "juil": 7, "août": 8, "aout": 8, "sept": 9, "oct": 10, "nov": 11, "déc": 12, "dec": 12}
 
 
+BOC_DATE_RX = re.compile(r"^(\d{1,2})-([a-zéûA-Z]+)\.?-(\d{2})$")
+
+
+def _boc_nb(t):
+    t = (t or "").strip().replace("\xa0", " ")
+    if t in ("", "NC", "SP", "-", "ND"):
+        return None
+    t = t.rstrip("%").strip().replace(" ", "").replace(",", ".")
+    try:
+        return float(t)
+    except ValueError:
+        return None
+
+
+def boc_layout_old(txt):
+    """Bulletins de 2013 à fin 2017 : colonnes Volume, Valeur, Cours précédent, Ouv., Clôt., Moy., Variation, Variation de l'année,
+    Cours de référence, écarts maximaux (bas, haut), dernier dividende (montant net, date), Comp., Rdt net, PER."""
+    return bool(re.search(r"\bMoy\.", txt)) and bool(re.search(r"Ecarts maximaux|Écarts maximaux", txt))
+
+
+def boc_stocks_old(txt):
+    out = {}
+    for ln in txt.splitlines():
+        m = re.match(r"^\s*([A-Z][A-Z0-9]{2,5})\s{2,}(\S.*?)\s{2,}(\S.*)$", ln)
+        if not m or m.group(1) in ("TOTAL", "SECTEUR"):
+            continue
+        cols = [c.strip() for c in re.split(r"\s{2,}", m.group(3).strip()) if c.strip()]
+        pct = [i for i, c in enumerate(cols) if c.endswith("%")]
+        r = {"n": re.sub(r"\s+", " ", m.group(2)).strip()}
+        flags = [i for i, c in enumerate(cols[:6]) if c in ("NC", "SP")]
+        if flags:  # pas d'échange (NC) ou titre suspendu (SP) : cours précédent puis trois cases vides
+            i0 = flags[0]
+            if i0 < 1:
+                continue
+            r["prev"] = _boc_nb(cols[i0 - 1])
+            k = flags[-1] + 1
+            if cols[i0] == "SP":
+                r["susp"] = 1
+        else:
+            if not pct or pct[0] < 6:
+                continue
+            p = pct[0]
+            vals = [_boc_nb(c) for c in cols[p - 6:p]]
+            if any(v is None for v in vals):
+                continue
+            r["vol"], r["val"], r["prev"], r["o"], r["c"], r["avg"] = vals
+            k = p
+        pcs = []
+        while k < len(cols) and (cols[k].endswith("%") or cols[k] == "-" and False):
+            pcs.append(_boc_nb(cols[k])); k += 1
+        if "c" in r and r.get("prev"):
+            calc = (r["c"] / r["prev"] - 1) * 100
+            if len(pcs) >= 2:
+                r["var"], r["ytd"] = pcs[0], pcs[1]
+            elif len(pcs) == 1:
+                if pcs[0] is not None and abs(pcs[0] - calc) <= 0.06:
+                    r["var"] = pcs[0]
+                else:
+                    r["ytd"] = pcs[0]
+        elif pcs:
+            r["ytd"] = pcs[-1]
+        rest = cols[k:]
+        nums = []
+        j = 0
+        while j < len(rest) and len(nums) < 3 and not BOC_DATE_RX.match(rest[j]):
+            v = _boc_nb(rest[j])
+            if v is None:
+                break
+            nums.append(v); j += 1
+        if nums:
+            r["ref"] = nums[0]
+        di = next((i for i, c in enumerate(rest) if BOC_DATE_RX.match(c)), None)
+        if di is not None:
+            if di >= 1 and di - 1 >= 3:
+                r["div"] = _boc_nb(rest[di - 1])
+            dm = BOC_DATE_RX.match(rest[di])
+            mo = BOC_MON.get(dm.group(2).lower().rstrip(".")[:5]) or BOC_MON.get(dm.group(2).lower()[:4])
+            if mo:
+                yy = int(dm.group(3))
+                r["div_d"] = f"{2000 + yy if yy < 70 else 1900 + yy}-{mo:02d}-{int(dm.group(1)):02d}"
+            tail = rest[di + 1:]
+            if tail and re.match(r"^\d+(er|e|eme|ème)$", tail[0]):
+                tail = tail[1:]
+            for t in tail:
+                if t.endswith("%"):
+                    r["yld"] = _boc_nb(t)
+                elif _boc_nb(t) is not None:
+                    r["per"] = _boc_nb(t)
+        if r.get("c") or r.get("prev") or r.get("ref"):
+            out[m.group(1)] = {k_: v for k_, v in r.items() if v is not None}
+    return out
+
+
 def boc_stocks(txt):
     """Tableau des actions du bulletin officiel de la cote : par symbole, cours précédent, ouverture, clôture, variation,
     volume, valeur, cours de référence, variation annuelle, dernier dividende net et sa date, rendement net, PER."""
+    if boc_layout_old(txt):  # mise en page 2013-2017 (avec le cours moyen)
+        return boc_stocks_old(txt)
     out = {}
     num_ = lambda t: None if t in (None, "SP") else float(t.replace(" ", "").replace("%", "").replace(",", ".")) if t.strip(" %,") else None
     for ln in txt.splitlines():
@@ -1167,8 +1262,8 @@ def run_boc(out):
 
 
 # ---------------------------------------------------------------- bulletins officiels de la cote : tableau des 48 actions, jour par jour
-BOC_COLS = ("prev", "o", "c", "var", "vol", "val", "ref", "ytd", "div", "div_d", "yld", "per")
-BOC_V = 3  # version du lecteur de bulletins
+BOC_COLS = ("prev", "o", "c", "var", "vol", "val", "ref", "ytd", "div", "div_d", "yld", "per", "avg")
+BOC_V = 4  # version du lecteur de bulletins (4 : mise en page 2013-2017 lue colonne par colonne)
 
 
 def run_bochist(out):
@@ -1182,9 +1277,15 @@ def run_bochist(out):
     ip = os.path.join(d_dir, "_index.json")
     idx = json.load(open(ip, encoding="utf8")) if os.path.exists(ip) else {"done": [], "miss": []}
     done, miss, bad = set(idx["done"]), set(idx["miss"]), set(idx.get("bad", []))
+    years = {}
     if idx.get("v") != BOC_V:  # lecteur amélioré : tous les jours sans résultat sont retentés
         miss, bad = set(), set()
-    years = {}
+        if (idx.get("v") or 0) < 4:  # bulletins 2013-2017 relus avec le lecteur de leur mise en page ; les lignes mal lues sont effacées
+            done = {k for k in done if k >= "20180101"}
+            for y in range(2012, 2018):
+                p_ = os.path.join(d_dir, f"{y}.json")
+                if os.path.exists(p_):
+                    os.remove(p_)
 
     def year(y):
         if y not in years:
