@@ -2690,6 +2690,286 @@ def run_avisocr(site_data):
     log(f"avis lus dans les PDF : {sum(1 for r in items.values() if r.get('ocr'))} dividendes, {sum(1 for r in items.values() if r.get('ag'))} assemblées")
 
 
+# ------------------------------------------------------------------ flottant officiel des sociétés cotées (avis de la BRVM, tableau scanné)
+def flottant_parse(txt, tickers, names=None):
+    """Lignes « EMETTEUR CODE titres titres_flottants flottant% Respectée/Non respectée » lues dans l'avis ; une ligne n'est gardée
+    que si titres flottants ÷ titres = flottant % (à 0,1 point) : la lecture d'un tableau scanné n'est jamais inventée.
+    Si le code est illisible, la ligne est rattachée par le nom de la société (`names` : {code: [noms]}). Seuil : 15 % du capital dans le public."""
+    out = {}
+    t = re.sub(r"[\u202f\xa0]", " ", txt)
+    generic = {"cote", "ivoire", "bank", "africa", "societe", "generale", "group", "international", "ci", "sa"}
+    nm = {tk: {w for n in ns if n for w in re.findall(r"[a-z]{4,}", _nrm(n)) if w not in generic} for tk, ns in (names or {}).items()}
+    for m in re.finditer(r"([^\n%]{0,70}?)\b([A-Za-z]{3,5})\s+(\d[\d ]{3,}\d)\s+(\d[\d ]{1,}\d)\s+[-—–_ ]*(\d{1,3}[.,]\d{1,2})\s*%", t):
+        tk = m.group(2).upper()
+        if tk not in tickers:  # code illisible : la société est reconnue à son nom sur la même ligne
+            lead = set(re.findall(r"[a-z]{4,}", _nrm(m.group(1) + " " + m.group(2))))
+            sc = sorted(((len(ws & lead), k) for k, ws in nm.items() if k not in out and ws & lead), reverse=True)
+            if not sc or (len(sc) > 1 and sc[0][0] == sc[1][0]):
+                continue
+            tk = sc[0][1]
+        try:
+            sh, fl, pct = int(re.sub(r"\D", "", m.group(3))), int(re.sub(r"\D", "", m.group(4))), float(m.group(5).replace(",", "."))
+        except ValueError:
+            continue
+        if sh <= 0 or fl < 0 or fl > sh or abs(fl / sh * 100 - pct) > 0.1:
+            continue
+        tail = t[m.end():m.end() + 40].lower()
+        ok = (not re.match(r"\s*[^a-z]*non", tail)) if "respect" in tail else pct >= 15
+        out[tk] = {"sh": sh, "flt": fl, "pct": round(pct, 2), "ok15": ok}
+    return out
+
+
+def run_flottant(raw, site_data):
+    """Dernier avis « Flottant des sociétés cotées » publié sur brvm.org : lu dans le PDF (reconnaissance de caractères), contrôlé ligne à ligne."""
+    if not site_data:
+        return
+    av = os.path.join(site_data, "avis_brvm.json")
+    if not os.path.exists(av):
+        return
+    items = json.load(open(av, encoding="utf8")).get("items") or {}
+    cand = sorted([r for r in items.values() if "flottant" in _nrm(r.get("ti") or "") and r.get("d")], key=lambda r: r["d"], reverse=True)
+    if not cand:
+        return
+    r = cand[0]
+    path = os.path.join(raw, "flottant.json")
+    prev = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {}
+    if prev.get("u") == r["u"] and prev.get("rows"):
+        note("flottant")
+        return  # déjà lu
+    summ = os.path.join(site_data, "summary.json")
+    secs_ = [x for x in (json.load(open(summ, encoding="utf8")).get("secs") if os.path.exists(summ) else []) if x.get("mkt") == "BRVM" and x.get("cls") == "Equity"]
+    tickers = {x["id"] for x in secs_}
+    names = {x["id"]: [x.get("n"), x.get("short")] for x in secs_}
+    if not tickers or not pdf_tools():
+        return
+    import glob, subprocess, tempfile
+    pdf = get(r["u"], tries=2, timeout=60)
+    txt = ""
+    with tempfile.TemporaryDirectory() as td:
+        p_ = os.path.join(td, "f.pdf")
+        open(p_, "wb").write(pdf)
+        subprocess.run(["pdftoppm", "-r", "300", "-png", p_, os.path.join(td, "pg")], capture_output=True, timeout=180)
+        for f in sorted(glob.glob(os.path.join(td, "pg*.png"))):
+            txt += subprocess.run(["tesseract", f, "-", "-l", "eng", "--psm", "6"], capture_output=True, timeout=180).stdout.decode("utf8", "replace") + "\n"
+    rows = flottant_parse(txt, tickers, names)
+    asof = re.search(r"au (\d{1,2}(?:er)? \w+ \d{4})", txt, re.I)
+    save(path, {"u": r["u"], "d": r["d"], "ti": r.get("ti"), "asof": asof.group(1) if asof else None, "rows": rows, "n_univers": len(tickers), "ts": int(time.time())})
+    note("flottant", ok=bool(rows), err=None if rows else "aucune ligne lisible")
+    log(f"flottant officiel : {len(rows)} sociétés lues sur {len(tickers)} ({r['d']})")
+
+
+# ------------------------------------------------------------------ notations financières (Bloomfield, WARA / EMR, GCR) publiées sur brvm.org
+GRADE = r"(?:AAA|AA\+|AA-|AA|A\+|A-|A|BBB\+|BBB-|BBB|BB\+|BB-|BB|B\+|B-|B|CCC\+|CCC-|CCC|CC|C|D|SD)"
+GRADE_ST = r"(?:A1\+|A1|A2|A3|B|C|D)"
+SUFFIX = r"(?:\s*\((?:WU|WA|SN|CI|BF|ML|NE|TG|BJ|GW|UEMOA)\))?(?:\s*\(SF\))?"
+
+
+def rating_parse(txt):
+    """Note long terme (et court terme), note précédente, perspective, date d'expiration et agence, lues dans une fiche ou un communiqué de notation.
+    Rien n'est déduit : un champ absent du document reste vide."""
+    t = re.sub(r"[’‘]", "'", txt)
+    n = _nrm(t)
+    r = {}
+    ag = ("Bloomfield" if "bloomfield" in n else "WARA" if re.search(r"\bwara\b|west africa rating", n) else "GCR" if re.search(r"\bgcr\b", n)
+          else "Moody's" if "moody" in n else "S&P" if re.search(r"standard\s*&\s*poor|s&p global", n) else "Fitch" if "fitch" in n else None)
+    if ag:
+        r["ag"] = ag
+    lines = [re.sub(r"\s+", " ", x).strip() for x in t.splitlines() if x.strip()]
+    # fiches (Bloomfield, WARA) : ligne « Long Terme … note1 note2 date perspective » ; l'ordre note actuelle / précédente vient de l'en-tête
+    hdr = next((x for x in lines if re.search(r"note (actu|pr[eé]c)", x, re.I)), "")
+    prev_first = bool(hdr) and bool(re.search(r"pr[eé]c", hdr, re.I)) and hdr.lower().find("pr") < hdr.lower().find("actu") if hdr and re.search(r"actu", hdr, re.I) else False
+    for key, pat in (("lt", r"long\s*terme"), ("st", r"court\s*terme")):
+        g_re = GRADE if key == "lt" else GRADE_ST
+        for x in lines:
+            if not re.search(pat, x, re.I) or re.search(r"^(sur le|notation de|note de) ", x, re.I):
+                continue
+            gs = re.findall(r"(?<![A-Za-z0-9])(" + g_re + SUFFIX + r")(?![A-Za-z0-9])", x)
+            gs = [g for g in gs if not re.fullmatch(r"(?i)(CFA|SF)", g)]
+            if not gs:
+                continue
+            cur, prv = (gs[1], gs[0]) if prev_first and len(gs) > 1 else (gs[0], gs[1] if len(gs) > 1 else None)
+            r[key] = cur.replace(" ", "")
+            if prv:
+                r[key + "0"] = prv.replace(" ", "")
+            d = re.search(r"(\d{2})/(\d{2})/(20\d\d)", x)
+            if d:
+                r["exp"] = f"{d.group(3)}-{d.group(2)}-{d.group(1)}"
+            o = re.search(r"(stable|positive|n[eé]gative|en (?:cours de )?(?:r[eé]vision|observation)|d[eé]veloppement)", x, re.I)
+            if o:
+                r["out"] = o.group(1).lower().replace("é", "e")
+            break
+    # communiqués (GCR, WARA) : « notation … de long terme de AA+(WU) » ; « perspective … stable »
+    if "lt" not in r:
+        m = re.search(r"long terme\s*(?:de|:|a|est|at)?\s*(?:de\s+)?(" + GRADE + SUFFIX + ")", n)
+        if m:
+            r["lt"] = m.group(1).upper().replace(" ", "")
+    if "st" not in r:
+        m = re.search(r"court terme\s*(?:de|:|a|est)?\s*(?:de\s+)?(" + GRADE_ST + SUFFIX + ")", n)
+        if m:
+            r["st"] = m.group(1).upper().replace(" ", "")
+    if "out" not in r:
+        m = re.search(r"perspective[^.]{0,80}?\b(stable|positive|negative)\b", n)
+        if m:
+            r["out"] = m.group(1)
+    v = re.search(r"validit[eé]\s*:?\s*([^\n]{6,60})", t, re.I)
+    if v:
+        r["val"] = v.group(1).strip()
+    if re.search(r"echelle regionale|\(wu\)", n):
+        r["scale"] = "régionale"
+    elif re.search(r"echelle nationale", n):
+        r["scale"] = "nationale"
+    return r if "lt" in r or "st" in r else None
+
+
+def run_ratings(raw, site_data, limit=80):
+    """Notices de notation publiées sur brvm.org (sociétés cotées et émetteurs d'obligations) : PDF lus (texte, sinon OCR) et notes extraites.
+    Lecture incrémentale : `limit` nouveaux documents par passage ; le reste suit les soirs suivants."""
+    path = os.path.join(raw, "ratings.json")
+    st = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"docs": {}}
+    docs = st.setdefault("docs", {})
+    todo = {}
+    try:  # base d'avis tierce (historique depuis 2005)
+        for x in harzat_json("events.json")["events"]:
+            u = x.get("document_url")
+            if x.get("category") == "rating" and u and u.lower().endswith(".pdf"):
+                todo[u] = {"t": x.get("ticker"), "soc": x.get("issuer"), "d": x.get("published_at") or x.get("event_at"), "ti": x.get("title")}
+    except Exception as e:  # noqa: BLE001
+        note("ratings", False, f"base d'avis : {e}")
+    av = os.path.join(site_data or "", "avis_brvm.json")
+    if site_data and os.path.exists(av):  # avis lus directement sur brvm.org
+        for u, r in (json.load(open(av, encoding="utf8")).get("items") or {}).items():
+            if r.get("k") == "notation" or r.get("c") == "Notation financière":
+                todo.setdefault(u, {"t": None, "soc": r.get("soc"), "d": r.get("d"), "ti": r.get("ti")})
+    new = [u for u in sorted(todo, key=lambda u: todo[u].get("d") or "", reverse=True) if u not in docs][:limit]
+    if new and not pdf_tools():
+        return
+    n_ok = 0
+    for u in new:
+        meta = todo[u]
+        try:
+            txt = avis_text(u)
+            r = rating_parse(txt) or {}
+            docs[u] = {**meta, **r, "read": TODAY.isoformat()}
+            n_ok += bool(r)
+        except Exception as e:  # noqa: BLE001
+            docs[u] = {**meta, "err": str(e)[:120], "read": TODAY.isoformat()}
+            note("ratings", False, f"{u[-60:]}: {e}")
+    for u, meta in todo.items():  # métadonnées (titre, société) tenues à jour
+        if u in docs:
+            for k in ("t", "soc", "d", "ti"):
+                if meta.get(k) and not docs[u].get(k):
+                    docs[u][k] = meta[k]
+    st["ts"] = int(time.time())
+    save(path, st)
+    note("ratings")
+    log(f"notations : {len(docs)} documents connus, {len(new)} lus ce soir ({n_ok} avec une note), {len(todo) - len(docs)} restants")
+
+
+# ------------------------------------------------------------------ intervenants du marché (annuaires officiels de brvm.org)
+SGI_DIRS = [("sgi", "/fr/intervenants/sgi/tous", "SGI"), ("sgo", "/fr/societes-de-gestion-d-opcvm", "Sociétés de gestion d'OPCVM"),
+            ("sgp", "/fr/intervenants/sgp/tous", "Sociétés de gestion de patrimoine"), ("cons", "/fr/intervenants/conservateurs/tous", "Banques teneurs de compte - conservateurs"),
+            ("agn", "/fr/autres-acteurs/agences-de-notation", "Agences de notation"), ("gar", "/fr/autres-acteurs/garants", "Garants")]
+TEL_CTY = {"221": "Sénégal", "223": "Mali", "225": "Côte d'Ivoire", "226": "Burkina Faso", "227": "Niger", "228": "Togo", "229": "Bénin", "245": "Guinée-Bissau"}
+
+
+def dir_parse(html):
+    """Fiches d'un annuaire brvm.org (nom, pays du drapeau, adresse, boîte postale, courriel, téléphone, fax, site)."""
+    i = html.find("view-content")
+    seg = html[i:] if i >= 0 else html
+    out = []
+    for blk in re.split(r'<div class="views-row ', seg)[1:]:
+        m = re.search(r'<span class="field-content"><div class="([^"]*)">(.*?)</div>', blk, re.S)
+        if not m:
+            continue
+        pays = HTML.unescape(m.group(1)).strip()
+        if pays in ("title", "field-content") or len(pays) > 25:
+            pays = ""
+        nom = re.sub(r"\s+", " ", HTML.unescape(re.sub(r"<[^>]+>", " ", m.group(2)))).strip()
+        if not nom or pays.startswith("bloc"):
+            continue
+        g = lambda cls: (lambda mm: re.sub(r"\s+", " ", HTML.unescape(re.sub(r"<[^>]+>", " ", mm.group(1)))).strip() if mm else "")(re.search(r'<div class="' + cls + r'[^>]*>(.*?)</div>', blk, re.S))  # noqa: E731
+        mail = re.search(r'mailto:([^"]+)"', blk)
+        tel = g("tel_sgi")
+        if not pays:  # drapeau absent : pays d'après l'indicatif téléphonique officiel
+            k = re.search(r"(?:\+|00)?\s*(2[0-9]{2})\b", tel)
+            pays = TEL_CTY.get(k.group(1), "") if k else ""
+            if pays:
+                pays += " *"
+        out.append({"n": nom, "pays": pays, "adr": g("adresse_sgi"), "bp": g("bp"), "mail": mail.group(1) if mail else "", "tel": tel, "fax": g("fax_sgi"), "web": g("site_sgi")})
+    return out
+
+
+def run_sgi(raw):
+    """Annuaires officiels des intervenants (SGI, SGO, SGP, conservateurs, agences de notation, garants) lus sur brvm.org, toutes pages."""
+    res = {}
+    for key, path_, label in SGI_DIRS:
+        rows, seen = [], set()
+        for pg in range(12):
+            try:
+                html = get("https://www.brvm.org" + path_ + (f"?page={pg}" if pg else ""), tries=2, timeout=30).decode("utf8", "replace")
+            except Exception as e:  # noqa: BLE001
+                note("sgi", False, f"{key} p{pg}: {e}")
+                break
+            part = dir_parse(html)
+            new = [r for r in part if (r["n"].lower(), r["tel"]) not in seen]
+            if not new:
+                break
+            for r in new:
+                seen.add((r["n"].lower(), r["tel"]))
+            rows += new
+            if f"{path_}?page={pg + 1}" not in html:
+                break
+        if rows:
+            note("sgi")
+        res[key] = {"label": label, "u": "https://www.brvm.org" + path_, "rows": rows}
+    if any(v["rows"] for v in res.values()):
+        save(os.path.join(raw, "sgi.json"), {"ts": int(time.time()), "d": TODAY.isoformat(), "dirs": res})
+    log("intervenants :", ", ".join(f"{k} {len(v['rows'])}" for k, v in res.items()))
+
+
+# ------------------------------------------------------------------ dividendes des actions et ETF US (Nasdaq : date de détachement, montant, paiement)
+def run_usdiv(raw):
+    """Historique des dividendes de l'univers US suivi (Nasdaq), pour les rendements totaux (dividendes réinvestis) et DVD."""
+    path = os.path.join(raw, "us_divs.json")
+    st = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"s": {}}
+    syms = [(x[0], "etf" if x[2] == "ETF" else "stocks") for x in US]
+    try:
+        meta = json.load(open(os.path.join(raw, "nasdaq_meta.json"), encoding="utf8"))
+        syms += [(x["s"], "stocks") for x in meta.get("ndx") or [] if x.get("s") and x["s"] not in {a for a, _ in syms}]
+    except Exception:  # noqa: BLE001
+        pass
+
+    def one(it):
+        sym, cls = it
+        try:
+            j = json.loads(get(f"https://api.nasdaq.com/api/quote/{urllib.parse.quote(sym)}/dividends?assetclass={cls}", headers=NQ_H, tries=2, timeout=40))
+            rows = (((j.get("data") or {}).get("dividends") or {}).get("rows")) or []
+            out = []
+            for r in rows:
+                d = r.get("exOrEffDate") or ""
+                m = re.match(r"(\d{2})/(\d{2})/(\d{4})", d)
+                amt = money(r.get("amount"))
+                if not m or not amt or (r.get("type") or "Cash").lower() != "cash":
+                    continue
+                pm = re.match(r"(\d{2})/(\d{2})/(\d{4})", r.get("paymentDate") or "")
+                out.append([f"{m.group(3)}-{m.group(1)}-{m.group(2)}", round(amt, 4), f"{pm.group(3)}-{pm.group(1)}-{pm.group(2)}" if pm else None])
+            return sym, sorted(out), None
+        except Exception as e:  # noqa: BLE001
+            return sym, None, str(e)
+    n_ok = 0
+    with ThreadPoolExecutor(4) as ex:
+        for sym, rows, err in ex.map(one, syms):
+            if rows is None:
+                note("us-div", False, f"{sym}: {err}")
+                continue
+            note("us-div")
+            st["s"][sym] = rows
+            n_ok += 1
+    st["ts"] = int(time.time())
+    save(path, st)
+    log(f"dividendes US : {n_ok} titres lus, {sum(1 for v in st['s'].values() if v)} avec au moins un dividende")
+
+
 def pdf_tools():
     """Outils de lecture des avis (texte du PDF, images de pages, reconnaissance de caractères), installés à la demande."""
     import shutil
@@ -2806,7 +3086,7 @@ def run_ussplit(raw):
         err = None
         for host in ("query1", "query2"):
             try:
-                j = json.loads(get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}?range=5y&interval=3mo&events=split", tries=2, timeout=30,
+                j = json.loads(get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{urllib.parse.quote(sym)}?range=15y&interval=3mo&events=split", tries=2, timeout=30,
                                    headers={"Referer": "https://finance.yahoo.com/", "Origin": "https://finance.yahoo.com"}))
                 res = ((j.get("chart") or {}).get("result") or [{}])[0] or {}
                 ev = (res.get("events") or {}).get("splits") or {}
@@ -2824,7 +3104,7 @@ def run_ussplit(raw):
             out[sym] = sp
     if out:
         save(os.path.join(raw, "us_splits.json"), {"ts": int(time.time()), "s": out})
-    log(f"fractionnements US : {len(out)} titres, {sum(1 for v in out.values() if v)} avec au moins un fractionnement sur 5 ans")
+    log(f"fractionnements US : {len(out)} titres, {sum(1 for v in out.values() if v)} avec au moins un fractionnement sur 15 ans")
 
 def main():
     ap = argparse.ArgumentParser()
@@ -2841,7 +3121,7 @@ def main():
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
-             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("ussplit", lambda: run_ussplit(a.out)), ("avisocr", lambda: run_avisocr(a.site)), ("ei", lambda: run_ei(a.out))]
+             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("ussplit", lambda: run_ussplit(a.out)), ("avisocr", lambda: run_avisocr(a.site)), ("flottant", lambda: run_flottant(a.out, a.site)), ("ratings", lambda: run_ratings(a.out, a.site)), ("sgi", lambda: run_sgi(a.out)), ("usdiv", lambda: run_usdiv(a.out)), ("ei", lambda: run_ei(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")

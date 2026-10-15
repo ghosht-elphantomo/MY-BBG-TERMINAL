@@ -759,6 +759,40 @@ def main():
     # Sources complémentaires : ETF, indices US, Nasdaq-100, CBOE, crypto ----------
     import build_extra
     xinfo = build_extra.ingest(a.extra, add, set(files), log)
+    # dividendes US (Nasdaq) ajoutés aux séries à la date de détachement : rendement total, backtests et DVD
+    try:
+        usd_p = os.path.join(a.extra, "us_divs.json") if a.extra else None
+        USDIV = (json.load(open(usd_p, encoding="utf8")).get("s") or {}) if usd_p and os.path.exists(usd_p) else {}
+        spl_p = os.path.join(a.extra, "us_splits.json") if a.extra else None
+        USSPL = (json.load(open(spl_p, encoding="utf8")).get("s") or {}) if spl_p and os.path.exists(spl_p) else {}
+        n_usd = n_ser = 0
+        for sid, rows in USDIV.items():
+            b = files.get(sid)
+            if not b or not rows:
+                continue
+            idx = {d: i for i, d in enumerate(b["d"])}
+            div = list(b.get("div") or [0] * len(b["d"]))
+            if any(div):
+                continue  # série qui porte déjà ses dividendes (Yahoo)
+            spl = [(x[0], x[1]) for x in USSPL.get(sid, []) if x[1] and x[1] > 0]
+            for d_, amt, _pay in rows:
+                k = di(d_)
+                for sd, ratio in spl:  # montant nominal de l'époque ramené à la base d'actions actuelle (cours déjà ajustés)
+                    if sd > d_:
+                        amt = amt / ratio
+                i = idx.get(k)
+                if i is None:  # détachement un jour sans cotation dans la série : première séance suivante
+                    nxt = [j for j, dd in enumerate(b["d"]) if dd >= k]
+                    i = nxt[0] if nxt else None
+                if i is not None:
+                    div[i] = round(div[i] + amt, 4)
+                    n_usd += 1
+            b["div"] = div
+            n_ser += 1
+        log("dividendes US :", n_usd, "versements placés dans", n_ser, "séries (écrits à la base du soir)")
+    except Exception as e:  # noqa: BLE001
+        log("dividendes US illisibles :", e)
+
     for s in secs:  # métadonnées Nasdaq des titres US déjà suivis
         if s["mkt"] == "US" and s["id"] in xinfo["ndx"]:
             s["ndx"] = True
@@ -925,6 +959,53 @@ def main():
     asof = max(s["dt"] for s in secs if s["mkt"] in ("US", "BRVM"))
     summ = {"asof": asof, "built": int(time.time()), "secs": secs, "sectors": sorted({s["grp"] for s in secs if s["mkt"] == "BRVM" and s["cls"] == "Equity"}),
             "session": {"asof": session.get("asof"), "label": session.get("session"), "capA": session.get("capA")} if session else None, "cty": CTY_NAME}
+    # notations financières (PDF de brvm.org lus le soir) : une ligne par document, dernière note par émetteur
+    try:
+        rp_ = os.path.join(a.extra, "ratings.json") if a.extra else None
+        RT = (json.load(open(rp_, encoding="utf8")).get("docs") or {}) if rp_ and os.path.exists(rp_) else {}
+        if RT:
+            tick = {s_["id"] for s_ in secs if s_.get("mkt") == "BRVM"}
+            rows_ = []
+            for u_, r_ in RT.items():
+                if not (r_.get("lt") or r_.get("st")):
+                    continue
+                rows_.append({"u": u_, "t": r_.get("t") if r_.get("t") in tick else None, "soc": r_.get("soc"), "ti": r_.get("ti"), "d": r_.get("d"), "ag": r_.get("ag"), "lt": r_.get("lt"), "lt0": r_.get("lt0"),
+                              "st": r_.get("st"), "st0": r_.get("st0"), "out": r_.get("out"), "exp": r_.get("exp"), "val": r_.get("val"), "scale": r_.get("scale")})
+            rows_.sort(key=lambda x: x.get("d") or "", reverse=True)
+            last_ = {}
+            for x in rows_:  # dernière notation connue par société cotée
+                if x["t"] and x["t"] not in last_:
+                    last_[x["t"]] = x
+            for s_ in secs:
+                x = last_.get(s_["id"])
+                if x:
+                    s_["rating"] = {k: x.get(k) for k in ("ag", "lt", "st", "out", "d", "exp")}
+            with open(os.path.join(out, "ratings.json"), "w", encoding="utf8") as fh:
+                json.dump({"rows": rows_, "n_docs": len(RT), "n_read": len(rows_)}, fh, separators=(",", ":"), ensure_ascii=False)
+    except Exception as e:  # noqa: BLE001
+        log("notations illisibles :", e)
+    # annuaires des intervenants (brvm.org)
+    try:
+        sg_ = os.path.join(a.extra, "sgi.json") if a.extra else None
+        if sg_ and os.path.exists(sg_):
+            shutil_copy = json.load(open(sg_, encoding="utf8"))
+            with open(os.path.join(out, "sgi.json"), "w", encoding="utf8") as fh:
+                json.dump(shutil_copy, fh, separators=(",", ":"), ensure_ascii=False)
+    except Exception as e:  # noqa: BLE001
+        log("intervenants illisibles :", e)
+    # flottant officiel (avis de la BRVM lu la veille au soir) : publié tel quel, et rattaché à chaque action
+    try:
+        fp_ = os.path.join(a.extra, "flottant.json") if a.extra else None
+        FLO = json.load(open(fp_, encoding="utf8")) if fp_ and os.path.exists(fp_) else None
+        if FLO and FLO.get("rows"):
+            for s_ in secs:
+                r_ = FLO["rows"].get(s_["id"])
+                if s_.get("mkt") == "BRVM" and r_:
+                    s_["flo"] = r_["pct"]
+            with open(os.path.join(out, "flottant.json"), "w", encoding="utf8") as fh:
+                json.dump(FLO, fh, separators=(",", ":"), ensure_ascii=False)
+    except Exception as e:  # noqa: BLE001
+        log("flottant officiel illisible :", e)
     for name, obj in (("summary", summ), ("weekly", wm), ("breadth", breadth), ("fundamentals", fmeta), ("dividends", dmeta), ("events", emeta),
                       ("events_recent", emeta[:80]), ("boc_check", {**boc_chk, "avis": av_chk, "d": dt.date.today().isoformat()} if BOC else {"n": 0, "avis": av_chk})):
         with open(os.path.join(out, name + ".json"), "w", encoding="utf8") as fh:

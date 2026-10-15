@@ -610,3 +610,6 @@ table.t.eqt td{line-height:24px}
 
 /* ---- RV (pairs et historique) : tableaux larges sur toute la largeur, graphiques côte à côte ---- */
 .rvg > .pn:first-child,.rvg > .pn:last-child{grid-column:1/-1}
+
+/* ---- SGI : annuaire ---- */
+.t.sgi td{vertical-align:top}.t.sgi td.l.am{line-height:1.25}.t.sgi td:nth-child(5){max-width:120px}.t.sgi td:nth-child(6){max-width:150px}.t.sgi td:nth-child(7),.t.sgi td:nth-child(8){max-width:150px}.t.sgi td:nth-child(n+5){overflow:hidden;text-overflow:ellipsis}.t.sgi td:nth-child(2){max-width:260px;overflow:hidden;text-overflow:ellipsis}

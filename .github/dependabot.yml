@@ -1,0 +1,11 @@
+# Dependabot : le site n'utilise aucune bibliothèque (page autonome, scripts Python sur la bibliothèque standard).
+# Seules les actions GitHub des workflows sont suivies : une proposition de mise à jour quand une nouvelle version sort.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels: ["maintenance"]
+    commit-message:
+      prefix: "Maintenance"

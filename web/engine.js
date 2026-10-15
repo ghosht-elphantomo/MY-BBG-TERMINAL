@@ -76,8 +76,12 @@ const STRATS = {
   vt:    { name: 'VOL TARGET', short: 'VT', d: { tv: 25 }, uses: ['tv'],
            desc: "Toujours investi, exposition = vol cible / (levier × vol réalisée 20 j), plafonnée à 100 %." },
   bh:    { name: 'BUY & HOLD', short: 'B&H', d: {}, uses: [],
-           desc: "Référence : investi en permanence avec le levier choisi." }
+           desc: "Référence : investi en permanence avec le levier choisi, performance du cours seul (dividendes encaissés, non réinvestis)." },
+  bhd:   { name: 'BUY & HOLD · DIVIDENDES RÉINVESTIS', short: 'B&H+D', d: {}, uses: [],
+           desc: "Investi en permanence ; chaque dividende (net) rachète des titres le jour du détachement : rendement total de l'actionnaire." }
 };
+/* marché sans dividendes (performance du cours seul) : copie de la série avec les dividendes mis à zéro */
+function marketNoDiv(H) { return buildMarket({ ...H, div: new Array(H.c.length).fill(0) }); }
 const DEFAULT_P = { strat: 'sma', n: 200, fast: 50, band: 0, tv: 35, lev: 3, exec: 'close', fee: 1, slip: 2, spread: .5, er: .84,
                     cash: 1, cap: 10000, start: '2017-11-01', ruin: 50, block: 20 };
 
@@ -89,7 +93,7 @@ function warmup(P) {
 
 function signals(M, P) {
   const n = M.n, c = M.c, e = new Float64Array(n), S = P.strat;
-  if (S === 'bh') { e.fill(1); return e; }
+  if (S === 'bh' || S === 'bhd') { e.fill(1); return e; }
   const vtLevel = (i, cur) => { const v = M.vol20[i]; if (!isFinite(v) || v <= 0) return cur; const t = Math.min(1, (P.tv / 100) / (P.lev * v));
     const r = Math.round(t * 20) / 20; return Math.abs(r - cur) >= .1 || (r === 1 && cur < 1 && cur > .85) ? r : cur; };
   if (S === 'sma' || S === 'smavt') {
@@ -192,8 +196,8 @@ function stats(eq, s0, s1, M) {
     mdd, mddI, maxDur, ddNow: dd[s1], dd, calmar: mdd < 0 ? cagr / -mdd : Infinity, yearly, rets, years, final: eq[s1] };
 }
 
-function leaderboard(M, P) {
-  return Object.keys(STRATS).map(k => { const p = { ...P, ...STRATS[k].d, strat: k }; const r = runBacktest(M, p);
+function leaderboard(M, P, Md) {
+  return Object.keys(STRATS).map(k => { const p = { ...P, ...STRATS[k].d, strat: k }; const r = runBacktest(k === 'bhd' && Md ? Md : M, p);
     return { k, name: STRATS[k].name, sharpe: r.st.sharpe, cagr: r.st.cagr, mdd: r.st.mdd, final: r.st.final, calmar: r.st.calmar, trades: r.st.trades }; })
     .sort((a, b) => b.sharpe - a.sharpe);
 }

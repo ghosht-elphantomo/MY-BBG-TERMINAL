@@ -32,6 +32,12 @@ function flagSVG(c, w = 22, h = 14) {
     case 'KE': b = '<rect width="22" height="4.2" fill="#000"/><rect y="4.2" width="22" height="5.6" fill="#fff"/><rect y="5" width="22" height="4" fill="#bb0000"/><rect y="9.8" width="22" height="4.2" fill="#006600"/><ellipse cx="11" cy="7" rx="2" ry="4" fill="#bb0000" stroke="#000" stroke-width=".5"/>'; break;
     case 'MA': b = '<rect width="22" height="14" fill="#c1272d"/><polygon points="11,3.2 12.3,7.8 8.4,5 13.6,5 9.7,7.8" fill="none" stroke="#006233" stroke-width=".7"/>'; break;
     case 'EG': b = h3('#ce1126', '#fff', '#000') + '<rect x="10" y="5.6" width="2" height="2.8" fill="#c09300"/>'; break;
+    case 'BJ': b = '<rect width="22" height="14" fill="#fcd116"/><rect y="7" width="22" height="7" fill="#e8112d"/><rect width="8.8" height="14" fill="#008751"/>'; break;
+    case 'BF': b = '<rect width="22" height="14" fill="#009e49"/><rect width="22" height="7" fill="#ef2b2d"/>' + star(11, 7, 2.6, '#fcd116'); break;
+    case 'ML': b = v3('#14b53a', '#fcd116', '#ce1126'); break;
+    case 'NE': b = h3('#e05206', '#fff', '#0db02b') + '<circle cx="11" cy="7" r="1.6" fill="#e05206"/>'; break;
+    case 'TG': b = '<rect width="22" height="14" fill="#006a4e"/>' + [1, 3].map(k => `<rect y="${k * 2.8}" width="22" height="2.8" fill="#ffce00"/>`).join('') + '<rect width="8.4" height="8.4" fill="#d21034"/>' + star(4.2, 4.2, 2.6, '#fff'); break;
+    case 'GW': b = '<rect width="22" height="14" fill="#fcd116"/><rect y="7" width="22" height="7" fill="#009e49"/><rect width="7.3" height="14" fill="#ce1126"/>' + star(3.65, 7, 2.2, '#000'); break;
     default: b = '<rect width="22" height="14" fill="#444"/>';
   }
   return `<svg class="flg" width="${w}" height="${h}" viewBox="0 0 22 14" aria-label="${esc(FLAG_N[c] || c)}"><title>${esc(FLAG_N[c] || c)}</title>${b}</svg>`;

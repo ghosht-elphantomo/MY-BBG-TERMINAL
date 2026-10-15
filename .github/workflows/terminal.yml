@@ -119,7 +119,12 @@ jobs:
       - name: Sources complémentaires (FRED, CBOE, CNN, crypto, Banque mondiale, bulletins BRVM)
         if: steps.mode.outputs.mode == 'eod'
         continue-on-error: true
-        run: timeout 1100 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,probe,boc,prof,bceao,umoa,eia,fut,ei,ussplit,avisocr --site /tmp/site/data
+        run: timeout 1100 python3 scripts/fetch_extra.py --out /tmp/raw --only fred,cboe,cnn,crypto,wb,probe,boc,prof,bceao,umoa,eia,fut,ei,ussplit,usdiv,avisocr,flottant --site /tmp/site/data
+
+      - name: Notations financières et flottant officiel (EOD, PDF de brvm.org)
+        if: steps.mode.outputs.mode == 'eod'
+        continue-on-error: true
+        run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only ratings,sgi --site /tmp/site/data
 
       - name: Comptes BRVM sur 10 exercices (archives SikaFinance, états financiers publiés)
         if: steps.mode.outputs.mode == 'eod'

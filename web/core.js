@@ -10,7 +10,7 @@ const ST = { fn: 'MONITOR', sec: 'QQQ', gp: { range: '1A', type: 'bbg', ov: { sm
 const FN = {
   BRIEF: ['Synthèse du jour', 'mkt', 'Marchés', 'BRVM, portefeuille, alertes, marchés mondiaux, changes, matières, taux, agenda du jour et actualités sur une page', 'Daily Briefing'],
   MONITOR: ['Moniteur de marchés', 'mkt', 'Marchés', 'Tous les titres suivis, signal SMA 200 de QQQ, séance BRVM, carte des capitalisations', 'Market Monitor'],
-  BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs', 'BRVM Overview'],
+  BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs ; en option : flottant officiel (avis de la BRVM)', 'BRVM Overview'],
   IMAP: ['Carte de chaleur', 'mkt', 'Marchés', 'BRVM, États-Unis, Europe, Royaume-Uni, Asie : surface = capitalisation, couleur = variation', 'Intraday Market Map'],
   US: ['Marché US', 'mkt', 'Marchés', 'Nasdaq-100, ETF secteurs, facteurs, pays, matières, crypto ; pré-marché et après-bourse', 'US Market Overview'],
   NEWS: ['Actualités', 'mkt', 'Actualités', 'Fil d’actualités relié aux titres : BRVM, UEMOA, marchés mondiaux, banques centrales', 'Top News'],
@@ -34,6 +34,8 @@ const FN = {
   EA: ['Publications de résultats', 'mkt', 'Fondamentaux', 'Calendrier des résultats US (date, consensus, dernière surprise), résultats publiés (surprise, réaction du cours) ; en option : objectifs de cours des analystes', 'Earnings Analysis'],
   ALRT: ['Alertes', 'mkt', 'Fondamentaux', 'Marges, FCF, dette, révisions, seuils de valorisation, résultats à venir', 'Alert Monitor'],
   DIVC: ['Calendrier dividendes', 'mkt', 'Fondamentaux', 'BRVM : prochains détachements, classement par rendement, historique', 'Dividend Calendar'],
+  NOT: ['Notations financières', 'mkt', 'Taux', 'Notes de crédit publiées à la BRVM (Bloomfield, WARA, GCR) : sociétés cotées, emprunts obligataires, historique', 'Credit Ratings'],
+  SGI: ['Intervenants du marché', 'mkt', 'Marchés', 'Annuaires officiels de la BRVM : SGI, sociétés de gestion d’OPCVM et de patrimoine, conservateurs, agences de notation, garants', 'Market Intermediaries'],
   EVTS: ['Événements des sociétés', 'mkt', 'Actualités', 'Avis officiels depuis 2000 : AG, dividendes, états financiers ; en option : suivi des sociétés BRVM, agenda des sociétés (BRVM et résultats US)', 'Corporate Events'],
   WEIF: ['Contrats à terme sur indices', 'mkt', 'Marchés', 'S&P 500, Nasdaq-100, Dow Jones, Russell 2000, VIX, FTSE 100, Nikkei : indication d’ouverture et écart au comptant', 'World Equity Index Futures'],
   WEI: ['Indices mondiaux', 'mkt', 'Marchés', 'Indices boursiers des Amériques, d’Europe, d’Afrique et d’Asie : niveau, variation, fourchette 52 semaines', 'World Equity Indices'],
@@ -45,7 +47,7 @@ const FN = {
   DES: ['Description', 'sec', 'Description', 'Profil, émission, ratios, chiffre d’affaires et BPA, secteur : la fiche d’identité du titre', 'Security Description'],
   CN: ['Actualités de la société', 'sec', 'Description', 'Articles qui citent la société, publications officielles, historique des événements', 'Company News'],
   HDS: ['Actionnariat', 'sec', 'Description', 'Principaux actionnaires, répartition du capital et flottant', 'Holdings: Current'],
-  RELS: ['Titres liés', 'sec', 'Description', 'Obligations de l’émetteur, indices, sociétés du même secteur', 'Related Securities'],
+  'STOCK BONDS': ['Titres liés', 'sec', 'Description', 'Obligations de l’émetteur cotées à la BRVM, indices, sociétés du même secteur', 'Stock & Bonds'],
   CACS: ['Opérations sur titres', 'sec', 'Description', 'Dividendes, assemblées, opérations sur le capital, à venir et passées', 'Corporate Action Calendar'],
   GP: ['Graphique', 'sec', 'Cours', 'Ligne style Bloomberg, bougies, moyennes mobiles, volume, RSI, MACD, comparaison', 'Line Chart'],
   TECH: ['Analyse technique', 'sec', 'Cours', 'Moyennes mobiles, RSI, MACD, stochastique, Bollinger, ATR, pivots, synthèse des signaux', 'Technical Analysis'],
@@ -76,16 +78,16 @@ const FN = {
   QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
-const MKT_KEYS = ['BRIEF', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'GC', 'RATES', 'COMMO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'HELP'];
-const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'RELS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
+const MKT_KEYS = ['BRIEF', 'PORT', 'BRVM', 'WEI', 'WEIF', 'IMAP', 'MOST', 'US', 'FG', 'ECO', 'ECST', 'ECWB', 'UEMOA', 'SRCH', 'NOT', 'GC', 'RATES', 'COMMO', 'BMAP', 'CORR', 'RRG', 'PER', 'SCREN', 'EA', 'LIQ', 'ALRT', 'DIVC', 'MACRO', 'FX', 'FXC', 'EVTS', 'SGI', 'HELP'];
+const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'STOCK BONDS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
 /* Fonctions associées (menu « Fonctions associées » de la barre d'outils) */
 const REL = { GP: ['HP', 'TECH', 'TRA', 'COMP', 'BETA', 'SEAS', 'QLAB'], TECH: ['GP', 'HVT', 'VAP', 'SEAS', 'BTST'], HS: ['COMP', 'CORR', 'BETA', 'GP'], HP: ['GP', 'TRA', 'COMP'], DES: ['GP', 'FA', 'HDS', 'CN', 'DVD', 'RV'], FA: ['RV', 'WACC', 'DVD', 'EE', 'MODL', 'SCOR'], RV: ['FA', 'PEER', 'SCOR', 'MODL', 'DDM'],
   DVD: ['DDM', 'TRA', 'DIVC', 'FA'], TRA: ['GP', 'DVD', 'COMP'], SCOR: ['RV', 'FA', 'LQA', 'ANOM', 'PEER', 'SCREN'], LQA: ['LIQ', 'SCOR', 'HP'], ANOM: ['GP', 'LQA', 'CN', 'ALRT'], PEER: ['RV', 'SCOR', 'COMP', 'SCREN'],
-  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'NEWS', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN'], IMAP: ['MONITOR', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['GC', 'UEMOA'], GC: ['SRCH', 'UEMOA'],
+  MODL: ['FA', 'RV', 'DDM', 'WACC'], HDS: ['DES', 'CN'], CN: ['DES', 'NEWS', 'EVTS'], BRVM: ['IMAP', 'LIQ', 'PER', 'DIVC', 'SCREN', 'SGI'], IMAP: ['MONITOR', 'US', 'BRVM'], UEMOA: ['GC', 'SRCH', 'FX'], SRCH: ['NOT', 'GC', 'UEMOA'], NOT: ['SRCH', 'STOCK BONDS', 'DES'], SGI: ['BRVM', 'NOT', 'HELP'], GC: ['SRCH', 'UEMOA'],
   BMAP: ['COMMO', 'MACRO', 'ECO', 'NEWS'], NEWS: ['CN', 'EVTS'], US: ['IMAP', 'FG', 'ECWB', 'ECO', 'MOST'], WEI: ['IMAP', 'MOST', 'RATES', 'COMMO'], COMMO: ['BMAP', 'WEI', 'MACRO'], MOST: ['WEI', 'IMAP', 'BRVM', 'US'],
-  HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], RELS: ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
+  HVT: ['GP', 'BETA', 'QLAB', 'VAP'], VAP: ['GP', 'HP', 'LQA'], GF: ['FA', 'RV', 'DVD'], ANR: ['EE', 'SURP', 'RV'], 'STOCK BONDS': ['PEER', 'SRCH', 'DES'], CACS: ['DVD', 'CN', 'EVTS'], MEMB: ['MOV', 'IMAP', 'GP'], MOV: ['MEMB', 'IMAP', 'MOST'],
   ECO: ['ECST', 'ECWB', 'RATES', 'UEMOA', 'NEWS'], ECST: ['ECO', 'ECWB', 'UEMOA', 'RATES'], ECWB: ['ECO', 'ECST', 'RATES', 'MACRO'], PORT: ['SCREN', 'CORR', 'DIVC', 'FX'], EA: ['EE', 'SURP', 'ANR', 'ECO'], WEIF: ['WEI', 'US', 'NEWS'], BRIEF: ['MONITOR', 'PORT', 'ECO', 'NEWS'], RATES: ['GC', 'SRCH', 'ECWB', 'ECO'], FXC: ['FX', 'UEMOA', 'WEI'], FX: ['FXC', 'UEMOA', 'WEI'] };
 const has = c => !!(FN[c] && PAGES[c]);
 const SECFN = new Set(Object.keys(FN).filter(k => FN[k][1] === 'sec'));
@@ -135,7 +137,12 @@ async function series(id) {
     applyQuoteToSeries(s); return s; });
   return Q.ser[id];
 }
-async function market(id) { if (!Q.M[id]) { const s = await series(id); Q.M[id] = buildMarket({ d: s.d, o: s.o, h: s.h, l: s.l, c: s.c, v: s.v, div: s.div }); } return Q.M[id]; }
+/* marché d'un titre : dividendes de la série (US : Yahoo) ou, pour la BRVM, dividendes nets de la base officielle à la date de détachement */
+async function marketDivs(id, s) { let div = s.div && s.div.some(v => v) ? s.div.slice() : new Array(s.c.length).fill(0); const q = Q.by[id];
+  if (q && q.mkt === 'BRVM' && q.cls === 'Equity') { const DV = await getJSON('dividends.json').catch(() => []); for (const x of DV) { if (x.t !== id || !x.dps) continue; const d = x.det || x.pay; if (!d) continue; const k = s.x.findIndex(v => v >= s2i(d.slice(0, 10))); if (k > 0) div[k] += x.dps; } }
+  return div; }
+/* mode : rien = dividendes de la série (inchangé) ; 'nodiv' = cours seul ; 'tr' = rendement total (BRVM : dividendes officiels ajoutés) */
+async function market(id, mode) { const key = mode ? id + '|' + mode : id; if (!Q.M[key]) { const s = await series(id); const div = mode === 'nodiv' ? new Array(s.c.length).fill(0) : mode === 'tr' ? await marketDivs(id, s) : s.div; Q.M[key] = buildMarket({ d: s.d, o: s.o, h: s.h, l: s.l, c: s.c, v: s.v, div }); } return Q.M[key]; }
 function sec(id) { return Q.by[id]; }
 function secsWhere(f) { return Q.sum.secs.filter(f); }
 function applyQuotes() {
@@ -158,6 +165,7 @@ function searchSecs(qs) {
 }
 function parseCmd(txt) {
   const toks = txt.trim().toUpperCase().replace(/<GO>|\bGO\b|EQUITY|INDEX|CURNCY|COMDTY/g, ' ').split(/\s+/).filter(Boolean);
+  for (let i = 0; i + 1 < toks.length; i++) if (FN[toks[i] + ' ' + toks[i + 1]]) toks.splice(i, 2, toks[i] + ' ' + toks[i + 1]);  // codes à deux mots (STOCK BONDS)
   let fn = null, s = null; for (const t0 of toks) { const t = !fn && (FN_ALIAS[t0] || FN_SHORT[t0]) ? fnAlias(t0) : t0; if (!fn && FN[t] && has(t)) { fn = t; continue; } if (t === 'AIDE') { fn = 'HELP'; continue; } if (!s) { const m = Q.by[t] || searchSecs(t)[0]; if (m) s = m.id; } }
   if (!s && toks.length > 1 && !fn) { const m = searchSecs(toks.join(' '))[0]; if (m) s = m.id; }
   return { fn, s };
@@ -179,7 +187,7 @@ function initCmd() {
   const show = () => {
     const v = inp.value, toks = v.trim().split(/\s+/).filter(Boolean), sp = /\s$/.test(v); const S = toks.length ? exactSec(toks[0]) : null;
     if (S && (toks.length > 1 || sp)) {
-      const part = (toks.length > 1 ? toks[toks.length - 1] : '').toUpperCase();
+      const part = (toks.length > 1 ? toks.slice(1).join(' ') : '').toUpperCase();
       const codes = SEC_TABS.filter(has).filter(c => !part || c.startsWith(part) || FN[c][0].toUpperCase().includes(part) || FN[c][4].toUpperCase().includes(part));
       items = [{ k: 'h', a: `${ykey(S)} · ${S.n}` }];
       for (const [g, cs] of MENU_GROUPS) { const gc = cs.filter(c => codes.includes(c)); if (!gc.length) continue; if (!part) items.push({ k: 'h', a: g });
@@ -212,7 +220,7 @@ function initCmd() {
     if (e.key === 'Tab') { e.preventDefault(); pick(sel, true); } if (e.key === 'Escape') { ac.hidden = true; } });
   ac.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); if (d) { e.preventDefault(); pick(+d.dataset.i); } });
   $('cmdForm').addEventListener('submit', e => { e.preventDefault(); const v = inp.value.trim();
-    if (!ac.hidden && items.length && !/^\d{1,3}$/.test(v)) { const w = v.toUpperCase().split(/\s+/); const typedFn = w.length === 1 && FN[w[0]] && has(w[0]);
+    if (!ac.hidden && items.length && !/^\d{1,3}$/.test(v)) { const w = v.toUpperCase().split(/\s+/); for (let i = 0; i + 1 < w.length; i++) if (FN[w[i] + ' ' + w[i + 1]]) w.splice(i, 2, w[i] + ' ' + w[i + 1]); const typedFn = w.length === 1 && FN[w[0]] && has(w[0]);
       const it = items[sel]; const typedSecFn = w.length === 2 && exactSec(w[0]) && FN[w[1]] && has(w[1]);
       if (!typedSecFn && it && (!typedFn || it.a === w[0])) { pick(sel); return; } }
     ac.hidden = true; inp.value = ''; inp.blur(); runCmd(v); });
@@ -376,15 +384,18 @@ function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hi
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
 let renderSeq = 0;
-/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, BTMM s'appelle RATES et WIRP, WB en sont les onglets 2 et 3, EQS s'appelle SCREN, TOP s'appelle NEWS, MON s'appelle MONITOR, GLCO s'appelle COMMO */
+/* anciens codes : CF est devenu un onglet de EVTS, WCRS un onglet de FXC, BTMM s'appelle RATES et WIRP, WB en sont les onglets 2 et 3, EQS s'appelle SCREN, TOP s'appelle NEWS, MON s'appelle MONITOR, GLCO s'appelle COMMO, RELS s'appelle STOCK BONDS */
 /* écrans à onglets qui regroupent d'anciennes fonctions (onglet 1 = vue principale) : source unique pour les onglets, l'aide et l'autocomplétion */
 const FN_TABS = {
+  BRVM: [['m', 'Marché'], ['f', 'Flottant officiel']],
+  NOT: [['c', 'Sociétés cotées'], ['b', 'Obligations et émetteurs'], ['h', 'Historique']],
+  SGI: [['sgi', 'SGI'], ['sgo', 'Gestion d’OPCVM'], ['sgp', 'Gestion de patrimoine'], ['cons', 'Conservateurs'], ['agn', 'Agences de notation'], ['gar', 'Garants']],
   EVTS: [['avis', 'Avis BRVM'], ['b', 'Suivi des sociétés BRVM'], ['a', 'Agenda des sociétés']],
   EA: [['u', 'À venir'], ['p', 'Publiés (60 jours)'], ['t', 'Objectifs des analystes']],
   FXC: [['m', 'Matrice des changes croisés'], ['w', 'Classement des devises']],
   RATES: [['m', 'Marché monétaire US'], ['f', 'Anticipations de la Fed'], ['w', 'BONDS · taux souverains mondiaux']] };
 const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
-const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], TOP: ['NEWS'], MON: ['MONITOR'], GLCO: ['COMMO'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'], BTMM: ['RATES', 'm'] };
+const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FXC', 'w'], EQS: ['SCREN'], RELS: ['STOCK BONDS'], TOP: ['NEWS'], MON: ['MONITOR'], GLCO: ['COMMO'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'], BTMM: ['RATES', 'm'] };
 /* raccourcis vers un onglet (ce ne sont pas d'anciens codes) */
 const FN_SHORT = { BONDS: ['RATES', 'w'] };
 function fnAlias(f) { const a = FN_ALIAS[f] || FN_SHORT[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }

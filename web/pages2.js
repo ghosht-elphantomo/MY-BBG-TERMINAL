@@ -34,11 +34,13 @@ function drawKM(host, curves) {
 PAGES.BTST = async (m, alive) => {
   const s = sec(ST.sec); const S = await series(ST.sec); if (!alive()) return;
   if (S.f !== 'D' || S.c.length < 320) { m.innerHTML = pn('Backtest', 'BTST', `<div class="empty">${S.f !== 'D' ? 'Série mensuelle' : 'Historique trop court (' + S.c.length + ' séances)'} : le backtest demande au moins 320 séances quotidiennes. Essayez QQQ, NVDA, SNTS, BRVMC…</div>`); return; }
-  const M = await market(ST.sec); if (!alive()) return;
-  const levOk = s.mkt === 'US' || s.mkt === 'TW', n = M.n;
-  const dflt = { ...DEFAULT_P, lev: ST.sec === 'QQQ' ? 3 : 1, cash: s.mkt === 'US' ? 1 : 0, start: M.d[Math.min(n - 300, Math.max(260, n - 252 * 10))], fee: s.mkt === 'BRVM' ? 30 : 1, slip: s.mkt === 'BRVM' ? 50 : 2 };
-  const P = ST.bt && ST.bt.sec === ST.sec ? ST.bt.P : dflt; if (!levOk) P.lev = 1;
-  const t0 = performance.now(); const r = runBacktest(M, P), lb = leaderboard(M, P), st = r.st; const ms = performance.now() - t0;
+  /* deux marchés : cours seul, et dividendes réinvestis (BRVM : dividendes nets de la base officielle au détachement ; US : Yahoo) */
+  const [Mp, Md] = await Promise.all([market(ST.sec, 'nodiv'), market(ST.sec, 'tr')]); if (!alive()) return;
+  const levOk = s.mkt === 'US' || s.mkt === 'TW', n = Mp.n, hasDiv = Md.div.some(v => v);
+  const dflt = { ...DEFAULT_P, strat: 'bh', lev: 1, divr: 0, cash: s.mkt === 'US' ? 1 : 0, start: Mp.d[Math.min(n - 300, Math.max(260, n - 252 * 10))], fee: s.mkt === 'BRVM' ? 30 : 1, slip: s.mkt === 'BRVM' ? 50 : 2 };
+  const P = ST.bt && ST.bt.sec === ST.sec ? ST.bt.P : dflt; if (!levOk) P.lev = 1; if (!STRATS[P.strat]) P.strat = 'bh';
+  const withDiv = P.strat === 'bhd' || !!+P.divr, M = withDiv ? Md : Mp;
+  const t0 = performance.now(); const r = runBacktest(M, P), lb = leaderboard(Mp, P, Md), st = r.st; const ms = performance.now() - t0;
   const eps = { s: ddEpisodes(r.eq, r.s0, r.s1), b: ddEpisodes(r.bh, r.s0, r.s1) }; const mc = monteCarlo(st.rets, { H: 252, N: 1000, block: P.block, ruin: P.ruin / 100, seed: 11 });
   const sel = (id, opts, v) => `<select id="${id}">${opts.map(([k, l]) => `<option value="${k}" ${String(k) === String(v) ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
   const uses = STRATS[P.strat].uses;
@@ -50,6 +52,7 @@ PAGES.BTST = async (m, alive) => {
     <label>Début<input id="bD" type="date" value="${P.start}" min="${M.d[0]}" max="${M.d[n - 60]}"></label><label>Capital<input id="bC" type="number" value="${P.cap}" step="1000" min="100"></label>
     <label>Frais (pb/ordre)<input id="bFe" type="number" value="${P.fee}" step="0.5" min="0"></label><label>Glissement (pb)<input id="bSl" type="number" value="${P.slip}" step="0.5" min="0"></label>
     <label>Cash rémunéré${sel('bCa', [[1, 'Oui (taux Fed)'], [0, 'Non']], P.cash)}</label><label>Seuil de ruine %<input id="bR" type="number" value="${P.ruin}" step="5" min="10" max="95"></label>
+    <label>Dividendes${P.strat === 'bhd' ? sel('bDv', [[1, 'Réinvestis (stratégie)']], 1) : sel('bDv', [[0, 'Encaissés (cours seul)'], [1, hasDiv ? 'Réinvestis au détachement' : 'Réinvestis (aucun dividende connu)']], P.divr)}</label>
     <button class="run" id="bRun">▶ LANCER LE BACKTEST</button></div>`;
   const kpi = (l, v) => `<span>${l}</span><b>${v}</b>`;
   const ym = {}; for (let i = r.s0 + 1; i <= r.s1; i++) { const k = M.d[i].slice(0, 7); ym[k] = i; } const keys = Object.keys(ym); const mret = {}; let prevEq = r.eq[r.s0];
@@ -59,11 +62,11 @@ PAGES.BTST = async (m, alive) => {
   const trades = r.trades.slice().reverse(); const op = r.open;
   m.innerHTML = `<div class="grid bt">
     <div class="grid" style="align-content:start">${pn('Paramètres', 'BTST', form, { sel: s.tk })}
-      ${pn('Classement · 8 stratégies', 'BTST', `<div class="tw"><table class="t"><thead><tr><th class="l">#</th><th class="l">Stratégie</th><th>Sharpe</th><th>CAGR</th><th>Max DD</th></tr></thead><tbody>${lb.map((l, i) => `<tr style="cursor:pointer" data-strat="${l.k}" class="${l.k === P.strat ? 'cur' : ''}"><td class="l">${i + 1}</td><td class="l nm">${l.name}</td><td class="wh">${num(l.sharpe, 2)}</td><td>${pc(l.cagr, 1)}</td><td>${pc(l.mdd, 0)}</td></tr>`).join('')}</tbody></table></div>`, { np: true, lect: 'Même titre, même levier, mêmes coûts, paramètres par défaut. Cliquer pour charger une stratégie.' })}</div>
+      ${pn('Classement · 9 stratégies', 'BTST', `<div class="tw"><table class="t"><thead><tr><th class="l">#</th><th class="l">Stratégie</th><th>Sharpe</th><th>CAGR</th><th>Max DD</th></tr></thead><tbody>${lb.map((l, i) => `<tr style="cursor:pointer" data-strat="${l.k}" class="${l.k === P.strat ? 'cur' : ''}"><td class="l">${i + 1}</td><td class="l nm">${l.name}</td><td class="wh">${num(l.sharpe, 2)}</td><td>${pc(l.cagr, 1)}</td><td>${pc(l.mdd, 0)}</td></tr>`).join('')}</tbody></table></div>`, { np: true, lect: 'Même titre, même levier, mêmes coûts, paramètres par défaut, performance du cours seul (sauf « dividendes réinvestis »). Cliquer pour charger une stratégie.' })}</div>
     <div class="grid" style="align-content:start">
       ${pn(`Résultat · ${STRATS[P.strat].name} · ${P.lev}×`, 'BTST', `<div class="grid c4" style="gap:4px 16px"><div class="kv2">${kpi('Capital final', num(st.final, 0))}${kpi('Perf. totale', pc(st.total, 0))}${kpi('CAGR', pc(st.cagr, 1))}</div><div class="kv2">${kpi('Volatilité', num(st.vol * 100, 1) + '%')}${kpi('Sharpe', num(st.sharpe, 2))}${kpi('Sortino', num(st.sortino, 2))}</div>
-        <div class="kv2">${kpi('Max drawdown', pc(st.mdd, 1))}${kpi('Calmar', num(st.calmar, 2))}${kpi('DD actuel', pc(st.ddNow, 1))}</div><div class="kv2">${kpi('Trades', st.trades)}${kpi('Gagnants', isFinite(st.win) ? num(st.win * 100, 0) + '%' : '—')}${kpi('Gain moy. / perte moy.', isFinite(st.rr) ? num(st.rr, 2) : '∞')}</div></div>`,
-        { sel: `${fds(M.d[r.s0])} → ${fds(M.d[r.s1])} · ${num(st.years, 1)} ans · calcul ${Math.round(ms)} ms`, lect: `Buy &amp; hold du titre sur la même période : CAGR <strong>${num(r.stB.cagr * 100, 1)} %</strong>, max DD <strong>${num(r.stB.mdd * 100, 1)} %</strong>, Sharpe <strong>${num(r.stB.sharpe, 2)}</strong>. Exposition moyenne de la stratégie : <strong>${num(st.expo * 100, 0)} %</strong> du temps investi.${P.lev > 1 ? ' Levier simulé jour par jour (frais de financement et de l’ETF inclus).' : ''}` })}
+        <div class="kv2">${kpi('Max drawdown', pc(st.mdd, 1))}${kpi('Calmar', num(st.calmar, 2))}${kpi('DD actuel', pc(st.ddNow, 1))}</div><div class="kv2">${kpi('Trades', st.trades)}${kpi('Gagnants', isFinite(st.win) ? num(st.win * 100, 0) + '%' : '—')}${kpi('Gain moy. / perte moy.', isFinite(st.rr) ? num(st.rr, 2) : '—')}</div></div>`,
+        { sel: `${fds(M.d[r.s0])} → ${fds(M.d[r.s1])} · ${num(st.years, 1)} ans · calcul ${Math.round(ms)} ms`, lect: `${withDiv ? 'Dividendes réinvestis au détachement (BRVM : montants nets de la base officielle). ' : ''}Buy &amp; hold du titre sur la même période${withDiv ? ' (dividendes réinvestis)' : ''} : CAGR <strong>${num(r.stB.cagr * 100, 1)} %</strong>, max DD <strong>${num(r.stB.mdd * 100, 1)} %</strong>, Sharpe <strong>${num(r.stB.sharpe, 2)}</strong>. Exposition moyenne de la stratégie : <strong>${num(st.expo * 100, 0)} %</strong> du temps investi.${P.lev > 1 ? ' Levier simulé jour par jour (frais de financement et de l’ETF inclus).' : ''}` })}
       ${pn('Courbe de capital · drawdown · exposition', 'BTST', cvb('btCv', 400), { np: true })}
       ${pn('Rendements mensuels de la stratégie (%)', 'BTST', mtable, { np: true })}
       <div class="grid c2b">
@@ -73,14 +76,14 @@ PAGES.BTST = async (m, alive) => {
       ${pn('Journal des trades · ' + (trades.length + (op ? 1 : 0)), 'BTST', `<div class="tw" style="max-height:300px"><table class="t"><thead><tr><th class="l">Entrée</th><th class="l">Sortie</th><th>Séances</th><th>Cours entrée</th><th>Cours sortie</th><th>Résultat</th></tr></thead><tbody>
         ${op ? `<tr class="cur"><td class="l">${fds(M.d[op.i])}</td><td class="l am">ouvert</td><td>${op.days}</td><td>${px(s, op.px)}</td><td>${px(s, M.c[n - 1])}</td><td>${pc(op.ret, 1)}</td></tr>` : ''}${trades.map(t => `<tr><td class="l">${fds(M.d[t.i0])}</td><td class="l">${fds(M.d[t.i1])}</td><td>${t.days}</td><td>${px(s, t.px0)}</td><td>${px(s, t.px1)}</td><td>${pc(t.ret, 1)}</td></tr>`).join('')}</tbody></table></div>`, { np: true })}
     </div></div>`;
-  const read = () => { const g = id => $(id) ? $(id).value : null; return { ...P, strat: g('bS'), n: +(g('bN') || P.n), fast: +(g('bF') || P.fast), band: +(g('bB') ?? P.band), tv: +(g('bT') || P.tv), lev: +g('bL'), exec: g('bE'), start: g('bD') || P.start, cap: Math.max(100, +g('bC') || 10000), fee: +g('bFe') || 0, slip: +g('bSl') || 0, cash: +g('bCa'), ruin: U.clamp(+g('bR') || 50, 10, 95) }; };
+  const read = () => { const g = id => $(id) ? $(id).value : null; return { ...P, strat: g('bS'), n: +(g('bN') || P.n), fast: +(g('bF') || P.fast), band: +(g('bB') ?? P.band), tv: +(g('bT') || P.tv), lev: +g('bL'), exec: g('bE'), start: g('bD') || P.start, cap: Math.max(100, +g('bC') || 10000), fee: +g('bFe') || 0, slip: +g('bSl') || 0, cash: +g('bCa'), divr: +(g('bDv') || 0), ruin: U.clamp(+g('bR') || 50, 10, 95) }; };
   $('bRun').onclick = () => { ST.bt = { sec: ST.sec, P: read() }; render(); };
   $('bS').onchange = () => { const k = $('bS').value; ST.bt = { sec: ST.sec, P: { ...read(), ...STRATS[k].d, strat: k } }; render(); };
   m.querySelectorAll('[data-strat]').forEach(tr => tr.onclick = () => { const k = tr.dataset.strat; ST.bt = { sec: ST.sec, P: { ...P, ...STRATS[k].d, strat: k } }; render(); });
   const pk = (a) => { let p = -Infinity; return Array.from(a).map(v => isFinite(v) ? (p = Math.max(p, v), v / p - 1) : null); };
   const ch = new TSChart($('btCv'), { panes: [{ h: 2.6, log: true, title: 'CAPITAL (ÉCHELLE LOG)' }, { h: 1, fmt: fmtPctAxis, max: 0, title: 'DRAWDOWN' }, { h: .5, fixed: [0, 1], fmt: fmtPctAxis, title: 'EXPOSITION' }] });
   const marks = []; for (let i = r.s0 + 1; i <= r.s1; i++) { if (r.ex[i] > 0 && r.ex[i - 1] === 0) marks.push({ i, v: r.eq[i], up: true }); if (r.ex[i] === 0 && r.ex[i - 1] > 0) marks.push({ i, v: r.eq[i], up: false }); }
-  ch.set({ x: S.x.slice(0, n), series: [{ y: Array.from(r.bh), color: CL.dim, label: 'Buy & hold', w: 1, fmt: v => num(v, 0) }, { y: Array.from(r.eq), color: CL.amber, w: 1.6, label: 'Stratégie', fmt: v => num(v, 0) }, ...(marks.length < 120 ? [{ type: 'marks', m: marks }] : []),
+  ch.set({ x: S.x.slice(0, n), series: [{ y: Array.from(r.bh), color: CL.dim, label: withDiv ? 'Buy & hold (div. réinv.)' : 'Buy & hold', w: 1, fmt: v => num(v, 0) }, { y: Array.from(r.eq), color: CL.amber, w: 1.6, label: 'Stratégie', fmt: v => num(v, 0) }, ...(marks.length < 120 ? [{ type: 'marks', m: marks }] : []),
     { pane: 1, type: 'area', y: pk(r.bh), color: CL.dim, fill: rgba(CL.dim, .12), base: 0, label: 'DD B&H', fmt: fmtPctAxis }, { pane: 1, type: 'area', y: pk(r.eq), color: CL.dn, fill: rgba(CL.dn, .2), base: 0, label: 'DD strat.', fmt: fmtPctAxis },
     { pane: 2, type: 'area', y: Array.from(r.ex).map((v, i) => i < r.s0 ? null : v), color: CL.cyan, fill: rgba(CL.cyan, .2), base: 0, label: 'Expo', fmt: fmtPctAxis }] }, [r.s0, r.s1]);
   drawFan($('btMc'), mc, P.ruin / 100);

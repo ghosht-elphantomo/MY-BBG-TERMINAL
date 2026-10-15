@@ -50,6 +50,8 @@ PAGES.MONITOR = async (m, alive) => {
 
 /* ------------------------------------------------------------------ BRVM */
 PAGES.BRVM = async (m, alive) => {
+  const tab = tabState('BRVM', 'm'); setTabs(FN_TABS.BRVM, tab, k => { ST.tab.BRVM = k; render(); });
+  if (tab === 'f') return brvmFloat(m, alive);
   const all = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity'), sectors = [...new Set(all.map(s => s.grp))].sort();
   const idx = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Index').sort((a, b) => legacy(a) - legacy(b));
   const st = ST.brvm, rows0 = st.sector === 'ALL' ? all : all.filter(s => s.grp === st.sector);
@@ -83,6 +85,33 @@ PAGES.BRVM = async (m, alive) => {
   const ch = new TSChart($('brB'), { panes: [{ h: 1.4, log: true, title: 'BRVM COMPOSITE' }, { h: 1, fixed: [0, 1], fmt: fmtPctAxis, refs: [{ v: .7, color: CL.up }, { v: .3, color: CL.dn }], title: '% > SMA200 / SMA50' }, { h: .7, title: 'NOUV. PLUS HAUTS − PLUS BAS' }] });
   ch.set({ x: B.d, series: [{ y: cy, color: CL.white, label: 'BRVMC' }, { pane: 1, y: B.a200, color: CL.amber, label: '>SMA200', fmt: fmtPctAxis }, { pane: 1, y: B.a50, color: CL.cyan, label: '>SMA50', w: 1, fmt: fmtPctAxis }, { pane: 2, type: 'bar', y: hl, colorFn: v => v >= 0 ? CL.up : CL.dn, label: 'H−B', fmt: v => num(v, 0) }] }, [B.d.length - 1260, B.d.length - 1]);
 };
+
+/* ------------------------------------------------------------------ BRVM · flottant officiel (avis de la BRVM, dernier publié) */
+async function brvmFloat(m, alive) {
+  setTitle('BRVM Overview · Free Float');
+  const F = await getJSON('flottant.json').catch(() => null); if (!alive()) return;
+  if (!F || !F.rows) { m.innerHTML = pn('Flottant officiel', 'BRVM', '<div class="empty">Aucun avis de flottant lu pour l’instant (lecture chaque soir des avis de la BRVM).</div>'); return; }
+  const all = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity'), st = ST.flo = ST.flo || { sort: { k: 'pct', dir: -1 } };
+  const R = all.map(s => { const r = F.rows[s.id]; const mc = r && s.last ? r.flt * s.last : null;
+    return { id: s.id, short: s.short || s.n, grp: s.grp, sh: r ? r.sh : null, flt: r ? r.flt : null, pct: r ? r.pct : null, ok15: r ? r.ok15 : null, shnow: s.shares, fnow: s.float, capf: mc, last: s.last, nd: !r }; });
+  const rk = sortRows(R, st.sort), nd = R.filter(x => x.nd), nok = R.filter(x => x.ok15 === false);
+  const capF = R.reduce((a, x) => a + (x.capf || 0), 0), capT = all.reduce((a, s) => a + (s.mcap || 0), 0);
+  const cols = [['id', 'Titre', 1], ['short', 'Société', 1], ['grp', 'Secteur', 1], ['sh', 'Titres (avis)'], ['flt', 'Titres flottants'], ['pct', 'Flottant %'], ['ok15', 'Seuil 15 %'], ['fnow', 'Flottant du jour %'], ['capf', 'Capi. flottante (Md)']];
+  m.innerHTML = `<div class="grid side">
+    ${pn(`Flottant officiel des sociétés cotées${F.asof ? ' au ' + esc(F.asof) : ''}`, 'BRVM', `<div class="tw" style="max-height:62vh"><table class="t" id="floT"><thead><tr>${thSort(cols, st.sort)}</tr></thead><tbody>
+      ${rk.map(x => `<tr data-sec="${x.id}" data-to="DES" class="${x.ok15 === false ? 'hl' : ''}"><td class="l tk">${x.id}</td><td class="l nm">${esc(x.short)}</td><td class="l dm">${esc(x.grp || '')}</td>
+        <td>${x.sh != null ? num(x.sh, 0) : '<span class="dm" title="ligne illisible dans l’avis">n.d.</span>'}</td><td>${x.flt != null ? num(x.flt, 0) : '<span class="dm">n.d.</span>'}</td><td class="wh">${x.pct != null ? num(x.pct, 2) + ' %' : '<span class="dm">n.d.</span>'}</td>
+        <td>${x.ok15 == null ? '<span class="dm">—</span>' : x.ok15 ? '<span class="up">respecté</span>' : '<span class="dn">non respecté</span>'}</td><td class="dm">${x.fnow != null ? num(x.fnow, 2) + ' %' : '—'}</td><td>${x.capf ? num(x.capf / 1e9, 1) : '—'}</td></tr>`).join('')}</tbody></table></div>`,
+      { np: true, sel: `avis publié le ${fds(F.d)} · ${R.length - nd.length} sociétés lues sur ${R.length}`, tools: F.u ? `<a href="${esc(F.u)}" target="_blank" rel="noopener" class="tb alt">Avis officiel (PDF)</a>` : '',
+        lect: `Flottant = part du capital détenue par le public, déclarée par les émetteurs et les SGI registraires, publiée par la BRVM (Instruction n° 01-2022/BRVM/DG) ; le seuil réglementaire est de 15 % du capital. <b>Flottant du jour</b> = capitalisation flottante ÷ capitalisation globale de la séance (brvm.org). <b>Capi. flottante</b> = titres flottants de l’avis × dernier cours. ${nd.length ? 'Lignes <b>n.d.</b> : illisibles dans le document scanné (' + nd.map(x => x.id).join(', ') + ') — rien n’est estimé.' : ''}` })}
+    <div class="grid" style="align-content:start">
+      ${pn('Synthèse', 'BRVM', `<div class="kv2"><span>Sociétés sous le seuil de 15 %</span><b class="${nok.length ? 'dn' : ''}">${nok.length}${nok.length ? ' · ' + nok.map(x => x.id).join(', ') : ''}</b><span>Flottant médian</span><b>${(() => { const v = R.map(x => x.pct).filter(x => x != null).sort((a, b) => a - b); return v.length ? num(v[Math.floor(v.length / 2)], 1) + ' %' : '—'; })()}</b><span>Capitalisation flottante totale</span><b>${big(capF)} XOF</b><span>Capitalisation totale du marché</span><b>${big(capT)} XOF</b><span>Flottant global pondéré</span><b>${capT ? num(capF / capT * 100, 1) + ' %' : '—'}</b></div>`)}
+      ${pn('Flottant par société (%)', 'BRVM', cvb('floB', Math.max(300, R.length * 15)))}
+    </div></div>`;
+  m.querySelectorAll('#floT th[data-k]').forEach(th => th.onclick = () => { const k = th.dataset.k; st.sort = { k, dir: st.sort.k === k ? -st.sort.dir : -1 }; render(); });
+  const L = R.filter(x => x.pct != null).sort((a, b) => b.pct - a.pct);
+  hbars($('floB'), L.map(x => x.id), L.map(x => x.pct), v => num(v, 1) + ' %', 15);
+}
 
 /* ------------------------------------------------------------------ GP (style Bloomberg par défaut : aire bleu nuit, ligne blanche, cartouche
    Dernier / Plus haut / Moyenne / Plus bas sur la période affichée, volume en dessous ; bougies, ligne, aire et études toujours disponibles) */

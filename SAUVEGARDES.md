@@ -23,3 +23,4 @@ demander « reviens au point de restauration du … » ; le code de ce point est
 | 13/10/2026 22 h 55 | Avant : capitalisations US unifiées (fractionnements, ADR), montants officiels BRVM, mises en page FA/RV | `0ff9e279d5788e2e595e56005a0a435def131710` | `efeeb31268e3bc8a1da51d956ee47deccf48f1e3` |
 | 13/10/2026 22 h 45 | Avant le déplacement des objectifs des analystes US de EVTS vers EA (doublon) | `a4add8b93210866cf80c9549d20f4b6a2ee99768` | `efeeb31268e3bc8a1da51d956ee47deccf48f1e3` |
 | 14/10/2026 09 h 30 | Avant : dividendes d'après les avis officiels lus dans les PDF (rectificatifs compris), retrait du contrôle par le calendrier | `3fdabbc4627b8deed913fc3f62798804834d179f` | `87d76c1096abb5467fbfdd045ecb89a77d3973eb` |
+| 15/10/2026 14 h 30 | Avant l'audit de sécurité, le flottant officiel, STOCK BONDS, BTST dividendes réinvestis, NOT et SGI | `823c9534a7646909de5481face94097c070921e4` | `87d76c1096abb5467fbfdd045ecb89a77d3973eb` |
