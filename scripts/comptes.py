@@ -960,10 +960,11 @@ def unit_choice(P, items, y):
             and set(SECS.get(k, ())) & {S_ACT, S_PAS}]
     if tot and bs_v and abs(tot) < max(bs_v) * 0.9:
         tot = None  # total plus petit qu'un poste du bilan : mal lu
+    # (le plus grand bilan de la cote dépasse à peine 15 000 milliards de FCFA, le plus grand chiffre d'affaires 2 000 milliards)
     if tot:
-        cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 3e8 <= abs(tot) * u <= 6e13]
+        cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 3e8 <= abs(tot) * u <= 3e13]
     elif ca:
-        cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 5e7 <= abs(ca) * u <= 1e13]
+        cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 5e7 <= abs(ca) * u <= 5e12]
     else:
         cands = []
     if allv:  # aucun montant au-delà de 100 000 milliards de FCFA
@@ -1125,6 +1126,28 @@ def consolidate(cj, mirror=None):
     def mirror_v(t, y, k):
         mk = MK.get(k)
         return (((mirror or {}).get(t) or {}).get(mk) or {}).get(str(y)) if mk else None
+    def scaled(v, o):
+        return any(abs(abs(v / o) - f) <= f * 0.005 for f in (1e3, 1e-3, 1e6, 1e-6))
+    keep_ = []
+    for x in recs:
+        # tout l'exercice dans une autre unité que les autres sources (identités vérifiées quelle que soit l'unité) : écarté
+        # (seulement face à une valeur confirmée par deux autres sources)
+        n_sc = n_eq = 0
+        for k in ("total_actif", "total_passif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres", "rao", "ebe"):
+            v = x["m"].get(k)
+            os_ = list(pool.get((x["t"], x["y"], k), [])) + ([mirror_v(x["t"], x["y"], k)] if mirror_v(x["t"], x["y"], k) else [])
+            if v in os_:
+                os_.remove(v)  # (sa propre valeur)
+            if not v or not os_:
+                continue
+            if any(abs(v - o) <= max(0.5, abs(o) * 0.005) for o in os_):
+                n_eq += 1
+            elif any(scaled(v, o) and sum(1 for o2 in os_ if abs(o2 - o) <= max(0.5, abs(o) * 0.005)) >= 2 for o in os_):
+                n_sc += 1
+        if n_sc >= 2 and n_eq == 0:
+            continue
+        keep_.append(x)
+    recs = keep_
     for x in recs:
         for k in list(x["m"]):
             v = x["m"][k]
@@ -1193,6 +1216,9 @@ def consolidate(cj, mirror=None):
         res = {}
         for y in sorted({x["y"] for x in groups[main]}):
             cand = sorted([x for x in groups[main] if x["y"] == y], key=lambda x: x["rank"], reverse=True)
+            # document principal de l'exercice : en couche texte, ses propres comptes, définitifs de préférence ; ses montants
+            # sont gardés ensemble (un exercice cohérent), les autres documents complètent les postes qu'il n'a pas
+            prim = max(cand, key=lambda x: (not x["ocr"], x["rank"][0], x["rank"][1], len(x["vk"]), x["rank"][2]))
             v, nsrc = {}, {}
             for k in sorted({k for x in cand for k in x["m"]}):
                 vals = {}
@@ -1213,8 +1239,38 @@ def consolidate(cj, mirror=None):
                     # provisoires à des comptes définitifs, ni la colonne N-1 de l'exercice suivant aux comptes de l'exercice
                     o["m"] = 1 if mv and abs(z - mv) <= abs(mv) * 0.005 + 0.5 and o["rank"][:2] >= fin_ else 0
                 best_v = max(vals, key=lambda z: (vals[z]["ver"], vals[z]["txt"], vals[z]["n"] + vals[z]["m"], vals[z]["rank"]))
+                if k in prim["m"] and k in prim["vk"]:
+                    # montant vérifié du document principal : gardé avec les autres membres de ses identités
+                    best_v = next(z for z in vals if abs(z - prim["m"][k]) <= max(0.5, abs(z) * 0.001))
                 v[k] = best_v
                 nsrc[k] = vals[best_v]["n"]
+            # les deux membres d'une identité (total de l'actif et du passif, résultat du compte de résultat et du bilan) viennent
+            # d'un même document quand les sources divergent ; sinon le second est retiré
+            for a_k, b_k in (("total_actif", "total_passif"), ("resultat_net", "resultat_bilan")):
+                if v.get(a_k) is None or v.get(b_k) is None or abs(v[a_k] - v[b_k]) <= max(0.5, abs(v[a_k]) * 0.001):
+                    continue
+                both = [x for x in cand if x["m"].get(a_k) is not None and x["m"].get(b_k) is not None
+                        and abs(x["m"][a_k] - x["m"][b_k]) <= max(0.5, abs(x["m"][a_k]) * 0.001)]
+                if a_k in prim["m"] and b_k not in prim["m"]:
+                    del v[b_k]  # (le document principal n'a que le premier membre)
+                elif both:
+                    x0 = max(both, key=lambda x: (x is prim, a_k in x["vk"], not x["ocr"], x["rank"]))
+                    v[a_k], v[b_k] = x0["m"][a_k], x0["m"][b_k]
+                else:
+                    del v[b_k]
+            # contrôle final de l'exercice reconstitué : une identité qui ne se vérifie plus (montants de documents différents)
+            # -> les montants du document principal reprennent la main ; les postes d'autres documents encore en cause sont retirés
+            def bad_ids(v_):
+                it_ = {k_: {0: val_} for k_, val_ in v_.items()}
+                return [n_ for n_, r_ in checks(it_, 0) if r_ is not None and r_ > 0.002 and n_ in IDENT_KEYS]
+            if bad_ids(v):
+                for k_ in prim["m"]:
+                    if k_ in v:
+                        v[k_] = prim["m"][k_]
+                for n_ in bad_ids(v):
+                    for k_ in IDENT_KEYS[n_]:
+                        if k_ in v and k_ not in prim["m"]:
+                            del v[k_]
             best = cand[0]
             res[y] = {"v": v, "n": max(nsrc.get(k, 1) for k in ("total_actif", "resultat_net") if k in nsrc) if any(k in nsrc for k in ("total_actif", "resultat_net")) else 1,
                       "d": best["d"], "own": best["rank"][0], "ns": nsrc}
