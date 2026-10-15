@@ -27,9 +27,9 @@ S_ACT, S_PAS, S_CR, S_FLX = "actif", "passif", "cr", "flux"
 ITEMS = [
     # ---- bilan actif (SYSCOHADA)
     ("charges_immobilisees", (S_ACT,), r"^charges immobilisees$"),
-    ("immo_incorp", (S_ACT,), r"^immobilisations incorporelles(?: nettes| brutes)?$"),
-    ("immo_corp", (S_ACT,), r"^immobilisations corporelles(?: nettes| brutes)?$"),
-    ("immo_fin", (S_ACT,), r"^immobilisations financieres(?: nettes| brutes)?$"),
+    ("immo_incorp", (S_ACT,), r"^immobilisations incorporelles(?: nettes)?$"),
+    ("immo_corp", (S_ACT,), r"^immobilisations corporelles(?: nettes)?$"),
+    ("immo_fin", (S_ACT,), r"^immobilisations financieres(?: nettes)?$"),
     ("actif_immobilise", (S_ACT,), r"^(?:total )?actif immobilise(?: net)?$|^total (?:de l.)?actif immobilise(?: net)?$|^total immobilisations(?: nettes)?$"),
     ("actif_circulant_hao", (S_ACT,), r"^actif circulant h\.?a\.?o\.?$"),
     ("stocks", (S_ACT,), r"^stocks?(?: et en.?cours| de marchandises)?$"),
@@ -117,9 +117,13 @@ ITEM_KEYS = [k for k, _, _ in ITEMS] + ["resultat_bilan"]
 
 # références SYSCOHADA (ancien et révisé) dont le sens ne change pas d'un plan à l'autre
 REF_CODES = {"AZ": "actif_immobilise", "BK": "actif_circulant", "BT": "tresorerie_actif", "BZ": "total_actif", "CA": "capital",
-             "CP": "capitaux_propres", "DD": "dettes_financieres", "DF": "ressources_stables", "DP": "passif_circulant",
+             "CP": "capitaux_propres", "DP": "passif_circulant",
              "DT": "tresorerie_passif", "DZ": "total_passif", "XA": "marge_commerciale", "XC": "valeur_ajoutee", "XD": "ebe",
              "XE": "resultat_exploitation", "XF": "resultat_financier", "XG": "rao", "XH": "rhao", "XI": "resultat_net"}
+# références dont le sens diffère entre l'ancien plan (DF = total des dettes financières, DG = total des ressources stables,
+# CI = résultat de l'exercice au bilan) et le plan révisé (DD, DF, CJ) : le libellé tranche, sinon le plan reconnu
+REF_CODES_AMBIG = {"DD": ("dettes_financieres", None), "DF": ("ressources_stables", "dettes_financieres"), "DG": (None, "ressources_stables"),
+                   "CI": (None, "resultat_bilan"), "CJ": ("resultat_bilan", None)}
 # plan révisé (2018 et après) seulement
 REF_CODES_REV = {"XB": "chiffre_affaires", "CJ": "resultat_bilan", "RK": "charges_personnel", "RS": "impots_resultat", "RQ": "participation",
                  "TA": "ventes_marchandises", "TB": "ventes_produits", "TC": "travaux_services", "TD": "produits_accessoires",
@@ -138,6 +142,7 @@ SPACE = "   "
 
 def nrm(x):
     x = re.sub(r"[’‘`´ʼ]", "'", x)
+    x = re.sub(r"[–—‐‑−]", "-", x)  # tirets typographiques (« N–1 »)
     return unicodedata.normalize("NFKD", x).encode("ascii", "ignore").decode().lower()
 
 
@@ -646,6 +651,17 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             key = None
             if code_ and re.fullmatch(r"[A-Z]{2}", code_):
                 key = REF_CODES.get(code_) or (REF_CODES_REV.get(code_) if revised else None)
+                if key is None and code_ in REF_CODES_AMBIG:
+                    k_rev, k_old = REF_CODES_AMBIG[code_]
+                    for lab_ in cands:  # le libellé tranche entre les deux plans
+                        for kk in (k_rev, k_old):
+                            if kk and kk != "resultat_bilan" and next(rx for k2, _, rx in ITEM_RX if k2 == kk).search(lab_):
+                                key = kk
+                                break
+                        if key:
+                            break
+                    if key is None:
+                        key = k_rev if revised else k_old
                 if key == "resultat_net" and s_here == S_PAS:
                     key = "resultat_bilan"
             if key is None and not labn and si > 0 and s_here == S_PAS and \
@@ -1210,6 +1226,16 @@ IDENT_KEYS = {"actif = passif": ("total_actif", "total_passif"), "résultat CR =
               "CA = somme des ventes": ("chiffre_affaires", "ventes_marchandises", "ventes_produits", "travaux_services", "produits_accessoires")}
 
 
+# sommes de postes vérifiées entre documents à la consolidation (parties, total)
+SOFT_SUMS = ((("ventes_marchandises", "ventes_produits", "travaux_services", "produits_accessoires"), "chiffre_affaires"),
+             (("charges_immobilisees", "immo_incorp", "immo_corp", "immo_fin"), "actif_immobilise"),
+             (("actif_circulant_hao", "stocks", "creances"), "actif_circulant"),
+             (("actif_immobilise", "actif_circulant", "tresorerie_actif"), "total_actif"),
+             (("capitaux_propres", "dettes_financieres"), "ressources_stables"),
+             (("ressources_stables", "passif_circulant", "tresorerie_passif"), "total_passif"),
+             (("flux_operationnels", "flux_investissement", "flux_financement"), "variation_tresorerie"))
+
+
 # ---------------------------------------------------------------- consolidation : un jeu de comptes par société et par exercice
 # documents d'une autre entité classés sous le titre : PH-CI (sous Palm CI), SDA CI (sous Bolloré Transport & Logistics CI),
 # SARI CI (sous CFAO Motors CI)
@@ -1594,6 +1620,25 @@ def consolidate(cj, mirror=None):
                     for n_ in bad_ids(v):
                         for k_ in IDENT_KEYS[n_]:
                             if k_ in v and k_ not in prim["m"]:
+                                del v[k_]
+                # sommes de postes (ventes = chiffre d'affaires, immobilisations, masses du bilan, flux) : les membres viennent du même
+                # document ; quand des documents différents donnent des découpages différents, les postes étrangers au document
+                # principal sont retirés
+                def src_of(k_):
+                    return {x["doc"] for x in cand if x["m"].get(k_) is not None and abs(x["m"][k_] - v[k_]) <= max(0.5, abs(v[k_]) * 0.001)}
+                for parts_, tot_ in SOFT_SUMS:
+                    ks_ = [k_ for k_ in parts_ + (tot_,) if v.get(k_) is not None]
+                    if v.get(tot_) is None or len(ks_) < 3:
+                        continue
+                    s_ = sum((-abs(v[k_]) if k_ in CHARGES else v[k_]) for k_ in parts_ if v.get(k_) is not None)
+                    if abs(s_ - v[tot_]) <= max(1.0, abs(v[tot_]) * 0.005):
+                        continue
+                    if v[tot_] == 0 and abs(s_) > 1.0:
+                        del v[tot_]  # (un total nul face à des composantes non nulles : tiret lu comme un zéro)
+                        continue
+                    if not all(prim["doc"] in src_of(k_) for k_ in ks_):
+                        for k_ in ks_:
+                            if prim["doc"] not in src_of(k_):
                                 del v[k_]
                 # solidité de chaque montant retenu : membre d'une identité vérifiée de son document, ou donné à l'identique par au
                 # moins deux documents, ou par la base de référence. Un montant isolé qui contredit la base de référence n'est pas
