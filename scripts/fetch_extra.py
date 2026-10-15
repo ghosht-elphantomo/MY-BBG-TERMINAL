@@ -2760,8 +2760,17 @@ def run_flottant(raw, site_data):
 
 # ------------------------------------------------------------------ notations financières (Bloomfield, WARA / EMR, GCR) publiées sur brvm.org
 GRADE = r"(?:AAA|AA\+|AA-|AA|A\+|A-|A|BBB\+|BBB-|BBB|BB\+|BB-|BB|B\+|B-|B|CCC\+|CCC-|CCC|CC|C|D|SD)"
-GRADE_ST = r"(?:A1\+|A1|A2|A3|B|C|D)"
-SUFFIX = r"(?:\s*\((?:WU|WA|SN|CI|BF|ML|NE|TG|BJ|GW|UEMOA)\))?(?:\s*\(SF\))?"
+GRADE_ST = r"(?:A1\+|A1-|A1|A2\+|A2-|A2|A3\+|A3-|A3|B|C|D)"
+SUFFIX = r"(?:\s*\((?:WU|WA|SN|CI|BF|ML|NE|TG|BJ|GW|UEMOA|SF|EL)\)){0,3}"
+
+
+RATING_PV = 2  # version du lecteur : une fiche lue par une version antérieure est relue
+
+
+def _grades(x, g_re):
+    """Notes présentes dans un texte, sans confondre une initiale (« Câbles », « Côte », « N/A ») avec une note."""
+    gs = re.findall(r"(?<![\w/])(" + g_re + SUFFIX + r")(?![\w/])", x, re.I)
+    return [g.upper().replace(" ", "") for g in gs if not re.fullmatch(r"(?i)(CFA|SF)", g)]
 
 
 def rating_parse(txt):
@@ -2769,50 +2778,72 @@ def rating_parse(txt):
     Rien n'est déduit : un champ absent du document reste vide."""
     t = re.sub(r"[’‘]", "'", txt)
     n = _nrm(t)
-    r = {}
+    r = {"pv": RATING_PV}
     ag = ("Bloomfield" if "bloomfield" in n else "WARA" if re.search(r"\bwara\b|west africa rating", n) else "GCR" if re.search(r"\bgcr\b", n)
           else "Moody's" if "moody" in n else "S&P" if re.search(r"standard\s*&\s*poor|s&p global", n) else "Fitch" if "fitch" in n else None)
     if ag:
         r["ag"] = ag
     lines = [re.sub(r"\s+", " ", x).strip() for x in t.splitlines() if x.strip()]
-    # fiches (Bloomfield, WARA) : ligne « Long Terme … note1 note2 date perspective » ; l'ordre note actuelle / précédente vient de l'en-tête
     hdr = next((x for x in lines if re.search(r"note (actu|pr[eé]c)", x, re.I)), "")
-    prev_first = bool(hdr) and bool(re.search(r"pr[eé]c", hdr, re.I)) and hdr.lower().find("pr") < hdr.lower().find("actu") if hdr and re.search(r"actu", hdr, re.I) else False
-    for key, pat in (("lt", r"long\s*terme"), ("st", r"court\s*terme")):
-        g_re = GRADE if key == "lt" else GRADE_ST
-        for x in lines:
-            if not re.search(pat, x, re.I) or re.search(r"^(sur le|notation de|note de) ", x, re.I):
+    if hdr:
+        # fiches (Bloomfield, WARA) : ligne « Long Terme … note1 note2 date perspective » ; l'ordre note actuelle / précédente vient de l'en-tête
+        prev_first = bool(re.search(r"actu", hdr, re.I)) and hdr.lower().find("pr") < hdr.lower().find("actu")
+        for key, pat in (("lt", r"long\s*terme"), ("st", r"court\s*terme")):
+            g_re = GRADE if key == "lt" else GRADE_ST
+            for x in lines:
+                if not re.search(pat, x, re.I) or re.search(r"^(sur le|notation de|note de) ", x, re.I):
+                    continue
+                gs = _grades(x, g_re)
+                if not gs:
+                    continue
+                cur, prv = (gs[1], gs[0]) if prev_first and len(gs) > 1 else (gs[0], gs[1] if len(gs) > 1 else None)
+                r[key] = cur
+                if prv:
+                    r[key + "0"] = prv
+                d = re.search(r"(\d{2})/(\d{2})/(20\d\d)", x)
+                if d:
+                    r["exp"] = f"{d.group(3)}-{d.group(2)}-{d.group(1)}"
+                o = re.search(r"(stable|positive|n[eé]gative|en (?:cours de )?(?:r[eé]vision|observation)|d[eé]veloppement)", x, re.I)
+                if o and "out" not in r:  # perspective de la note long terme (lue en premier)
+                    r["out"] = o.group(1).lower().replace("é", "e")
+                break
+    else:
+        # communiqués (GCR, WARA) : la phrase d'action fait foi (« rehausse … de A(WU) à AA-(WU) », « affirme … de A+(WU) »),
+        # puis, à défaut, la première ligne du tableau « Emetteur de long terme | Régionale | AA-(WU) | Stable »
+        flat = re.sub(r"\s+", " ", n)
+        for key, word, g_re in (("lt", "long", GRADE), ("st", "court", GRADE_ST)):
+            G = "(" + g_re + SUFFIX + ")"
+            head = r"de " + word + r" terme[^.]{0,160}?"
+            m = re.search(head + r"\bde " + G + r"(?![\w/]) a " + G + r"(?![\w/])", flat, re.I)
+            if m:
+                r[key + "0"], r[key] = (_grades(m.group(1), g_re) or [None])[0], (_grades(m.group(2), g_re) or [None])[0]
                 continue
-            gs = re.findall(r"(?<![A-Za-z0-9])(" + g_re + SUFFIX + r")(?![A-Za-z0-9])", x)
-            gs = [g for g in gs if not re.fullmatch(r"(?i)(CFA|SF)", g)]
-            if not gs:
+            m = re.search(head + r"\ba " + G + r"(?![\w/]) de " + G + r"(?![\w/])", flat, re.I)
+            if m:
+                r[key], r[key + "0"] = (_grades(m.group(1), g_re) or [None])[0], (_grades(m.group(2), g_re) or [None])[0]
                 continue
-            cur, prv = (gs[1], gs[0]) if prev_first and len(gs) > 1 else (gs[0], gs[1] if len(gs) > 1 else None)
-            r[key] = cur.replace(" ", "")
-            if prv:
-                r[key + "0"] = prv.replace(" ", "")
-            d = re.search(r"(\d{2})/(\d{2})/(20\d\d)", x)
-            if d:
-                r["exp"] = f"{d.group(3)}-{d.group(2)}-{d.group(1)}"
-            o = re.search(r"(stable|positive|n[eé]gative|en (?:cours de )?(?:r[eé]vision|observation)|d[eé]veloppement)", x, re.I)
-            if o:
-                r["out"] = o.group(1).lower().replace("é", "e")
-            break
-    # communiqués (GCR, WARA) : « notation … de long terme de AA+(WU) » ; « perspective … stable »
-    if "lt" not in r:
-        m = re.search(r"long terme\s*(?:de|:|a|est|at)?\s*(?:de\s+)?(" + GRADE + SUFFIX + ")", n)
-        if m:
-            r["lt"] = m.group(1).upper().replace(" ", "")
-    if "st" not in r:
-        m = re.search(r"court terme\s*(?:de|:|a|est)?\s*(?:de\s+)?(" + GRADE_ST + SUFFIX + ")", n)
-        if m:
-            r["st"] = m.group(1).upper().replace(" ", "")
-    if "out" not in r:
-        m = re.search(r"perspective[^.]{0,80}?\b(stable|positive|negative)\b", n)
+            m = re.search(head + r"\bde " + G + r"(?![\w/])", flat, re.I) or re.search(r"de " + word + r" terme\s+" + G + r"(?![\w/])", flat, re.I)
+            if m:
+                r[key] = (_grades(m.group(1), g_re) or [None])[0]
+                if re.search(r"(affirm|confirm|maint|plac)[^.]{0,80}" + head, flat, re.I):
+                    r[key + "0"] = r[key]
+                continue
+            for x in lines:
+                if re.search(r"(?i)(e|é)metteur de " + word + r" terme|note de " + word + r" terme", x) and not re.search(r"(?i)(rehauss|abaiss|affirm|attribu|relev|plac)", x):
+                    gs = _grades(x, g_re)
+                    if gs:
+                        r[key] = gs[-1]
+                        break
+        for k in ("lt", "lt0", "st", "st0"):
+            if not r.get(k):
+                r.pop(k, None)
+    if "out" not in r:  # « la perspective passe de positive à stable » : la nouvelle perspective est la seconde
+        m = re.search(r"perspective[^.]{0,60}?passe (?:de |d')\s*\w+ a (stable|positive|negative)\b", n) or \
+            re.search(r"perspective[^.]{0,80}?\b(stable|positive|negative)\b", n)
         if m:
             r["out"] = m.group(1)
     v = re.search(r"validit[eé]\s*:?\s*([^\n]{6,60})", t, re.I)
-    if v:
+    if v and re.search(r"20\d\d", v.group(1)):  # période de validité datée (fiches), pas une phrase du communiqué
         r["val"] = v.group(1).strip()
     if re.search(r"echelle regionale|\(wu\)", n):
         r["scale"] = "régionale"
@@ -2821,7 +2852,7 @@ def rating_parse(txt):
     return r if "lt" in r or "st" in r else None
 
 
-def run_ratings(raw, site_data, limit=80):
+def run_ratings(raw, site_data, limit=200):
     """Notices de notation publiées sur brvm.org (sociétés cotées et émetteurs d'obligations) : PDF lus (texte, sinon OCR) et notes extraites.
     Lecture incrémentale : `limit` nouveaux documents par passage ; le reste suit les soirs suivants."""
     path = os.path.join(raw, "ratings.json")
@@ -2840,7 +2871,7 @@ def run_ratings(raw, site_data, limit=80):
         for u, r in (json.load(open(av, encoding="utf8")).get("items") or {}).items():
             if r.get("k") == "notation" or r.get("c") == "Notation financière":
                 todo.setdefault(u, {"t": None, "soc": r.get("soc"), "d": r.get("d"), "ti": r.get("ti")})
-    new = [u for u in sorted(todo, key=lambda u: todo[u].get("d") or "", reverse=True) if u not in docs][:limit]
+    new = [u for u in sorted(todo, key=lambda u: todo[u].get("d") or "", reverse=True) if u not in docs or (docs[u].get("pv") or 1) < RATING_PV][:limit]
     if new and not pdf_tools():
         return
     n_ok = 0
@@ -2849,10 +2880,10 @@ def run_ratings(raw, site_data, limit=80):
         try:
             txt = avis_text(u)
             r = rating_parse(txt) or {}
-            docs[u] = {**meta, **r, "read": TODAY.isoformat()}
+            docs[u] = {**meta, **r, "pv": RATING_PV, "read": TODAY.isoformat()}
             n_ok += bool(r)
         except Exception as e:  # noqa: BLE001
-            docs[u] = {**meta, "err": str(e)[:120], "read": TODAY.isoformat()}
+            docs[u] = {**meta, "err": str(e)[:120], "pv": RATING_PV, "read": TODAY.isoformat()}
             note("ratings", False, f"{u[-60:]}: {e}")
     for u, meta in todo.items():  # métadonnées (titre, société) tenues à jour
         if u in docs:

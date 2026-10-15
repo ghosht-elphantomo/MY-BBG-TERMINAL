@@ -970,7 +970,13 @@ def main():
             for u_, r_ in RT.items():
                 if not (r_.get("lt") or r_.get("st")):
                     continue
-                rows_.append({"u": u_, "t": r_.get("t") if r_.get("t") in tick else ev_t.get(u_), "soc": r_.get("soc"), "ti": r_.get("ti"), "d": r_.get("d"), "ag": r_.get("ag"), "lt": r_.get("lt"), "lt0": r_.get("lt0"),
+                # un fonds de titrisation (FCTC, note « (SF) ») n'est pas la société qui l'a créé : rangé avec les émetteurs d'obligations
+                sf_ = "(SF)" in (r_.get("lt") or "") or bool(re.search(r"(?<![a-z])fctc(?![a-z])", ((r_.get("ti") or "") + " " + u_).lower()))
+                t_ = None if sf_ else r_.get("t") if r_.get("t") in tick else ev_t.get(u_)
+                soc_ = r_.get("soc")
+                if not t_ and ":" in (r_.get("ti") or ""):  # émetteur non coté : nom tel qu'il figure dans l'intitulé de l'avis
+                    soc_ = r_["ti"].split(":")[0].strip()
+                rows_.append({"u": u_, "t": t_, "soc": soc_, "ti": r_.get("ti"), "d": r_.get("d"), "ag": r_.get("ag"), "lt": r_.get("lt"), "lt0": r_.get("lt0"),
                               "st": r_.get("st"), "st0": r_.get("st0"), "out": r_.get("out"), "exp": r_.get("exp"), "val": r_.get("val"), "scale": r_.get("scale")})
             rows_.sort(key=lambda x: x.get("d") or "", reverse=True)
             last_ = {}
