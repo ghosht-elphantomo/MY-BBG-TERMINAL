@@ -92,6 +92,15 @@ class Table:
         self.dirty = True
         return "chg"
 
+    def drop(self, pred):
+        """Retire les lignes reconnues invalides (jamais une ligne simplement absente de la source) ; renvoie les clés retirées."""
+        ks = [k for k, r in self.rows.items() if pred(r)]
+        for k in ks:
+            del self.rows[k]
+        if ks:
+            self.dirty = True
+        return ks
+
     def save(self):
         if not self.dirty and os.path.exists(self.path):
             return
@@ -169,6 +178,7 @@ def main():
                 seen[tk] = seen.get(tk, 0) + 1
     keep = brvm_eq | {tk for tk, n in seen.items() if n >= 250}
     years, skipped, n_src = {}, {}, {}
+    prev_rows, dup_days, n_mill = None, [], []
     last_boc = ""
     for f in sorted(glob.glob(os.path.join(a.boc, "[12][0-9][0-9][0-9].json"))):
         y = os.path.basename(f)[:4]
@@ -178,8 +188,13 @@ def main():
         t = years.get(y) or Table(out, f"cours/{y}.csv", COURS, ["date", "titre"])
         n_src[y] = n_src.get(y, 0) + sum(len(v) for v in data.values())
         years[y] = t
-        for d, rows in data.items():
+        for d, rows in sorted(data.items()):
             di = iso(d)
+            # bulletin identique au précédent (jour férié publié sous la date du lendemain, ex. 29/10/2020) : pas une séance
+            if prev_rows is not None and rows == prev_rows:
+                dup_days.append(di)
+                continue
+            prev_rows = rows
             last_boc = max(last_boc, di)
             for tk, vals in rows.items():
                 if not isinstance(vals, list) or tk not in keep:
@@ -189,6 +204,12 @@ def main():
                     if c in BOC_MAP:
                         r[BOC_MAP[c]] = iso(v) if c == "div_d" else v
                 if lisible(r):
+                    # montants d'un milliard et plus imprimés en milliers dans certains bulletins (ex. Sonatel, sept.-oct. 2026) : remis en FCFA
+                    vol_, val_ = fl(r.get("volume")), fl(r.get("valeur"))
+                    px_ = fl(r.get("cloture")) or fl(r.get("ouverture")) or fl(r.get("precedent"))
+                    if vol_ and val_ and px_ and vol_ > 0 and val_ / vol_ < 0.01 * px_ and 0.85 <= val_ * 1000 / vol_ / px_ <= 1.15:
+                        r["valeur"] = val_ * 1000
+                        n_mill.append(f"{di} {tk}")
                     t.upsert(r)
                 else:
                     skipped[y] = skipped.get(y, 0) + 1
@@ -275,6 +296,11 @@ def main():
     # ---------- journal des corrections (cumulatif) ----------
     tco = Table(out, "corrections.csv", ["constate_le", "fichier", "cle", "champ", "ancienne_valeur", "nouvelle_valeur"],
                 ["constate_le", "fichier", "cle", "champ"])
+    for di in dup_days:  # séance inexistante déjà archivée : retirée, et consignée
+        t = years.get(di[:4])
+        for k in (t.drop(lambda r, di=di: r["date"] == di) if t else []):
+            tco.upsert({"constate_le": today, "fichier": t.name, "cle": " | ".join(k), "champ": "ligne", "ancienne_valeur": "séance archivée",
+                        "nouvelle_valeur": "retirée : bulletin identique à celui de la veille (jour sans séance)"})
     for t in tables:
         if t.n0 == 0:  # première alimentation du fichier : rien à corriger
             continue
@@ -382,7 +408,7 @@ def main():
         rules[x["regle"]] = rules.get(x["regle"], 0) + 1
     etat = {"version": VERSION, "maj": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "derniere_seance": last_boc,
             "fichiers": {t.name: {"lignes": len(t.rows), "ajoutees": t.added, "corrigees": len(t.changed)} for t in tables},
-            "bulletins_lignes_non_retenues": skipped, "bulletins_lignes_lues": n_src,
+            "bulletins_lignes_non_retenues": skipped, "bulletins_lignes_lues": n_src, "bulletins_identiques_ecartes": dup_days, "montants_en_milliers_convertis": n_mill,
             "corrections_total": len(tco.rows), "corrections_du_jour": tco.added, "controles": rules}
     with open(os.path.join(out, "etat.json"), "w", encoding="utf-8") as fh:
         json.dump(etat, fh, ensure_ascii=False, indent=1)

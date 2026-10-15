@@ -460,13 +460,18 @@ def main():
                     BOC.setdefault(sym, {})[int(k)] = dict(zip(cols, v))
         log("bulletins officiels :", len(BOC), "titres,", sum(len(v) for v in BOC.values()), "lignes")
     boc_chk = {"n": 0, "diff": 0, "added": 0, "div_added": 0, "by": {}}
-    if BOC:  # dividendes payés lus dans les bulletins, ajoutés quand la base n'a rien à ±10 jours
+    if BOC:  # dividendes payés lus dans les bulletins, ajoutés seulement quand la base n'a aucun versement à ±120 jours
+        # (la date du bulletin peut suivre de plusieurs semaines celle de l'avis : un même dividende ne doit pas compter deux fois ;
+        # un dividende payé en plusieurs fractions espacées de plus de 4 mois reste compté une fois par fraction)
         have_pay = collections.defaultdict(list)
+        have_amt = collections.defaultdict(list)
         for x in divs:
             for kk in ("date_paiement", "date_detachement"):
                 if x.get(kk) and x.get("ticker"):
                     try:
                         have_pay[x["ticker"]].append(dt.date.fromisoformat(x[kk][:10]))
+                        if x.get("dividende"):
+                            have_amt[x["ticker"]].append((dt.date.fromisoformat(x[kk][:10]), float(x["dividende"])))
                     except ValueError:
                         pass
         for sym, days in BOC.items():
@@ -480,7 +485,9 @@ def main():
                     pd_ = dt.date.fromisoformat(r["div_d"])
                 except ValueError:
                     continue
-                if pd_.year < 2008 or any(abs((pd_ - h).days) <= 10 for h in have_pay[sym]):
+                if pd_.year < 2008 or any(abs((pd_ - h).days) <= 120 for h in have_pay[sym]) \
+                        or any(abs((pd_ - h).days) <= 200 and abs(a_ / r["div"] - 1) < .01 for h, a_ in have_amt[sym]):
+                    boc_chk["div_dup"] = boc_chk.get("div_dup", 0) + 1
                     continue
                 divs.append({"ticker": sym, "dividende": r["div"], "date_paiement": r["div_d"], "exercice": pd_.year - 1, "source": "BOC"})
                 have_pay[sym].append(pd_)

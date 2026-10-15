@@ -38,4 +38,6 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
 
 - Cours : bulletins au format actuel depuis fin 2017. Les bulletins plus anciens ont plusieurs mises en page ;
   seules leurs lignes qui se vérifient d'elles-mêmes sont reprises (`etat.json` indique le nombre de lignes non retenues).
+- Un bulletin identique à celui de la veille (publié pour un jour férié, ex. 29/10/2020) n'est pas une séance : il est écarté.
+- Montants d'un milliard de FCFA et plus imprimés en milliers dans certains bulletins : remis en FCFA (liste dans `etat.json`).
 - Les ratios (marges, ROE…) ne sont pas stockés : ils se recalculent à partir de `resultats.csv`.
