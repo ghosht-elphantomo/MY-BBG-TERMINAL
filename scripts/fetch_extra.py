@@ -1111,8 +1111,15 @@ def run_comptes(out):
         note("comptes", False, "outils PDF absents")
         return
     n_new = n_ocr = 0
+    # seconde lecture des documents numérisés encore non vérifiés : un tiers du passage lui est réservé tant qu'il en reste
+    try:
+        st_ = {u: r.get("st") for u, r in json.load(open(os.path.join(out, "comptes.json"), encoding="utf8")).get("docs", {}).items()}
+    except Exception:  # noqa: BLE001
+        st_ = {}
+    n_re_wait = sum(1 for u, m in docs.items() if m.get("ocr") and not m.get("ocr4") and m.get("st") == "lu" and m.get("n_err4", 0) < 2 and st_.get(u) != "ok")
+    budget_new = budget - (min(budget / 3, 300 + 150 * n_re_wait) if n_re_wait else 0)
     for e in todo:
-        if time.time() - t0 > budget:
+        if time.time() - t0 > budget_new:
             break
         u = e["document_url"]
         h = hashlib.sha1(u.encode()).hexdigest()[:16]
@@ -1157,7 +1164,7 @@ def run_comptes(out):
             except Exception as ex:  # noqa: BLE001
                 rec["st0"] = f"lecture : {str(ex)[:60]}"
             # couche texte absente, illisible ou incomplète : reconnaissance de caractères des pages des états
-            if not ok_text and time.time() - t0 > budget - 240:
+            if not ok_text and time.time() - t0 > budget_new - 240:
                 break  # plus le temps de lire ce document par reconnaissance de caractères : il sera repris au passage suivant
             if not ok_text:
                 ocr_pages = cpt_ocr_pages(p_, pages, keep, rec, td)
@@ -1171,7 +1178,7 @@ def run_comptes(out):
                         n_ocr += 1
                         # première lecture insuffisante : seconde lecture tout de suite (400 dpi, ligne par ligne)
                         r1 = comptes.read_doc({"txt": (body, False), **{k: (v, True) for k, v in o.items()}}, rec)
-                        if not (r1.get("st") == "ok" and r1.get("n", 0) >= 15) and time.time() - t0 < budget - 120:
+                        if not (r1.get("st") == "ok" and r1.get("n", 0) >= 15) and time.time() - t0 < budget_new - 120:
                             o4 = cpt_ocr(p_, ocr_pages, td, psm=4, dpi=400)
                             for lang, t_ in o4.items():
                                 with gzip.open(os.path.join(out, "txt", f"{h}.{lang}4.gz"), "wt", encoding="utf8") as f:
@@ -1188,16 +1195,12 @@ def run_comptes(out):
     # seconde lecture des documents numérisés (une fois chacun) : 400 dpi, ligne par ligne (fra4, eng4) ; ceux dont aucun
     # exercice ne se vérifie encore d'abord, les plus récents en premier
     n_re = 0
-    try:
-        st_ = {u: r.get("st") for u, r in json.load(open(os.path.join(out, "comptes.json"), encoding="utf8")).get("docs", {}).items()}
-    except Exception:  # noqa: BLE001
-        st_ = {}
 
     def re_q():
         q_ = [u for u, m in docs.items() if m.get("ocr") and not m.get("ocr4") and m.get("st") == "lu" and m.get("n_err4", 0) < 2]
         return sorted(q_, key=lambda u: (st_.get(u) == "ok", -int(re.sub(r"\D", "", docs[u].get("d") or "0")[:8] or 0)))
-    for u in (re_q() if time.time() - t0 < budget - 600 else []):
-        if time.time() - t0 > budget - 600:
+    for u in (re_q() if time.time() - t0 < budget - 300 else []):
+        if time.time() - t0 > budget - 300:
             break  # (un long document lu à 400 dpi peut prendre plusieurs minutes)
         m = docs[u]
         try:
