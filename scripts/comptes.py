@@ -978,6 +978,11 @@ def unit_choice(P, items, y):
     return None, cands
 
 
+# postes qui varient peu d'un exercice à l'autre (contrôle des chiffres tronqués par la reconnaissance de caractères)
+STABLE = {"chiffre_affaires", "ventes_marchandises", "ventes_produits", "valeur_ajoutee", "charges_personnel", "total_actif", "total_passif",
+          "immo_corp", "immo_incorp", "stocks", "creances", "clients", "fournisseurs", "actif_circulant", "passif_circulant", "actif_immobilise",
+          "capital", "b_pnb", "b_interets_produits", "b_interets_charges", "b_creances_clientele", "b_dettes_clientele", "b_charges_generales"}
+
 # lectures par reconnaissance de caractères : français et anglais, page lue comme un bloc (fra, eng) ou ligne par ligne
 # (fra4, eng4 : mode « colonne de texte » de tesseract, qui garde mieux les lignes des tableaux numérisés)
 OCR_SRC = ("fra", "eng", "fra4", "eng4")
@@ -1031,6 +1036,11 @@ def read_doc(texts, meta):
                 if src in OCR_SRC and k not in ok_id:
                     ovs = [((o_["perims"].get(per) or {}).get(k) or {}).get(y) for o_ in others]
                     if not any(ov is not None and abs(ov - x) <= 0.5 for ov in ovs):
+                        continue
+                    # chiffres tronqués par la lecture (les deux lectures butent sur la même image) : un poste habituellement stable
+                    # vingt fois plus petit que l'autre exercice du même document n'est pas gardé
+                    oy = [v_ for y_, v_ in v.items() if y_ != y and v_]
+                    if k in STABLE and x and oy and abs(oy[0]) >= 1e6 and abs(x / oy[0]) < 0.05:
                         continue
                 rec[k] = abs(x) if k in CHARGES else x
             unit, cands = unit_choice(P, items, y)
