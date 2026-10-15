@@ -73,7 +73,7 @@ ITEMS = [
     ("rao", (S_CR,), r"^resultat des activites ordinaires$|^resultat activites ordinaires$"),
     ("rhao", (S_CR,), r"^resultat hors activites? ordinaires?$|^resultat h\.? ?a\.? ?o\.?$"),
     ("participation", (S_CR,), r"^participation des travailleurs$"),
-    ("impots_resultat", (S_CR,), r"^impots? sur (?:le |les )?(?:resultats?|benefices?|societes)$|^impot sur le resultat$|^charges? d.impots?(?: sur le resultat)?$|^impots? exigibles? et differes?$"),
+    ("impots_resultat", (S_CR,), r"^impots? [sd]ur (?:le |les )?(?:resultats?|benefices?|societes)$|^impot sur le resultat$|^charges? d.impots?(?: sur le resultat)?$|^impots? exigibles? et differes?$"),
     ("perte_nette", (S_CR,), r"^perte(?: nette)?(?: de l.exercice)?$"),
     ("quote_part_mee", (S_CR,), r"^quote.?part (?:dans |du |des )?(?:le |les )?resultats? (?:net )?(?:des |dans les )?(?:societes|entreprises|entites|participations)(?: mises en(?: equivalence)?| associees| en equivalence)?$"),
     ("resultat_avant_impot", (S_CR,), r"^resultat avant impots?(?: sur le resultat| et participation)?$|^resultat (?:net )?avant impots?$"),
@@ -99,7 +99,7 @@ ITEMS = [
     ("b_dettes_interbancaires", (S_PAS,), r"^dettes interbancaires(?: et assimilees)?$"),
     ("b_dettes_clientele", (S_PAS,), r"^dettes a l.egard de la clientele$"),
     ("b_capital", (S_PAS,), r"^capital (?:ou dotation|appele)$|^capital souscrit$"),
-    ("b_resultat_bilan", (S_PAS,), r"^resultat de l.exercice \(\+/-\)$"),
+    ("b_resultat_bilan", (S_PAS,), r"^resultat de l.exercice ?\(\+ ?/ ?-\)$"),
     ("b_interets_produits", (S_CR,), r"^interets et produits assimilee?s$"),
     ("b_interets_charges", (S_CR,), r"^interets et charges assimilees$"),
     ("b_commissions_produits", (S_CR,), r"^commissions \(?produits\)?$"),
@@ -445,11 +445,14 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     pend = []
     single_hint = []
     unit_side, units_seen, unit_at = [None, None], [], -99
+    note_at = -999  # dernière ligne d'en-tête avec une colonne « Note(s) »
     for i, ln in enumerate(lines):
         if "\f" in ln:
             ln = ln.replace("\f", "")
         h = _hdr(ln)
         n_ = nrm(ln).strip()
+        if re.search(r"(?:^|\s{2})(?:notes?|ref\.? notes?)(?:\s{2}|$)", n_) and not re.search(r"\d{3}", n_):
+            note_at = i
         for pos_u, f_u in line_units(nrm(ln)):  # unité de chaque tableau (de chaque côté quand deux tableaux se font face)
             if split and pos_u >= split[0] - 5:
                 unit_side[1] = f_u
@@ -536,6 +539,9 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 lab = c[1]
                 st_ = c[3]
                 j = k + 1
+                if j + 1 < len(cells) and cells[j][0] == "L" and cells[j + 1][0] in ("N", "D") and \
+                        len(re.sub(r"[^A-Za-z]", "", cells[j][1])) <= 3:
+                    j += 1  # référence ou bruit de lecture entre le libellé et ses montants (« CHIFFRE D'AFFAIRES  XB  … »)
                 vals = []
                 while j < len(cells) and cells[j][0] in ("N", "D"):
                     vals.append((cells[j][1], cells[j][2]))
@@ -551,7 +557,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 j += 1
             segs.append((code if not segs else None, "", vals, c[3]))
             k = j
-        if split and split[3] and segs:
+        if split and split[3] and segs and not ocr:
             # « TOTAL ACTIF  x  y   x  y » : les montants au-delà de la limite appartiennent au tableau de droite (sans libellé)
             segs2 = []
             for code_, lab, vals, st_ in segs:
@@ -568,7 +574,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             side_ = 0
             if split and st_ is not None:
                 if si > 0 and segs[si - 1][2] and st_ > 20:  # libellé qui suit des montants : tableau de droite
-                    split[0] = min(split[0], st_)
+                    split[0] = min(split[0], st_) if split[3] else st_  # (la 1re mesure remplace l'estimation tirée du titre)
                     split[3] = True  # limite des deux tableaux vérifiée sur une ligne de montants
                     s_here = split[2]
                     side_ = 1
@@ -583,9 +589,15 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             labn = re.sub(r"^(?:[ivx]+|[a-h]|\d{1,2})[-.)] +", "", labn)  # numérotation « I. », « a) »
             labn = re.sub(r"\s*\(?(?:note|notes)\s*\d+[a-z]?\)?$", "", labn)
             labn = re.sub(r"\s+\d{1,2}(?:\.\d)?$", "", labn)  # numéro de note en fin de libellé
+            # formule de calcul en fin de libellé (« CHIFFRE D'AFFAIRES (A + B + C + D) », « (somme TK à RN) »)
+            labn = re.sub(r"\s*\((?=[^()]*(?:[a-z0-9] ?\+ ?[a-z0-9]|\bsomme\b|\b[a-z]{2} a [a-z]{2}\b))[^)]*\).*$", "", labn)
+            if len(vals) == 4 and vals[0][0] is None and vals[1][0] is not None and float(vals[1][0]).is_integer() \
+                    and 0 < abs(vals[1][0]) < 100 and vals[2][0] is not None and vals[3][0] is not None:
+                vals = vals[2:]  # colonne des signes (« - »), colonne des notes, puis les deux exercices
             nn_ = [v for v, _ in vals if v is not None]
-            if len(nn_) >= 2 and vals[0][0] is not None and float(vals[0][0]).is_integer() and 0 < vals[0][0] < 100 \
-                    and (all(abs(x) >= 10000 for x in nn_[1:]) or (_NOTE_DOT[0] and all(not float(x).is_integer() for x in nn_[1:3]))):
+            if len(nn_) >= 2 and vals[0][0] is not None and float(vals[0][0]).is_integer() and 0 < abs(vals[0][0]) < 100 \
+                    and ((all(abs(x) >= 10000 for x in nn_[1:]) and (len(nn_) >= 3 or i - note_at < 80 or ocr)) or (len(nn_) >= 3 and all(x == 0 for x in nn_[1:]))
+                         or (_NOTE_DOT[0] and all(not float(x).is_integer() for x in nn_[1:3]))):
                 vals = vals[1:]  # colonne des notes
             if not any(v is not None for v, _ in vals):
                 if labn:
@@ -620,14 +632,14 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                         key = {S_ACT: "total_actif", S_PAS: "total_passif"}.get(s_here, None if s_here in (S_CR, S_FLX) else "_total")
                 if key is None:
                     if os.environ.get("CPT_DEBUG2"):
-                        print("   nokey", i, s_here, cands[:3], [v for v, _ in vals])
+                        print("   nokey", i, s_here, cands[:3], [v for v, _ in vals], split, st_)
                     continue
             if key == "resultat_net" and s_here == S_PAS:
                 key = "resultat_bilan"
             if key == "b_resultat_bilan":
                 key = "resultat_bilan"
             yrs, how = _assign(vals, [] if ocr else heads, i, fy, brut_tbl and s_here == S_ACT)
-            if how == "order" and not split and len([v for v, _ in vals if v is not None]) > 4:
+            if how == "order" and not split and len(vals) > 4:
                 continue  # tableau à plusieurs colonnes (par secteur, variation des capitaux propres…) : colonnes inconnues
             if how == "var":
                 order_votes.append(yrs)
@@ -1127,13 +1139,15 @@ def consolidate(cj, mirror=None):
     def same(a_, b_):
         return a_ is not None and b_ is not None and abs(a_ - b_) <= max(0.5, abs(b_) * 0.001)
 
-    def support(x, y):
+    def support(x, y, peers=False):
         n_ = 0
         for k in KEYC:
             v = x["m"].get(k)
             if v is None:
                 continue
-            if any(o is not x and o["doc"] != x["doc"] and same(v, o["m"].get(k)) for o in idx_ty.get((x["t"], y), [])):
+            # (pour juger un décalage d'années, une lecture par reconnaissance de caractères ne contredit pas une couche texte)
+            if any(o is not x and o["doc"] != x["doc"] and same(v, o["m"].get(k)) and not (peers and o["ocr"] and not x["ocr"])
+                   for o in idx_ty.get((x["t"], y), [])):
                 n_ += 1
             elif same(v, mirror_v(x["t"], y, k)) or (mirror_v(x["t"], y, k) is not None and abs(v - mirror_v(x["t"], y, k)) <= abs(mirror_v(x["t"], y, k)) * 0.005):
                 n_ += 1
@@ -1141,7 +1155,7 @@ def consolidate(cj, mirror=None):
     keep = []
     for x in recs:
         s0 = support(x, x["y"])
-        sh = max(support(x, x["y"] - 1), support(x, x["y"] + 1))
+        sh = max(support(x, x["y"] - 1, True), support(x, x["y"] + 1, True))
         if sh >= 2 and s0 == 0:
             continue  # montants d'une autre année
         if x["guess"] and s0 == 0:
@@ -1186,11 +1200,11 @@ def consolidate(cj, mirror=None):
                     o["n"] += 1
                     o["rank"] = max(o["rank"], x["rank"])
                 mv = mirror_v(t, y, k)
-                fin_ = max(o["rank"][1] for o in vals.values())
+                fin_ = max(o["rank"][:2] for o in vals.values())
                 for z, o in vals.items():
-                    # la base de référence départage des comptes de même rang, mais ne fait pas préférer des comptes
-                    # provisoires à des comptes définitifs
-                    o["m"] = 1 if mv and abs(z - mv) <= abs(mv) * 0.005 + 0.5 and o["rank"][1] >= fin_ else 0
+                    # la base de référence départage des comptes de même rang, mais ne fait préférer ni des comptes
+                    # provisoires à des comptes définitifs, ni la colonne N-1 de l'exercice suivant aux comptes de l'exercice
+                    o["m"] = 1 if mv and abs(z - mv) <= abs(mv) * 0.005 + 0.5 and o["rank"][:2] >= fin_ else 0
                 best_v = max(vals, key=lambda z: (vals[z]["ver"], vals[z]["txt"], vals[z]["n"] + vals[z]["m"], vals[z]["rank"]))
                 v[k] = best_v
                 nsrc[k] = vals[best_v]["n"]
