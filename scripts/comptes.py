@@ -43,6 +43,8 @@ ITEMS = [
     ("reserves", (S_PAS,), r"^reserves$"),
     ("report_nouveau", (S_PAS,), r"^report a nouveau"),
     ("capitaux_propres", (S_PAS,), r"^(?:total )?capitaux propres(?: et ressources assimilees| et assimiles)?(?: et)?$|^total des capitaux propres$|^total equity$"),
+    ("cp_groupe", (S_PAS,), r"^(?:total )?capitaux propres(?:[ ,-]+part (?:du )?groupe| attribuables aux (?:actionnaires|proprietaires) de la (?:societe|maison)? ?mere| attribuables aux (?:actionnaires|proprietaires) de la societe)$"),
+    ("interets_minoritaires", (S_PAS,), r"^(?:capitaux propres attribuables aux |total )?(?:participations|interets) ne donnant pas le controle$|^interets minoritaires$"),
     ("dettes_financieres", (S_PAS,), r"^(?:total )?dettes financieres(?: et ressources assimilees)?(?: et)?$|^total dettes et res\. assimilees$"),
     ("ressources_stables", (S_PAS,), r"^(?:total )?ressources stables$"),
     ("passif_circulant", (S_PAS,), r"^(?:total )?passif circulant$"),
@@ -73,9 +75,10 @@ ITEMS = [
     ("participation", (S_CR,), r"^participation des travailleurs$"),
     ("impots_resultat", (S_CR,), r"^impots? sur (?:le |les )?(?:resultats?|benefices?|societes)$|^impot sur le resultat$|^charges? d.impots?(?: sur le resultat)?$|^impots? exigibles? et differes?$"),
     ("perte_nette", (S_CR,), r"^perte(?: nette)?(?: de l.exercice)?$"),
+    ("quote_part_mee", (S_CR,), r"^quote.?part (?:dans |du |des )?(?:le |les )?resultats? (?:net )?(?:des |dans les )?(?:societes|entreprises|entites|participations)(?: mises en(?: equivalence)?| associees| en equivalence)?$"),
     ("resultat_avant_impot", (S_CR,), r"^resultat avant impots?(?: sur le resultat| et participation)?$|^resultat (?:net )?avant impots?$"),
     # « Résultat net » : compte de résultat ou bilan selon l'état où il figure
-    ("resultat_net", (S_CR, S_PAS, None), r"^(?:resultat net(?: de l.exercice| de la periode| consolide| comptable| de l.ensemble consolide| total)?|resultat de l.exercice|benefice(?: net)?(?: de l.exercice)?|benefice ou perte|resultat net \(?benefice.*|profit for the (?:year|period))$"),
+    ("resultat_net", (S_CR, S_PAS, None), r"^(?:resultat net(?: de l.exercice| l.exercice| de la periode| consolide| comptable| de l.ensemble consolide| total)?|resultat de l.exercice|benefice(?: net)?(?: de l.exercice)?|benefice ou perte|resultat net \(?benefice.*|profit for the (?:year|period))$"),
     ("resultat_net_pg", (S_CR,), r"^resultat net[ ,-]+part (?:du )?groupe$|^resultat net attribuable aux (?:actionnaires|proprietaires) de la (?:societe|maison)? ?mere$|^resultat net attribuable aux (?:actionnaires|proprietaires) de la societe$"),
     # ---- flux de trésorerie (TFT révisé) / TAFIRE
     ("cafg", (S_FLX, None), r"^capacite d.autofinancement globale(?: \(?cafg\)?)?$|^cafg$|^capacite d.autofinancement$"),
@@ -313,6 +316,11 @@ def _cells(line, skip=()):
                 continue
             if re.search(r"[A-Za-zÀ-ÿ]{2}", txt_):
                 out.append(("L", txt_, start + st_ + len(part), start + st_))
+    # dates en toutes lettres (« 31 décembre 2021 ») : ni montant ni libellé
+    line = re.sub(r"(?i)(?<![\d,.])\d{1,2}(?:er)? ?(?:[-/.] ?)?(?:janv|f[ée]vr|mars|avr|mai|juin|juil|ao[uû]t|sept|oct|nov|d[ée]c)[a-zéû]*\.?"
+                  r"(?: ?(?:[-/.] ?)?(?:19|20)?\d\d(?![\d,.]))?(?![a-z])", lambda m_: " " * len(m_.group(0)), line)
+    # renvois de notes à plusieurs niveaux (« 6.3.11 ») : ni montant ni libellé
+    line = re.sub(r"(?<![\d.,])\d{1,2}(?:\.\d{1,2}){2,}(?![\d.,])", lambda m_: " " * len(m_.group(0)), line)
     for mm in NUM.finditer(line, pos):
         tok = mm.group(0)
         before = line[max(0, mm.start() - 1):mm.start()]
@@ -347,14 +355,14 @@ def _hdr(line):
     """Années d'en-tête d'une ligne [(fin, début, année ou ('N', décalage))], si la ligne n'est faite que d'en-têtes."""
     n = nrm(line)
     hs = []
-    for m in re.finditer(r"(?<![\d,.])(?:(?:\d{1,2})[-/. ]+(?:\d{1,2}|[a-z]{3,9}\.?)[-/. ]+)?((?:19[89]\d|20[0-3]\d)|\d{2})(?![\d%]|[,.]\d)", n):
+    for m in re.finditer(r"(?<![\d,.])(?:(?:\d{1,2})(?: ?[-/.] ?| {1,2})(?:\d{1,2}|(?:janv?|fevr?|mars|avr|mai|juin|juil|aout|sept?|oct|nov|dec)[a-z]{0,6}\.?)(?: ?[-/.] ?| {1,2}))?((?:19[89]\d|20[0-3]\d)|\d{2})(?![\d%]|[,.]\d)", n):
         y = m.group(1)
         if len(y) == 2:
             if not re.search(r"[-/. ]$", n[:m.start(1)]) or m.start(1) == m.start():
                 continue  # « 09 » seul n'est pas une année ; « 31-déc-09 » oui
             y = 2000 + int(y) if int(y) < 50 else 1900 + int(y)
         hs.append((m.end(), m.start(), int(y)))
-    for m in re.finditer(r"(?<![a-z])(?:janv?|fevr?|mars|avr|mai|juin|juil|aout|sept?|oct|nov|dec)[a-z]*\.?[-/ ]+(\d{4}|\d{2})(?![\d%,])", n):
+    for m in re.finditer(r"(?<![a-z])(?:janv?|fevr?|mars|avr|mai|juin|juil|aout|sept?|oct|nov|dec)[a-z]*\.?(?: ?[-/] ?| {1,2})(\d{4}|\d{2})(?![\d%,])", n):
         y = int(m.group(1)) if len(m.group(1)) == 4 else 2000 + int(m.group(1))  # « Dec.-24 », « déc. 2024 »
         if 1990 <= y <= 2039 and not any(s0 <= m.start() < e0 for e0, s0, _ in hs):
             hs.append((m.end(), m.start(), y))
@@ -384,15 +392,15 @@ def head_sec(p):
     if len(p) > 90 or re.search(r"\d{3}", re.sub(r"(?:19|20)\d\d|\d[ ,.]\d{3}", "", p)):
         return None
     p = re.sub(r"\s+", " ", re.sub(r"[^a-z' /-]|(?<![a-z])[-/](?![a-z])", " ", re.sub(r"(?:19|20)\d\d|\d[ ,.]\d{3}", " ", p))).strip()
-    if re.search(r"tableau des flux|flux de tresorerie$|tableau financier|tafire|tableau (?:des )?emplois|^ressources$|^emplois$|tableau de financement", p):
+    if re.search(r"tableau (?:[a-z]+ )?des flux|flux de tresorerie$|tableau financier|tafire|tableau (?:des )?emplois|^ressources$|^emplois$|tableau de financement", p):
         return S_FLX
-    if re.search(r"compte de resultat|comptes? de resultats|compte d.exploitation|compte des resultats|etat du resultat|income statement|pertes et profits|^produits$|^charges$|^produits ?/ ?charges$|^charges ?/ ?produits$", p):
+    if re.search(r"compte de resultat|comptes? de resultats|compte d.exploitation|compte des resultats|etat du resultat|income statement|pertes et profits|^produits$|^charges$|^produits ?/ ?charges$|^charges ?/ ?produits$|^debit$|^credit$", p):
         return S_CR
     if re.search(r"hors.?bilan|^engagements|affectation du resultat|projet d.affectation|repartition des benefices|^affectation$", p):
         return "hb"
-    if re.search(r"^(?:bilan[^a-z]*)?actif(?: du bilan)?(?: consolide)?$|^actif ?:?$|^assets$|^actif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^actif -", p):
+    if re.search(r"^(?:bilan[^a-z]*)?actifs?(?: du bilan)?(?: consolide)?$|^actif ?:?$|^assets$|^actif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^actif -", p):
         return S_ACT
-    if re.search(r"^(?:bilan[^a-z]*)?passi ?f(?: du bilan)?(?: consolide)?$|^passif et capitaux propres$|^capitaux propres et passifs$|^liabilities|^passif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^passif -", p):
+    if re.search(r"^(?:bilan[^a-z]*)?passi ?fs?(?: du bilan)?(?: consolide)?$|^passifs? (?:et )?capitaux propres$|^capitaux propres (?:et )?passifs?$|^liabilities|^passif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^passif -", p):
         return S_PAS
     if re.search(r"^bilan\b|situation financiere|balance sheet", p):
         return "bilan"
@@ -498,12 +506,14 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             elif len(found_s) >= 2 and found_s[0][1] != found_s[1][1] and found_s[1][1] != "bilan":
                 left = [e for e, _, _ in h if e < found_s[1][0]] if h else []
                 s0 = S_ACT if found_s[0][1] == "bilan" else found_s[0][1]
-                split = [(max(left) + 1) if left else max(0, found_s[1][0] - 12), s0, found_s[1][1]]
+                split = [(max(left) + 1) if left else max(0, found_s[1][0] - 12), s0, found_s[1][1], False]
                 sec = s0
             elif found_s:
                 s_ = found_s[0][1]
                 if s_ == "bilan":
                     sec = S_ACT if sec not in (S_ACT, S_PAS) else sec
+                elif split and s_ in (S_CR, S_FLX) and set(split[1:3]) <= {S_ACT, S_PAS}:
+                    sec, split = s_, None  # nouvel état après le bilan (titre centré sur la page)
                 elif split:  # deux tableaux côte à côte : seul le côté du titre change d'état
                     if found_s[0][0] < split[0] - 5:
                         split[1] = sec = s_
@@ -541,6 +551,17 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 j += 1
             segs.append((code if not segs else None, "", vals, c[3]))
             k = j
+        if split and split[3] and segs:
+            # « TOTAL ACTIF  x  y   x  y » : les montants au-delà de la limite appartiennent au tableau de droite (sans libellé)
+            segs2 = []
+            for code_, lab, vals, st_ in segs:
+                lv = [x for x in vals if x[1] < split[0]]
+                rv = [x for x in vals if x[1] >= split[0] + 8]
+                if st_ is not None and st_ < split[0] - 2 and lab and len(lv) >= 1 and len(rv) >= 2 and len(lv) + len(rv) == len(vals):
+                    segs2 += [(code_, lab, lv, st_), (None, "", rv, split[0])]
+                else:
+                    segs2.append((code_, lab, vals, st_))
+            segs = segs2
         new_pend = []
         for si, (code_, lab, vals, st_) in enumerate(segs):
             s_here = sec
@@ -548,6 +569,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             if split and st_ is not None:
                 if si > 0 and segs[si - 1][2] and st_ > 20:  # libellé qui suit des montants : tableau de droite
                     split[0] = min(split[0], st_)
+                    split[3] = True  # limite des deux tableaux vérifiée sur une ligne de montants
                     s_here = split[2]
                     side_ = 1
                 else:
@@ -581,6 +603,9 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 key = REF_CODES.get(code_) or (REF_CODES_REV.get(code_) if revised else None)
                 if key == "resultat_net" and s_here == S_PAS:
                     key = "resultat_bilan"
+            if key is None and not labn and si > 0 and s_here == S_PAS and \
+                    re.fullmatch(r"total ?(?:general ?)?(?:de l.)?actif", re.sub(r"\s+", " ", nrm(segs[si - 1][1])).strip(" :.-*•")):
+                key = "total_passif"  # « TOTAL ACTIF  x  y  |  x  y » : montants sans libellé du tableau du passif
             if key is None:
                 for lab_ in cands:
                     for kk, secs, rx in ITEM_RX:
@@ -592,14 +617,18 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 if key is None and cands:
                     t0 = cands[0]
                     if re.fullmatch(r"total(?: general| bilan)?|total general \(?[ivx0-9 +]+\)?", t0):
-                        key = {S_ACT: "total_actif", S_PAS: "total_passif"}.get(s_here, "_total")
+                        key = {S_ACT: "total_actif", S_PAS: "total_passif"}.get(s_here, None if s_here in (S_CR, S_FLX) else "_total")
                 if key is None:
+                    if os.environ.get("CPT_DEBUG2"):
+                        print("   nokey", i, s_here, cands[:3], [v for v, _ in vals])
                     continue
             if key == "resultat_net" and s_here == S_PAS:
                 key = "resultat_bilan"
             if key == "b_resultat_bilan":
                 key = "resultat_bilan"
             yrs, how = _assign(vals, [] if ocr else heads, i, fy, brut_tbl and s_here == S_ACT)
+            if how == "order" and not split and len([v for v, _ in vals if v is not None]) > 4:
+                continue  # tableau à plusieurs colonnes (par secteur, variation des capitaux propres…) : colonnes inconnues
             if how == "var":
                 order_votes.append(yrs)
             if len([v for v, _ in vals if v is not None]) == 1 and not any(v is None for v, _ in vals):
@@ -731,7 +760,8 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 unit = u
                 break
     nt = nrm(txt[:8000])
-    cur = "USD" if re.search(r"(?:milliers|millions) de dollars|en (?:k|m)?usd\b|us\$|\busd ?(?:000|thousand|million)|thousands of us dollars|in thousands of usd", nt) else "XOF"
+    cur = "USD" if re.search(r"(?:milliers|millions) de dollars|en (?:k|m)?usd\b|us\$|\busd ?(?:000|thousand|million)|thousands of us dollars|in thousands of usd", nt) or \
+        re.search(r"(?:milliers|millions) de dollars (?:eu|us|americains)|(?:milliers|millions) (?:de )?\$ ?eu\b", nrm(txt)) else "XOF"
     std = "ifrs" if main.endswith("_ifrs") else "syscohada"
     KEYS_G = ("total_actif", "total_passif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres", "_total")
     dfl_ = "conso" if conso_hint else "social"
@@ -759,7 +789,12 @@ def _assign(vals, heads, i, fy, brut):
         # l'en-tête retenu est celui dont les colonnes s'alignent le mieux sur tous les montants de la ligne
         # (plusieurs tableaux se suivent avec des mises en page différentes)
         best_h = None
-        for rk, (_, hs) in enumerate(reversed(recent)):
+        cand_h = list(reversed(recent))
+        for (l1, h1), (l2, h2) in zip(recent, recent[1:]):
+            # en-tête réparti sur deux lignes voisines (« 31 Décembre 2025 » au-dessus de « 2024 ») : colonnes réunies
+            if l2 - l1 == 1 and not any(abs(a[0] - b[0]) <= 3 for a in h1 for b in h2):
+                cand_h.append((-1, sorted(h1 + h2)))  # (-1 : retenu seulement si toutes les colonnes s'alignent)
+        for rk, (l_h, hs) in enumerate(cand_h):
             # montants alignés à droite sous des années centrées : affectation dans l'ordre des colonnes, sur la fenêtre
             # de colonnes d'en-tête la plus proche (tableaux côte à côte : les colonnes de l'autre tableau sont ignorées)
             hs_s = sorted(hs)
@@ -783,6 +818,8 @@ def _assign(vals, heads, i, fy, brut):
                         if best_h is None or sc > best_h[0]:
                             best_h = (sc, got)
                         continue
+            if l_h == -1:
+                continue
             got, dist = {}, []
             for v, xe in nums:
                 bb = None
@@ -800,7 +837,7 @@ def _assign(vals, heads, i, fy, brut):
                         got[yr] = v
                         dist.append(bb[0])
             if got:
-                sc = (len(got), -sum(dist) / len(dist), -rk)
+                sc = (len(got), -rk, -sum(dist) / len(dist))  # à nombre égal de colonnes, l'en-tête le plus proche au-dessus
                 if best_h is None or sc > best_h[0]:
                     best_h = (sc, got)
         out = best_h[1] if best_h else {}
@@ -856,7 +893,13 @@ def checks(items, year, bank=False):
     if g("rao") is not None and g("resultat_exploitation") is not None and g("resultat_financier") is not None:
         res.append(("RAO = RE + RF", rel(g("resultat_exploitation") + g("resultat_financier"), g("rao"))))
     if g("resultat_avant_impot") is not None and g("impots_resultat") is not None and rn_ is not None:
-        res.append(("RN = résultat avant impôt - impôt", rel(g("resultat_avant_impot") - abs(g("impots_resultat")), rn_)))
+        # (quote-part des sociétés mises en équivalence après le résultat avant impôt ; impôt positif : charge imprimée
+        # sans signe, ou produit d'impôt)
+        rai_, it_, mee_ = g("resultat_avant_impot"), g("impots_resultat"), g("quote_part_mee") or 0
+        c_ = [rel(rai_ + m_ - abs(it_), rn_) for m_ in {0, mee_}]
+        if it_ > 0:
+            c_ += [rel(rai_ + m_ + it_, rn_) for m_ in {0, mee_}]
+        res.append(("RN = résultat avant impôt - impôt", min(c_)))
     # sommes des postes du bilan : retenues seulement quand elles se vérifient (elles confirment alors chaque poste lu)
     for nm, tot, parts, need in (("actif = somme des postes", "total_actif", ACT_PARTS, ("immo_corp", "tresorerie_actif")),
                                  ("actif = somme des masses", "total_actif", ("actif_immobilise", "actif_circulant", "tresorerie_actif"), ("actif_immobilise", "actif_circulant", "tresorerie_actif")),
@@ -894,12 +937,19 @@ def unit_choice(P, items, y):
     sinon la seule unité plausible (total du bilan entre 0,3 et 60 000 milliards de FCFA). None si plusieurs restent possibles."""
     tot = (items.get("total_actif") or {}).get(y) or (items.get("total_passif") or {}).get(y)
     ca = (items.get("chiffre_affaires") or items.get("b_pnb") or {}).get(y)
+    allv = [abs(v[y]) for k, v in items.items() if y in v]
+    bs_v = [abs(v[y]) for k, v in items.items() if y in v and k not in ("total_actif", "total_passif")
+            and set(SECS.get(k, ())) & {S_ACT, S_PAS}]
+    if tot and bs_v and abs(tot) < max(bs_v) * 0.9:
+        tot = None  # total plus petit qu'un poste du bilan : mal lu
     if tot:
         cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 3e8 <= abs(tot) * u <= 6e13]
     elif ca:
         cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 5e7 <= abs(ca) * u <= 1e13]
     else:
         cands = []
+    if allv:  # aucun montant au-delà de 100 000 milliards de FCFA
+        cands = [u for u in cands if max(allv) * u <= 1e14]
     if P.get("unit") in cands:
         return P["unit"], cands
     if len(cands) == 1:
@@ -999,7 +1049,8 @@ def consolidate(cj, mirror=None):
     comptes suivants, versions provisoire et définitive, texte ou reconnaissance de caractères) :
       1. un montant qui entre dans une identité vérifiée de son document l'emporte sur un montant non vérifié ;
       2. puis un montant lu dans la couche texte l'emporte sur une reconnaissance de caractères ;
-      3. puis le montant donné par le plus de sources concordantes (documents, et la base de référence) ;
+      3. puis le montant donné par le plus de sources concordantes (documents ; la base de référence ne compte que si elle
+         reprend des comptes de même rang : jamais des chiffres provisoires contre des comptes définitifs) ;
       4. puis celui du document le plus probant (comptes de l'exercice, définitifs, le plus récent).
     Un montant décalé d'un facteur 1 000 (ou 1 000 000) par rapport à une autre source est une erreur d'unité : écarté.
     Les états par secteur d'activité ne sont pas des comptes de la société : ignorés."""
@@ -1135,8 +1186,11 @@ def consolidate(cj, mirror=None):
                     o["n"] += 1
                     o["rank"] = max(o["rank"], x["rank"])
                 mv = mirror_v(t, y, k)
+                fin_ = max(o["rank"][1] for o in vals.values())
                 for z, o in vals.items():
-                    o["m"] = 1 if mv is not None and abs(z - mv) <= abs(mv) * 0.005 + 0.5 else 0
+                    # la base de référence départage des comptes de même rang, mais ne fait pas préférer des comptes
+                    # provisoires à des comptes définitifs
+                    o["m"] = 1 if mv and abs(z - mv) <= abs(mv) * 0.005 + 0.5 and o["rank"][1] >= fin_ else 0
                 best_v = max(vals, key=lambda z: (vals[z]["ver"], vals[z]["txt"], vals[z]["n"] + vals[z]["m"], vals[z]["rank"]))
                 v[k] = best_v
                 nsrc[k] = vals[best_v]["n"]
@@ -1149,8 +1203,8 @@ def consolidate(cj, mirror=None):
         for y, r in res.items():
             for k in ("chiffre_affaires", "b_pnb", "resultat_net", "total_actif"):
                 mv = mirror_v(t, y, k)
-                if mv is None or r["v"].get(k) is None:
-                    continue
+                if not mv or r["v"].get(k) is None:
+                    continue  # (un zéro de la base de référence est une donnée manquante)
                 ok_ = abs(r["v"][k] - mv) <= abs(mv) * 0.01 + 0.5 or r["ns"].get(k, 1) >= 2
                 a_n += 1
                 a_ok += ok_
