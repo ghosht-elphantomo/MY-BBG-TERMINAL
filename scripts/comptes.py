@@ -218,9 +218,16 @@ def _join_broken(m):
     return "".join(g) + "," + m.group(2)
 
 
+GLYPH_DIGITS = {chr(0x3EC + d): str(d) for d in range(10)}
+GLYPH_DIGITS.update({"\x03": " ", "\u0372": "-"})
+
+
 def clean(txt, ocr=False):
     """Caractères parasites de la reconnaissance de caractères (barres, crochets) autour des montants ; montants dont la
-    couche texte a cassé les chiffres (« 1 19 9 ,2 ») recollés quand le document en compte beaucoup."""
+    couche texte a cassé les chiffres (« 1 19 9 ,2 ») recollés quand le document en compte beaucoup ; chiffres d'une police
+    sans table de caractères (codes de glyphes Ϭ…ϵ pour 0…9) remis en chiffres."""
+    if sum(1 for ch in txt[:200000] if "\u03ec" <= ch <= "\u03f5") >= 30:
+        txt = "".join(GLYPH_DIGITS.get(ch, ch) for ch in txt)
     if len(re.findall(r"\d ,\d|(?<!\d)\d{1,2} \d{1,2} ?,\d", txt)) >= 8:
         txt = BROKEN.sub(_join_broken, txt)
         txt = re.sub(r"(?<=\d) ,(?=\d{1,2}(?!\d))", ",", txt)
@@ -311,6 +318,10 @@ def _hdr(line):
                 continue  # « 09 » seul n'est pas une année ; « 31-déc-09 » oui
             y = 2000 + int(y) if int(y) < 50 else 1900 + int(y)
         hs.append((m.end(), m.start(), int(y)))
+    for m in re.finditer(r"(?<![a-z])(?:janv?|fevr?|mars|avr|mai|juin|juil|aout|sept?|oct|nov|dec)[a-z]*\.?[-/ ]+(\d{4}|\d{2})(?![\d%,])", n):
+        y = int(m.group(1)) if len(m.group(1)) == 4 else 2000 + int(m.group(1))  # « Dec.-24 », « déc. 2024 »
+        if 1990 <= y <= 2039 and not any(s0 <= m.start() < e0 for e0, s0, _ in hs):
+            hs.append((m.end(), m.start(), y))
     for m in re.finditer(r"(?<=[\s(])(\d)[, ](\d{3})(?=\s|$)", n):  # « 2,009 », « 2 013 » (année imprimée avec séparateur de milliers)
         y = int(m.group(1) + m.group(2))
         if 1990 <= y <= 2039:
@@ -337,11 +348,11 @@ def head_sec(p):
         return S_FLX
     if re.search(r"compte de resultat|comptes? de resultats|compte d.exploitation|compte des resultats|etat du resultat|income statement|pertes et profits|^produits$|^charges$|^produits ?/ ?charges$|^charges ?/ ?produits$", p):
         return S_CR
-    if re.search(r"hors.?bilan|^engagements", p):
+    if re.search(r"hors.?bilan|^engagements|affectation du resultat|projet d.affectation|repartition des benefices|^affectation$", p):
         return "hb"
-    if re.search(r"^(?:bilan[^a-z]*)?actif(?: du bilan)?(?: consolide)?$|^actif ?:?$|^assets$|^actif ?[-(:]+ ?(?:en|montants?|donnees)\b", p):
+    if re.search(r"^(?:bilan[^a-z]*)?actif(?: du bilan)?(?: consolide)?$|^actif ?:?$|^assets$|^actif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^actif -", p):
         return S_ACT
-    if re.search(r"^(?:bilan[^a-z]*)?passi ?f(?: du bilan)?(?: consolide)?$|^passif et capitaux propres$|^capitaux propres et passifs$|^liabilities|^passif ?[-(:]+ ?(?:en|montants?|donnees)\b", p):
+    if re.search(r"^(?:bilan[^a-z]*)?passi ?f(?: du bilan)?(?: consolide)?$|^passif et capitaux propres$|^capitaux propres et passifs$|^liabilities|^passif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^passif -", p):
         return S_PAS
     if re.search(r"^bilan\b|situation financiere|balance sheet", p):
         return "bilan"
@@ -396,9 +407,10 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             nb_ = nb_[:s0_] + " " * (e_ - s0_) + nb_[e_:]
         if not re.search(r"\d{3}", re.sub(r"(?:19|20)\d\d", "", nb_)):
             # titres d'états et sous-titres (actif / passif côte à côte, consolidé / social)
-            if re.search(r"consolid", n_):
+            titre_ = len(n_) <= 110 and re.search(r"bilan|compte|etat|tableau|resultat|flux|situation financiere", n_)
+            if titre_ and re.search(r"consolid", n_) and not re.search(r"sociaux|individuel", n_):
                 perim = "conso"
-            elif re.search(r"comptes? sociaux|etats financiers sociaux|individuels|bilan social|societe mere", n_):
+            elif titre_ and re.search(r"comptes? sociaux|etats financiers sociaux|individuels?|bilan social|compte de resultat social|societe mere", n_):
                 perim = "social"
             if re.search(r"\bifrs\b|normes? internationales?", n_) and not re.search(r"syscohada", n_):
                 std_cur = "ifrs"
@@ -425,7 +437,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 s_ = found_s[0][1]
                 if s_ == "bilan":
                     sec = S_ACT if sec not in (S_ACT, S_PAS) else sec
-                elif split and s_ not in ("hb",):  # deux tableaux côte à côte : seul le côté du titre change d'état
+                elif split:  # deux tableaux côte à côte : seul le côté du titre change d'état
                     if found_s[0][0] < split[0] - 5:
                         split[1] = sec = s_
                     else:
