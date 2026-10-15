@@ -428,6 +428,11 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     sec, split, perim = None, None, None
     tt_ = nrm(title or "") + " " + nrm(txt[:3000])
     std_cur = "ifrs" if re.search(r"\bifrs\b|normes? internationales?", tt_) and not re.search(r"syscohada", nrm(title or "")) else "syscohada"
+    # vocabulaire propre aux normes IFRS et aux comptes consolidés, quand les titres ne le disent pas
+    if std_cur == "syscohada" and not re.search(r"syscohada", nt_) and \
+            len(re.findall(r"resultat global|ne donnant pas le controle|actifs? non courants?|passifs? non courants?", nt_)) >= 2:
+        std_cur = "ifrs"
+    conso_hint = bool(re.search(r"ensemble consolide|ne donnant pas le controle|interets minoritaires|perimetre de consolidation", nt_))
     order_votes = []
     pend = []
     single_hint = []
@@ -463,7 +468,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                          r"etat du resultat global|flux de tresorerie)\s+(?:[a-z']+\s+){0,3}consolid", n_) and not re.search(r"sociaux|individuel", n_):
                 perim = "conso"
             elif re.search(r"(?:bilan|comptes?|etats?(?: de synthese| financiers)?|compte de resultat|tableau des flux)\s+(?:[a-z']+\s+){0,2}(?:sociaux|individuels?|social)\b|"
-                           r"societe mere|comptes sociaux", n_):
+                           r"comptes sociaux", n_):
                 perim = "social"
             if re.search(r"\bifrs\b|normes? internationales?", n_) and not re.search(r"syscohada", n_):
                 std_cur = "ifrs"
@@ -705,13 +710,14 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 d[key] = ys
     items = found.get("conso") or {}
     perims = {k: v for k, v in found.items() if v}
-    for suf in ("", "_ifrs"):  # périmètre non annoncé : comptes de la société (sociaux)
+    for suf in ("", "_ifrs"):  # périmètre non annoncé : comptes de la société (sociaux), sauf vocabulaire des comptes consolidés
+        dflt = ("conso" if conso_hint else "social") + suf
         if "_" + suf in perims:
-            if "social" + suf not in perims:
-                perims["social" + suf] = perims.pop("_" + suf)
+            if dflt not in perims:
+                perims[dflt] = perims.pop("_" + suf)
             else:
                 for k, v in perims.pop("_" + suf).items():
-                    perims["social" + suf].setdefault(k, v)
+                    perims[dflt].setdefault(k, v)
     main = max(perims, key=lambda k: len(perims[k])) if perims else "social"
     items = perims.get(main, {})
     bank = sum(1 for k in items if k.startswith("b_")) >= 3
@@ -728,7 +734,8 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     cur = "USD" if re.search(r"(?:milliers|millions) de dollars|en (?:k|m)?usd\b|us\$|\busd ?(?:000|thousand|million)|thousands of us dollars|in thousands of usd", nt) else "XOF"
     std = "ifrs" if main.endswith("_ifrs") else "syscohada"
     KEYS_G = ("total_actif", "total_passif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres", "_total")
-    guess_p = sorted({("social" if p_ == "_" else "social_ifrs" if p_ == "__ifrs" else p_) for p_, k_ in guess if k_ in KEYS_G})
+    dfl_ = "conso" if conso_hint else "social"
+    guess_p = sorted({(dfl_ if p_ == "_" else dfl_ + "_ifrs" if p_ == "__ifrs" else p_) for p_, k_ in guess if k_ in KEYS_G})
     return {"guess": guess_p, "items": items, "perims": perims, "main": main, "unit": unit, "cap": cap, "fy": fy, "type": "banque" if bank else "entreprise",
             "cur": cur, "per": doc_kind(txt, title), "std": std, "revised": revised}
 
@@ -753,6 +760,29 @@ def _assign(vals, heads, i, fy, brut):
         # (plusieurs tableaux se suivent avec des mises en page différentes)
         best_h = None
         for rk, (_, hs) in enumerate(reversed(recent)):
+            # montants alignés à droite sous des années centrées : affectation dans l'ordre des colonnes, sur la fenêtre
+            # de colonnes d'en-tête la plus proche (tableaux côte à côte : les colonnes de l'autre tableau sont ignorées)
+            hs_s = sorted(hs)
+            k_ = len(nums)
+            if 1 <= k_ <= len(hs_s):
+                win = None
+                for st_w in range(len(hs_s) - k_ + 1):
+                    ds = [abs(hs_s[st_w + j][0] - nums[j][1]) for j in range(k_)]
+                    if max(ds) <= 25 and (win is None or sum(ds) < win[0]):
+                        win = (sum(ds), st_w)
+                if win:
+                    got = {}
+                    for j in range(k_):
+                        yr = hs_s[win[1] + j][2]
+                        if isinstance(yr, tuple):
+                            yr = fy + yr[1] if fy else None
+                        if yr is not None and yr not in got:
+                            got[yr] = nums[j][0]
+                    if got and len(got) == k_:
+                        sc = (k_ + 0.5, -win[0] / k_, -rk)
+                        if best_h is None or sc > best_h[0]:
+                            best_h = (sc, got)
+                        continue
             got, dist = {}, []
             for v, xe in nums:
                 bb = None
