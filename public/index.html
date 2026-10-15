@@ -2216,10 +2216,10 @@ function accRows(F) {
   if (F.bank) return [['rev', 'Produit net bancaire', 'm'], ['rev', 'croissance', 'g'], ['ni', 'Résultat net', 'm'], ['nm', 'Marge nette', 'p'], ['eps', 'BNPA (FCFA)', 'e'], ['eps', 'croissance', 'g'],
     ['dps', 'Dividende net / action (FCFA)', 'e'], ['payout', 'Taux de distribution', 'p'], ['eq', 'Capitaux propres', 'm'], ['assets', 'Total bilan', 'm'], ['deposits', 'Dépôts de la clientèle', 'm'], ['loans', 'Crédits à la clientèle', 'm'],
     ['ld', 'Crédits / dépôts', 'p'], ['cir', 'Coefficient d’exploitation', 'q'], ['cor', 'Coût du risque', 'm'], ['cor_l', 'Coût du risque / crédits', 'p'], ['roe', 'ROE', 'p'], ['roa_s', 'ROA', 'q'], ['solv', 'Ratio de solvabilité', 'q']];
-  return [['rev', 'Chiffre d’affaires', 'm'], ['rev', 'croissance', 'g'], ['ebitda', 'EBITDA', 'm'], ['ebit', 'Résultat d’exploitation', 'm'], ['om', 'Marge d’exploitation', 'p'], ['ni', 'Résultat net', 'm'], ['nm', 'Marge nette', 'p'],
+  return [['rev', 'Chiffre d’affaires', 'm'], ['rev', 'croissance', 'g'], ['ebitda', 'Excédent brut d’exploitation (EBE)', 'm'], ['ebit', 'Résultat d’exploitation', 'm'], ['om', 'Marge d’exploitation', 'p'], ['ni', 'Résultat net', 'm'], ['nm', 'Marge nette', 'p'],
     ['eps', 'BNPA (FCFA)', 'e'], ['eps', 'croissance', 'g'], ['dps', 'Dividende net / action (FCFA)', 'e'], ['payout', 'Taux de distribution', 'p'], ['ocf', 'Flux de trésorerie d’exploitation', 'm'], ['capex', 'Investissements (capex)', 'm'],
     ['fcf', 'Free cash-flow', 'm', 'hl'], ['fcfm', 'Marge FCF', 'p'], ['fcf', 'croissance FCF', 'g'], ['fpay', 'Dividendes / FCF', 'p'], ['eq', 'Capitaux propres', 'm'], ['nd', 'Dette nette', 'm'], ['cash', 'Trésorerie', 'm'],
-    ['assets', 'Total bilan', 'm'], ['roe', 'ROE', 'p'], ['roic', 'ROIC (impôt légal)', 'p'], ['nd_ebitda', 'Dette nette / EBITDA', 'x']];
+    ['assets', 'Total bilan', 'm'], ['roe', 'ROE', 'p'], ['roic', 'ROIC (impôt légal)', 'p'], ['nd_ebitda', 'Dette nette / EBE', 'x']];
 }
 function yDerived(F) {
   const Y = F.Y, n = Y.y.length, dv = (a, b) => a.map((v, i) => v != null && b[i] ? v / b[i] : null);
@@ -2256,7 +2256,29 @@ function accountsTable(F, nY = 10, opts = {}) {
 }
 function faSrcNote(F) {
   return F.mkt === 'US' ? `Comptes publiés (${F.annual_only ? 'rapports annuels' : 'rapports annuels et trimestriels'}), devise ${F.ccy || 'USD'}. FCF = flux d’exploitation − acquisitions d’immobilisations corporelles. Dette financière hors obligations locatives.`
-    : `<sup class="am">a</sup> = exercice reconstitué à partir des chiffres clés (CA, résultat net, BNPA, dividende) ; flux de trésorerie lus dans les états financiers SYSCOHADA publiés par la société. FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
+    : `Montants tirés des états financiers publiés par la société quand leurs totaux se vérifient (détail poste par poste et ratios dans les onglets) ; <sup class="am">a</sup> = exercice reconstitué à partir des chiffres clés (CA, résultat net, BNPA, dividende). FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
+}
+
+/* Comptes publiés détaillés (BRVM) : postes des états financiers et ratios, sur tous les exercices lus.
+   Années continues : un exercice sans comptes lisibles reste visible (n.d.). Montants en millions de FCFA. */
+function cptYears(F, all) { const ys = F.C.y; if (!ys.length) return []; const hi = ys[ys.length - 1], lo = all ? ys[0] : Math.max(ys[0], hi - 9); const o = []; for (let y = lo; y <= hi; y++) o.push(y); return o; }
+function cptTable(F, sk, all) {
+  const S = (F.C.s || []).find(x => x[0] === sk || x[0] === 'b' + sk); if (!S) return '<div class="empty">Poste non disponible dans les comptes lus.</div>';
+  const cols = cptYears(F, all), ix = y => F.C.y.indexOf(y);
+  const head = `<tr><th class="l">M FCFA</th>${cols.map(y => `<th>FY ${y}</th>`).join('')}</tr>`;
+  const strong = new Set(['chiffre_affaires', 'b_pnb', 'valeur_ajoutee', 'ebe', 'resultat_exploitation', 'b_rbe', 'rao', 'resultat_net', 'actif_immobilise', 'actif_circulant', 'total_actif', 'capitaux_propres', 'passif_circulant', 'total_passif', 'cafg', 'flux_operationnels']);
+  const body = S[2].map(([k, lab, vals]) => `<tr><td class="l ${strong.has(k) ? 'yl' : 'am'}">${esc(lab)}</td>${cols.map(y => { const i = ix(y), v = i >= 0 ? vals[i] : null;
+    return v == null ? `<td>${NDc(i < 0 ? 'comptes de cet exercice non disponibles' : 'poste non présenté ou non lisible dans les comptes de cet exercice')}</td>` : `<td class="${strong.has(k) ? 'yl' : 'wh'}">${num(v, Math.abs(v) < 100 ? 1 : 0)}</td>`; }).join('')}</tr>`).join('');
+  return `<div class="tw"><table class="t acc"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+function ratioFmt(f, v) { if (v == null || !isFinite(v)) return null; return f === 'p' ? num(v * 100, 1) + ' %' : f === 'x' ? num(v, 2) + ' x' : f === 'j' ? num(v, 0) + ' j' : f === 'm' ? num(v, 0) : f === 'e' ? num(v, Math.abs(v) < 100 ? 2 : 0) : num(v, 2); }
+function ratioTable(F, all) {
+  const R = F.R; if (!R || !R.g || !R.g.length) return '<div class="empty">Ratios non calculables (comptes insuffisants).</div>';
+  const cols = cptYears({ C: { y: R.y } }, all), ix = y => R.y.indexOf(y); let n = 0;
+  const head = `<tr><th class="l">Ratio</th>${cols.map(y => `<th>FY ${y}</th>`).join('')}</tr>`;
+  const body = R.g.map(([g, rows]) => `<tr class="sec"><td class="l" colspan="${cols.length + 1}">${esc(g)}</td></tr>` + rows.map(([k, lab, f, vals]) => { n++;
+    return `<tr><td class="l am">${esc(lab)}${f === 'm' ? ' <span class="dm">(M FCFA)</span>' : ''}</td>${cols.map(y => { const i = ix(y), t = i >= 0 ? ratioFmt(f, vals[i]) : null; return `<td class="${t == null ? '' : (f === 'p' && vals[i] < 0) || (f === 'm' && vals[i] < 0) ? 'dn' : 'wh'}">${t == null ? '<span class="dm">—</span>' : t}</td>`; }).join('')}</tr>`; }).join('')).join('');
+  return { html: `<div class="tw"><table class="t acc"><thead>${head}</thead><tbody>${body}</tbody></table></div>`, n };
 }
 
 /* ------------------------------------------------------------------ FA */
@@ -2268,6 +2290,14 @@ PAGES.FA = async (m, alive) => {
   const kpi = [['Chiffre d’affaires', F.mkt === 'US' ? 'rev_g' : 'rev_g', 'croissance sur 1 an'], ['Free cash-flow', 'fcf_g', 'croissance sur 1 an'], ['Marge FCF', 'fcfm', ''], ['ROE', 'roe', ''], ['ROIC', 'roic', ''], ['Dette nette / EBITDA', 'nd_ebitda', '']];
   const tab = tabState('FA', 'k'); setTabs([['k', 'Chiffres clés'], ['is', 'Compte de résultat'], ['bs', 'Bilan'], ['cf', 'Flux de trésorerie'], ['r', 'Ratios']], tab, k => { ST.tab.FA = k; render(); });
   setActs([{ n: 97, l: 'Sortie', menu: () => [{ l: 'Exporter le tableau (CSV)', run: exportCSV }, { l: 'Imprimer / PDF', run: () => window.print() }] }]);
+  if (tab !== 'k' && isBRVM(F) && F.C && F.C.y && F.C.y.length) {
+    const all = !!st.all, y0 = F.C.y[0], per = F.C.per === 'conso' ? 'consolidés' : 'sociaux', std = F.C.std === 'ifrs' ? 'IFRS' : 'SYSCOHADA';
+    const tools = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Exercices</span><button class="tb ${all ? '' : 'on'}" data-all="0">10 derniers</button><button class="tb ${all ? 'on' : ''}" data-all="1">Tout l’historique (depuis ${y0})</button></div>`;
+    const lect = `Comptes ${per} (${std}) publiés par la société, en millions de FCFA. Un exercice n’est repris que si ses totaux se vérifient dans le document (total actif = total passif, résultat du compte de résultat = résultat du bilan, soldes intermédiaires) ; n.d. = non disponible. Chaque exercice vient de ses propres comptes de préférence (sinon de la colonne « exercice précédent » des comptes suivants).`;
+    if (tab === 'r') { const T = ratioTable(F, all); m.innerHTML = tools + pn(`${esc(s.tk)} · ${T.n || ''} ratios calculés sur les comptes publiés`, 'FA', T.html || T, { np: true, lect: 'Ratios calculés uniquement à partir des postes publiés (aucune estimation) ; « — » = un poste nécessaire manque. Moyennes = (début + fin d’exercice) / 2. BNPA et dividende tels que publiés ; PER et rendement au dernier cours de chaque exercice. ' + lect }); }
+    else { const lab = { is: 'Compte de résultat', bs: 'Bilan', cf: 'Flux de trésorerie' }[tab]; m.innerHTML = tools + pn(`${esc(s.tk)} · ${lab} · comptes publiés`, 'FA', cptTable(F, tab, all), { np: true, lect }); }
+    m.querySelectorAll('[data-all]').forEach(b => b.onclick = () => { st.all = b.dataset.all === '1'; render(); });
+    return; }
   if (tab !== 'k') { const ONLY = F.bank ? { is: ['rev', 'ni', 'nm', 'eps', 'dps', 'payout', 'cir', 'cor'], bs: ['eq', 'assets', 'deposits', 'loans', 'ld', 'solv'], cf: ['dps', 'payout'], r: ['roe', 'roa_s', 'nm', 'ld', 'cir', 'cor_l', 'solv', 'payout'] }[tab]
       : { is: ['rev', 'gm', 'ebitda', 'opi', 'ebit', 'om', 'ni', 'nm', 'eps', 'dps', 'payout'], bs: ['cashx', 'cash', 'debt', 'nd', 'eq', 'assets', 'sh'], cf: ['ocf', 'capex', 'fcf', 'fcfm', 'sbc', 'div', 'buy', 'fpay'], r: ['om', 'nm', 'fcfm', 'roe', 'roic', 'nd_ebitda', 'payout', 'fpay'] }[tab];
     const lab = { is: 'Compte de résultat', bs: 'Bilan', cf: 'Flux de trésorerie', r: 'Ratios' }[tab];
@@ -3112,7 +3142,7 @@ async function desPerf(m, s, S) {
   const yr = yearRows.slice().reverse(); barChart($('desYr'), { labels: yr.map(r => String(r.y).slice(2)), values: yr.map(r => r.ret * 100), fmt: v => num(v, 0) + '%', extra: i => 'max DD ' + num(yr[i].mdd * 100, 1) + '%' });
 }
 
-/* ------------------------------------------------------------------ HDS : actionnariat (BRVM : SikaFinance ; US : détenteurs institutionnels 13F via Nasdaq) */
+/* ------------------------------------------------------------------ HDS : actionnariat (BRVM : principaux actionnaires ; US : détenteurs institutionnels 13F) */
 /* chiffres Nasdaq (« 1,426,283,914 », « 1.919% », « $480,144,217 ») remis au format français */
 const nqv = x => { if (x == null) return null; const v = parseFloat(String(x).replace(/[$,%\s]/g, '')); return isFinite(v) ? v : null; };
 const nqf = (x, d) => { const v = nqv(x); return v == null ? '—' : num(v, d); };
@@ -3266,7 +3296,7 @@ PAGES.LQA = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ TRA : rendement total (dividendes réinvestis) contre cours seul */
-/* BRVM : dividendes officiels (brvm.org, dates exactes) complétés par les dividendes par exercice des comptes (SikaFinance) quand la date
+/* BRVM : dividendes officiels (avis, dates exactes) complétés par les dividendes par exercice des comptes quand la date
    de détachement n'est pas recensée : placés à la date habituelle de la société (estimation signalée). */
 async function trSeriesX(s, S) {
   if (!isBRVM(s) || s.cls !== 'Equity') { const tr = await trSeries(s, S); const k = S.div ? S.div.findIndex(v => v > 0) : -1; return { tr, est: [], cov: null, covY: k >= 0 ? Math.floor(S.x[k] / 10000) : null }; }
@@ -5169,28 +5199,53 @@ PAGES.WEIF = async (m, alive) => {
     ${pn('Lecture', 'INDX', `<div class="kv2">${D.filter(d => ['@SP.1', '@ND.1', '@DJ.1', '@TFS.1'].includes(d[0])).map(([k, l]) => `<span>${l.replace(/ \(.*\)/, '')}</span><b>${pc(F[k].pct)}</b>`).join('')}${F['@VX.1'] ? `<span>VIX à terme</span><b class="wh">${num(F['@VX.1'].last, 2)}</b>` : ''}</div>`, { lect: 'Signe et ampleur attendus à l’ouverture de Wall Street d’après les contrats à terme, hors nouvelles d’ici l’ouverture.' })}</div>`;
 };
 
-/* ------------------------------------------------------------------ anticipations de taux de la Fed (onglet 2 de RATES, ex-WIRP) d'après les contrats Fed funds 30 jours */
-const FOMC = ['2026-01-28', '2026-03-18', '2026-04-29', '2026-06-17', '2026-07-29', '2026-09-16', '2026-10-28', '2026-12-09']; // dates de décision publiées par la Fed (2e jour de réunion)
+/* ------------------------------------------------------------------ anticipations de taux de la Fed (onglet 2 de RATES, ex-WIRP) d'après les contrats Fed funds 30 jours
+   Calendrier officiel des réunions (relu chaque jour). Méthode de référence du marché : taux effectif de début et de fin de chaque mois de
+   réunion tiré des contrats (le mois voisin sans réunion sert d'ancrage), puis probabilités des fourchettes cibles réunion après réunion
+   (arbre de mouvements de 25 pb). */
+const FED_N = 3; // décisions affichées
+const ymAdd = (ym, k) => { let [y, mo] = ym.split('-').map(Number); mo += k; while (mo > 12) { mo -= 12; y++; } while (mo < 1) { mo += 12; y--; } return `${y}-${String(mo).padStart(2, '0')}`; };
+function fedPaths(R, FD, eff) {
+  const today = new Date().toISOString().slice(0, 10), F = Object.fromEntries(R.map(x => [x.ym, x.imp])), has = ym => FD.some(d => d.slice(0, 7) === ym);
+  const out = []; let prevE = null, prevYm = null;
+  for (const d of FD.filter(d => d >= today && F[d.slice(0, 7)] != null).sort()) {
+    const ym = d.slice(0, 7), [y, mo] = ym.split('-').map(Number), N = new Date(Date.UTC(y, mo, 0)).getUTCDate(), dd = Math.min(+d.slice(8, 10), N), f = F[ym];
+    const pv = ymAdd(ym, -1), nx = ymAdd(ym, 1); let S = null, E = null;
+    if (prevYm === pv && prevE != null) S = prevE; else if (!has(pv) && F[pv] != null) S = F[pv];     /* début du mois : réunion du mois précédent, ou mois précédent sans réunion */
+    if (!has(nx) && F[nx] != null) E = F[nx];                                                          /* fin du mois : mois suivant sans réunion */
+    if (S == null && E != null) S = (f - E * (N - dd) / N) / (dd / N);                                /* le nouveau taux s'applique le lendemain de la décision */
+    if (S == null) S = prevE != null ? prevE : eff;
+    if (E == null) E = N - dd > 0 ? (f - S * dd / N) / ((N - dd) / N) : (F[nx] != null ? F[nx] : S);
+    out.push({ d, pre: S, post: E, chg: (E - S) * 100 }); prevE = E; prevYm = ym;
+  }
+  return out;
+}
 async function wirpView(m, alive) {
   setTitle('World Interest Rate Probability'); const [W, E] = await Promise.all([WMKT(), ecoLite().catch(() => null)]); if (!alive()) return;
   const FF = ((W && W.cmd) || []).filter(r => r.g === 'FF').sort((a, b) => String(a.exp).localeCompare(String(b.exp)));
   if (FF.length < 3) { m.innerHTML = pn('Anticipations de taux', 'RATES', '<div class="empty">Contrats Fed funds en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, eff = M.DFF ? M.DFF.last : 100 - FF[0].last, lo = M.DFEDTARL ? M.DFEDTARL.last : null, hi = M.DFEDTARU ? M.DFEDTARU.last : null;
-  const R = FF.map(r => ({ r, ym: String(r.exp).slice(0, 7), imp: 100 - r.last }));
-  /* méthode des contrats mensuels : le mois d'une réunion mélange le taux d'avant et le taux d'après la décision */
-  const today = new Date().toISOString().slice(0, 10), meet = []; let pre = eff;
-  for (const x of R) { const md = FOMC.find(d => d.slice(0, 7) === x.ym && d >= today); if (!md) { pre = x.imp; continue; }
-    const [y, mo] = x.ym.split('-').map(Number), N = new Date(Date.UTC(y, mo, 0)).getUTCDate(), d1 = +md.slice(8, 10); /* le nouveau taux s'applique le lendemain de la décision */
-    const post = N - d1 > 0 ? (x.imp - pre * d1 / N) / ((N - d1) / N) : x.imp; meet.push({ d: md, pre, post, chg: (post - pre) * 100 }); pre = post; }
+  const R = FF.map(r => ({ r, ym: String(r.exp).slice(0, 7), imp: 100 - r.last })), FD = (E && E.fomc) || [];
+  const meet = fedPaths(R, FD, eff).slice(0, FED_N);
+  /* probabilités des fourchettes cibles : à chaque réunion, la variation attendue se répartit entre les deux mouvements de 25 pb qui l'encadrent */
+  let dist = { 0: 1 };
+  for (const x of meet) { const n = x.chg / 25, k = Math.floor(n + 1e-9), fr = Math.max(0, n - k), nd = {};
+    for (const [s0, p] of Object.entries(dist)) { const s = +s0; nd[s + k] = (nd[s + k] || 0) + p * (1 - fr); if (fr > 1e-6) nd[s + k + 1] = (nd[s + k + 1] || 0) + p * fr; }
+    x.dist = dist = nd; }
+  const steps = [...new Set(meet.flatMap(x => Object.keys(x.dist).filter(s => x.dist[s] >= 5e-4).map(Number)))].sort((a, b) => a - b);
+  const rng = s => lo != null && hi != null ? `${num(lo + s * .25, 2)}–${num(hi + s * .25, 2)}` : `${s > 0 ? '+' : ''}${s * 25} pb`;
   const mois = ym => new Date(ym + '-15T12:00:00Z').toLocaleDateString('fr-FR', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const lect1 = p => { const top = Object.entries(p).sort((a, b) => b[1] - a[1])[0]; const s = +top[0]; return s === 0 ? 'statu quo le plus probable' : `${s < 0 ? 'baisse' : 'hausse'} de ${Math.abs(s) * 25} pb la plus probable`; };
+  const tbl = meet.length ? `<table class="t wrp"><thead><tr><th class="l">Décision</th>${steps.map(s => `<th${s === 0 ? ' class="wh"' : ''}>${rng(s)}</th>`).join('')}<th>Taux début</th><th>Taux fin</th><th>Var. (pb)</th><th class="l">Lecture</th></tr></thead><tbody>${meet.map(x => { const mx = Math.max(...Object.values(x.dist));
+      return `<tr><td class="l am">${fds(x.d)}</td>${steps.map(s => { const p = x.dist[s] || 0; return `<td class="${p === mx ? 'yl' : p >= .005 ? 'wh' : 'dm'}">${p >= 5e-4 ? num(p * 100, 1) + ' %' : '—'}</td>`; }).join('')}<td>${num(x.pre, 3)} %</td><td class="wh">${num(x.post, 3)} %</td><td>${bpS(x.chg)}</td><td class="l">${lect1(x.dist)}</td></tr>`; }).join('')}</tbody></table>`
+    : `<div class="empty">${FD.length ? 'Aucune réunion dans la fenêtre des contrats relevés.' : 'Calendrier des réunions de la Fed en attente du prochain relevé.'}</div>`;
   m.innerHTML = `<div class="tools ttb"><span class="tlab">Banque centrale</span><b class="wh">Réserve fédérale (États-Unis)</b><span class="tlab">Fourchette cible</span><b class="wh">${lo != null && hi != null ? `${num(lo, 2)} – ${num(hi, 2)} %` : '—'}</b><span class="tlab">Taux effectif</span><b class="wh">${num(eff, 2)} %</b><span class="gsp"></span><span class="dm">contrats relevés à ${qTime(FF[0].t)}</span></div>
+    ${pn(`Probabilités des fourchettes cibles · ${meet.length} prochaine${meet.length > 1 ? 's' : ''} décision${meet.length > 1 ? 's' : ''} du FOMC`, 'RATES', tbl,
+      { np: true, lect: 'Méthode de référence du marché : pour chaque mois de réunion, le taux effectif de début et de fin de mois est tiré des contrats Fed funds 30 jours (le contrat d’un mois voisin sans réunion sert d’ancrage ; le nouveau taux s’applique le lendemain de la décision). La variation attendue se répartit entre les deux mouvements de 25 pb qui l’encadrent, et les réunions s’enchaînent (probabilités cumulées). Dates des réunions : calendrier officiel du FOMC, relu chaque jour.' })}
     <div class="grid c2">${pn('Taux moyen implicite par mois', 'RATES', cvb('wiG', 300), { np: true })}
-      ${pn('Prochaines réunions du FOMC', 'RATES', meet.length ? `<table class="t wrp"><thead><tr><th class="l">Décision</th><th>Taux avant</th><th>Taux implicite après</th><th>Variation (pb)</th><th class="l">Lecture</th></tr></thead><tbody>${meet.map(x => { const p = Math.abs(x.chg) / 25;
-          return `<tr><td class="l am">${fds(x.d)}</td><td>${num(x.pre, 3)} %</td><td class="wh">${num(x.post, 3)} %</td><td>${bpS ? bpS(x.chg) : num(x.chg, 1)}</td><td class="l">${Math.abs(x.chg) < 2.5 ? 'statu quo attendu' : `${x.chg < 0 ? 'baisse' : 'hausse'} de 25 pb anticipée à ${num(Math.min(100, p * 100), 0)} %${p > 1 ? ' (plus d’un mouvement)' : ''}`}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">Aucune réunion restante cette année dans la fenêtre des contrats.</div>',
-        { np: true, lect: 'Méthode des contrats mensuels (celle des outils de marché) : le prix d’un mois de réunion mélange le taux d’avant et celui d’après la décision, au prorata des jours. Réunions de l’année en cours seulement.' })}</div>
-    ${pn('Contrats Fed funds 30 jours', 'RATES', `<table class="t"><thead><tr><th class="l">Mois</th><th class="l">Échéance</th><th>Prix</th><th>Var.</th><th>Taux implicite</th><th>Écart au taux effectif (pb)</th><th>Équivalent en mouvements de 25 pb</th></tr></thead><tbody>${R.map((x, i) => { const d = (x.imp - eff) * 100;
-        return `<tr><td class="l"><span class="rn">${i + 1})</span><span class="am">${mois(x.ym)}</span></td><td class="l dm">${fds(x.r.exp)}</td><td class="wh">${num(x.r.last, 4)}</td><td class="${cls(x.r.chg)}">${x.r.chg != null ? (x.r.chg > 0 ? '+' : '') + num(x.r.chg, 3) : '—'}</td><td class="wh">${num(x.imp, 3)} %</td><td>${bpS(d)}</td><td>${num(d / 25, 2)}</td></tr>`; }).join('')}</tbody></table>`,
-      { np: true, lect: 'Taux implicite = 100 − prix du contrat : taux effectif moyen attendu sur le mois. Un écart négatif signifie que le marché anticipe des baisses de taux.' })}`;
+    ${pn('Contrats Fed funds 30 jours', 'RATES', `<table class="t"><thead><tr><th class="l">Mois</th><th class="l">Échéance</th><th>Prix</th><th>Var.</th><th>Taux implicite</th><th>Écart au taux effectif (pb)</th><th>En mouvements de 25 pb</th></tr></thead><tbody>${R.map((x, i) => { const d = (x.imp - eff) * 100, mt = FD.find(z => z.slice(0, 7) === x.ym);
+        return `<tr><td class="l"><span class="rn">${i + 1})</span><span class="am">${mois(x.ym)}</span>${mt ? ` <i class="qd" title="réunion du FOMC le ${fds(mt)}">R</i>` : ''}</td><td class="l dm">${fds(x.r.exp)}</td><td class="wh">${num(x.r.last, 4)}</td><td class="${cls(x.r.chg)}">${x.r.chg != null ? (x.r.chg > 0 ? '+' : '') + num(x.r.chg, 3) : '—'}</td><td class="wh">${num(x.imp, 3)} %</td><td>${bpS(d)}</td><td>${num(d / 25, 2)}</td></tr>`; }).join('')}</tbody></table>`,
+      { np: true, lect: 'Taux implicite = 100 − prix du contrat : taux effectif moyen attendu sur le mois. R = mois d’une réunion du FOMC. Un écart négatif signifie que le marché anticipe des baisses de taux.' })}</div>`;
   new TSChart($('wiG'), { panes: [{ h: 1, fmt: v => num(v, 2) + '%', refs: (lo != null ? [{ v: lo, color: 'rgba(200,200,200,.5)' }, { v: hi, color: 'rgba(200,200,200,.5)' }] : []).concat([{ v: eff, color: CL.amber }]) }], grid: 'dot' })
     .set({ x: R.map(x => +x.r.exp.replace(/-/g, '')), series: [{ y: R.map(x => x.imp), color: '#5fd0ea', w: 2, label: 'Taux implicite', fmt: v => num(v, 3) + ' %' }] }, [0, R.length - 1]);
 }
@@ -5309,10 +5364,10 @@ PAGES.RATES = async (m, alive) => {
 
 </script>
 <script>
-/* ================= FQT — NOT (notations financières) et SGI (intervenants du marché), d'après brvm.org ================= */
+/* ================= FQT — NOT (notations financières) et SGI (intervenants du marché), d’après les publications officielles ================= */
 'use strict';
 
-/* ------------------------------------------------------------------ NOT : notations financières publiées sur brvm.org (Bloomfield, WARA, GCR)
+/* ------------------------------------------------------------------ NOT : notations financières publiées officiellement (Bloomfield, WARA, GCR)
    Les notes sont lues dans les fiches et communiqués PDF déposés à la BRVM ; rien n'est déduit : un champ absent du document reste vide. */
 const NOT_LT = ['AAA', 'AA+', 'AA', 'AA-', 'A+', 'A', 'A-', 'BBB+', 'BBB', 'BBB-', 'BB+', 'BB', 'BB-', 'B+', 'B', 'B-', 'CCC+', 'CCC', 'CCC-', 'CC', 'C', 'D', 'SD'];
 const notRank = g => { const k = NOT_LT.indexOf(String(g || '').replace(/\(.*$/, '').trim()); return k < 0 ? 99 : k; };
@@ -5432,7 +5487,7 @@ const FN = {
   HS: ['Écart historique', 'sec', 'Cours', 'Rapport ou écart entre deux titres : moyenne, bandes ±1 et ±2 écarts-types, score z, centile, demi-vie', 'Historical Spread'],
   COMP: ['Rendements comparés', 'sec', 'Cours', 'Performance contre d’autres titres et un indice, dividendes réinvestis', 'Comparative Returns'],
   SEAS: ['Saisonnalité', 'sec', 'Cours', 'Rendements années × mois, jour de la semaine, « Sell in May »', 'Seasonality Chart'],
-  FA: ['Analyse financière', 'sec', 'Fondamentaux', 'Chiffres clés, compte de résultat, bilan, flux, ratios sur 10 exercices', 'Financial Analysis'],
+  FA: ['Analyse financière', 'sec', 'Fondamentaux', 'Chiffres clés, compte de résultat, bilan, flux et ratios ; BRVM : états financiers publiés poste par poste et une centaine de ratios sur tout l’historique', 'Financial Analysis'],
   RV: ['Valorisation relative', 'sec', 'Fondamentaux', 'Multiples contre pairs du secteur et contre son propre historique, juste valeur', 'Relative Valuation'],
   WACC: ['Coût du capital', 'sec', 'Fondamentaux', 'WACC, ROIC et création de valeur (ROIC − WACC)', 'Weighted Average Cost of Capital'],
   DVD: ['Dividendes', 'sec', 'Fondamentaux', 'Historique, rendement, croissance, taux de distribution, couverture par le FCF', 'Dividend/Split Summary'],
@@ -5822,7 +5877,7 @@ function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hi
 /* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
 /* ---------- mise à jour silencieuse du terminal : quand une nouvelle version est en ligne, la page se recharge d'elle-même
    au premier moment calme (onglet en arrière-plan, retour sur l'onglet, ou une minute sans action), en gardant l'écran et ses onglets ---------- */
-const APP_V = '980bc8ede4f2';
+const APP_V = 'e5ee01ecb107';
 let APP_NEW = false, APP_ACT = Date.now();
 function appReload() { try { sessionStorage.setItem('fqt_tabs', JSON.stringify(ST.tab)); } catch (e) { } location.reload(); }
 function appMaybe(now) { if (!APP_NEW) return; const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value; if (document.hidden || now || (!typing && Date.now() - APP_ACT > 60000)) appReload(); }
@@ -5863,7 +5918,7 @@ async function initSync() {
 
 /* ---------- mode anonyme (liens temporaires de démonstration) : les noms des fournisseurs de données disparaissent de l'écran ---------- */
 const ANON = typeof window !== 'undefined' && !!window.FQT_ANON;
-const ANON_RX = [/\b(?:Yahoo Finance|Yahoo|TradingView|Nasdaq(?: \/ Zacks| \(Zacks\))?|Zacks|SEC EDGAR|EDGAR|XBRL|SEC|FRED|Réserve fédérale de St\. Louis|CBOE|CNN|CNBC|EIA|AIE|IEA|Coinbase|Banque mondiale|World Bank|UMOA-Titres|Energy Institute|Our World in Data|OWID|Natural Earth|world-atlas|SikaFinance|Sika ?Finance|RichBourse|MarketScreener|Investing\.com|GitHub|Vercel|jsDelivr|ICE, CME, NYMEX, COMEX via CNBC|bourses via CNBC)\b/g];
+const ANON_RX = JSON.parse(decodeURIComponent(escape(atob('W1siXFxiKD86WWFob28gRmluYW5jZXxZYWhvb3xUcmFkaW5nVmlld3xOYXNkYXEoPzogXFwvIFphY2tzfCBcXChaYWNrc1xcKSk/fFphY2tzfFNFQyBFREdBUnxFREdBUnxYQlJMfFNFQ3xGUkVEfFLDqXNlcnZlIGbDqWTDqXJhbGUgZGUgU3RcXC4gTG91aXN8Q0JPRXxDTk58Q05CQ3xFSUF8QUlFfElFQXxDb2luYmFzZXxCYW5xdWUgbW9uZGlhbGV8V29ybGQgQmFua3xVTU9BLVRpdHJlc3xFbmVyZ3kgSW5zdGl0dXRlfE91ciBXb3JsZCBpbiBEYXRhfE9XSUR8TmF0dXJhbCBFYXJ0aHx3b3JsZC1hdGxhc3xTaWthRmluYW5jZXxTaWthID9GaW5hbmNlfFJpY2hCb3Vyc2V8TWFya2V0U2NyZWVuZXJ8SW52ZXN0aW5nXFwuY29tfEdpdEh1YnxWZXJjZWx8anNEZWxpdnJ8SUNFLCBDTUUsIE5ZTUVYLCBDT01FWCB2aWEgQ05CQ3xib3Vyc2VzIHZpYSBDTkJDKVxcYiIsImciXV0=')))).map(([p, f]) => new RegExp(p, f)); // liste encodée
 function anonText(t) { let o = t.replace(/\b(?:Sources?|Calendrier|Consensus publié par|Cotations différées)\s*(?::|\()[^.]*?(?:\.(?=\s|$)|$)/g, ''); for (const rx of ANON_RX) o = o.replace(rx, ''); return o.replace(/\b(Sources?|Calendrier|Données|Consensus publié par)\s*:?\s*(?:[,·;/()]\s*|\s(et|via|ou)\s)*(?=[.;)]|$)/g, '').replace(/\(\s*[,;·/]*\s*\)/g, '').replace(/\s+([,.;])/g, '$1').replace(/([,·;/])\s*(?=[,·;/.)])/g, '').replace(/ {2,}/g, ' '); }
 function anonNode(root) { if (!ANON || !root) return; const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const L = []; while (w.nextNode()) L.push(w.currentNode); for (const n of L) { const v = anonText(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
   root.querySelectorAll && root.querySelectorAll('[title]').forEach(e => { const v = anonText(e.title); if (v !== e.title) e.title = v; }); }

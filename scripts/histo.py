@@ -155,6 +155,7 @@ def main():
     ap.add_argument("--data", required=True, help="données publiées du terminal (dossier data)")
     ap.add_argument("--boc", required=True, help="archive des bulletins officiels (boc_px)")
     ap.add_argument("--out", required=True, help="dossier de la base historique")
+    ap.add_argument("--comptes", default=None, help="comptes.json (états financiers publiés, lus et vérifiés)")
     a = ap.parse_args()
     now = dt.datetime.now(dt.timezone.utc)
     today = now.date().isoformat()
@@ -275,6 +276,27 @@ def main():
                 tre.upsert(r)
     tables.append(tre)
 
+    # ---------- 6 bis. états financiers publiés, poste par poste (millions de FCFA), exercices vérifiés ----------
+    tef = Table(out, "etats_financiers.csv", ["titre", "exercice", "perimetre", "norme", "poste", "valeur", "documents_concordants"],
+                ["titre", "exercice", "poste"])
+    if a.comptes and os.path.exists(a.comptes):
+        try:
+            import sys
+            sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+            import comptes as CPT
+            fund = load(os.path.join(a.data, "fundamentals.json"), {}) or {}
+            mir = {t: (v.get("series") or {}) for t, v in fund.items() if isinstance(v, dict)}
+            for tk, cc in CPT.consolidate(load(a.comptes, {}) or {}, mir).items():
+                if tk not in brvm_eq:
+                    continue
+                for y, r in sorted(cc["y"].items()):
+                    for k, v in sorted(r["v"].items()):
+                        tef.upsert({"titre": tk, "exercice": y, "perimetre": cc["per"], "norme": cc["std"], "poste": k, "valeur": round(v, 3),
+                                    "documents_concordants": r.get("n")})
+        except Exception as e:  # noqa: BLE001
+            log.append(f"états financiers illisibles : {e}")
+    tables.append(tef)
+
     # ---------- 7. flottant officiel ----------
     tfl = Table(out, "flottant.csv", ["date_avis", "arrete_au", "titre", "titres", "titres_flottants", "flottant_pct", "seuil_15_respecte"],
                 ["date_avis", "titre"])
@@ -301,6 +323,10 @@ def main():
         for k in (t.drop(lambda r, di=di: r["date"] == di) if t else []):
             tco.upsert({"constate_le": today, "fichier": t.name, "cle": " | ".join(k), "champ": "ligne", "ancienne_valeur": "séance archivée",
                         "nouvelle_valeur": "retirée : bulletin identique à celui de la veille (jour sans séance)"})
+    # exercice pas encore clos (comptes semestriels pris pour des comptes annuels par une source) : ligne retirée, et consignée
+    for k in tre.drop(lambda r: (r.get("exercice") or "0").isdigit() and int(r["exercice"]) >= now.year):
+        tco.upsert({"constate_le": today, "fichier": tre.name, "cle": " | ".join(k), "champ": "ligne", "ancienne_valeur": "exercice archivé",
+                    "nouvelle_valeur": "retirée : exercice pas encore clos (comptes semestriels)"})
     for t in tables:
         if t.n0 == 0:  # première alimentation du fichier : rien à corriger
             continue

@@ -112,7 +112,8 @@ jobs:
           FQT_MODE: ${{ steps.mode.outputs.mode }}
         run: |
           # Fear & Greed de CNN relevé à chaque passage en semaine (le soir, il est déjà relevé avec les sources complémentaires)
-          ONLY=avis,watch,obl,cmc,cal; if [ "$(date -u +%u)" -le 5 ] && [ "$FQT_MODE" != "eod" ]; then ONLY=$ONLY,cnn; fi
+          # calendrier du FOMC relu au plus une fois par jour (anticipations de la Fed)
+          ONLY=avis,watch,obl,cmc,cal,fomc; if [ "$(date -u +%u)" -le 5 ] && [ "$FQT_MODE" != "eod" ]; then ONLY=$ONLY,cnn; fi
           timeout 360 python3 scripts/fetch_extra.py --out /tmp/raw --only $ONLY --site /tmp/site/data --news /tmp/site/data/news.json
 
       - name: Outils PDF (EOD)
@@ -129,10 +130,10 @@ jobs:
         continue-on-error: true
         run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only ratings,sgi --site /tmp/site/data
 
-      - name: Comptes BRVM sur 10 exercices (archives SikaFinance, états financiers publiés)
+      - name: Comptes BRVM sur 10 exercices (archives)
         if: steps.mode.outputs.mode == 'eod'
         continue-on-error: true
-        run: timeout 1600 python3 scripts/fetch_extra.py --out /tmp/raw --only sikah,pdffin
+        run: timeout 1600 python3 scripts/fetch_extra.py --out /tmp/raw --only sikah
 
       - name: Comptes SEC et consensus des analystes (EOD)
         if: steps.mode.outputs.mode == 'eod'
@@ -154,7 +155,15 @@ jobs:
         run: timeout 900 python3 scripts/fetch_extra.py --out /tmp/raw --only nasdaq
 
       - name: Recalculer toute la base
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # états financiers publiés à la BRVM, lus et vérifiés (branche comptes) ; copie gardée sur la branche raw en secours
+          if curl -sfL -m 40 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw" \
+               "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/comptes.json?ref=comptes" -o /tmp/comptes.json \
+             && python3 -c "import json,sys;d=json.load(open('/tmp/comptes.json'));sys.exit(0 if d.get('docs') else 1)"; then
+            cp /tmp/comptes.json /tmp/raw/comptes.json
+          elif [ -f /tmp/raw/comptes.json ]; then cp /tmp/raw/comptes.json /tmp/comptes.json; fi
           # base historique BRVM (dépôt public tiers) ; miroir gardé chaque soir sur la branche raw et utilisé si le dépôt devient injoignable
           if timeout 180 git clone -q --depth 1 https://github.com/harzat/brvm-data-public.git /tmp/brvmsrc && [ -f /tmp/brvmsrc/actions.json ]; then
             if [ "${{ steps.mode.outputs.mode }}" = "eod" ]; then rm -rf /tmp/raw/brvm_src && mkdir -p /tmp/raw/brvm_src && tar -C /tmp/brvmsrc --exclude=.git -cf - . | tar -x -C /tmp/raw/brvm_src; fi
@@ -166,7 +175,8 @@ jobs:
           fi
           LIVE=""; if [ "${{ steps.mode.outputs.mode }}" != "eod" ] && [ -f /tmp/site/data/summary.json ]; then LIVE="--live"; fi
           python3 scripts/build_terminal.py --brvm-src /tmp/brvmsrc --out /tmp/site/data --session /tmp/state/brvm.json \
-            --extra /tmp/raw --fcf seed/fcf_brvm.json --quotes /tmp/site/data/quotes.json --cache /tmp/bcache --boc /tmp/boc/boc_px $LIVE
+            --extra /tmp/raw --fcf seed/fcf_brvm.json --quotes /tmp/site/data/quotes.json --cache /tmp/bcache --boc /tmp/boc/boc_px $LIVE \
+            $([ -f /tmp/comptes.json ] && echo --comptes /tmp/comptes.json)
 
       - name: "Publier les données brutes (branche raw, soir ou comptes SEC rafraîchis)"
         env:

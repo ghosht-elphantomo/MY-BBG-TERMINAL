@@ -281,28 +281,53 @@ PAGES.WEIF = async (m, alive) => {
     ${pn('Lecture', 'INDX', `<div class="kv2">${D.filter(d => ['@SP.1', '@ND.1', '@DJ.1', '@TFS.1'].includes(d[0])).map(([k, l]) => `<span>${l.replace(/ \(.*\)/, '')}</span><b>${pc(F[k].pct)}</b>`).join('')}${F['@VX.1'] ? `<span>VIX à terme</span><b class="wh">${num(F['@VX.1'].last, 2)}</b>` : ''}</div>`, { lect: 'Signe et ampleur attendus à l’ouverture de Wall Street d’après les contrats à terme, hors nouvelles d’ici l’ouverture.' })}</div>`;
 };
 
-/* ------------------------------------------------------------------ anticipations de taux de la Fed (onglet 2 de RATES, ex-WIRP) d'après les contrats Fed funds 30 jours */
-const FOMC = ['2026-01-28', '2026-03-18', '2026-04-29', '2026-06-17', '2026-07-29', '2026-09-16', '2026-10-28', '2026-12-09']; // dates de décision publiées par la Fed (2e jour de réunion)
+/* ------------------------------------------------------------------ anticipations de taux de la Fed (onglet 2 de RATES, ex-WIRP) d'après les contrats Fed funds 30 jours
+   Calendrier officiel des réunions (relu chaque jour). Méthode de référence du marché : taux effectif de début et de fin de chaque mois de
+   réunion tiré des contrats (le mois voisin sans réunion sert d'ancrage), puis probabilités des fourchettes cibles réunion après réunion
+   (arbre de mouvements de 25 pb). */
+const FED_N = 3; // décisions affichées
+const ymAdd = (ym, k) => { let [y, mo] = ym.split('-').map(Number); mo += k; while (mo > 12) { mo -= 12; y++; } while (mo < 1) { mo += 12; y--; } return `${y}-${String(mo).padStart(2, '0')}`; };
+function fedPaths(R, FD, eff) {
+  const today = new Date().toISOString().slice(0, 10), F = Object.fromEntries(R.map(x => [x.ym, x.imp])), has = ym => FD.some(d => d.slice(0, 7) === ym);
+  const out = []; let prevE = null, prevYm = null;
+  for (const d of FD.filter(d => d >= today && F[d.slice(0, 7)] != null).sort()) {
+    const ym = d.slice(0, 7), [y, mo] = ym.split('-').map(Number), N = new Date(Date.UTC(y, mo, 0)).getUTCDate(), dd = Math.min(+d.slice(8, 10), N), f = F[ym];
+    const pv = ymAdd(ym, -1), nx = ymAdd(ym, 1); let S = null, E = null;
+    if (prevYm === pv && prevE != null) S = prevE; else if (!has(pv) && F[pv] != null) S = F[pv];     /* début du mois : réunion du mois précédent, ou mois précédent sans réunion */
+    if (!has(nx) && F[nx] != null) E = F[nx];                                                          /* fin du mois : mois suivant sans réunion */
+    if (S == null && E != null) S = (f - E * (N - dd) / N) / (dd / N);                                /* le nouveau taux s'applique le lendemain de la décision */
+    if (S == null) S = prevE != null ? prevE : eff;
+    if (E == null) E = N - dd > 0 ? (f - S * dd / N) / ((N - dd) / N) : (F[nx] != null ? F[nx] : S);
+    out.push({ d, pre: S, post: E, chg: (E - S) * 100 }); prevE = E; prevYm = ym;
+  }
+  return out;
+}
 async function wirpView(m, alive) {
   setTitle('World Interest Rate Probability'); const [W, E] = await Promise.all([WMKT(), ecoLite().catch(() => null)]); if (!alive()) return;
   const FF = ((W && W.cmd) || []).filter(r => r.g === 'FF').sort((a, b) => String(a.exp).localeCompare(String(b.exp)));
   if (FF.length < 3) { m.innerHTML = pn('Anticipations de taux', 'RATES', '<div class="empty">Contrats Fed funds en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const M = E ? Object.fromEntries(E.meta.map(x => [x.id, x])) : {}, eff = M.DFF ? M.DFF.last : 100 - FF[0].last, lo = M.DFEDTARL ? M.DFEDTARL.last : null, hi = M.DFEDTARU ? M.DFEDTARU.last : null;
-  const R = FF.map(r => ({ r, ym: String(r.exp).slice(0, 7), imp: 100 - r.last }));
-  /* méthode des contrats mensuels : le mois d'une réunion mélange le taux d'avant et le taux d'après la décision */
-  const today = new Date().toISOString().slice(0, 10), meet = []; let pre = eff;
-  for (const x of R) { const md = FOMC.find(d => d.slice(0, 7) === x.ym && d >= today); if (!md) { pre = x.imp; continue; }
-    const [y, mo] = x.ym.split('-').map(Number), N = new Date(Date.UTC(y, mo, 0)).getUTCDate(), d1 = +md.slice(8, 10); /* le nouveau taux s'applique le lendemain de la décision */
-    const post = N - d1 > 0 ? (x.imp - pre * d1 / N) / ((N - d1) / N) : x.imp; meet.push({ d: md, pre, post, chg: (post - pre) * 100 }); pre = post; }
+  const R = FF.map(r => ({ r, ym: String(r.exp).slice(0, 7), imp: 100 - r.last })), FD = (E && E.fomc) || [];
+  const meet = fedPaths(R, FD, eff).slice(0, FED_N);
+  /* probabilités des fourchettes cibles : à chaque réunion, la variation attendue se répartit entre les deux mouvements de 25 pb qui l'encadrent */
+  let dist = { 0: 1 };
+  for (const x of meet) { const n = x.chg / 25, k = Math.floor(n + 1e-9), fr = Math.max(0, n - k), nd = {};
+    for (const [s0, p] of Object.entries(dist)) { const s = +s0; nd[s + k] = (nd[s + k] || 0) + p * (1 - fr); if (fr > 1e-6) nd[s + k + 1] = (nd[s + k + 1] || 0) + p * fr; }
+    x.dist = dist = nd; }
+  const steps = [...new Set(meet.flatMap(x => Object.keys(x.dist).filter(s => x.dist[s] >= 5e-4).map(Number)))].sort((a, b) => a - b);
+  const rng = s => lo != null && hi != null ? `${num(lo + s * .25, 2)}–${num(hi + s * .25, 2)}` : `${s > 0 ? '+' : ''}${s * 25} pb`;
   const mois = ym => new Date(ym + '-15T12:00:00Z').toLocaleDateString('fr-FR', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+  const lect1 = p => { const top = Object.entries(p).sort((a, b) => b[1] - a[1])[0]; const s = +top[0]; return s === 0 ? 'statu quo le plus probable' : `${s < 0 ? 'baisse' : 'hausse'} de ${Math.abs(s) * 25} pb la plus probable`; };
+  const tbl = meet.length ? `<table class="t wrp"><thead><tr><th class="l">Décision</th>${steps.map(s => `<th${s === 0 ? ' class="wh"' : ''}>${rng(s)}</th>`).join('')}<th>Taux début</th><th>Taux fin</th><th>Var. (pb)</th><th class="l">Lecture</th></tr></thead><tbody>${meet.map(x => { const mx = Math.max(...Object.values(x.dist));
+      return `<tr><td class="l am">${fds(x.d)}</td>${steps.map(s => { const p = x.dist[s] || 0; return `<td class="${p === mx ? 'yl' : p >= .005 ? 'wh' : 'dm'}">${p >= 5e-4 ? num(p * 100, 1) + ' %' : '—'}</td>`; }).join('')}<td>${num(x.pre, 3)} %</td><td class="wh">${num(x.post, 3)} %</td><td>${bpS(x.chg)}</td><td class="l">${lect1(x.dist)}</td></tr>`; }).join('')}</tbody></table>`
+    : `<div class="empty">${FD.length ? 'Aucune réunion dans la fenêtre des contrats relevés.' : 'Calendrier des réunions de la Fed en attente du prochain relevé.'}</div>`;
   m.innerHTML = `<div class="tools ttb"><span class="tlab">Banque centrale</span><b class="wh">Réserve fédérale (États-Unis)</b><span class="tlab">Fourchette cible</span><b class="wh">${lo != null && hi != null ? `${num(lo, 2)} – ${num(hi, 2)} %` : '—'}</b><span class="tlab">Taux effectif</span><b class="wh">${num(eff, 2)} %</b><span class="gsp"></span><span class="dm">contrats relevés à ${qTime(FF[0].t)}</span></div>
+    ${pn(`Probabilités des fourchettes cibles · ${meet.length} prochaine${meet.length > 1 ? 's' : ''} décision${meet.length > 1 ? 's' : ''} du FOMC`, 'RATES', tbl,
+      { np: true, lect: 'Méthode de référence du marché : pour chaque mois de réunion, le taux effectif de début et de fin de mois est tiré des contrats Fed funds 30 jours (le contrat d’un mois voisin sans réunion sert d’ancrage ; le nouveau taux s’applique le lendemain de la décision). La variation attendue se répartit entre les deux mouvements de 25 pb qui l’encadrent, et les réunions s’enchaînent (probabilités cumulées). Dates des réunions : calendrier officiel du FOMC, relu chaque jour.' })}
     <div class="grid c2">${pn('Taux moyen implicite par mois', 'RATES', cvb('wiG', 300), { np: true })}
-      ${pn('Prochaines réunions du FOMC', 'RATES', meet.length ? `<table class="t wrp"><thead><tr><th class="l">Décision</th><th>Taux avant</th><th>Taux implicite après</th><th>Variation (pb)</th><th class="l">Lecture</th></tr></thead><tbody>${meet.map(x => { const p = Math.abs(x.chg) / 25;
-          return `<tr><td class="l am">${fds(x.d)}</td><td>${num(x.pre, 3)} %</td><td class="wh">${num(x.post, 3)} %</td><td>${bpS ? bpS(x.chg) : num(x.chg, 1)}</td><td class="l">${Math.abs(x.chg) < 2.5 ? 'statu quo attendu' : `${x.chg < 0 ? 'baisse' : 'hausse'} de 25 pb anticipée à ${num(Math.min(100, p * 100), 0)} %${p > 1 ? ' (plus d’un mouvement)' : ''}`}</td></tr>`; }).join('')}</tbody></table>` : '<div class="empty">Aucune réunion restante cette année dans la fenêtre des contrats.</div>',
-        { np: true, lect: 'Méthode des contrats mensuels (celle des outils de marché) : le prix d’un mois de réunion mélange le taux d’avant et celui d’après la décision, au prorata des jours. Réunions de l’année en cours seulement.' })}</div>
-    ${pn('Contrats Fed funds 30 jours', 'RATES', `<table class="t"><thead><tr><th class="l">Mois</th><th class="l">Échéance</th><th>Prix</th><th>Var.</th><th>Taux implicite</th><th>Écart au taux effectif (pb)</th><th>Équivalent en mouvements de 25 pb</th></tr></thead><tbody>${R.map((x, i) => { const d = (x.imp - eff) * 100;
-        return `<tr><td class="l"><span class="rn">${i + 1})</span><span class="am">${mois(x.ym)}</span></td><td class="l dm">${fds(x.r.exp)}</td><td class="wh">${num(x.r.last, 4)}</td><td class="${cls(x.r.chg)}">${x.r.chg != null ? (x.r.chg > 0 ? '+' : '') + num(x.r.chg, 3) : '—'}</td><td class="wh">${num(x.imp, 3)} %</td><td>${bpS(d)}</td><td>${num(d / 25, 2)}</td></tr>`; }).join('')}</tbody></table>`,
-      { np: true, lect: 'Taux implicite = 100 − prix du contrat : taux effectif moyen attendu sur le mois. Un écart négatif signifie que le marché anticipe des baisses de taux.' })}`;
+    ${pn('Contrats Fed funds 30 jours', 'RATES', `<table class="t"><thead><tr><th class="l">Mois</th><th class="l">Échéance</th><th>Prix</th><th>Var.</th><th>Taux implicite</th><th>Écart au taux effectif (pb)</th><th>En mouvements de 25 pb</th></tr></thead><tbody>${R.map((x, i) => { const d = (x.imp - eff) * 100, mt = FD.find(z => z.slice(0, 7) === x.ym);
+        return `<tr><td class="l"><span class="rn">${i + 1})</span><span class="am">${mois(x.ym)}</span>${mt ? ` <i class="qd" title="réunion du FOMC le ${fds(mt)}">R</i>` : ''}</td><td class="l dm">${fds(x.r.exp)}</td><td class="wh">${num(x.r.last, 4)}</td><td class="${cls(x.r.chg)}">${x.r.chg != null ? (x.r.chg > 0 ? '+' : '') + num(x.r.chg, 3) : '—'}</td><td class="wh">${num(x.imp, 3)} %</td><td>${bpS(d)}</td><td>${num(d / 25, 2)}</td></tr>`; }).join('')}</tbody></table>`,
+      { np: true, lect: 'Taux implicite = 100 − prix du contrat : taux effectif moyen attendu sur le mois. R = mois d’une réunion du FOMC. Un écart négatif signifie que le marché anticipe des baisses de taux.' })}</div>`;
   new TSChart($('wiG'), { panes: [{ h: 1, fmt: v => num(v, 2) + '%', refs: (lo != null ? [{ v: lo, color: 'rgba(200,200,200,.5)' }, { v: hi, color: 'rgba(200,200,200,.5)' }] : []).concat([{ v: eff, color: CL.amber }]) }], grid: 'dot' })
     .set({ x: R.map(x => +x.r.exp.replace(/-/g, '')), series: [{ y: R.map(x => x.imp), color: '#5fd0ea', w: 2, label: 'Taux implicite', fmt: v => num(v, 3) + ' %' }] }, [0, R.length - 1]);
 }

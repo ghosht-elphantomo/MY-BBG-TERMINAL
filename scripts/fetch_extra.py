@@ -345,6 +345,59 @@ def run_nasdaq(out, prev):
     save(os.path.join(out, "nasdaq_meta.json"), meta)
 
 
+# ---------------------------------------------------------------- calendrier des réunions du FOMC (Réserve fédérale)
+FOMC_MO = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+
+
+def fomc_parse(h):
+    """Page des calendriers du FOMC -> dates de décision (2e jour) des réunions programmées, années par années."""
+    t = HTML.unescape(re.sub(r"<[^>]+>", "\n", h))
+    lines = [x.strip() for x in t.splitlines() if x.strip()]
+    out, year = set(), None
+    for i, x in enumerate(lines):
+        m = re.match(r"^(\d{4}) FOMC Meetings$", x, re.I)
+        if m:
+            year = int(m.group(1))
+            continue
+        mm = re.match(r"^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?(?:/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?)?$", x, re.I)
+        if not year or not mm or i + 1 >= len(lines):
+            continue
+        dm = re.match(r"^(\d{1,2})(?:\s*-\s*(\d{1,2}))?\s*\*?\s*(.*)$", lines[i + 1])
+        if not dm or re.search(r"unscheduled|notation|conference call|cancel", dm.group(3) or "", re.I):
+            continue
+        d1, d2 = int(dm.group(1)), int(dm.group(2) or dm.group(1))
+        mo = FOMC_MO[mm.group(1).lower()]
+        if d2 < d1 and mm.group(2):
+            mo = FOMC_MO[mm.group(2).lower()]  # réunion à cheval sur deux mois (« Apr/May 30-1 »)
+        try:
+            out.add(dt.date(year + (1 if mo < FOMC_MO[mm.group(1).lower()] else 0), mo, d2).isoformat())
+        except ValueError:
+            continue
+    return sorted(out)
+
+
+def run_fomc(out):
+    """Dates de décision du FOMC publiées par la Réserve fédérale (relues au plus une fois par jour ; ancienne liste gardée si la
+    page ne répond pas ou change de forme)."""
+    p = os.path.join(out, "fomc.json")
+    old = json.load(open(p, encoding="utf8")) if os.path.exists(p) else {}
+    if old.get("ts") and time.time() - old["ts"] < 20 * 3600:
+        return
+    try:
+        h = get("https://www.federalreserve.gov/monetarypolicy/fomccalendars.htm", tries=2, timeout=30).decode("utf8", "replace")
+        d = fomc_parse(h)
+    except Exception as e:  # noqa: BLE001
+        note("fomc", False, str(e)[:120])
+        return
+    y = TODAY.year
+    if sum(1 for x in d if x.startswith(str(y))) < 6:
+        note("fomc", False, f"calendrier illisible ({len(d)} dates)")
+        return
+    save(p, {"ts": int(time.time()), "d": d})
+    open(os.path.join(out, ".dirty"), "a").write(" fomc")
+    note("fomc")
+
+
 # ---------------------------------------------------------------- FRED, CBOE, CNN, crypto, Banque mondiale
 def run_fred(out):
     fails = [0]
@@ -3532,7 +3585,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     only = set(a.only.split(",")) if a.only else set()
     t0 = time.time()
-    steps = [("cal", lambda: run_cal(a.out, a.site)), ("avis", lambda: run_avis(a.site)), ("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("cboe", lambda: run_cboe(a.out)),
+    steps = [("cal", lambda: run_cal(a.out, a.site)), ("avis", lambda: run_avis(a.site)), ("nasdaq", lambda: run_nasdaq(a.out, a.out)), ("fred", lambda: run_fred(a.out)), ("fomc", lambda: run_fomc(a.out)), ("cboe", lambda: run_cboe(a.out)),
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("comptes", lambda: run_comptes(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),

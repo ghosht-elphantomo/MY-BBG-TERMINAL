@@ -1,7 +1,7 @@
-/* ================= FQT — NOT (notations financières) et SGI (intervenants du marché), d'après brvm.org ================= */
+/* ================= FQT — NOT (notations financières) et SGI (intervenants du marché), d’après les publications officielles ================= */
 'use strict';
 
-/* ------------------------------------------------------------------ NOT : notations financières publiées sur brvm.org (Bloomfield, WARA, GCR)
+/* ------------------------------------------------------------------ NOT : notations financières publiées officiellement (Bloomfield, WARA, GCR)
    Les notes sont lues dans les fiches et communiqués PDF déposés à la BRVM ; rien n'est déduit : un champ absent du document reste vide. */
 const NOT_LT = ['AAA', 'AA+', 'AA', 'AA-', 'A+', 'A', 'A-', 'BBB+', 'BBB', 'BBB-', 'BB+', 'BB', 'BB-', 'B+', 'B', 'B-', 'CCC+', 'CCC', 'CCC-', 'CC', 'C', 'D', 'SD'];
 const notRank = g => { const k = NOT_LT.indexOf(String(g || '').replace(/\(.*$/, '').trim()); return k < 0 ? 99 : k; };

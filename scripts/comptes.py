@@ -796,6 +796,8 @@ def _assign(vals, heads, i, fy, brut):
             return ({fy: v[2], fy - 1: v[3]} if v[3] is not None else {fy: v[2]}), "brut"
         if len(v) == 3 and v[2] is not None and abs(z[0] - abs(z[1]) - z[2]) <= max(2, abs(z[0]) * 1e-6) and fy:
             return {fy: v[2]}, "brut"
+        if len(v) == 3 and None not in v and v[0] == v[1] and v[0] != 0 and fy:
+            return {fy: v[1], fy - 1: v[2]}, "brut"  # colonne des amortissements vide : brut = net, puis net N-1
     recent = [h for h in heads if 0 <= i - h[0] < 160][-4:]
     out = {}
     if recent:

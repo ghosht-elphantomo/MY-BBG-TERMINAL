@@ -121,7 +121,7 @@ PAGES.LQA = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ TRA : rendement total (dividendes réinvestis) contre cours seul */
-/* BRVM : dividendes officiels (brvm.org, dates exactes) complétés par les dividendes par exercice des comptes (SikaFinance) quand la date
+/* BRVM : dividendes officiels (avis, dates exactes) complétés par les dividendes par exercice des comptes quand la date
    de détachement n'est pas recensée : placés à la date habituelle de la société (estimation signalée). */
 async function trSeriesX(s, S) {
   if (!isBRVM(s) || s.cls !== 'Equity') { const tr = await trSeries(s, S); const k = S.div ? S.div.findIndex(v => v > 0) : -1; return { tr, est: [], cov: null, covY: k >= 0 ? Math.floor(S.x[k] / 10000) : null }; }

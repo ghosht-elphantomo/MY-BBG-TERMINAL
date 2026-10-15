@@ -57,7 +57,7 @@ const FN = {
   HS: ['Écart historique', 'sec', 'Cours', 'Rapport ou écart entre deux titres : moyenne, bandes ±1 et ±2 écarts-types, score z, centile, demi-vie', 'Historical Spread'],
   COMP: ['Rendements comparés', 'sec', 'Cours', 'Performance contre d’autres titres et un indice, dividendes réinvestis', 'Comparative Returns'],
   SEAS: ['Saisonnalité', 'sec', 'Cours', 'Rendements années × mois, jour de la semaine, « Sell in May »', 'Seasonality Chart'],
-  FA: ['Analyse financière', 'sec', 'Fondamentaux', 'Chiffres clés, compte de résultat, bilan, flux, ratios sur 10 exercices', 'Financial Analysis'],
+  FA: ['Analyse financière', 'sec', 'Fondamentaux', 'Chiffres clés, compte de résultat, bilan, flux et ratios ; BRVM : états financiers publiés poste par poste et une centaine de ratios sur tout l’historique', 'Financial Analysis'],
   RV: ['Valorisation relative', 'sec', 'Fondamentaux', 'Multiples contre pairs du secteur et contre son propre historique, juste valeur', 'Relative Valuation'],
   WACC: ['Coût du capital', 'sec', 'Fondamentaux', 'WACC, ROIC et création de valeur (ROIC − WACC)', 'Weighted Average Cost of Capital'],
   DVD: ['Dividendes', 'sec', 'Fondamentaux', 'Historique, rendement, croissance, taux de distribution, couverture par le FCF', 'Dividend/Split Summary'],
@@ -488,7 +488,7 @@ async function initSync() {
 
 /* ---------- mode anonyme (liens temporaires de démonstration) : les noms des fournisseurs de données disparaissent de l'écran ---------- */
 const ANON = typeof window !== 'undefined' && !!window.FQT_ANON;
-const ANON_RX = [/\b(?:Yahoo Finance|Yahoo|TradingView|Nasdaq(?: \/ Zacks| \(Zacks\))?|Zacks|SEC EDGAR|EDGAR|XBRL|SEC|FRED|Réserve fédérale de St\. Louis|CBOE|CNN|CNBC|EIA|AIE|IEA|Coinbase|Banque mondiale|World Bank|UMOA-Titres|Energy Institute|Our World in Data|OWID|Natural Earth|world-atlas|SikaFinance|Sika ?Finance|RichBourse|MarketScreener|Investing\.com|GitHub|Vercel|jsDelivr|ICE, CME, NYMEX, COMEX via CNBC|bourses via CNBC)\b/g];
+const ANON_RX = JSON.parse(decodeURIComponent(escape(atob('W1siXFxiKD86WWFob28gRmluYW5jZXxZYWhvb3xUcmFkaW5nVmlld3xOYXNkYXEoPzogXFwvIFphY2tzfCBcXChaYWNrc1xcKSk/fFphY2tzfFNFQyBFREdBUnxFREdBUnxYQlJMfFNFQ3xGUkVEfFLDqXNlcnZlIGbDqWTDqXJhbGUgZGUgU3RcXC4gTG91aXN8Q0JPRXxDTk58Q05CQ3xFSUF8QUlFfElFQXxDb2luYmFzZXxCYW5xdWUgbW9uZGlhbGV8V29ybGQgQmFua3xVTU9BLVRpdHJlc3xFbmVyZ3kgSW5zdGl0dXRlfE91ciBXb3JsZCBpbiBEYXRhfE9XSUR8TmF0dXJhbCBFYXJ0aHx3b3JsZC1hdGxhc3xTaWthRmluYW5jZXxTaWthID9GaW5hbmNlfFJpY2hCb3Vyc2V8TWFya2V0U2NyZWVuZXJ8SW52ZXN0aW5nXFwuY29tfEdpdEh1YnxWZXJjZWx8anNEZWxpdnJ8SUNFLCBDTUUsIE5ZTUVYLCBDT01FWCB2aWEgQ05CQ3xib3Vyc2VzIHZpYSBDTkJDKVxcYiIsImciXV0=')))).map(([p, f]) => new RegExp(p, f)); // liste encodée
 function anonText(t) { let o = t.replace(/\b(?:Sources?|Calendrier|Consensus publié par|Cotations différées)\s*(?::|\()[^.]*?(?:\.(?=\s|$)|$)/g, ''); for (const rx of ANON_RX) o = o.replace(rx, ''); return o.replace(/\b(Sources?|Calendrier|Données|Consensus publié par)\s*:?\s*(?:[,·;/()]\s*|\s(et|via|ou)\s)*(?=[.;)]|$)/g, '').replace(/\(\s*[,;·/]*\s*\)/g, '').replace(/\s+([,.;])/g, '$1').replace(/([,·;/])\s*(?=[,·;/.)])/g, '').replace(/ {2,}/g, ' '); }
 function anonNode(root) { if (!ANON || !root) return; const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const L = []; while (w.nextNode()) L.push(w.currentNode); for (const n of L) { const v = anonText(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
   root.querySelectorAll && root.querySelectorAll('[title]').forEach(e => { const v = anonText(e.title); if (v !== e.title) e.title = v; }); }

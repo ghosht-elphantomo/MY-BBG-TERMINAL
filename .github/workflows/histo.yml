@@ -1,7 +1,8 @@
 name: Base historique BRVM
 
 # Archive cumulative (jamais effacée) des cours officiels, indices, dividendes, fractionnements, événements, résultats,
-# flottant et notations, contrôlée chaque soir. Lit seulement les branches `data` et `boc` ; écrit seulement la branche `histo`.
+# états financiers publiés, flottant et notations, contrôlée chaque soir. Lit seulement les branches `data`, `boc` et `comptes` ;
+# écrit seulement la branche `histo`.
 # Ne touche ni au site, ni à son actualisation : aucun déploiement (vercel.json de la branche), aucune écriture ailleurs.
 on:
   schedule:
@@ -26,6 +27,7 @@ jobs:
           mkdir -p /tmp/in /tmp/boc
           git fetch -q --depth 1 origin data && git archive FETCH_HEAD | tar -x -C /tmp/in
           git fetch -q --depth 1 origin boc && git archive FETCH_HEAD | tar -x -C /tmp/boc
+          mkdir -p /tmp/cpt && (git fetch -q --depth 1 origin comptes && git archive FETCH_HEAD comptes.json | tar -x -C /tmp/cpt) || true
           test -f /tmp/in/data/summary.json && test -d /tmp/boc/boc_px
       - name: Mettre à jour et contrôler la base (branche histo)
         env:
@@ -37,7 +39,7 @@ jobs:
           git config user.name "fqt-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git fetch -q --depth 1 "$URL" histo; then git reset -q --hard FETCH_HEAD; fi
-          python3 scripts/histo.py --data /tmp/in/data --boc /tmp/boc/boc_px --out /tmp/histo
+          python3 scripts/histo.py --data /tmp/in/data --boc /tmp/boc/boc_px --out /tmp/histo --comptes /tmp/cpt/comptes.json
           cp scripts/histo_README.md /tmp/histo/README.md
           printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/histo/vercel.json
           git add -A

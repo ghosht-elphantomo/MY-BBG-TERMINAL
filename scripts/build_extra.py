@@ -452,9 +452,13 @@ def eco(extra, out, log):
         res["curve"] = {"ten": [t[1] for t in ten], "mat": [t[2] for t in ten],
                         "d": [base[i] for i in daily], "v": [[r_(cols[t[0]][i], 3) for t in ten] for i in daily],
                         "md": [base[i] for i in months], "mv": [[r_(cols[t[0]][i], 3) for t in ten] for i in months]}
+    # dates de décision du FOMC publiées par la Fed (relevées chaque jour)
+    fo = jload(os.path.join(extra, "fomc.json"), {})
+    if fo.get("d"):
+        res["fomc"] = fo["d"]
     jsave(os.path.join(out, "eco.json"), res)
     # version légère (sans les historiques) pour les écrans qui n'affichent que les derniers chiffres et la courbe
-    jsave(os.path.join(out, "eco_lite.json"), {k: res[k] for k in ("meta", "rec", "curve") if k in res})
+    jsave(os.path.join(out, "eco_lite.json"), {k: res[k] for k in ("meta", "rec", "curve", "fomc") if k in res})
     log(f"eco.json : {len(res['s'])} séries FRED")
     return F
 
@@ -915,12 +919,282 @@ def us_company(co, b, s, fx):
     return r
 
 
+# ---------------------------------------------------------------- comptes détaillés et ratios (états financiers publiés à la BRVM)
+CPT_ROWS = {  # postes présentés, dans l'ordre des états (clé, libellé)
+    "is": [("chiffre_affaires", "Chiffre d’affaires"), ("ventes_marchandises", "Ventes de marchandises"), ("marge_commerciale", "Marge commerciale"),
+           ("ventes_produits", "Ventes de produits fabriqués"), ("travaux_services", "Travaux, services vendus"), ("produits_accessoires", "Produits accessoires"),
+           ("valeur_ajoutee", "Valeur ajoutée"), ("charges_personnel", "Charges de personnel"), ("ebe", "Excédent brut d’exploitation"),
+           ("dotations", "Dotations aux amortissements et provisions"), ("resultat_exploitation", "Résultat d’exploitation"),
+           ("revenus_financiers", "Revenus financiers"), ("frais_financiers", "Frais financiers"), ("resultat_financier", "Résultat financier"),
+           ("rao", "Résultat des activités ordinaires"), ("rhao", "Résultat hors activités ordinaires"), ("participation", "Participation des travailleurs"),
+           ("resultat_avant_impot", "Résultat avant impôt"), ("impots_resultat", "Impôts sur le résultat"), ("resultat_net", "Résultat net"),
+           ("resultat_net_pg", "Résultat net part du groupe")],
+    "bis": [("b_interets_produits", "Intérêts et produits assimilés"), ("b_interets_charges", "Intérêts et charges assimilées"),
+            ("b_commissions_produits", "Commissions (produits)"), ("b_commissions_charges", "Commissions (charges)"), ("b_pnb", "Produit net bancaire"),
+            ("b_charges_generales", "Charges générales d’exploitation"), ("dotations", "Dotations aux amortissements"), ("b_rbe", "Résultat brut d’exploitation"),
+            ("b_cout_risque", "Coût du risque"), ("resultat_exploitation", "Résultat d’exploitation"), ("resultat_avant_impot", "Résultat avant impôt"),
+            ("impots_resultat", "Impôts sur les bénéfices"), ("resultat_net", "Résultat net")],
+    "bs": [("charges_immobilisees", "Charges immobilisées"), ("immo_incorp", "Immobilisations incorporelles"), ("immo_corp", "Immobilisations corporelles"),
+           ("immo_fin", "Immobilisations financières"), ("actif_immobilise", "Actif immobilisé"), ("actif_circulant_hao", "Actif circulant HAO"),
+           ("stocks", "Stocks"), ("creances", "Créances et emplois assimilés"), ("clients", "Clients"), ("actif_circulant", "Actif circulant"),
+           ("tresorerie_actif", "Trésorerie actif"), ("total_actif", "Total actif"), ("capital", "Capital"), ("primes_reserves", "Primes et réserves"),
+           ("reserves", "Réserves"), ("report_nouveau", "Report à nouveau"), ("resultat_bilan", "Résultat de l’exercice"), ("capitaux_propres", "Capitaux propres"),
+           ("dettes_financieres", "Dettes financières"), ("ressources_stables", "Ressources stables"), ("fournisseurs", "Fournisseurs"),
+           ("passif_circulant", "Passif circulant"), ("tresorerie_passif", "Trésorerie passif"), ("total_passif", "Total passif")],
+    "bbs": [("b_caisse", "Caisse, banque centrale"), ("b_effets_publics", "Effets publics"), ("b_creances_interbancaires", "Créances interbancaires"),
+            ("b_creances_clientele", "Créances sur la clientèle"), ("b_titres_placement", "Titres de placement"), ("immo_corp", "Immobilisations corporelles"),
+            ("total_actif", "Total actif"), ("b_dettes_interbancaires", "Dettes interbancaires"), ("b_dettes_clientele", "Dettes envers la clientèle"),
+            ("capital", "Capital"), ("b_capital", "Capital"), ("reserves", "Réserves"), ("resultat_bilan", "Résultat de l’exercice"),
+            ("capitaux_propres", "Capitaux propres"), ("total_passif", "Total passif")],
+    "cf": [("cafg", "Capacité d’autofinancement globale"), ("flux_operationnels", "Flux des activités opérationnelles"),
+           ("capex_incorp", "Acquisitions d’immobilisations incorporelles"), ("capex_corp", "Acquisitions d’immobilisations corporelles"),
+           ("flux_investissement", "Flux des activités d’investissement"), ("dividendes_verses", "Dividendes versés"),
+           ("flux_financement", "Flux des activités de financement"), ("variation_tresorerie", "Variation de la trésorerie"),
+           ("tresorerie_fin", "Trésorerie nette à la clôture")],
+}
+
+
+def brvm_ratios(cc, bank, eps_y, dps_y, px_y):
+    """Une centaine de ratios par exercice, calculés à partir des seuls postes publiés (et vérifiés) des états financiers,
+    du BNPA et du dividende publiés, et du dernier cours de l'exercice. Aucun ratio n'est calculé quand un poste manque.
+    Renvoie (années, [[groupe, [[clé, libellé, format, [valeurs]]]]]) ; formats : p (part), x (multiple), j (jours), m (millions), e (FCFA)."""
+    Ys = sorted(int(y) for y in (cc.get("y") or {}))
+    if not Ys:
+        return [], []
+    V = {y: (cc["y"].get(y) or cc["y"].get(str(y)) or {}).get("v", {}) for y in Ys}
+    g = lambda k, y: V.get(y, {}).get(k)  # noqa: E731
+
+    def ratio(a, b_, pos=False):
+        if a is None or b_ in (None, 0):
+            return None
+        if pos and b_ <= 0:
+            return None
+        return a / b_
+
+    def avg(k, y):
+        a, b_ = g(k, y), g(k, y - 1)
+        return (a + b_) / 2 if a is not None and b_ is not None else None
+
+    def sub(*ks, y=None):
+        vals = [g(k, y) for k in ks]
+        return None if any(v is None for v in vals) else vals[0] - sum(vals[1:])
+
+    def summ(*ks, y=None, need=1):
+        vals = [g(k, y) for k in ks if g(k, y) is not None]
+        return sum(vals) if len(vals) >= need else None
+    def grow_(k, y):  # croissance non significative quand un des deux exercices est négatif ou nul
+        a_, b_ = g(k, y - 1), g(k, y)
+        return b_ / a_ - 1 if a_ is not None and b_ is not None and a_ > 0 and b_ >= 0 else None
+    ca = (lambda y: g("b_pnb", y)) if bank else (lambda y: g("chiffre_affaires", y))
+    absn = lambda v: abs(v) if v is not None else None  # noqa: E731
+
+    def taux_impot(y):
+        imp, rn = absn(g("impots_resultat", y)), g("resultat_net", y)
+        base = (rn + imp + (absn(g("participation", y)) or 0)) if rn is not None and imp is not None else None
+        r_ = ratio(imp, base, True)
+        return r_ if r_ is not None and 0 <= r_ <= 1 else None  # résultat avant impôt nul ou négatif : taux non significatif
+
+    def dette_nette(y):
+        d_, ta, tp = g("dettes_financieres", y), g("tresorerie_actif", y), g("tresorerie_passif", y)
+        return d_ + tp - ta if None not in (d_, ta, tp) else None
+
+    def capex(y):
+        a, b_ = g("capex_corp", y), g("capex_incorp", y)
+        return (abs(a or 0) + abs(b_ or 0)) if (a is not None or b_ is not None) else None
+
+    def fcf(y):
+        fo, cx = g("flux_operationnels", y), capex(y)
+        return fo - cx if fo is not None and cx is not None else None
+
+    def per_share(y):
+        return eps_y.get(y), dps_y.get(y), px_y.get(y)
+
+    def cdr(y):  # coût du risque compté positivement quand c'est une charge (signe lu d'après RBE ± coût du risque = résultat d'exploitation)
+        cr_, rbe_, re_ = g("b_cout_risque", y), g("b_rbe", y), g("resultat_exploitation", y)
+        if cr_ is None:
+            return None
+        if rbe_ is not None and re_ is not None:
+            if abs(rbe_ + cr_ - re_) <= max(1.0, abs(re_) * .002):
+                return -cr_
+            if abs(rbe_ - cr_ - re_) <= max(1.0, abs(re_) * .002):
+                return cr_
+        return None
+    R = []
+    if bank:
+        R.append(["Croissance", [
+            ["g_pnb", "Produit net bancaire", "p", [grow_("b_pnb", y) for y in Ys]],
+            ["g_rn", "Résultat net", "p", [grow_("resultat_net", y) for y in Ys]],
+            ["g_ta", "Total bilan", "p", [grow_("total_actif", y) for y in Ys]],
+            ["g_dep", "Dépôts de la clientèle", "p", [grow_("b_dettes_clientele", y) for y in Ys]],
+            ["g_cred", "Crédits à la clientèle", "p", [grow_("b_creances_clientele", y) for y in Ys]],
+            ["g_cp", "Capitaux propres", "p", [grow_("capitaux_propres", y) for y in Ys]]]])
+        R.append(["Exploitation", [
+            ["cir", "Coefficient d’exploitation (charges générales + dotations / PNB)", "p",
+             [ratio(summ("b_charges_generales", "dotations", y=y, need=2) if g("dotations", y) is not None else None, ca(y), True) for y in Ys]],
+            ["cir0", "Charges générales / PNB", "p", [ratio(absn(g("b_charges_generales", y)), ca(y), True) for y in Ys]],
+            ["rbe_pnb", "Résultat brut d’exploitation / PNB", "p", [ratio(g("b_rbe", y), ca(y), True) for y in Ys]],
+            ["cr_pnb", "Coût du risque / PNB", "p", [ratio(cdr(y), ca(y), True) for y in Ys]],
+            ["re_pnb", "Résultat d’exploitation / PNB", "p", [ratio(g("resultat_exploitation", y), ca(y), True) for y in Ys]],
+            ["rn_pnb", "Résultat net / PNB", "p", [ratio(g("resultat_net", y), ca(y), True) for y in Ys]],
+            ["int_pnb", "Marge d’intérêts / PNB", "p", [ratio(sub("b_interets_produits", "b_interets_charges", y=y) if g("b_interets_charges", y) is not None else None, ca(y), True) for y in Ys]],
+            ["com_pnb", "Commissions nettes / PNB", "p", [ratio(sub("b_commissions_produits", "b_commissions_charges", y=y), ca(y), True) for y in Ys]],
+            ["tax", "Taux d’impôt effectif", "p", [taux_impot(y) for y in Ys]]]])
+        R.append(["Rentabilité", [
+            ["roe", "ROE (résultat net / capitaux propres)", "p", [ratio(g("resultat_net", y), g("capitaux_propres", y), True) for y in Ys]],
+            ["roe_m", "ROE sur capitaux propres moyens", "p", [ratio(g("resultat_net", y), avg("capitaux_propres", y), True) for y in Ys]],
+            ["roa", "ROA (résultat net / total bilan)", "p", [ratio(g("resultat_net", y), g("total_actif", y), True) for y in Ys]],
+            ["roa_m", "ROA sur total bilan moyen", "p", [ratio(g("resultat_net", y), avg("total_actif", y), True) for y in Ys]],
+            ["pnb_ta", "PNB / total bilan", "p", [ratio(ca(y), g("total_actif", y), True) for y in Ys]],
+            ["nim", "Marge d’intérêts / total bilan", "p", [ratio(sub("b_interets_produits", "b_interets_charges", y=y) if g("b_interets_charges", y) is not None else None, g("total_actif", y), True) for y in Ys]]]])
+        R.append(["Bilan et risque", [
+            ["ld", "Crédits / dépôts", "p", [ratio(g("b_creances_clientele", y), g("b_dettes_clientele", y), True) for y in Ys]],
+            ["l_ta", "Crédits / total bilan", "p", [ratio(g("b_creances_clientele", y), g("total_actif", y), True) for y in Ys]],
+            ["d_ta", "Dépôts / total bilan", "p", [ratio(g("b_dettes_clientele", y), g("total_actif", y), True) for y in Ys]],
+            ["eq_ta", "Capitaux propres / total bilan", "p", [ratio(g("capitaux_propres", y), g("total_actif", y), True) for y in Ys]],
+            ["eq_l", "Capitaux propres / crédits", "p", [ratio(g("capitaux_propres", y), g("b_creances_clientele", y), True) for y in Ys]],
+            ["cor_l", "Coût du risque / crédits moyens", "p", [ratio(cdr(y), avg("b_creances_clientele", y), True) for y in Ys]],
+            ["y_l", "Intérêts reçus / crédits moyens", "p", [ratio(g("b_interets_produits", y), avg("b_creances_clientele", y), True) for y in Ys]],
+            ["c_d", "Intérêts versés / dépôts moyens", "p", [ratio(absn(g("b_interets_charges", y)), avg("b_dettes_clientele", y), True) for y in Ys]]]])
+    else:
+        R.append(["Croissance", [
+            ["g_ca", "Chiffre d’affaires", "p", [grow_("chiffre_affaires", y) for y in Ys]],
+            ["g_va", "Valeur ajoutée", "p", [grow_("valeur_ajoutee", y) for y in Ys]],
+            ["g_ebe", "Excédent brut d’exploitation", "p", [grow_("ebe", y) for y in Ys]],
+            ["g_re", "Résultat d’exploitation", "p", [grow_("resultat_exploitation", y) for y in Ys]],
+            ["g_rn", "Résultat net", "p", [grow_("resultat_net", y) for y in Ys]],
+            ["g_cp", "Capitaux propres", "p", [grow_("capitaux_propres", y) for y in Ys]],
+            ["g_ta", "Total bilan", "p", [grow_("total_actif", y) for y in Ys]],
+            ["g_cafg", "Capacité d’autofinancement", "p", [grow_("cafg", y) for y in Ys]]]])
+        R.append(["Marges", [
+            ["mc", "Taux de marge commerciale (marge / ventes de marchandises)", "p", [ratio(g("marge_commerciale", y), g("ventes_marchandises", y), True) for y in Ys]],
+            ["va_ca", "Valeur ajoutée / CA", "p", [ratio(g("valeur_ajoutee", y), ca(y), True) for y in Ys]],
+            ["ebe_ca", "Marge d’EBE (EBE / CA)", "p", [ratio(g("ebe", y), ca(y), True) for y in Ys]],
+            ["re_ca", "Marge d’exploitation (résultat d’exploitation / CA)", "p", [ratio(g("resultat_exploitation", y), ca(y), True) for y in Ys]],
+            ["rao_ca", "Résultat des activités ordinaires / CA", "p", [ratio(g("rao", y), ca(y), True) for y in Ys]],
+            ["rn_ca", "Marge nette (résultat net / CA)", "p", [ratio(g("resultat_net", y), ca(y), True) for y in Ys]],
+            ["cafg_ca", "Capacité d’autofinancement / CA", "p", [ratio(g("cafg", y), ca(y), True) for y in Ys]]]])
+        R.append(["Charges", [
+            ["pers_ca", "Charges de personnel / CA", "p", [ratio(absn(g("charges_personnel", y)), ca(y), True) for y in Ys]],
+            ["pers_va", "Charges de personnel / valeur ajoutée", "p", [ratio(absn(g("charges_personnel", y)), g("valeur_ajoutee", y), True) for y in Ys]],
+            ["dot_ca", "Dotations aux amortissements / CA", "p", [ratio(absn(g("dotations", y)), ca(y), True) for y in Ys]],
+            ["ff_ca", "Frais financiers / CA", "p", [ratio(absn(g("frais_financiers", y)), ca(y), True) for y in Ys]],
+            ["ff_ebe", "Frais financiers / EBE", "p", [ratio(absn(g("frais_financiers", y)), g("ebe", y), True) for y in Ys]],
+            ["icov", "Couverture des frais financiers (résultat d’exploitation / frais financiers)", "x", [ratio(g("resultat_exploitation", y), absn(g("frais_financiers", y)), True) for y in Ys]],
+            ["tax", "Taux d’impôt effectif", "p", [taux_impot(y) for y in Ys]]]])
+        R.append(["Rentabilité", [
+            ["roe", "ROE (résultat net / capitaux propres)", "p", [ratio(g("resultat_net", y), g("capitaux_propres", y), True) for y in Ys]],
+            ["roe_m", "ROE sur capitaux propres moyens", "p", [ratio(g("resultat_net", y), avg("capitaux_propres", y), True) for y in Ys]],
+            ["roa", "ROA (résultat net / total bilan)", "p", [ratio(g("resultat_net", y), g("total_actif", y), True) for y in Ys]],
+            ["roa_m", "ROA sur total bilan moyen", "p", [ratio(g("resultat_net", y), avg("total_actif", y), True) for y in Ys]],
+            ["re_ta", "Rentabilité économique (résultat d’exploitation / total bilan)", "p", [ratio(g("resultat_exploitation", y), g("total_actif", y), True) for y in Ys]],
+            ["ebe_ta", "EBE / total bilan", "p", [ratio(g("ebe", y), g("total_actif", y), True) for y in Ys]],
+            ["roce", "ROCE (résultat d’exploitation après impôt / (capitaux propres + dettes financières))", "p",
+             [ratio(g("resultat_exploitation", y) * (1 - taux_impot(y)) if g("resultat_exploitation", y) is not None and taux_impot(y) is not None else None,
+                    summ("capitaux_propres", "dettes_financieres", y=y, need=2), True) for y in Ys]],
+            ["cafg_cp", "Capacité d’autofinancement / capitaux propres", "p", [ratio(g("cafg", y), g("capitaux_propres", y), True) for y in Ys]]]])
+        R.append(["Structure financière", [
+            ["auto", "Autonomie financière (capitaux propres / total bilan)", "p", [ratio(g("capitaux_propres", y), g("total_passif", y) or g("total_actif", y), True) for y in Ys]],
+            ["gear", "Dettes financières / capitaux propres", "x", [ratio(g("dettes_financieres", y), g("capitaux_propres", y), True) for y in Ys]],
+            ["nd_cp", "Endettement net / capitaux propres", "x", [ratio(dette_nette(y), g("capitaux_propres", y), True) for y in Ys]],
+            ["nd", "Endettement net (dettes financières + trésorerie passif − trésorerie actif)", "m", [dette_nette(y) for y in Ys]],
+            ["nd_ebe", "Endettement net / EBE", "x", [ratio(dette_nette(y), g("ebe", y), True) for y in Ys]],
+            ["df_cafg", "Capacité de remboursement (dettes financières / CAFG, en années)", "x", [ratio(g("dettes_financieres", y), g("cafg", y), True) for y in Ys]],
+            ["cov_imm", "Ressources stables / actif immobilisé", "x", [ratio(g("ressources_stables", y), g("actif_immobilise", y), True) for y in Ys]],
+            ["fr", "Fonds de roulement (ressources stables − actif immobilisé)", "m", [sub("ressources_stables", "actif_immobilise", y=y) for y in Ys]],
+            ["bfr", "Besoin en fonds de roulement (actif circulant − passif circulant)", "m", [sub("actif_circulant", "passif_circulant", y=y) for y in Ys]],
+            ["tn", "Trésorerie nette (trésorerie actif − trésorerie passif)", "m", [sub("tresorerie_actif", "tresorerie_passif", y=y) for y in Ys]],
+            ["fr_j", "Fonds de roulement en jours de CA", "j", [ratio(sub("ressources_stables", "actif_immobilise", y=y) * 360 if sub("ressources_stables", "actif_immobilise", y=y) is not None else None, ca(y), True) for y in Ys]],
+            ["bfr_j", "BFR en jours de CA", "j", [ratio(sub("actif_circulant", "passif_circulant", y=y) * 360 if sub("actif_circulant", "passif_circulant", y=y) is not None else None, ca(y), True) for y in Ys]]]])
+        R.append(["Liquidité et activité", [
+            ["liq_g", "Liquidité générale ((actif circulant + trésorerie) / (passif circulant + trésorerie passif))", "x",
+             [ratio(summ("actif_circulant", "tresorerie_actif", y=y, need=2), summ("passif_circulant", "tresorerie_passif", y=y, need=2), True) for y in Ys]],
+            ["liq_r", "Liquidité réduite (hors stocks)", "x",
+             [ratio(summ("actif_circulant", "tresorerie_actif", y=y, need=2) - g("stocks", y) if summ("actif_circulant", "tresorerie_actif", y=y, need=2) is not None and g("stocks", y) is not None else None,
+                    summ("passif_circulant", "tresorerie_passif", y=y, need=2), True) for y in Ys]],
+            ["liq_i", "Liquidité immédiate (trésorerie actif / dettes à court terme)", "x", [ratio(g("tresorerie_actif", y), summ("passif_circulant", "tresorerie_passif", y=y, need=2), True) for y in Ys]],
+            ["rot", "Rotation de l’actif (CA / total bilan)", "x", [ratio(ca(y), g("total_actif", y), True) for y in Ys]],
+            ["stk_j", "Stocks en jours de CA", "j", [ratio(g("stocks", y) * 360 if g("stocks", y) is not None else None, ca(y), True) for y in Ys]],
+            ["cli_j", "Créances en jours de CA", "j", [ratio((g("creances", y) if g("creances", y) is not None else g("clients", y)) * 360 if (g("creances", y) if g("creances", y) is not None else g("clients", y)) is not None else None, ca(y), True) for y in Ys]],
+            ["frs_j", "Fournisseurs en jours de CA", "j", [ratio(g("fournisseurs", y) * 360 if g("fournisseurs", y) is not None else None, ca(y), True) for y in Ys]],
+            ["imm_ta", "Actif immobilisé / total bilan", "p", [ratio(g("actif_immobilise", y), g("total_actif", y), True) for y in Ys]],
+            ["imm_ca", "Intensité capitalistique (actif immobilisé / CA)", "x", [ratio(g("actif_immobilise", y), ca(y), True) for y in Ys]]]])
+        R.append(["Flux de trésorerie", [
+            ["cafg", "Capacité d’autofinancement globale", "m", [g("cafg", y) for y in Ys]],
+            ["cafg_rn", "Capacité d’autofinancement / résultat net", "x", [ratio(g("cafg", y), g("resultat_net", y), True) for y in Ys]],
+            ["fo_ca", "Flux opérationnels / CA", "p", [ratio(g("flux_operationnels", y), ca(y), True) for y in Ys]],
+            ["fo_rn", "Flux opérationnels / résultat net", "x", [ratio(g("flux_operationnels", y), g("resultat_net", y), True) for y in Ys]],
+            ["capex", "Investissements (acquisitions d’immobilisations)", "m", [capex(y) for y in Ys]],
+            ["capex_ca", "Investissements / CA", "p", [ratio(capex(y), ca(y), True) for y in Ys]],
+            ["capex_dot", "Investissements / dotations aux amortissements", "x", [ratio(capex(y), absn(g("dotations", y)), True) for y in Ys]],
+            ["fcf", "Flux de trésorerie disponible (flux opérationnels − investissements)", "m", [fcf(y) for y in Ys]],
+            ["fcf_ca", "Flux disponible / CA", "p", [ratio(fcf(y), ca(y), True) for y in Ys]],
+            ["div_rn", "Dividendes versés / résultat net de l’exercice précédent", "p", [ratio(absn(g("dividendes_verses", y)), g("resultat_net", y - 1), True) for y in Ys]],
+            ["div_fo", "Dividendes versés / flux opérationnels", "p", [ratio(absn(g("dividendes_verses", y)), g("flux_operationnels", y), True) for y in Ys]]]])
+    def tcam(k, y, n):
+        a_, b_ = (ca(y - n), ca(y)) if k == "_ca" else (g(k, y - n), g(k, y))
+        return cagr(a_, b_, n)
+    base = [("_ca", "PNB" if bank else "Chiffre d’affaires"), ("resultat_net", "Résultat net")] + \
+        ([("b_dettes_clientele", "Dépôts de la clientèle"), ("b_creances_clientele", "Crédits à la clientèle")] if bank else [("ebe", "EBE"), ("capitaux_propres", "Capitaux propres")])
+    R.append(["Croissance annuelle moyenne", [[f"tc{n}_{k}", f"{lab} sur {n} ans", "p", [tcam(k, y, n) for y in Ys]] for k, lab in base for n in (3, 5, 10)]])
+
+    def mean3(fn, y):
+        v = [fn(y - j) for j in range(3)]
+        return sum(v) / 3 if all(x is not None for x in v) else None
+    roe_f = lambda y: ratio(g("resultat_net", y), g("capitaux_propres", y), True)  # noqa: E731
+    nm_f = lambda y: ratio(g("resultat_net", y), ca(y), True)  # noqa: E731
+    R.append(["Moyennes sur 3 exercices", [["roe3", "ROE moyen sur 3 ans", "p", [mean3(roe_f, y) for y in Ys]],
+                                           ["nm3", ("Résultat net / PNB" if bank else "Marge nette") + " moyenne sur 3 ans", "p", [mean3(nm_f, y) for y in Ys]],
+                                           ["ebe3", "Marge d’EBE moyenne sur 3 ans", "p", [None if bank else mean3(lambda z: ratio(g("ebe", z), ca(z), True), y) for y in Ys]]]])
+    ps = [per_share(y) for y in Ys]
+
+    def n_impl(i):  # nombre d'actions implicite : résultat net publié ÷ BNPA publié (même base que les cours ajustés)
+        y, e_ = Ys[i], ps[i][0]
+        rn = g("resultat_net", y)
+        return rn * 1e6 / e_ if rn and e_ and (rn > 0) == (e_ > 0) else None
+
+    def per_sh(k, i):
+        n_ = n_impl(i)
+        v = g(k, Ys[i]) if k != "_ca" else ca(Ys[i])
+        return v * 1e6 / n_ if v is not None and n_ else None
+
+    def ev(i):
+        n_, px_ = n_impl(i), ps[i][2]
+        nd_ = dette_nette(Ys[i])
+        return px_ * n_ / 1e6 + nd_ if n_ and px_ and nd_ is not None and not bank else None
+    R.append(["Par action et marché", [
+        ["bvps", "Actif net par action (FCFA)", "e", [per_sh("capitaux_propres", i) for i in range(len(Ys))]],
+        ["cfps", "Capacité d’autofinancement par action (FCFA)", "e", [per_sh("cafg", i) for i in range(len(Ys))]],
+        ["sps", ("PNB" if bank else "Chiffre d’affaires") + " par action (FCFA)", "e", [per_sh("_ca", i) for i in range(len(Ys))]],
+        ["pb", "Cours / actif net par action (P/B)", "x", [ratio(ps[i][2], per_sh("capitaux_propres", i), True) for i in range(len(Ys))]],
+        ["pcf", "Cours / capacité d’autofinancement par action", "x", [ratio(ps[i][2], per_sh("cafg", i), True) for i in range(len(Ys))]],
+        ["ev_ebe", "Valeur d’entreprise / EBE", "x", [ratio(ev(i), g("ebe", Ys[i]), True) for i in range(len(Ys))]],
+        ["ev_ca", "Valeur d’entreprise / CA", "x", [ratio(ev(i), ca(Ys[i]), True) for i in range(len(Ys))]],
+        ["eps", "BNPA publié (FCFA)", "e", [p_[0] for p_ in ps]],
+        ["dps", "Dividende net par action (FCFA)", "e", [p_[1] for p_ in ps]],
+        ["payout", "Taux de distribution (dividende / BNPA)", "p", [ratio(p_[1], p_[0], True) for p_ in ps]],
+        ["px", "Dernier cours de l’exercice (FCFA)", "e", [p_[2] for p_ in ps]],
+        ["pe", "PER au dernier cours de l’exercice", "x", [ratio(p_[2], p_[0], True) for p_ in ps]],
+        ["dy", "Rendement du dividende au dernier cours de l’exercice", "p", [ratio(p_[1], p_[2], True) for p_ in ps]],
+        ["g_eps", "Croissance du BNPA", "p", [grow(ps[i - 1][0], ps[i][0]) if i and Ys[i - 1] == Ys[i] - 1 and (ps[i][0] or 0) >= 0 else None for i in range(len(Ys))]],
+        ["g_dps", "Croissance du dividende", "p", [grow(ps[i - 1][1], ps[i][1]) if i and Ys[i - 1] == Ys[i] - 1 else None for i in range(len(Ys))]]]])
+    out = []
+    for grp, rows in R:
+        for r in rows:  # multiples au-delà de 100 (dénominateur presque nul) : non significatifs
+            if r[2] == "x":
+                r[3] = [None if v is not None and abs(v) > 100 else v for v in r[3]]
+        rows = [r for r in rows if any(v is not None for v in r[3])]
+        if rows:
+            out.append([grp, rows])
+    return Ys, out
+
+
 def brvm_company(sid, s, fd_, fcf, dps_hist, b, tax):
     """Ratios d'une société BRVM : comptes SikaFinance (5 exercices), flux de trésorerie SYSCOHADA lus dans les états financiers."""
     S = (fd_ or {}).get("series", {})
     bank = bool(s.get("bank"))
     yrs = sorted({int(y) for k in ("ca", "resultat_net", "bnpa", "capitaux_propres") for y in (S.get(k) or {})} | {int(y) for y in (fcf or {})} | {int(y) for y in dps_hist})
-    yrs = [y for y in yrs if y >= 2010]
+    cc = (fd_ or {}).get("cpt") or {}
+    yrs = [y for y in yrs if y >= 2010 or str(y) in (cc.get("y") or {}) or y in (cc.get("y") or {})]
     gv = lambda k, y: (S.get(k) or {}).get(str(y))  # noqa: E731
     M = 1e6
     Y = {"y": yrs}
@@ -1042,6 +1316,33 @@ def brvm_company(sid, s, fd_, fcf, dps_hist, b, tax):
             dy.append(div0(dp, c_) if dp else None)
         r["mh"] = {"d": wd, "pe": pe, "pb": pb, "ev_ebitda": eve, "fcfy": fy, "dy": dy}
     r["Y"] = Y
+    # états financiers publiés (postes vérifiés) et ratios détaillés, sur tous les exercices lus
+    if cc.get("y"):
+        Ys = sorted(int(y) for y in cc["y"])
+        secs_ = []
+        for sk, title in ((("bis" if bank else "is"), "Compte de résultat"), (("bbs" if bank else "bs"), "Bilan"), ("cf", "Flux de trésorerie")):
+            rows = []
+            seen = set()
+            for k, lab in CPT_ROWS[sk]:
+                vals = [((cc["y"].get(y) or cc["y"].get(str(y)) or {}).get("v") or {}).get(k) for y in Ys]
+                if any(v is not None for v in vals) and lab not in seen:
+                    seen.add(lab)
+                    rows.append([k, lab, vals])
+            if rows:
+                secs_.append([sk, title, rows])
+        eps_y = {int(y): v for y, v in (S.get("bnpa") or {}).items() if v is not None}
+        dps_y = {int(y): v for y, v in (S.get("dividende") or {}).items() if v}
+        dps_y.update({int(y): v for y, v in dps_hist.items() if v})
+        px_y = {}
+        if b:
+            for d_, c_ in zip(b["d"], b["c"]):
+                if c_:
+                    px_y[d_ // 10000] = c_
+            last_y = b["d"][-1] // 10000
+            px_y.pop(last_y, None)  # exercice en cours : pas de « dernier cours de l'exercice »
+        Yr, groups = brvm_ratios(cc, bank, eps_y, dps_y, px_y)
+        r["C"] = {"y": Ys, "per": cc.get("per"), "std": cc.get("std"), "s": secs_}
+        r["R"] = {"y": Yr, "g": groups}
     return r
 
 

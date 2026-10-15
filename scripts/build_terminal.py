@@ -260,6 +260,7 @@ def main():
     ap.add_argument("--quotes", default=None, help="quotes.json du relevé (cours du jour appliqués à toutes les séries)")
     ap.add_argument("--live", action="store_true", help="passage de séance : séries existantes non réécrites, tous les calculs refaits")
     ap.add_argument("--boc", default=None, help="dossier boc_px (branche boc) : tableaux des actions lus dans les bulletins officiels de la cote")
+    ap.add_argument("--comptes", default=None, help="comptes.json (branche comptes) : états financiers publiés à la BRVM, lus et vérifiés")
     a = ap.parse_args()
     QUOTES = {}
     if a.quotes and os.path.exists(a.quotes):
@@ -335,6 +336,75 @@ def main():
     src = a.brvm_src
     acts = json.load(open(os.path.join(src, "actions.json"), encoding="utf8"))["actions"]
     fund = json.load(open(os.path.join(src, "fundamentals.json"), encoding="utf8"))
+    # états financiers publiés à la BRVM (branche comptes), lus et vérifiés par les identités comptables : prioritaires sur la base
+    # tierce pour les exercices qu'ils couvrent, quand leur périmètre est le même (comptes sociaux ou consolidés)
+    cpt_chk = {"t": 0, "y": 0, "set": 0, "fix": 0, "fill": 0, "detail_only": [], "ex": []}
+    if a.comptes and os.path.exists(a.comptes):
+        try:
+            import comptes as CPT
+            mir = {t: (v.get("series") or {}) for t, v in fund.items() if t != "_meta" and isinstance(v, dict)}
+            CONS = CPT.consolidate(json.load(open(a.comptes, encoding="utf8")), mir)
+            bank_t = {x.get("symbole") or x.get("ticker"): bool(x.get("banque")) for x in acts}
+            MAPC = (("resultat_net", "resultat_net"), ("total_bilan", "total_actif"), ("capitaux_propres", "capitaux_propres"),
+                    ("ebit", "resultat_exploitation"), ("ebitda", "ebe"), ("depots_clientele", "b_dettes_clientele"),
+                    ("credits_clientele", "b_creances_clientele"))
+            DERIVED = ("roe", "roa", "marge_nette", "marge_exploitation", "croissance_ca", "croissance_resultat_net")
+            for t, cc in CONS.items():
+                f = fund.get(t)
+                if not f or not isinstance(f, dict):
+                    continue
+                f["cpt"] = cc
+                cpt_chk["t"] += 1
+                # même périmètre et mêmes normes que la base : la plupart des montants communs concordent, et le résultat net aussi
+                # (des écarts isolés sont des erreurs ou des chiffres provisoires de la base, corrigés par les comptes publiés)
+                same_basis = cc["ncmp"] < 3 or (cc["agree"] >= .5 and (cc.get("n_rn", 0) < 2 or (cc.get("agree_rn") or 0) >= .5))
+                if not same_basis:
+                    cpt_chk["detail_only"].append(f'{t} ({cc["per"]}, {cc["agree"]:.0%} de {cc["ncmp"]})')
+                    continue
+                ser = f.setdefault("series", {})
+                bank = bank_t.get(t) or any("b_pnb" in r["v"] for r in cc["y"].values())
+                for y, r in cc["y"].items():
+                    v, ys = r["v"], str(y)
+                    cpt_chk["y"] += 1
+                    pairs = [("ca", "b_pnb" if bank else "chiffre_affaires")] + list(MAPC)
+                    # coût du risque (charge comptée positivement) : signe lu d'après le compte de résultat
+                    # (résultat brut d'exploitation ± coût du risque = résultat d'exploitation)
+                    if bank and v.get("b_cout_risque") is not None and v.get("b_rbe") is not None and v.get("resultat_exploitation") is not None:
+                        cr_, rbe_, re_ = v["b_cout_risque"], v["b_rbe"], v["resultat_exploitation"]
+                        if abs(rbe_ + cr_ - re_) <= max(1.0, abs(re_) * .002):
+                            v = dict(v, _cdr=-cr_)
+                        elif abs(rbe_ - cr_ - re_) <= max(1.0, abs(re_) * .002):
+                            v = dict(v, _cdr=cr_)
+                        if "_cdr" in v:
+                            pairs.append(("cout_du_risque", "_cdr"))
+                    changed = False
+                    for sk, ck in pairs:
+                        if v.get(ck) is None:
+                            continue
+                        o = ser.setdefault(sk, {})
+                        old = o.get(ys)
+                        new = round(v[ck], 1)
+                        if old is not None and abs(old - new) <= 0.6:
+                            continue  # même montant (arrondi au million près)
+                        if old is None:
+                            cpt_chk["fill"] += 1
+                        elif abs(old - new) > max(1.0, abs(old) * .005):
+                            cpt_chk["fix"] += 1
+                            changed = True
+                            if len(cpt_chk["ex"]) < 25:
+                                cpt_chk["ex"].append(f"{t} {y} {sk} {old:g} -> {new:g}")
+                        o[ys] = new
+                        cpt_chk["set"] += 1
+                    if changed:  # ratios de la base tierce calculés sur les montants corrigés : retirés (recalculés plus loin)
+                        for dk in DERIVED:
+                            (ser.get(dk) or {}).pop(ys, None)
+            log("comptes publiés BRVM :", {k: v for k, v in cpt_chk.items() if k not in ("ex", "detail_only")},
+                ("; périmètre différent de la base, détail seulement : " + ", ".join(cpt_chk["detail_only"])) if cpt_chk["detail_only"] else "")
+            if cpt_chk["ex"]:
+                log("comptes corrigés d'après les états publiés :", "; ".join(cpt_chk["ex"]))
+        except Exception as e:  # noqa: BLE001
+            import traceback
+            log("comptes publiés BRVM illisibles :", e, traceback.format_exc()[-400:])
     # exercices plus anciens : pages SikaFinance archivées (web.archive.org), ajoutés seulement là où la source actuelle n'a rien
     sh_path = os.path.join(a.extra, "sika_hist.json") if a.extra else None
     if sh_path and os.path.exists(sh_path):
@@ -357,31 +427,16 @@ def main():
                         added = True
                 if added:
                     src_y[y] = "archive SikaFinance " + rec.get("src", "")
-    # états financiers publiés sur brvm.org (PDF lus) : postes manquants et flux de trésorerie
-    pf_path = os.path.join(a.extra, "pdf_fin.json") if a.extra else None
+    # flux de trésorerie : ceux des états financiers publiés à la BRVM et vérifiés (flux des activités opérationnelles et
+    # acquisitions d'immobilisations du même document) ; l'ancienne lecture sans contrôle (pdf_fin.json) n'est plus utilisée
     pdf_cf = {}
-    if pf_path and os.path.exists(pf_path):
-        pf = json.load(open(pf_path, encoding="utf8")).get("t", {})
-        kmap2 = {"rev": "ca", "ni": "resultat_net", "ebitda": "ebitda", "ebit": "ebit", "eq": "capitaux_propres", "assets": "total_bilan"}
-        for t, yrs in pf.items():
-            f = fund.get(t)
-            if not f:
-                continue
-            ser = f.setdefault("series", {})
-            src_y = f.setdefault("src_years", {})
-            for y, rec in yrs.items():
-                added = False
-                for k, sk in kmap2.items():
-                    if rec.get(k) is None:
-                        continue
-                    o = ser.setdefault(sk, {})
-                    if o.get(y) is None:
-                        o[y] = rec[k]
-                        added = True
-                if added and y not in src_y:
-                    src_y[y] = "états financiers publiés (brvm.org)"
-                if rec.get("cfo") is not None:
-                    pdf_cf.setdefault(t, {})[y] = {"cfo": rec["cfo"], "capex": rec.get("capex", 0), "fcf": rec.get("fcf", rec["cfo"] - (rec.get("capex") or 0)), "src": rec.get("src")}
+    for t, f in fund.items():
+        cc = f.get("cpt") if isinstance(f, dict) else None
+        for y, r in ((cc or {}).get("y") or {}).items():
+            v = r["v"]
+            if v.get("flux_operationnels") is not None and (v.get("capex_corp") is not None or v.get("capex_incorp") is not None):
+                cap = abs(v.get("capex_corp") or 0) + abs(v.get("capex_incorp") or 0)
+                pdf_cf.setdefault(t, {})[str(y)] = {"cfo": v["flux_operationnels"], "capex": round(cap, 3), "fcf": round(v["flux_operationnels"] - cap, 3)}
     divs = json.load(open(os.path.join(src, "dividendes.json"), encoding="utf8"))["all"]
     # avis lus directement sur brvm.org (relevés toutes les 15 min) : secours si la base d'avis tierce s'arrête
     AV = []
@@ -662,6 +717,29 @@ def main():
                 shares = shares * k_
                 f["nb_titres"] = shares
                 split_log.append(f"{t} {e_} x{k_:g} : nombre de titres ajusté")
+        # cours de clôture officiels (bulletin de la cote) prioritaires : la série reste ajustée des opérations sur titres
+        # (facteur local = rapport médian série / bulletin sur les séances voisines) ; une clôture qui s'en écarte de plus de 0,5 %
+        # est remplacée par la clôture officielle, si le bulletin est cohérent (cours précédent × variation = clôture)
+        if BOC.get(t) and rows:
+            B_ = BOC[t]
+            qs = [(j, r[4] / B_[r[0]]["c"]) for j, r in enumerate(rows) if r[4] and (B_.get(r[0]) or {}).get("c")]
+            for n_q, (j, q) in enumerate(qs):
+                win = sorted(x for _, x in qs[max(0, n_q - 10):n_q + 11])
+                m_ = win[len(win) // 2]
+                if abs(q / m_ - 1) <= .005 or sum(1 for x in win if abs(x / m_ - 1) <= .005) < .7 * len(win):
+                    continue
+                b_ = B_[rows[j][0]]
+                if b_.get("prev") and b_.get("var") is not None and abs(b_["prev"] * (1 + b_["var"] / 100) / b_["c"] - 1) > .006:
+                    continue  # bulletin incohérent ce jour-là : la série est gardée
+                c_new = b_["c"] * m_
+                o_new = b_["o"] * m_ if b_.get("o") else rows[j][1]
+                r = rows[j]
+                rows[j] = (r[0], o_new, max(r[2], o_new, c_new), min(r[3], o_new, c_new), c_new) + tuple(r[5:])
+                boc_chk["close_fix"] = boc_chk.get("close_fix", 0) + 1
+                cfb_ = boc_chk.setdefault("close_fix_by", {})
+                cfb_[t] = cfb_.get(t, 0) + 1
+                if not a.live:
+                    force_write.add(t)
         # données officielles de la BRVM, prioritaires sur les sites tiers :
         # nombre de titres et capitalisation flottante (page « Capitalisations » de brvm.org), PER et dividende du bulletin officiel de la cote
         so_ = sess_rows.get(t) or {}
@@ -946,11 +1024,11 @@ def main():
 
     # Calculs dérivés (macro, sentiment, liquidité, comptes, consensus, valorisation BRVM, UEMOA) ----
     fcf_path = a.fcf
-    if pdf_cf:  # flux de trésorerie : fichier hebdomadaire complété par les états financiers lus
+    if pdf_cf:  # flux de trésorerie : ceux des états financiers publiés et vérifiés l'emportent sur le fichier de départ
         base = json.load(open(a.fcf, encoding="utf8")) if a.fcf and os.path.exists(a.fcf) else {"series": {}}
         for t, yrs in pdf_cf.items():
             for y, r in yrs.items():
-                base.setdefault("series", {}).setdefault(t, {}).setdefault(y, r)
+                base.setdefault("series", {}).setdefault(t, {})[y] = r
         import tempfile
         fcf_path = os.path.join(tempfile.gettempdir(), "fqt_fcf_merged.json")
         json.dump(base, open(fcf_path, "w", encoding="utf8"))

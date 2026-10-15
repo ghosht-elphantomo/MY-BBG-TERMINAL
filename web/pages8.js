@@ -145,7 +145,7 @@ async function desPerf(m, s, S) {
   const yr = yearRows.slice().reverse(); barChart($('desYr'), { labels: yr.map(r => String(r.y).slice(2)), values: yr.map(r => r.ret * 100), fmt: v => num(v, 0) + '%', extra: i => 'max DD ' + num(yr[i].mdd * 100, 1) + '%' });
 }
 
-/* ------------------------------------------------------------------ HDS : actionnariat (BRVM : SikaFinance ; US : détenteurs institutionnels 13F via Nasdaq) */
+/* ------------------------------------------------------------------ HDS : actionnariat (BRVM : principaux actionnaires ; US : détenteurs institutionnels 13F) */
 /* chiffres Nasdaq (« 1,426,283,914 », « 1.919% », « $480,144,217 ») remis au format français */
 const nqv = x => { if (x == null) return null; const v = parseFloat(String(x).replace(/[$,%\s]/g, '')); return isFinite(v) ? v : null; };
 const nqf = (x, d) => { const v = nqv(x); return v == null ? '—' : num(v, d); };
