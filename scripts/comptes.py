@@ -36,7 +36,7 @@ ITEMS = [
     ("clients", (S_ACT,), r"^clients(?: et comptes rattaches)?$"),
     ("actif_circulant", (S_ACT,), r"^(?:total )?actif circulant$"),
     ("tresorerie_actif", (S_ACT,), r"^(?:total )?tresorerie ?- ?actif$|^(?:total )?tresorerie actif$|^disponibilites$"),
-    ("total_actif", (S_ACT, None), r"^total (?:general )?(?:de l.)?actif$|^total general actif$|^total bilan actif$|^total (?:des )?actifs$|^total assets$|^actif total$"),
+    ("total_actif", (S_ACT, None), r"^total ?(?:general ?)?(?:de ?l.? ?)?actif$|^total general actif$|^total bilan actif$|^total (?:des )?actifs$|^total assets$|^actif total$"),
     # ---- bilan passif (SYSCOHADA)
     ("capital", (S_PAS,), r"^capital(?: social| souscrit(?: appele)?)?$"),
     ("primes_reserves", (S_PAS,), r"^primes et reserves$"),
@@ -48,7 +48,7 @@ ITEMS = [
     ("passif_circulant", (S_PAS,), r"^(?:total )?passif circulant$"),
     ("fournisseurs", (S_PAS,), r"^fournisseurs(?: d.exploitation)?$"),
     ("tresorerie_passif", (S_PAS,), r"^(?:total )?tresorerie ?- ?passif$|^(?:total )?tresorerie passif$"),
-    ("total_passif", (S_PAS, None), r"^total (?:general )?(?:du )?passif$|^total general passif$|^total bilan passif$|^total (?:des |du )?(?:capitaux propres et (?:des )?passifs?|passifs? et (?:des )?capitaux propres)$|^total liabilities and (?:shareholders. )?equity$|^passif total$|^total capitaux propres et passifs$"),
+    ("total_passif", (S_PAS, None), r"^total ?(?:general ?)?(?:du ?)?passif$|^total general passif$|^total bilan passif$|^total (?:des |du )?(?:capitaux propres et (?:des )?passifs?|passifs? et (?:des )?capitaux propres)$|^total liabilities and (?:shareholders. )?equity$|^passif total$|^total capitaux propres et passifs$"),
     ("actif_non_courant", (S_ACT,), r"^total (?:de l.|des )?actifs? non courants?$"),
     ("actif_courant", (S_ACT,), r"^total (?:de l.|des )?actifs? courants?$"),
     ("passif_non_courant", (S_PAS,), r"^total (?:du |des )?passifs? non courants?$"),
@@ -704,18 +704,20 @@ def checks(items, year, bank=False):
     if g("valeur_ajoutee") is not None and g("charges_personnel") is not None and g("ebe") is not None:
         res.append(("EBE = VA - personnel", rel(g("valeur_ajoutee") - abs(g("charges_personnel")), g("ebe"))))
     imp = abs(g("impots_resultat") or 0) + abs(g("participation") or 0)
-    if g("rao") is not None and g("rhao") is not None and g("resultat_net") is not None:
-        res.append(("RN = RAO + HAO - impôt", rel(g("rao") + g("rhao") - imp, g("resultat_net"))))
-    elif g("resultat_exploitation") is not None and g("resultat_financier") is not None and g("rhao") is not None and g("resultat_net") is not None:
-        res.append(("RN = RE + RF + HAO - impôt", rel(g("resultat_exploitation") + g("resultat_financier") + g("rhao") - imp, g("resultat_net"))))
-    if g("rao") is not None and g("rhao") is None and g("impots_resultat") is not None and g("resultat_net") is not None:
-        r_ = rel(g("rao") - imp, g("resultat_net"))  # comptes sans éléments hors activités ordinaires (IFRS) : retenue si elle se vérifie
+    # résultat net du compte de résultat, ou à défaut celui du bilan (compte de résultat coupé avant sa dernière ligne)
+    rn_ = g("resultat_net") if g("resultat_net") is not None else g("resultat_bilan")
+    if g("rao") is not None and g("rhao") is not None and rn_ is not None:
+        res.append(("RN = RAO + HAO - impôt", rel(g("rao") + g("rhao") - imp, rn_)))
+    elif g("resultat_exploitation") is not None and g("resultat_financier") is not None and g("rhao") is not None and rn_ is not None:
+        res.append(("RN = RE + RF + HAO - impôt", rel(g("resultat_exploitation") + g("resultat_financier") + g("rhao") - imp, rn_)))
+    if g("rao") is not None and g("rhao") is None and g("impots_resultat") is not None and rn_ is not None:
+        r_ = rel(g("rao") - imp, rn_)  # comptes sans éléments hors activités ordinaires (IFRS) : retenue si elle se vérifie
         if r_ is not None and r_ <= 0.001:
             res.append(("RN = RAO - impôt", r_))
     if g("rao") is not None and g("resultat_exploitation") is not None and g("resultat_financier") is not None:
         res.append(("RAO = RE + RF", rel(g("resultat_exploitation") + g("resultat_financier"), g("rao"))))
-    if g("resultat_avant_impot") is not None and g("impots_resultat") is not None and g("resultat_net") is not None:
-        res.append(("RN = résultat avant impôt - impôt", rel(g("resultat_avant_impot") - abs(g("impots_resultat")), g("resultat_net"))))
+    if g("resultat_avant_impot") is not None and g("impots_resultat") is not None and rn_ is not None:
+        res.append(("RN = résultat avant impôt - impôt", rel(g("resultat_avant_impot") - abs(g("impots_resultat")), rn_)))
     # sommes des postes du bilan : retenues seulement quand elles se vérifient (elles confirment alors chaque poste lu)
     for nm, tot, parts, need in (("actif = somme des postes", "total_actif", ACT_PARTS, ("immo_corp", "tresorerie_actif")),
                                  ("actif = somme des masses", "total_actif", ("actif_immobilise", "actif_circulant", "tresorerie_actif"), ("actif_immobilise", "actif_circulant", "tresorerie_actif")),
@@ -826,10 +828,10 @@ def read_doc(texts, meta):
 
 
 IDENT_KEYS = {"actif = passif": ("total_actif", "total_passif"), "résultat CR = bilan": ("resultat_net", "resultat_bilan"),
-              "RN = RAO + HAO - impôt": ("rao", "rhao", "impots_resultat", "participation", "resultat_net"),
-              "RN = RE + RF + HAO - impôt": ("resultat_exploitation", "resultat_financier", "rhao", "impots_resultat", "participation", "resultat_net"),
-              "RN = résultat avant impôt - impôt": ("resultat_avant_impot", "impots_resultat", "resultat_net"),
-              "RN = RAO - impôt": ("rao", "impots_resultat", "participation", "resultat_net"),
+              "RN = RAO + HAO - impôt": ("rao", "rhao", "impots_resultat", "participation", "resultat_net", "resultat_bilan"),
+              "RN = RE + RF + HAO - impôt": ("resultat_exploitation", "resultat_financier", "rhao", "impots_resultat", "participation", "resultat_net", "resultat_bilan"),
+              "RN = résultat avant impôt - impôt": ("resultat_avant_impot", "impots_resultat", "resultat_net", "resultat_bilan"),
+              "RN = RAO - impôt": ("rao", "impots_resultat", "participation", "resultat_net", "resultat_bilan"),
               "actif = somme des postes": ("total_actif",) + ACT_PARTS,
               "actif = somme des masses": ("total_actif", "actif_immobilise", "actif_circulant", "tresorerie_actif"),
               "passif = somme des masses": ("total_passif", "capitaux_propres", "dettes_financieres", "passif_circulant", "tresorerie_passif"),
