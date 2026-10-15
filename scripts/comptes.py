@@ -1142,8 +1142,26 @@ def consolidate(cj, mirror=None):
                 nsrc[k] = vals[best_v]["n"]
             best = cand[0]
             res[y] = {"v": v, "n": max(nsrc.get(k, 1) for k in ("total_actif", "resultat_net") if k in nsrc) if any(k in nsrc for k in ("total_actif", "resultat_net")) else 1,
-                      "d": best["d"], "own": best["rank"][0]}
-        out[t] = {"y": res, "per": main[0].replace("_ifrs", ""), "std": main[1], "agree": round(ag[0], 3), "ncmp": ag[3]}
+                      "d": best["d"], "own": best["rank"][0], "ns": nsrc}
+        # concordance avec la base de référence (même périmètre, mêmes normes ?) : un écart confirmé par au moins deux documents
+        # officiels est une erreur de la base, pas un autre périmètre
+        a_ok = a_n = rn_ok = rn_n = 0
+        for y, r in res.items():
+            for k in ("chiffre_affaires", "b_pnb", "resultat_net", "total_actif"):
+                mv = mirror_v(t, y, k)
+                if mv is None or r["v"].get(k) is None:
+                    continue
+                ok_ = abs(r["v"][k] - mv) <= abs(mv) * 0.01 + 0.5 or r["ns"].get(k, 1) >= 2
+                a_n += 1
+                a_ok += ok_
+                if k == "resultat_net":
+                    rn_n += 1
+                    rn_ok += ok_
+        for r in res.values():
+            r.pop("ns", None)
+        ag = (a_ok / a_n if a_n else 0, 0, 0, a_n)
+        out[t] = {"y": res, "per": main[0].replace("_ifrs", ""), "std": main[1], "agree": round(ag[0], 3), "ncmp": ag[3],
+                  "agree_rn": round(rn_ok / rn_n, 3) if rn_n else None, "n_rn": rn_n}
     return out
 
 
