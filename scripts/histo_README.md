@@ -14,7 +14,7 @@ Fichiers CSV en UTF-8, séparateur virgule, décimales avec un point
 | `fractionnements.csv` | Fractionnements et regroupements (ratio) | titre, date |
 | `evenements.csv` | Avis et publications : assemblées, états financiers, opérations sur titres (`operation_sur_titre` = 1), document PDF | date, titre, catégorie, intitulé, document |
 | `resultats.csv` | Comptes annuels : chiffre d'affaires, résultat net, capitaux propres, total bilan, trésorerie, EBIT, EBITDA, dette nette, dépôts et crédits clientèle, coût du risque (millions de FCFA) ; BNPA et dividende (FCFA par action) | titre, exercice |
-| `etats_financiers.csv` | États financiers publiés par les sociétés, poste par poste (bilan, compte de résultat, flux ; millions de FCFA), pour les seuls exercices dont les totaux se vérifient dans le document ; périmètre (comptes sociaux ou consolidés), norme (SYSCOHADA ou IFRS) et nombre de documents qui donnent les mêmes montants | titre, exercice, poste |
+| `etats_financiers.csv` | États financiers publiés par les sociétés, poste par poste (code et libellé du poste ; bilan, compte de résultat, flux ; millions de FCFA), pour les seuls exercices dont les totaux se vérifient dans le document ; périmètre (comptes sociaux ou consolidés), norme (SYSCOHADA ou IFRS) et nombre de documents qui donnent les mêmes montants | titre, exercice, poste |
 | `flottant.csv` | Flottant officiel : titres, titres flottants, flottant %, seuil de 15 % | date de l'avis, titre |
 | `notations.csv` | Notations financières : agence, notes long et court terme (et précédentes), perspective, échelle, validité | date, document |
 | `corrections.csv` | Journal des corrections : date de constat, fichier, clé, champ, ancienne et nouvelle valeur | — |

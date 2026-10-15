@@ -978,6 +978,35 @@ def unit_choice(P, items, y):
     return None, cands
 
 
+# libellés des postes (base historique)
+LABELS = {
+    "charges_immobilisees": "Charges immobilisées", "immo_incorp": "Immobilisations incorporelles", "immo_corp": "Immobilisations corporelles",
+    "immo_fin": "Immobilisations financières", "actif_immobilise": "Actif immobilisé", "actif_circulant_hao": "Actif circulant HAO", "stocks": "Stocks",
+    "creances": "Créances et emplois assimilés", "clients": "Clients", "actif_circulant": "Actif circulant", "tresorerie_actif": "Trésorerie actif",
+    "total_actif": "Total actif", "capital": "Capital", "primes_reserves": "Primes et réserves", "reserves": "Réserves", "report_nouveau": "Report à nouveau",
+    "resultat_bilan": "Résultat de l'exercice (bilan)", "capitaux_propres": "Capitaux propres", "cp_groupe": "Capitaux propres part du groupe",
+    "interets_minoritaires": "Intérêts minoritaires", "dettes_financieres": "Dettes financières", "ressources_stables": "Ressources stables",
+    "passif_circulant": "Passif circulant", "fournisseurs": "Fournisseurs", "tresorerie_passif": "Trésorerie passif", "total_passif": "Total passif",
+    "actif_non_courant": "Actifs non courants", "actif_courant": "Actifs courants", "passif_non_courant": "Passifs non courants",
+    "passif_courant": "Passifs courants", "ventes_marchandises": "Ventes de marchandises", "marge_commerciale": "Marge commerciale",
+    "ventes_produits": "Ventes de produits fabriqués", "travaux_services": "Travaux, services vendus", "produits_accessoires": "Produits accessoires",
+    "chiffre_affaires": "Chiffre d'affaires", "valeur_ajoutee": "Valeur ajoutée", "charges_personnel": "Charges de personnel",
+    "ebe": "Excédent brut d'exploitation", "dotations": "Dotations aux amortissements et provisions", "resultat_exploitation": "Résultat d'exploitation",
+    "revenus_financiers": "Revenus financiers", "frais_financiers": "Frais financiers", "resultat_financier": "Résultat financier",
+    "rao": "Résultat des activités ordinaires", "rhao": "Résultat hors activités ordinaires", "participation": "Participation des travailleurs",
+    "impots_resultat": "Impôts sur le résultat", "quote_part_mee": "Quote-part des sociétés mises en équivalence",
+    "resultat_avant_impot": "Résultat avant impôt", "resultat_net": "Résultat net", "resultat_net_pg": "Résultat net part du groupe",
+    "cafg": "Capacité d'autofinancement globale", "flux_operationnels": "Flux des activités opérationnelles",
+    "capex_incorp": "Acquisitions d'immobilisations incorporelles", "capex_corp": "Acquisitions d'immobilisations corporelles",
+    "flux_investissement": "Flux des activités d'investissement", "dividendes_verses": "Dividendes versés",
+    "flux_financement": "Flux des activités de financement", "variation_tresorerie": "Variation de la trésorerie",
+    "tresorerie_fin": "Trésorerie nette à la clôture", "b_caisse": "Caisse, banque centrale", "b_creances_interbancaires": "Créances interbancaires",
+    "b_creances_clientele": "Créances sur la clientèle", "b_effets_publics": "Effets publics", "b_titres_placement": "Titres de placement",
+    "b_dettes_interbancaires": "Dettes interbancaires", "b_dettes_clientele": "Dettes envers la clientèle", "b_capital": "Capital",
+    "b_interets_produits": "Intérêts et produits assimilés", "b_interets_charges": "Intérêts et charges assimilées",
+    "b_commissions_produits": "Commissions (produits)", "b_commissions_charges": "Commissions (charges)", "b_pnb": "Produit net bancaire",
+    "b_charges_generales": "Charges générales d'exploitation", "b_rbe": "Résultat brut d'exploitation", "b_cout_risque": "Coût du risque"}
+
 # postes qui varient peu d'un exercice à l'autre (contrôle des chiffres tronqués par la reconnaissance de caractères)
 STABLE = {"chiffre_affaires", "ventes_marchandises", "ventes_produits", "valeur_ajoutee", "charges_personnel", "total_actif", "total_passif",
           "immo_corp", "immo_incorp", "stocks", "creances", "clients", "fournisseurs", "actif_circulant", "passif_circulant", "actif_immobilise",

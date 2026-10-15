@@ -277,7 +277,7 @@ def main():
     tables.append(tre)
 
     # ---------- 6 bis. états financiers publiés, poste par poste (millions de FCFA), exercices vérifiés ----------
-    tef = Table(out, "etats_financiers.csv", ["titre", "exercice", "perimetre", "norme", "poste", "valeur", "documents_concordants"],
+    tef = Table(out, "etats_financiers.csv", ["titre", "exercice", "perimetre", "norme", "poste", "libelle", "valeur", "documents_concordants"],
                 ["titre", "exercice", "poste"])
     if a.comptes and os.path.exists(a.comptes):
         try:
@@ -291,7 +291,8 @@ def main():
                     continue
                 for y, r in sorted(cc["y"].items()):
                     for k, v in sorted(r["v"].items()):
-                        tef.upsert({"titre": tk, "exercice": y, "perimetre": cc["per"], "norme": cc["std"], "poste": k, "valeur": round(v, 3),
+                        tef.upsert({"titre": tk, "exercice": y, "perimetre": cc["per"], "norme": cc["std"], "poste": k,
+                                    "libelle": CPT.LABELS.get(k, k), "valeur": round(v, 3),
                                     "documents_concordants": r.get("n")})
         except Exception as e:  # noqa: BLE001
             log.append(f"états financiers illisibles : {e}")
