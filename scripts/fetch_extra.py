@@ -1041,7 +1041,7 @@ def run_comptes(out):
     def again(m):  # document à reprendre : erreur de téléchargement, ou long scan pas encore lu par reconnaissance de caractères
         if str(m.get("st", "")).startswith("erreur"):
             return m.get("n_err", 0) < 3
-        return m.get("q", 99) < 40 and not m.get("ocr") and "found" not in m and 20 < (m.get("pages") or 0) <= 120
+        return m.get("q", 99) < 40 and not m.get("ocr") and "found" not in m and 0 < (m.get("pages") or 0) <= 120
     todo = [e for e in todo if e["document_url"] not in docs or again(docs[e["document_url"]])]
     if not pdf_tools():
         note("comptes", False, "outils PDF absents")
