@@ -1,120 +1,131 @@
 {
  "version": 1,
- "maj": "2026-10-15T13:42:14Z",
- "derniere_seance": "2026-10-14",
+ "maj": "2026-10-16T00:04:55Z",
+ "derniere_seance": "2026-10-15",
  "fichiers": {
+  "cours/2013.csv": {
+   "lignes": 36,
+   "ajoutees": 36,
+   "corrigees": 0
+  },
   "cours/2014.csv": {
-   "lignes": 0,
-   "ajoutees": 0,
+   "lignes": 791,
+   "ajoutees": 791,
    "corrigees": 0
   },
   "cours/2015.csv": {
-   "lignes": 0,
-   "ajoutees": 0,
+   "lignes": 9184,
+   "ajoutees": 9184,
    "corrigees": 0
   },
   "cours/2016.csv": {
-   "lignes": 0,
-   "ajoutees": 0,
+   "lignes": 9841,
+   "ajoutees": 9841,
    "corrigees": 0
   },
   "cours/2017.csv": {
-   "lignes": 303,
-   "ajoutees": 303,
+   "lignes": 10470,
+   "ajoutees": 10167,
    "corrigees": 0
   },
   "cours/2018.csv": {
    "lignes": 9387,
-   "ajoutees": 9387,
-   "corrigees": 0
+   "ajoutees": 0,
+   "corrigees": 1
   },
   "cours/2019.csv": {
    "lignes": 9509,
-   "ajoutees": 9509,
+   "ajoutees": 0,
    "corrigees": 0
   },
   "cours/2020.csv": {
-   "lignes": 9321,
-   "ajoutees": 9321,
-   "corrigees": 0
+   "lignes": 9283,
+   "ajoutees": 0,
+   "corrigees": 1
   },
   "cours/2021.csv": {
    "lignes": 10639,
-   "ajoutees": 10639,
+   "ajoutees": 0,
    "corrigees": 0
   },
   "cours/2022.csv": {
    "lignes": 10764,
-   "ajoutees": 10764,
-   "corrigees": 0
+   "ajoutees": 0,
+   "corrigees": 1
   },
   "cours/2023.csv": {
    "lignes": 10536,
-   "ajoutees": 10536,
+   "ajoutees": 0,
    "corrigees": 0
   },
   "cours/2024.csv": {
    "lignes": 10854,
-   "ajoutees": 10854,
+   "ajoutees": 0,
    "corrigees": 0
   },
   "cours/2025.csv": {
    "lignes": 11575,
-   "ajoutees": 11575,
+   "ajoutees": 0,
    "corrigees": 0
   },
   "cours/2026.csv": {
-   "lignes": 9174,
-   "ajoutees": 9174,
-   "corrigees": 0
+   "lignes": 9222,
+   "ajoutees": 48,
+   "corrigees": 19
   },
   "indices.csv": {
-   "lignes": 41704,
-   "ajoutees": 41704,
+   "lignes": 41714,
+   "ajoutees": 10,
    "corrigees": 0
   },
   "dividendes.csv": {
-   "lignes": 415,
-   "ajoutees": 415,
-   "corrigees": 0
+   "lignes": 441,
+   "ajoutees": 26,
+   "corrigees": 1
   },
   "fractionnements.csv": {
    "lignes": 37,
-   "ajoutees": 37,
+   "ajoutees": 0,
    "corrigees": 0
   },
   "evenements.csv": {
-   "lignes": 7289,
-   "ajoutees": 7289,
+   "lignes": 7290,
+   "ajoutees": 1,
    "corrigees": 0
   },
   "resultats.csv": {
-   "lignes": 535,
-   "ajoutees": 535,
+   "lignes": 798,
+   "ajoutees": 264,
+   "corrigees": 332
+  },
+  "etats_financiers.csv": {
+   "lignes": 17178,
+   "ajoutees": 17178,
    "corrigees": 0
   },
   "flottant.csv": {
    "lignes": 46,
-   "ajoutees": 46,
+   "ajoutees": 0,
    "corrigees": 0
   },
   "notations.csv": {
-   "lignes": 80,
-   "ajoutees": 80,
-   "corrigees": 0
+   "lignes": 333,
+   "ajoutees": 253,
+   "corrigees": 39
   }
  },
  "bulletins_lignes_non_retenues": {
-  "2014": 45,
-  "2015": 3317,
-  "2016": 6708,
-  "2017": 7696
+  "2013": 1,
+  "2015": 24,
+  "2016": 19,
+  "2017": 64
  },
  "bulletins_lignes_lues": {
-  "2014": 45,
-  "2015": 3317,
-  "2016": 6708,
-  "2017": 7999,
+  "2013": 37,
+  "2014": 791,
+  "2015": 9208,
+  "2016": 9860,
+  "2017": 10534,
   "2018": 9389,
   "2019": 9513,
   "2020": 9321,
@@ -123,17 +134,45 @@
   "2023": 10542,
   "2024": 11033,
   "2025": 11575,
-  "2026": 9178
+  "2026": 9226
  },
- "corrections_total": 0,
- "corrections_du_jour": 0,
+ "bulletins_identiques_ecartes": [
+  "2020-10-29"
+ ],
+ "montants_en_milliers_convertis": [
+  "2018-04-17 ONTBF",
+  "2020-09-09 CBIBF",
+  "2022-08-24 ORGT",
+  "2026-03-04 SGBC",
+  "2026-04-10 SNTS",
+  "2026-04-14 SNTS",
+  "2026-04-17 SGBC",
+  "2026-07-07 ECOC",
+  "2026-07-14 SNTS",
+  "2026-07-15 SNTS",
+  "2026-08-04 SNTS",
+  "2026-09-16 SNTS",
+  "2026-09-18 SNTS",
+  "2026-09-21 SNTS",
+  "2026-09-22 SNTS",
+  "2026-09-24 SNTS",
+  "2026-09-25 SNTS",
+  "2026-09-28 SNTS",
+  "2026-10-02 SNTS",
+  "2026-10-05 SNTS",
+  "2026-10-06 SNTS",
+  "2026-10-09 SNTS",
+  "2026-10-15 SNTS"
+ ],
+ "corrections_total": 526,
+ "corrections_du_jour": 526,
  "controles": {
-  "variation_hors_seuil": 15,
+  "precedent_different": 208,
+  "variation_hors_seuil": 29,
   "variation_incoherente": 29,
   "seance_incomplete": 13,
-  "prix_moyen_hors_fourchette": 23,
-  "precedent_different": 69,
   "cloture_absente": 1,
+  "prix_moyen_hors_fourchette": 1,
   "avis_different_bulletin": 4,
   "dates_incoherentes": 8,
   "bnpa_signe_oppose": 1

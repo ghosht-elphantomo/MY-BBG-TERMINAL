@@ -8,12 +8,13 @@ Fichiers CSV en UTF-8, séparateur virgule, décimales avec un point
 
 | Fichier | Contenu | Clé |
 |---|---|---|
-| `cours/AAAA.csv` | Cours des actions tels que publiés dans le bulletin officiel de la cote : précédent, ouverture, clôture, variation %, volume, valeur échangée (FCFA), cours de référence, variation annuelle %, dernier dividende, sa date, rendement %, PER | date, titre |
+| `cours/AAAA.csv` | Cours des actions tels que publiés dans le bulletin officiel de la cote : précédent, ouverture, clôture, variation %, volume, valeur échangée (FCFA), cours de référence, variation annuelle %, dernier dividende, sa date, rendement %, PER, cours moyen (bulletins 2013-2017) | date, titre |
 | `indices.csv` | Clôture des indices BRVM (séances terminées) | date, indice |
 | `dividendes.csv` | Dividendes nets par action, d'après les avis (`avis`) et les bulletins de la cote (`bulletin`) ; montant publié, montant ramené au nombre d'actions actuel et facteur d'ajustement ; dates d'annonce, de détachement et de paiement | titre, exercice, origine |
 | `fractionnements.csv` | Fractionnements et regroupements (ratio) | titre, date |
 | `evenements.csv` | Avis et publications : assemblées, états financiers, opérations sur titres (`operation_sur_titre` = 1), document PDF | date, titre, catégorie, intitulé, document |
 | `resultats.csv` | Comptes annuels : chiffre d'affaires, résultat net, capitaux propres, total bilan, trésorerie, EBIT, EBITDA, dette nette, dépôts et crédits clientèle, coût du risque (millions de FCFA) ; BNPA et dividende (FCFA par action) | titre, exercice |
+| `etats_financiers.csv` | États financiers publiés par les sociétés, poste par poste (code et libellé du poste ; bilan, compte de résultat, flux ; millions de FCFA), pour les seuls exercices dont les totaux se vérifient dans le document ; périmètre (comptes sociaux ou consolidés), norme (SYSCOHADA ou IFRS) et nombre de documents qui donnent les mêmes montants | titre, exercice, poste |
 | `flottant.csv` | Flottant officiel : titres, titres flottants, flottant %, seuil de 15 % | date de l'avis, titre |
 | `notations.csv` | Notations financières : agence, notes long et court terme (et précédentes), perspective, échelle, validité | date, document |
 | `corrections.csv` | Journal des corrections : date de constat, fichier, clé, champ, ancienne et nouvelle valeur | — |
@@ -38,4 +39,17 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
 
 - Cours : bulletins au format actuel depuis fin 2017. Les bulletins plus anciens ont plusieurs mises en page ;
   seules leurs lignes qui se vérifient d'elles-mêmes sont reprises (`etat.json` indique le nombre de lignes non retenues).
-- Les ratios (marges, ROE…) ne sont pas stockés : ils se recalculent à partir de `resultats.csv`.
+- Un bulletin identique à celui de la veille (publié pour un jour férié, ex. 29/10/2020) n'est pas une séance : il est écarté.
+- Montants d'un milliard de FCFA et plus imprimés en milliers dans certains bulletins : remis en FCFA (liste dans `etat.json`).
+- Les ratios (marges, ROE…) ne sont pas stockés : ils se recalculent à partir de `resultats.csv` et `etats_financiers.csv`.
+- Un exercice pas encore clos (comptes semestriels) n'a pas sa place dans `resultats.csv` : une telle ligne est retirée et consignée.
+- `etats_financiers.csv` : un exercice provient de ses propres comptes de préférence (définitifs plutôt que provisoires), sinon de la colonne
+  « exercice précédent » des comptes de l'année suivante ; un chiffre repris et corrigé par la société dans une publication ultérieure
+  l'emporte. Les états lus par reconnaissance de caractères ne gardent que les montants confirmés par deux lectures ou par une
+  identité comptable. Un jeu d'états dont un chiffre est faux (unité, année, ordre de grandeur) est écarté en entier ; les
+  présentations de résultats et les notations ne servent jamais de source.
+- Capitaux propres d'un bilan de synthèse sans ligne de total : somme des composantes publiées (capital, primes, réserves, report à
+  nouveau, résultat, autres), retenue seulement si le passif la vérifie (total − dettes financières − passif circulant − trésorerie passif).
+- Flux de trésorerie (flux opérationnels, acquisitions d'immobilisations, flux disponible) : uniquement ceux lus dans les états
+  financiers publiés et contrôlés par les identités du document. Le fichier de départ `seed/fcf_brvm.json` (lecture sans contrôle,
+  31 exercices faux sur 32 recoupés : unités, lignes confondues avec le chiffre d'affaires) a été retiré ; aucun flux n'est estimé.
