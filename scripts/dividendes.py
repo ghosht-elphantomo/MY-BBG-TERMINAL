@@ -287,6 +287,7 @@ _BOILER = re.compile(r"bourse regionale des valeurs|siege social|\btel\b|t[eé]l
                      r"depositaire central|banque de reglement|www\.|@|\brc \d|\brc abidjan|rccm|r.?gistre du commerce|agrement|"
                      r"^(?:societe anonyme|s\.? ?a\.? avec)|societe anonyme.{0,40}capital|\bau capital de\b.*\d{3}|capital social|"
                      r"zone industrielle|\bimmeuble\b|\bpage \d+\b|\d\d?:\d\d|afrique de (?:l.? ?)?p?ouest\s*$|"
+                     r"^\W*r.publique\b[^,;:]{0,30}$|\brc n|\bs\.?\s?a\.? au capital|^\W*prendre contact|"
                      r"^(?!.*(?:ordre|seance|cotation|transaction)).*\b[bge]?o?urse\b.*(?:mob|nob|valeu|valeh|regon|regional|\brer\b)", re.I)
 
 
