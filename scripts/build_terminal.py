@@ -653,7 +653,7 @@ def main():
                     if abs(x["dividende"] / o["net"] - 1) > .0005:
                         if len(off_chk["ex"]) < 30:
                             off_chk["ex"].append(f'{o["t"]} {o.get("pay") or o.get("det")} : {x["dividende"]:g} -> {o["net"]:g}')
-                        x["dividende"] = o["net"]
+                        x["dividende_base"], x["dividende"] = x["dividende"], o["net"]
                         off_chk["amt"] += 1
                     else:
                         off_chk["same"] += 1
@@ -666,6 +666,8 @@ def main():
                     if o.get("ex") and not x.get("exercice"):
                         x["exercice"] = o["ex"]
                     x["source"], x["avis"] = "BRVM", 1
+                    if o.get("src") in ("bulletin", "revue trimestrielle"):
+                        x["weak"] = 1  # (montant lu dans un ancien bulletin ou une revue : contrôlé plus loin sur le cours du jour)
                     if o.get("fx"):
                         x["usd_c"], x["fx"] = o["usd_c"], o["fx"]
                     if o.get("kind") == "exceptionnel":
@@ -675,6 +677,7 @@ def main():
                 else:
                     nx = {"ticker": o["t"], "dividende": o["net"], "exercice": o.get("ex"), "date_annonce": o.get("pub"),
                           "date_detachement": o.get("det"), "date_paiement": o.get("pay"), "source": "BRVM", "avis": 1,
+                          **({"weak": 1} if o.get("src") in ("bulletin", "revue trimestrielle") else {}),
                           **({"usd_c": o["usd_c"], "fx": o["fx"]} if o.get("fx") else {}), **({"exc": 1} if o.get("kind") == "exceptionnel" else {}), **({"px_raw": o["px"], "px_d": o["px_d"]} if o.get("px") and o.get("px_d") else {})}
                     divs.append(nx)
                     byt[o["t"]].append(nx)
@@ -1031,6 +1034,26 @@ def main():
                     f_ = (x.get("ajust") or 1.0) * km_
                     x["dividende_publie"], x["dividende"], x["ajust"] = pub_, round(pub_ / f_, 4), round(f_, 6)
                     boc_chk.setdefault("div_base", []).append(f"{t} {x.get('exercice')} ÷{f_:g} (même opération ; rendement {y_:.0%} sinon)")
+        # montant lu dans un ancien bulletin ou une revue (source la plus faible) dont le rendement au cours du jour du paiement reste
+        # invraisemblable (moins de 0,1 % ou plus de 50 %) : lecture fautive, versement retiré plutôt qu'affiché faux
+        for x in divs:
+            if x.get("ticker") != t or not x.get("weak") or not x.get("dividende"):
+                continue
+            ds_ = str(x.get("date_paiement") or x.get("date_detachement") or "")[:10]
+            if not ds_:
+                continue
+            j_ = bisect.bisect_right(dts_, di(ds_)) - 1
+            if j_ >= 0 and rows[j_][4]:
+                y_ = x["dividende"] / rows[j_][4]
+            elif x.get("px_raw"):  # (paiement antérieur à la série de cours : cours imprimé dans le bulletin, même base d'actions)
+                y_ = x.get("dividende_publie", x["dividende"]) / x["px_raw"]
+            else:
+                continue
+            if not (.001 <= y_ <= .5):
+                boc_chk.setdefault("div_rejete", []).append(f"{t} {x.get('exercice')} {x.get('dividende_publie', x['dividende']):g} (rendement {y_:.1%})")
+                b_ = x.get("dividende_base")  # (montant de la base remplacé par cette lecture : rétabli s'il est, lui, vraisemblable)
+                b_adj = b_ / (x.get("ajust") or 1.0) if b_ else None
+                x["dividende"] = round(b_adj, 4) if b_adj and j_ >= 0 and rows[j_][4] and .001 <= b_adj / rows[j_][4] <= .5 else None
         # BNPA et dividende par exercice de la fiche : chaque exercice ramené sur la base des actions actuelles. La base de chaque
         # valeur se lit sur le nombre d'actions implicite (résultat net ÷ BNPA) : celui d'aujourd'hui (déjà ajusté), ou celui
         # d'avant une ou plusieurs opérations récentes (montant publié à l'époque, à diviser par le rapport de ces opérations)
