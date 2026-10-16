@@ -1,0 +1,65 @@
+name: Export complet
+
+# Copie complète et autonome du terminal, refaite chaque nuit : le site (index.html) avec toutes ses données à côté (data/),
+# la base historique (base_historique/), des lanceurs pour l'ouvrir sur un ordinateur sans connexion, et une notice.
+# Écrit seulement la branche `export` (aucun déploiement : vercel.json de la branche) ; ne touche ni au site ni à son actualisation.
+# Télécharger : page du dépôt sur GitHub, branche « export », bouton « Code » puis « Download ZIP ».
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/export.yml", "deploy/export/**"]
+  schedule:
+    - cron: "47 0 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: export
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assembler le site, ses données et la base historique
+        run: |
+          set -e
+          mkdir -p /tmp/exp/data /tmp/exp/base_historique
+          cp public/index.html public/version.json public/favicon.ico public/favicon.svg public/apple-touch-icon.png public/LICENSE-fonts.txt /tmp/exp/
+          git fetch -q --depth 1 origin data && git archive FETCH_HEAD data | tar -x -C /tmp/exp
+          if git fetch -q --depth 1 origin histo; then git archive FETCH_HEAD | tar -x -C /tmp/exp/base_historique; rm -f /tmp/exp/base_historique/vercel.json; fi
+          cp deploy/export/* /tmp/exp/
+          chmod +x "/tmp/exp/Ouvrir le terminal (Mac).command" || true
+          # contrôle : le site et ses fichiers principaux sont là, et chaque JSON se lit
+          test -s /tmp/exp/index.html && test -s /tmp/exp/data/summary.json && test -s /tmp/exp/data/quotes.json
+          python3 - <<'EOF'
+          import json, os, sys
+          bad = []
+          for root, _, files in os.walk("/tmp/exp/data"):
+              for f in files:
+                  if f.endswith(".json"):
+                      try:
+                          json.load(open(os.path.join(root, f), encoding="utf8"))
+                      except Exception as e:  # noqa: BLE001
+                          bad.append(f"{f}: {e}")
+          n = sum(len(fs) for _, _, fs in os.walk("/tmp/exp"))
+          print(f"{n} fichiers, {len(bad)} JSON illisibles")
+          sys.exit(1 if bad else 0)
+          EOF
+          date -u +"Export du %d/%m/%Y à %H:%M UTC" > /tmp/exp/DATE_EXPORT.txt
+          du -sh /tmp/exp
+      - name: Publier (branche export)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/exp/vercel.json
+          URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          export GIT_DIR=/tmp/exp.git GIT_WORK_TREE=/tmp/exp
+          rm -rf "$GIT_DIR"; git init -q -b export
+          git config user.name "fqt-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Export $(date -u +'%d/%m/%Y %H:%M') UTC" && git push -q -f "$URL" HEAD:export
