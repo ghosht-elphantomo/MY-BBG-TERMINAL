@@ -1,2 +1,5 @@
-gn_lesechos.xml|https://news.google.com/rss/search?q=site:lesechos.fr+march%C3%A9s+OR+bourse+OR+finance&hl=fr&gl=FR&ceid=FR:fr
-lesechos_old.xml|https://syndication.lesechos.fr/rss/rss_finance-marches.xml
+boc_20140115.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20140115.pdf
+boc_20170802.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20170802.pdf
+boc_20191231.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20191231.pdf
+boc2_20140115.pdf|https://www.brvm.org/sites/default/files/boc_20140115_2.pdf
+wb_avis2002.pdf|https://web.archive.org/web/20031120101029id_/http://www.brvm.org:80/fr/marche/avis/2002/juillet/AVIS%20N%B080%20-%202002%20%20DIVIDENDES%20PEYRISSAC%20-%20EX%202001.pdf
