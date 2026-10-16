@@ -52,12 +52,12 @@ def nrm(s):
 def kind_of(ti, u, k0=None):
     """Nature d'un document d'après sa catégorie connue, sinon son intitulé et le nom de son fichier."""
     n = nrm(ti) + " " + nrm(urllib.parse.unquote(u.rsplit("/", 1)[-1], encoding="latin-1"))
+    tn = nrm(ti)
     # (emprunt obligataire : « TPCI 5,45 % 2026-2031 », « (EOS.O30) », sukuk… quelle que soit la catégorie de la liste)
     if re.search(r"\d+(?:,\d+)? ?% ?(?:19|20)\d\d ?- ?(?:19|20)\d\d|\.o\d+\b|emprunt obligataire|obligataire|sukuk|diaspora bonds", n):
         return "obl"
     # intitulé qui annonce les états financiers avant toute attestation ou tout rapport sur eux : « états financiers », quelle
     # que soit la catégorie de la liste (« SONATEL SN : Etats financiers et attestation des Commissaires Aux Comptes – Exercice 2025 »)
-    tn = nrm(ti)
     m_ef = re.search(r"\betats? financiers?|financial statements|\bcomptes (?:annuels|consolides|sociaux|semestriels)", tn)
     m_cac = re.search(r"attestation|commissaires? aux comptes|\bcac\b|rapport (?:general|special) des", tn)
     if re.match(r"(?:[^:]{0,70}:\s*)?(?:attestation|rapports? (?:des|du) (?:cac|commissaires?))", tn) and k0 in (None, "ef", "rann", "ra", "com", "avis", "cac"):
@@ -66,7 +66,11 @@ def kind_of(ti, u, k0=None):
         return "ef"
     if m_ef and m_cac and m_cac.start() < m_ef.start() and k0 in (None, "ef", "com", "avis"):
         return "cac"  # (« Attestation de sincérité sur les états financiers »)
-    if k0 == "rann" and re.search(r"trimestr|semestr|rapport d.activite|rapport de gestion.{0,20}(?:mars|juin|septembre)", nrm(ti)) and not re.search(r"rapport annuel|examen limite|commissaire|attestation|\bcac\b", nrm(ti)):
+    if k0 == "ag" and not re.search(r"assembl|convoc|resolution|vote|pouvoir|meeting|\bag[oem]\b|prorogation d.ag|reunion", tn):
+        k0 = None  # (« Obtention d'un prêt de Deutsche Bank AG » : pas une assemblée)
+    if k0 == "rann" and re.search(r"financial results?|resultats? financ", tn) and not re.search(r"rapport annuel|annual report", tn):
+        return "res"
+    if k0 == "rann" and re.search(r"trimestr|semestr|rapport d.activite|rapport de gestion.{0,20}(?:mars|juin|septembre)|activi?ty report|quarter|quater|half|semester", nrm(ti)) and not re.search(r"rapport annuel|examen limite|commissaire|attestation|\bcac\b", nrm(ti)):
         return "ra"  # (ancien site : « Rapport semestriel » rangé avec les rapports annuels)
     if k0 and k0 not in ("avis", "com"):
         return k0
@@ -74,7 +78,7 @@ def kind_of(ti, u, k0=None):
              ("div", r"dividende|calendrier de paiement"),
              ("obl", r"obligat|emprunt|sukuk|interets|remboursement (?:partiel|total|anticipe)|amortissement|coupon|titres? de creance"),
              ("ef", r"etats? financiers?|bilan|comptes (?:annuels|consolides|sociaux|semestriels)"),
-             ("ra", r"rapport d.activite"), ("cac", r"commissaires? aux comptes"), ("rann", r"rapport annuel|rapport de gestion"),
+             ("ra", r"rapport d.activite|rapport (?:semestriel|trimestriel)|activi?ty report"), ("cac", r"commissaires? aux comptes"), ("rann", r"rapport annuel|rapport de gestion"),
              ("res", r"resultats?\b"), ("not", r"notation"), ("ag", r"assemblee|convocation|resolution"),
              ("ost", r"fractionnement|augmentation de capital|attribution gratuite|introduction en bourse|radiation|suspension|"
                      r"reprise de cotation|valeur theorique|offre publique|droits? (?:de souscription|d.attribution)"),
@@ -93,9 +97,9 @@ def flags_of(ti, u, k):
         f += "D"
     if re.search(r"rectif|annule et remplace", n):
         f += "R"
-    if re.search(r"semestr|1er semestre|s1\b|\bau 30 juin|30/06/(?:19|20)\d\d|rapport de gestion.{0,20}juin", n):
+    if re.search(r"semestr|1er semestre|s1\b|\bau 30 juin|30/06/(?:19|20)\d\d|rapport de gestion.{0,20}juin|\bhalf\b|half.year|\bsemester", n):
         f += "S"
-    if re.search(r"trimestr|\b[1-4](?:er|e|eme)? trimestre|\bt[1-4]\b|[1-4]t20|\bau 30 septembre|\bau 31 mars|30/09/(?:19|20)\d\d|31/03/(?:19|20)\d\d|rapport de gestion.{0,20}(?:mars|septembre)", n) and k != "rev":
+    if re.search(r"trimestr|\b[1-4](?:er|e|eme)? trimestre|\bt[1-4]\b|[1-4]t20|\bau 30 septembre|\bau 31 mars|30/09/(?:19|20)\d\d|31/03/(?:19|20)\d\d|rapport de gestion.{0,20}(?:mars|septembre)|\bquar?ter\b|first quarter|\bq[1-4]\b", n) and k != "rev":
         f += "T"
     if re.search(r"consolid", n):
         f += "C"
@@ -239,7 +243,10 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print, comptes=None)
         for n in (a.get("nom"), a.get("nom_officiel")):
             if n:
                 co.setdefault(t, set()).add(n)
-    def alias(t, n):  # (nom d'émetteur gardé seulement s'il ne désigne pas une autre société : listes parfois mal rattachées)
+    def alias(t, n):  # (nom d'émetteur gardé seulement s'il ne désigne pas une autre société : listes parfois mal rattachées ;
+        # « Avis », « BRVM » relevés à la place d'un nom : écartés)
+        if n and re.fullmatch(r"\W*(?:avis|brvm|communiques?|bulletin|rapport|societe|note|information|annonce|document)\W*", nrm(n)):
+            return
         if t and n and ticker_of(n) in (None, t):
             co.setdefault(t, set()).add(n)
     for e in ev:
@@ -254,8 +261,14 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print, comptes=None)
     sure = set()
     for u, m in cp.items():
         r = R.get(canon(u))
-        if r and m.get("st") == "ok" and m.get("per") == "annuel" and isinstance(m.get("fy"), int) and 1990 <= m["fy"] <= dt.date.today().year:
-            r[2] = m["fy"]
+        if not (r and m.get("st") == "ok" and m.get("per") == "annuel" and isinstance(m.get("fy"), int) and 1990 <= m["fy"] <= dt.date.today().year):
+            continue
+        # (l'exercice lu ne l'emporte sur l'intitulé que si celui-ci est muet, ou s'il porte l'année de publication : « Exercice 2013 »
+        # publié en février 2013 = comptes 2012 ; un intitulé cohérent avec sa date est gardé, la lecture d'un scan peut se tromper
+        # d'année : « Exercice 2004 » de Sonatel lu 2003)
+        fy, dy_ = m["fy"], r[3] // 10000
+        if not r[2] or fy == r[2] or (dy_ and r[2] == dy_ and fy == dy_ - 1):
+            r[2] = fy
             sure.add(id(r))
     this_y = dt.date.today().year
     n_fix = 0
@@ -288,10 +301,58 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print, comptes=None)
             m = re.match(r"([^:—]{3,60}?)\s*[:—]", r[4])
             if m and not re.match(r"\s*(?:avis|communiqu|bulletin|brvm\b|instruction|decision|note)", nrm(m.group(1))):
                 r[1] = ticker_of(m.group(1)) or ""
+    # document sans société dont l'intitulé porte le nom complet d'une seule société cotée (« … — Bank Of Africa NIGER — Admission
+    # des actions nouvelles ») : rattaché à elle (nom d'une seule société, le plus long trouvé ; « NSIA HOLDING » ne désigne pas NSIA Banque)
+    SW = {"de", "du", "des", "la", "le", "les", "l", "d", "et", "of", "the", "sa", "s", "a", "en"}
+    toks = lambda x: [w for w in re.sub(r"[^a-z0-9]+", " ", nrm(x)).split() if w not in SW]
+    phr = {}
+    for t, L in co.items():
+        for n_ in L:
+            tk = tuple(toks(n_))
+            if len(tk) >= 2 or (len(tk) == 1 and len(tk[0]) >= 5 and tk[0] not in ("banque", "societe", "groupe", "africa", "bank")):
+                phr.setdefault(tk, set()).add(t)
+    phr = {k: v for k, v in phr.items() if len(v) == 1}
+    # (nom d'un seul mot, « SICOR » : seulement s'il désigne surtout cette société dans les intitulés rattachés ; « total » non)
+    tokrows = {}
+    for r in rows:
+        if r[1]:
+            for w in set(toks(r[4])):
+                tokrows.setdefault(w, []).append(r[1])
+    for k in [k for k in phr if len(k) == 1]:
+        t_, L_ = next(iter(phr[k])), tokrows.get(k[0], [])
+        if L_ and sum(1 for x in L_ if x == t_) < .8 * len(L_):
+            del phr[k]
+    n_att = 0
+    for r in rows:
+        if r[1] or r[0] in ("boc", "rev", "seance", "regl", "opcvm"):
+            continue
+        tt = toks(r[4])
+        best, who = 0, set()
+        for k, v in phr.items():
+            if len(k) < best:
+                continue
+            if any(tt[i:i + len(k)] == list(k) for i in range(len(tt) - len(k) + 1)):
+                if len(k) > best:
+                    best, who = len(k), set(v)
+                else:
+                    who |= v
+        if len(who) == 1:
+            r[1] = who.pop()
+            n_att += 1
+    # même document déposé deux fois (même intitulé, même date, même société) : une seule ligne
+    seen_, rows2 = set(), []
+    for r in sorted(rows, key=lambda r: (bool(re.search(r"_\d\.pdf$", r[5])), "A" in r[6])):
+        key_ = (r[0], r[1], r[3], re.sub(r"[^a-z0-9]+", " ", nrm(r[4])).strip())
+        if key_ in seen_ and r[3]:
+            continue
+        seen_.add(key_)
+        rows2.append(r)
+    n_dup = len(rows) - len(rows2)
+    rows = sorted(rows2, key=lambda r: (-r[3], r[4]))
     res = {"v": 1, "ts": int(time.time()), "n": len(rows), "co": {t: sorted(n for n in v if n) for t, v in co.items() if t},
            "r": rows}
     json.dump(res, open(os.path.join(out, "search.json"), "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))
-    log(f"recherche MOTS CLES : {len(rows)} documents indexés, {len(sure)} exercices lus dans les comptes, {n_fix} dates ou exercices incohérents écartés ({time.time() - t0:.1f} s)")
+    log(f"recherche MOTS CLES : {len(rows)} documents indexés, {len(sure)} exercices lus dans les comptes, {n_fix} dates ou exercices incohérents écartés, {n_att} documents rattachés par le nom de la société, {n_dup} doublons retirés ({time.time() - t0:.1f} s)")
     return res
 
 

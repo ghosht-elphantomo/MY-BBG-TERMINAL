@@ -87,7 +87,7 @@ async function kwLoad() {
   for (const b of (B && B.rows) || []) E.push({ k: 'oblc', t: '', y: b.y1 || 0, d: 0, ti: `${b.n} (${b.code})${b.iss ? ' — ' + b.iss : ''}`, u: 'bond:' + b.code, f: '', iss: b.iss || '' });
   /* sociétés : noms officiels, courants, anciens, symboles ; poids d'un mot = rareté parmi les sociétés */
   const CO = {}, add = (t, n) => { if (!t || !n) return; (CO[t] = CO[t] || new Set()).add(n); };
-  for (const [t, L] of Object.entries((S && S.co) || {})) L.forEach(n => add(t, n));
+  for (const [t, L] of Object.entries((S && S.co) || {})) L.forEach(n => { if (!/^\W*(avis|brvm|communiques?|bulletin|rapport|societe|note|information|annonce|document)\W*$/i.test(kwN(n))) add(t, n); });
   for (const s of Q.sum.secs) if (s.mkt === 'BRVM' && s.cls === 'Equity') { add(s.id, s.short); add(s.id, s.n); }
   const COTOK = {}, DF = {};
   for (const [t, L] of Object.entries(CO)) { const set = new Set([t.toLowerCase()]); L.forEach(n => kwToks(n).forEach(w => { if (w.length > 1 && !KW_STOP.has(w)) set.add(w); })); COTOK[t] = set; }

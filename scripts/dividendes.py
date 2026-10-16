@@ -440,7 +440,7 @@ ALIAS = [
     (r"\bboa\b.*(?:burkina|\bbf\b)|bank of africa.*(?:burkina|\bbf\b)", "BOABF"), (r"\bboa\b.*(?:benin|\bbn\b)|bank of africa.*(?:benin|\bbn\b)", "BOAB"),
     (r"\bboa\b.*(?:cote d.?ivoire|\bci\b)|bank of africa.*(?:cote|\bci\b)", "BOAC"), (r"\bboa\b.*(?:mali|\bml\b)|bank of africa.*(?:mali|\bml\b)", "BOAM"),
     (r"\bboa\b.*(?:niger|\bng\b)|bank of africa.*(?:niger|\bng\b)", "BOAN"), (r"\bboa\b.*(?:senegal|\bsn\b)|bank of africa.*(?:senegal|\bsn\b)", "BOAS"),
-    (r"ecobank transnational|\beti\b", "ETIT"), (r"ecobank", "ECOC"), (r"sonatel", "SNTS"), (r"onatel", "ONTBF"), (r"orange", "ORAC"),
+    (r"ecobank transnational|\beti\b|ecobank trans\b|ecobank (?:tg|togo|group)\b", "ETIT"), (r"ecobank", "ECOC"), (r"sonatel", "SNTS"), (r"onatel", "ONTBF"), (r"orange", "ORAC"),
     (r"coris", "CBIBF"), (r"palm ?ci|palmci|palm cote", "PALC"), (r"\bbici|bicici", "BICC"), (r"biic", "BICB"),
     (r"total(?:energies)?(?: marketing)? (?:senegal|sn)\b|total senegal", "TTLS"), (r"total", "TTLC"), (r"\bcie\b|compagnie ivoirienne d.electricite", "CIEC"),
     (r"solibra", "SLBC"), (r"societe ivoirienne de banque|\bsib\b", "SIBC"), (r"loterie nationale|\blnb\b", "LNBB"), (r"nsia", "NSBC"),

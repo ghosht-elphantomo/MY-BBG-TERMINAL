@@ -1885,7 +1885,7 @@ NAME_TOKENS = {"ABJC": r"servair", "BNBC": r"bernabe", "BICC": r"\bbici", "CABC"
                "SDCC": r"sode.?ci|sodeci", "SDSC": r"bollore|africa global|\bagl\b", "SEMC": r"siem", "SGBC": r"\bsgb|societe generale|\bsgci\b",
                "SHEC": r"vivo", "SIBC": r"\bsib\b|\bsib ci\b", "SICC": r"sicor", "SIVC": r"air liquide", "SLBC": r"solibra", "SMBC": r"\bsmb\b",
                "SNTS": r"sonatel", "SOGC": r"\bsogb\b", "SPHC": r"\bsaph\b", "STAC": r"setao", "STBC": r"sitab", "UNLC": r"unilever",
-               "UNXC": r"uniwax", "ECOC": r"ecobank ci|ecobank cote", "ETIT": r"ecobank tg|\beti\b|\beti tg\b", "CBIBF": r"coris", "LNBB": r"\blnb\b|loterie",
+               "UNXC": r"uniwax", "ECOC": r"ecobank ci|ecobank cote", "ETIT": r"ecobank tg|ecobank trans|ecobank togo|\beti\b|\beti tg\b", "CBIBF": r"coris", "LNBB": r"\blnb\b|loterie",
                "BICB": r"\bbiic\b", "BOAB": r"boa bn|boa benin|africa bn|africa benin", "BOABF": r"boa bf|boa burkina|africa bf|africa burkina",
                "BOAC": r"boa ci|boa cote|africa ci|boaci", "BOAM": r"boa ml|boa mali|africa ml|africa mali", "BOAN": r"boa ng|boa niger|africa ng|africa niger",
                "BOAS": r"boa sn|boa senegal|africa sn|africa senegal", "TTLC": r"total ci|total cote|totalenergies marketing ci|totalenergies marketing cote",
