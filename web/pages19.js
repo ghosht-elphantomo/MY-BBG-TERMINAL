@@ -20,8 +20,11 @@ const QP_PER = { T1: '1er trimestre', S1: '1er semestre', '9M': '9 mois', A: 'ex
 const QP_M = { rev: 'Chiffre d’affaires', ebit: 'Résultat d’exploitation', ni: 'Résultat net' };
 const QP_METH = { naive: 'exercice précédent reconduit', drift: 'tendance : croissance médiane des derniers exercices', ytd_g: 'croissance du cumul de l’exercice appliquée à l’exercice précédent',
   ytd_s: 'cumul de l’exercice ÷ part saisonnière habituelle de la période', ytd_d: 'écart du cumul de l’exercice ajouté à l’exercice précédent', margin: 'chiffre d’affaires prévu × marge médiane des 3 derniers exercices',
-  trend: 'tendance de la société rapprochée de la croissance de long terme ; marge ramenée vers sa médiane' };
-const QP_MS = { naive: 'naïve', drift: 'tendance', ytd_g: 'croissance du cumul', ytd_s: 'part saisonnière', ytd_d: 'écart du cumul', margin: 'marge médiane', trend: 'tendance et marge' };
+  trend: 'tendance de la société rapprochée de la croissance de long terme ; marge ramenée vers sa médiane',
+  damped: 'croissance récente amortie vers la croissance de long terme ; marge ramenée progressivement vers sa médiane',
+  comb: 'moyenne de deux méthodes (niveau reconduit et tendance)', sector: 'marge qui rejoint en cinq ans la médiane des sociétés du même secteur' };
+const QP_MS = { naive: 'naïve', drift: 'tendance', ytd_g: 'croissance du cumul', ytd_s: 'part saisonnière', ytd_d: 'écart du cumul', margin: 'marge médiane', trend: 'tendance et marge',
+  damped: 'croissance amortie', comb: 'combinaison', sector: 'marge du secteur' };
 const QP_VT = { initiale: 'Version initiale', publication: 'Mise à jour (résultats publiés)', exceptionnelle: 'Révision exceptionnelle', trimestrielle: 'Mise à jour trimestrielle', methode: 'Révision de méthode' };
 const QP_DISC = '<div class="qv-disc">QLAB Prévisions estime les résultats des entreprises à partir de leurs publications ; il ne prévoit pas le cours de l’action, ne donne aucun objectif de cours et ne promet aucun rendement. Montants en millions de francs CFA ; bénéfice par action en francs CFA, sur la base du nombre d’actions actuel ; fourchettes à 80 % mesurées sur les erreurs passées de la méthode.</div>';
 const qpM = v => v == null || !isFinite(v) ? '—' : num(v, Math.abs(v) >= 1000 ? 0 : Math.abs(v) >= 10 ? 1 : 2);
@@ -81,7 +84,8 @@ function qpFc(C, IX) {
     ${rows.map(([k, l]) => a1[k] ? `<tr><td class="l am">${l}</td><td>${qpM(a1[k].lo)}</td><td class="fc">${qpM(a1[k].v)}</td><td>${qpM(a1[k].hi)}</td></tr>` : '').join('')}</tbody></table></div>`;
   // ce qui fait évoluer la prévision
   const why = ['rev', 'ebit', 'ni'].filter(k => a1[k]).map(k => { const x = a1[k], alts = x.alts || {};
-    return `<p><b>${k === 'rev' && bank ? 'Produit net bancaire' : QP_M[k]}</b> : ${esc(QP_METH[x.meth] || x.meth)}${x.n ? ` <span class="dm">(fourchette mesurée sur ${x.n} prévisions passées)</span>` : ''}.${Object.keys(alts).length > 1 ? ` Autres méthodes : ${Object.entries(alts).filter(([mm]) => mm !== x.meth).map(([mm, v]) => `${esc(QP_METH[mm] || mm)} ${qpM(v)}`).join(' ; ')}.` : ''}</p>`; }).join('');
+    const x2 = (fcA[1] || {})[k];
+    return `<p><b>${k === 'rev' && bank ? 'Produit net bancaire' : QP_M[k]}</b> : ${F.fy} — ${esc(QP_METH[x.meth] || x.meth)}${x.n ? ` <span class="dm">(fourchette mesurée sur ${x.n} prévisions passées)</span>` : ''}.${Object.keys(alts).length > 1 ? ` Autres méthodes : ${Object.entries(alts).filter(([mm]) => mm !== x.meth).map(([mm, v]) => `${esc(QP_METH[mm] || mm)} ${qpM(v)}`).join(' ; ')}.` : ''}${x2 ? ` Exercices suivants — ${esc(QP_METH[x2.meth] || x2.meth)}.` : ''}</p>`; }).join('');
   const lastP = P.periods.filter(p => p.fy === F.fy).slice(-1)[0];
   const ytd = lastP ? `<p><b>Dernier cumul publié</b> : ${QP_PER[lastP.per]} ${lastP.fy}${lastP.rev != null ? ` — ${bank ? 'PNB' : 'chiffre d’affaires'} ${qpM(lastP.rev)}` : ''}${lastP.ni != null ? `, résultat net ${qpM(lastP.ni)}` : ''}${(() => { const pr = P.periods.find(x => x.fy === lastP.fy - 1 && x.per === lastP.per); return pr && pr.rev && lastP.rev ? ` (${lastP.rev >= pr.rev ? '+' : ''}${num((lastP.rev / pr.rev - 1) * 100, 1)} % sur un an)` : ''; })()}${lastP.src ? ` <span class="dm">· ${esc(lastP.src)}${lastP.d ? ', ' + qvD(lastP.d) : ''}</span>` : ''}.</p>` : '';
   const chart = qpChart(P.annual, fcA, 'ni', 'Résultat net') + qpChart(P.annual, fcA, 'rev', bank ? 'Produit net bancaire' : 'Chiffre d’affaires');

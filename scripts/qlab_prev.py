@@ -37,7 +37,7 @@ import time
 import qlab_core as C
 import periodiques as PER
 
-ENGINE = "QLAB-P 1.0"
+ENGINE = "QLAB-P 1.1"  # 1.1 : trajectoires amorties, combinées et retour de la marge vers celle du secteur, choisies par validation
 MAT_NI = 0.05          # seuil de matérialité : variation possible du résultat net prévu qui déclenche une analyse exceptionnelle
 MIN_CASES = 15         # cas minimum pour qu'une méthode puisse remplacer la prévision naïve
 GAIN_MIN = 0.10        # amélioration minimale de l'erreur médiane exigée
@@ -52,7 +52,9 @@ M_REV = {"naive": "Exercice précédent reconduit (prévision naïve)", "drift":
          "ytd_g": "Croissance du cumul de l'exercice appliquée à l'exercice précédent", "ytd_s": "Cumul de l'exercice ÷ part saisonnière habituelle"}
 M_NI = {"naive": "Exercice précédent reconduit (prévision naïve)", "margin": "Chiffre d'affaires prévu × marge médiane des 3 derniers exercices",
         "ytd_d": "Écart du cumul de l'exercice ajouté à l'exercice précédent", "ytd_s": "Cumul de l'exercice ÷ part saisonnière habituelle"}
-M_FUT = {"naive": "Dernier niveau reconduit", "trend": "Tendance de la société rapprochée de la croissance de long terme ; marge ramenée vers sa médiane"}
+M_FUT = {"naive": "Dernier niveau reconduit", "trend": "Tendance de la société rapprochée de la croissance de long terme ; marge ramenée vers sa médiane",
+         "damped": "Croissance récente amortie vers la croissance de long terme ; marge ramenée progressivement vers sa médiane",
+         "comb": "Moyenne de la trajectoire reconduite et de la trajectoire amortie"}
 EV_W = {"res": ("Publication de résultats", 1.0), "ef": ("États financiers", 1.0), "ra": ("Rapport d'activité", 1.0), "rann": ("Rapport annuel", 0.6),
         "dir": ("Changement de dirigeant", 0.5), "ost": ("Opération sur le capital", 0.8), "not": ("Notation financière", 0.4),
         "com": ("Communiqué", 0.4), "ag": ("Assemblée générale", 0.2), "div": ("Dividende", 0.1)}
@@ -201,6 +203,7 @@ def candidates(S, A, Pv, N, state, glt):
         cr["naive"] = rev_L
         if g is not None:
             cr["drift"] = rev_L * (1 + g)
+            cr["comb"] = 0.5 * (cr["naive"] + cr["drift"])
     if state:
         c, p = ytd_pair(Pv, "rev", N, state)
         if fin(c) and fin(p) and p > 0 and c > 0 and fin(rev_L) and rev_L > 0 and 0.4 <= c / p <= 2.5:
@@ -218,6 +221,8 @@ def candidates(S, A, Pv, N, state, glt):
         mm = margin_med(A, m, L)
         if mm is not None and fin(rev_base):
             cm["margin"] = rev_base * mm
+            if "naive" in cm:
+                cm["comb"] = 0.5 * (cm["naive"] + cm["margin"])
         if state and fin(a_L):
             c, p = ytd_pair(Pv, m, N, state)
             if fin(c) and fin(p):
@@ -228,23 +233,55 @@ def candidates(S, A, Pv, N, state, glt):
         out[(m, 1)] = cm
     # exercices suivants (horizon 2 à 5, comptés depuis le dernier exercice publié), à partir de la prévision de N retenue plus tard
     out["_g"] = g
+    out["_g3"] = growth3(A["rev"], L)
     out["_glt"] = glt
     out["_mm"] = {m: margin_med(A, m, L, n=5) for m in ("ebit", "ni")}
     return out
 
 
-def future(base, h, g, glt, mm, m0):
-    """trajectoire au-delà de l'exercice N : chiffre d'affaires selon la tendance de la société rapprochée de la croissance de long
-    terme ; marges ramenées en trois ans vers leur médiane des 5 derniers exercices"""
-    rev = {"naive": {}, "trend": {}}
+SECM = {}
+PHI = 0.7  # amortissement annuel de l'écart entre la croissance récente de la société et la croissance de long terme
+
+
+def sector_margins(I):
+    """marge nette et marge d'exploitation médianes de chaque modèle économique, par exercice (au moins 3 sociétés)"""
+    out = {}
+    by = {}
+    for t, S in I["S"].items():
+        rv = S["ser"].get("rev") or {}
+        for m in ("ni", "ebit"):
+            for y, v in (S["ser"].get(m) or {}).items():
+                r = rv.get(y)
+                if fin(v) and fin(r) and r > 0:
+                    by.setdefault((S.get("arch"), m, y), []).append(v / r)
+    for k, L in by.items():
+        if len(L) >= 3:
+            out[k] = med(L)
+    return out
+
+
+def future(base, h, g, glt, mm, g3=None, msec=None):
+    """trajectoires possibles au-delà de l'exercice N (la validation choisit) :
+    - naive : dernier niveau reconduit ;
+    - trend : croissance médiane de la société rapprochée de la croissance de long terme ; marges ramenées en trois ans vers leur
+      médiane des 5 derniers exercices ;
+    - damped : croissance récente (3 derniers exercices) qui converge progressivement vers la croissance de long terme (écart
+      amorti de 30 % par an) ; marges qui convergent au même rythme vers leur médiane ;
+    - comb : moyenne de la trajectoire reconduite et de la trajectoire amortie (la combinaison de prévisions réduit souvent l'erreur)"""
     r = base.get("rev")
     if not fin(r):
         return {}
+    rev = {"naive": {}, "trend": {}, "damped": {}, "comb": {}}
     gg = (0.5 * g + 0.5 * glt) if g is not None else glt
+    g0 = g3 if g3 is not None else g
     for k in range(2, h + 1):
         rev["naive"][k] = r
         rev["trend"][k] = r * (1 + gg) ** (k - 1)
-    res = {("rev", k): {"naive": rev["naive"][k], "trend": rev["trend"][k]} for k in range(2, h + 1)}
+        if g0 is not None:
+            gk = glt + (g0 - glt) * PHI ** (k - 2)
+            rev["damped"][k] = rev["damped"].get(k - 1, r) * (1 + gk)
+            rev["comb"][k] = 0.5 * (r + rev["damped"][k])
+    res = {("rev", k): {mm_: rev[mm_][k] for mm_ in rev if k in rev[mm_]} for k in range(2, h + 1)}
     for m in ("ebit", "ni"):
         b = base.get(m)
         if not fin(b):
@@ -256,8 +293,23 @@ def future(base, h, g, glt, mm, m0):
                 tgt = mm.get(m) if mm.get(m) is not None else mN
                 w = min(1.0, (k - 1) / 3)
                 d_["trend"] = rev["trend"][k] * (mN + (tgt - mN) * w)
+                if k in rev["damped"]:
+                    d_["damped"] = rev["damped"][k] * (tgt + (mN - tgt) * PHI ** (k - 1))
+                    d_["comb"] = 0.5 * (b + d_["damped"])
+                ms = (msec or {}).get(m)
+                if ms is not None:
+                    # marge qui rejoint en cinq ans la médiane des sociétés du même modèle économique (redressement ou
+                    # normalisation), chiffre d'affaires reconduit
+                    d_["sector"] = r * (mN + (ms - mN) * min(1.0, (k - 1) / 4))
             res[(m, k)] = d_
     return res
+
+
+def growth3(series, L):
+    a, b = series.get(L), series.get(L - 3)
+    if fin(a) and fin(b) and a > 0 and b > 0:
+        return C.clamp((a / b) ** (1 / 3) - 1, -0.2, 0.25)
+    return None
 
 
 def periodic_fc(A, Pv, N, state, fcN):
@@ -335,7 +387,8 @@ def backtest(I, P, today_i, glt_of):
                 # horizons 2 à 5, depuis la publication de l'exercice N-1 seulement
                 if st_ is None:
                     base = {m: cand.get((m, 1), {}).get("naive") for m in MET}
-                    fut = future(base, H_MAX, cand["_g"], glt, cand["_mm"], None)
+                    msec = {m: SECM.get((S.get("arch"), m, N - 2)) for m in ("ni", "ebit")}
+                    fut = future(base, H_MAX, cand["_g"], glt, cand["_mm"], cand["_g3"], msec)
                     for (m, k), d_ in fut.items():
                         act = (S["ser"].get(m) or {}).get(N + k - 1)
                         if not fin(act):
@@ -494,7 +547,8 @@ def forecast(t, S, Pt, sel, today_i, glt):
         rows[(m, 1)] = {"fy": N, "v": f, "lo": lo, "hi": hi, "meth": best, "cell": f"A:{key_state}|{gq or gg}", "n": qq["n"] if qq else 0,
                         "alts": {k: r3(v) for k, v in cm.items()}}
     base = {m: rows[(m, 1)]["v"] for m in MET if (m, 1) in rows}
-    fut = future(base, H_MAX, cand["_g"], glt, cand["_mm"], None)
+    msec = {m: SECM.get((S.get("arch"), m, N - 2)) for m in ("ni", "ebit")}
+    fut = future(base, H_MAX, cand["_g"], glt, cand["_mm"], cand["_g3"], msec)
     path = {m: path_method(sel, m, grp, t) for m in MET}
     for (m, k), d_ in fut.items():
         best = path[m] if path[m] in d_ else ("naive" if "naive" in d_ else next(iter(d_)))
@@ -733,6 +787,8 @@ def run(out, extra=None, log=print, comptes=None, today=None, now=None):
     P, titles, n_pub = periodic_data(comptes, I, log)
     today_i = C.dint(today)
     glt_of = lambda S: (M.get("glt") or {}).get(S.get("cty")) or (M.get("glt") or {}).get("CI") or 0.04  # noqa: E731
+    global SECM
+    SECM = sector_margins(I)
     cases = backtest(I, P, today_i, glt_of)
     sel = select(cases)
     effects = event_effects(I, cases)

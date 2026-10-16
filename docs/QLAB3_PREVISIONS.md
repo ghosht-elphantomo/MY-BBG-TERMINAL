@@ -12,7 +12,7 @@ Ce fichier conserve l'intégralité du cahier des charges de QLAB 3. Aucune fonc
 | Prévisions par exercice : flux de trésorerie et indicateurs sectoriels (dépôts, crédits, coût du risque, volumes) | à développer |
 | Cumuls intermédiaires (1er trimestre, 1er semestre, 9 mois) publiés et prévus, chaque chiffre lu contrôlé par la variation publiée sur la même ligne | fait (couverture croissante : les rapports d'activité restant à lire sont lus automatiquement) |
 | Trimestre isolé (3e trimestre seul, 4e trimestre) | à développer |
-| Horizons : exercice en cours, quatre exercices suivants avec incertitude croissante mesurée | fait |
+| Horizons : exercice en cours, quatre exercices suivants avec incertitude croissante mesurée ; trajectoires reconduite, tendance, croissance amortie, combinaison et retour de la marge vers celle du secteur, choisies par validation (QLAB-P 1.1) | fait |
 | Choix de méthode propre à chaque société (historique propre, exigence renforcée) et par type d'entreprise (banques / autres) | fait |
 | Modèles sectoriels fins (agro-industrie, télécoms, distribution, énergie, services publics) | à développer |
 | Facteurs : matières premières, inflation, change, taux, coûts, concurrence, réglementation, fiscalité, climat, macroéconomie, géopolitique | à développer (ne seront intégrés que s'ils réduisent l'erreur hors échantillon) |
