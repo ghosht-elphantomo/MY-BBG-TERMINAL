@@ -15,9 +15,10 @@ function setupCanvas(host) {
   const x = cv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h); return { x, w, h, cv };
 }
 function niceTicks(lo, hi, n = 5) {
+  if (!isFinite(lo) || !isFinite(hi) || hi < lo) return [];  /* (série vide ou invalide : pas de graduation plutôt qu'une boucle sans fin) */
   const span = hi - lo || Math.abs(hi) || 1, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), err = step0 / mag;
   const step = (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1) * mag; const out = [];
-  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9 * span; v += step) out.push(+v.toPrecision(12));
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9 * span && out.length < 200; v += step) out.push(+v.toPrecision(12));
   return out;
 }
 function logTicks(lo, hi) {
@@ -37,8 +38,8 @@ class TSChart {
     this.data = null; this.v0 = 0; this.v1 = 0; this.hover = null; this.drag = null; this.raf = 0;
     const cv = document.createElement('canvas'); host.appendChild(cv); this.cv = cv; cv.style.touchAction = 'none';
     cv.addEventListener('mousemove', e => this.onMove(e)); cv.addEventListener('mouseleave', () => { this.hover = null; this.drag = null; this.req(); });
-    cv.addEventListener('mousedown', e => { this.drag = { x: e.clientX, v0: this.v0, v1: this.v1 }; cv.style.cursor = 'grabbing'; });
-    window.addEventListener('mouseup', () => { this.drag = null; cv.style.cursor = ''; });
+    cv.addEventListener('mousedown', e => { this.drag = { x: e.clientX, v0: this.v0, v1: this.v1 }; cv.style.cursor = 'grabbing'; TSChart.cur = this; });
+    if (!TSChart.mu) { TSChart.mu = true; window.addEventListener('mouseup', () => { const c = TSChart.cur; TSChart.cur = null; if (c) { c.drag = null; c.cv.style.cursor = ''; } }); }
     cv.addEventListener('wheel', e => this.onWheel(e), { passive: false });
     cv.addEventListener('dblclick', () => { if (this.def) { [this.v0, this.v1] = this.def; this.req(); } });
     let t1 = null, t2 = null;
@@ -49,7 +50,7 @@ class TSChart {
       if (t1 && T.length === 1) { const span = t1.v1 - t1.v0; this.panTo(t1.v0 + (t1.x - T[0].clientX) / this.plotW() * span, span); }
       else if (t2 && T.length === 2) { const d = Math.abs(T[0].clientX - T[1].clientX) || 1; this.zoomFrom(t2, t2.d / d); } }, { passive: false });
     cv.addEventListener('touchend', () => { t1 = t2 = null; }, { passive: true });
-    this.ro = new ResizeObserver(() => this.draw()); this.ro.observe(host);
+    this.ro = new ResizeObserver(() => { if (cv.isConnected) this.draw(); }); this.ro.observe(host);
   }
   get i0() { return Math.max(0, Math.floor(this.v0)); }
   get i1() { return this.data ? Math.min(this.data.x.length - 1, Math.ceil(this.v1)) : 0; }

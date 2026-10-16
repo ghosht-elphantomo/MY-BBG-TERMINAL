@@ -1098,9 +1098,10 @@ function setupCanvas(host) {
   const x = cv.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, w, h); return { x, w, h, cv };
 }
 function niceTicks(lo, hi, n = 5) {
+  if (!isFinite(lo) || !isFinite(hi) || hi < lo) return [];  /* (série vide ou invalide : pas de graduation plutôt qu'une boucle sans fin) */
   const span = hi - lo || Math.abs(hi) || 1, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), err = step0 / mag;
   const step = (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1) * mag; const out = [];
-  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9 * span; v += step) out.push(+v.toPrecision(12));
+  for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9 * span && out.length < 200; v += step) out.push(+v.toPrecision(12));
   return out;
 }
 function logTicks(lo, hi) {
@@ -1120,8 +1121,8 @@ class TSChart {
     this.data = null; this.v0 = 0; this.v1 = 0; this.hover = null; this.drag = null; this.raf = 0;
     const cv = document.createElement('canvas'); host.appendChild(cv); this.cv = cv; cv.style.touchAction = 'none';
     cv.addEventListener('mousemove', e => this.onMove(e)); cv.addEventListener('mouseleave', () => { this.hover = null; this.drag = null; this.req(); });
-    cv.addEventListener('mousedown', e => { this.drag = { x: e.clientX, v0: this.v0, v1: this.v1 }; cv.style.cursor = 'grabbing'; });
-    window.addEventListener('mouseup', () => { this.drag = null; cv.style.cursor = ''; });
+    cv.addEventListener('mousedown', e => { this.drag = { x: e.clientX, v0: this.v0, v1: this.v1 }; cv.style.cursor = 'grabbing'; TSChart.cur = this; });
+    if (!TSChart.mu) { TSChart.mu = true; window.addEventListener('mouseup', () => { const c = TSChart.cur; TSChart.cur = null; if (c) { c.drag = null; c.cv.style.cursor = ''; } }); }
     cv.addEventListener('wheel', e => this.onWheel(e), { passive: false });
     cv.addEventListener('dblclick', () => { if (this.def) { [this.v0, this.v1] = this.def; this.req(); } });
     let t1 = null, t2 = null;
@@ -1132,7 +1133,7 @@ class TSChart {
       if (t1 && T.length === 1) { const span = t1.v1 - t1.v0; this.panTo(t1.v0 + (t1.x - T[0].clientX) / this.plotW() * span, span); }
       else if (t2 && T.length === 2) { const d = Math.abs(T[0].clientX - T[1].clientX) || 1; this.zoomFrom(t2, t2.d / d); } }, { passive: false });
     cv.addEventListener('touchend', () => { t1 = t2 = null; }, { passive: true });
-    this.ro = new ResizeObserver(() => this.draw()); this.ro.observe(host);
+    this.ro = new ResizeObserver(() => { if (cv.isConnected) this.draw(); }); this.ro.observe(host);
   }
   get i0() { return Math.max(0, Math.floor(this.v0)); }
   get i1() { return this.data ? Math.min(this.data.x.length - 1, Math.ceil(this.v1)) : 0; }
@@ -1472,7 +1473,7 @@ const dmy = d => fmtD(d); const dmyShort = d => fmtD(d).slice(0, 6) + fmtD(d).sl
 function parseDMY(t) { const m = String(t || '').trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/); if (!m) return null; let y = +m[3]; if (y < 100) y += 2000; return y * 10000 + (+m[2]) * 100 + (+m[1]); }
 /* conversion de devise (champ « Devise » du GP) : facteurs alignés sur les dates, XOF ↔ EUR à la parité fixe de 655,957 */
 const XOF_EUR = 655.957, FX_SER = { XOF: 'USDXOF', EUR: 'EURUSD', TWD: 'USDTWD' };
-const FX_OK = s => s && ['XOF', 'USD', 'EUR', 'TWD'].includes(s.ccy) && !['Rate'].includes(s.cls) && !/%/.test(s.ccy || '');
+const FX_OK = s => s && ['XOF', 'USD', 'EUR', 'TWD'].includes(s.ccy) && !['Rate', 'Curncy'].includes(s.cls) && !/%/.test(s.ccy || '');  /* (une paire de devises convertie dans l'une de ses devises n'a pas de sens) */
 async function fxFactor(from, to, xs) {
   if (!from || !to || from === to) return null;
   if (from === 'XOF' && to === 'EUR') return xs.map(() => 1 / XOF_EUR); if (from === 'EUR' && to === 'XOF') return xs.map(() => XOF_EUR);
@@ -1664,16 +1665,7 @@ PAGES.GP = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ HELP */
-PAGES.HELP = async m => {
-  const rows = [['MONITOR', 'Marchés : tous les titres, signal SMA200 de QQQ, séance BRVM, carte des capitalisations', 'MONITOR'], ['BRVM', '48 actions triables (PER, rendement, bêta, liquidité…), indices, largeur du marché, secteurs', 'BRVM'],
-    ['GP', 'Graphique interactif : bougies, MM, Bollinger, RSI, MACD, drawdown, comparaison, échelle log, 5 min pour QQQ', 'SNTS GP · QQQ GP'], ['DES', 'Fiche : comptes sur plusieurs exercices, dividendes, avis (BRVM) ; perfs annuelles et drawdowns (tous)', 'SNTS DES'],
-    ['BTST', 'Backtest de 8 stratégies sur le titre actif, levier simulé (US), Monte Carlo, durée des drawdowns', 'QQQ BTST'], ['QLAB', 'Statistiques : distribution, VaR, QQ-plot, cône de volatilité, autocorrélation, Hurst, analogues, probabilité bayésienne', 'NVDA QLAB'],
-    ['CORR', 'Matrice de corrélation (hebdo), ACP et ratio d’absorption, paire au choix', 'CORR'], ['SEAS', 'Saisonnalité : années × mois, effet jour de semaine, « Sell in May »', 'BRVMC SEAS'],
-    ['MACRO', 'Or depuis 1833, S&P 500 depuis 1871, CAPE, inflation, taux 10 ans, pétrole, gaz, VIX ; l’or pendant les krachs', 'MACRO'], ['FX', 'Franc CFA : USD/XOF, effet change sur QQQ et la BRVM', 'FX'],
-    ['DVD', 'Dividendes BRVM : prochains paiements, rendements, historique complet', 'DVD'], ['EVTS', 'Les avis officiels BRVM (AG, dividendes, états financiers…) filtrables', 'EVTS']];
-  m.innerHTML = pn('Aide · fonctions', 'HELP', `<table class="t"><thead><tr><th class="l">Code</th><th class="l">Ce que fait la fonction</th><th class="l">Exemple à taper</th></tr></thead><tbody>${rows.map(r => `<tr data-fn="${r[0]}" style="cursor:pointer"><td class="l tk">${r[0]}</td><td class="l nm">${r[1]}</td><td class="l am">${r[2]} &lt;GO&gt;</td></tr>`).join('')}</tbody></table>`,
-    { np: true, lect: 'Tapez n’importe où pour écrire dans la ligne de commande. Un ticker seul ouvre son graphique (ou la fonction en cours). <b>Échap</b> revient à MONITOR. Sur les graphiques : molette = zoom, glisser = déplacer, double-clic = vue initiale.' });
-};
+/* PAGES.HELP : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 </script>
 <script>
@@ -1755,7 +1747,7 @@ PAGES.BTST = async (m, alive) => {
       ${pn('Journal des trades · ' + (trades.length + (op ? 1 : 0)), 'BTST', `<div class="tw" style="max-height:300px"><table class="t"><thead><tr><th class="l">Entrée</th><th class="l">Sortie</th><th>Séances</th><th>Cours entrée</th><th>Cours sortie</th><th>Résultat</th></tr></thead><tbody>
         ${op ? `<tr class="cur"><td class="l">${fds(M.d[op.i])}</td><td class="l am">ouvert</td><td>${op.days}</td><td>${px(s, op.px)}</td><td>${px(s, M.c[n - 1])}</td><td>${pc(op.ret, 1)}</td></tr>` : ''}${trades.map(t => `<tr><td class="l">${fds(M.d[t.i0])}</td><td class="l">${fds(M.d[t.i1])}</td><td>${t.days}</td><td>${px(s, t.px0)}</td><td>${px(s, t.px1)}</td><td>${pc(t.ret, 1)}</td></tr>`).join('')}</tbody></table></div>`, { np: true })}
     </div></div>`;
-  const read = () => { const g = id => $(id) ? $(id).value : null; return { ...P, strat: g('bS'), n: +(g('bN') || P.n), fast: +(g('bF') || P.fast), band: +(g('bB') ?? P.band), tv: +(g('bT') || P.tv), lev: +g('bL'), exec: g('bE'), start: g('bD') || P.start, cap: Math.max(100, +g('bC') || 10000), fee: +g('bFe') || 0, slip: +g('bSl') || 0, cash: +g('bCa'), divr: +(g('bDv') || 0), ruin: U.clamp(+g('bR') || 50, 10, 95) }; };
+  const read = () => { const g = id => $(id) ? $(id).value : null; return { ...P, strat: g('bS'), n: +(g('bN') || P.n), fast: +(g('bF') || P.fast), band: +(g('bB') ?? P.band), tv: +(g('bT') || P.tv), lev: +g('bL'), exec: g('bE'), start: g('bD') || P.start, cap: Math.max(100, +g('bC') || 10000), fee: +g('bFe') || 0, slip: +g('bSl') || 0, cash: +g('bCa'), divr: P.strat === 'bhd' ? +P.divr || 0 : +(g('bDv') || 0), ruin: U.clamp(+g('bR') || 50, 10, 95) }; };
   $('bRun').onclick = () => { ST.bt = { sec: ST.sec, P: read() }; render(); };
   $('bS').onchange = () => { const k = $('bS').value; ST.bt = { sec: ST.sec, P: { ...read(), ...STRATS[k].d, strat: k } }; render(); };
   m.querySelectorAll('[data-strat]').forEach(tr => tr.onclick = () => { const k = tr.dataset.strat; ST.bt = { sec: ST.sec, P: { ...P, ...STRATS[k].d, strat: k } }; render(); });
@@ -1862,40 +1854,7 @@ function corrMat(R, ids, a, b) { const n = ids.length, C = Array.from({ length: 
     for (let t = a; t < b; t++) { const u = x[t], v = y[t]; if (u == null || v == null) continue; sx += u; sy += v; sxx += u * u; syy += v * v; sxy += u * v; k++; }
     if (k >= Math.max(20, (b - a) * .5)) { const cv = sxy / k - sx * sy / k / k, vx = sxx / k - sx * sx / k / k, vy = syy / k - sy * sy / k / k; C[i][j] = C[j][i] = vx > 0 && vy > 0 ? cv / Math.sqrt(vx * vy) : null; } } }
   return C; }
-PAGES.CORR = async (m, alive) => {
-  const W = await getJSON('weekly.json'); if (!alive()) return; const cs = ST.corr, T = W.w.length;
-  const R = {}; for (const [id, col] of Object.entries(W.s)) { R[id] = col.map((v, i) => i && v != null && col[i - 1] != null && col[i - 1] > 0 && v > 0 && v !== col[i - 1] ? Math.log(v / col[i - 1]) : (i && v != null && col[i - 1] != null && v === col[i - 1] ? 0 : null)); }
-  const U_ = { US: secsWhere(s => (s.mkt === 'US' || s.mkt === 'TW') && W.s[s.id]).map(s => s.id), BRVM: secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity' && W.s[s.id] && !s.susp && (s.liq || 0) > 2e6).map(s => s.id).concat(['BRVMC']),
-    MIX: ['QQQ', 'VTI', 'SOXX', 'NVDA', 'MSFT', 'TSM', '0050', 'BRVMC', 'BRVM30', 'SNTS', 'ORAC', 'SGBC', 'BRENT', 'WTI', 'NATGAS', 'VIX', 'EURUSD', 'USDXOF', 'USDTWD'].filter(id => W.s[id]) };
-  const ids0 = U_[cs.u], a = Math.max(1, T - cs.win), b = T; let C = corrMat(R, ids0, a, b);
-  const keep = ids0.map((id, i) => C[i].filter(v => v != null).length > ids0.length * .6); const ids = ids0.filter((_, i) => keep[i]); C = corrMat(R, ids, a, b);
-  const Cf = C.map(r => r.map(v => v == null ? 0 : v)); const E = eigTop(Cf, Math.min(8, ids.length)); const ord = ids.map((id, i) => [id, E.vecs[0][i] * Math.sign(E.vecs[0].reduce((x, y) => x + y, 0))]).sort((p, q) => q[1] - p[1]);
-  const oi = ord.map(o => ids.indexOf(o[0]));
-  const avg = (() => { let s = 0, k = 0; for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) if (C[i][j] != null) { s += C[i][j]; k++; } return s / k; })();
-  const pair = cs.pair && ids.includes(cs.pair[0]) && ids.includes(cs.pair[1]) ? cs.pair : [ord[0][0], ord[1][0]];
-  const tools = `<span class="tlab">Univers</span>${[['US', 'États-Unis & Taïwan'], ['BRVM', 'BRVM (liquides)'], ['MIX', 'Multi-actifs']].map(([k, l]) => `<button class="tb ${cs.u === k ? 'on' : ''}" data-cu="${k}">${l}</button>`).join('')}<span class="tlab">Fenêtre</span>${[[52, '1 an'], [104, '2 ans'], [260, '5 ans']].map(([k, l]) => `<button class="tb ${cs.win === k ? 'on' : ''}" data-cw="${k}">${l}</button>`).join('')}`;
-  const mat = `<div class="tw" style="max-height:72vh"><table class="t hm" id="cT"><thead><tr><th class="l"></th>${oi.map(i => `<th style="writing-mode:vertical-rl;transform:rotate(180deg);text-align:left;padding:4px 2px">${ids[i]}</th>`).join('')}</tr></thead><tbody>
-    ${oi.map(i => `<tr><td class="l tk" data-sec="${ids[i]}" data-to="GP" style="cursor:pointer">${ids[i]}</td>${oi.map(j => { const v = C[i][j]; return `<td data-p="${ids[i]}|${ids[j]}" style="cursor:pointer;background:${i === j ? '#222' : heatBg(v, 1)};color:${v != null && Math.abs(v) > .6 ? '#fff' : 'var(--txt)'}">${i === j ? '' : v == null ? '·' : num(v, 2).replace('0,', ',')}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>`;
-  const varEx = E.vals.map(v => v / ids.length);
-  m.innerHTML = `<div class="tools" style="border:1px solid var(--line2)">${tools}<span class="tlab">${ids.length} actifs · rendements hebdomadaires · ${fd(W.w[a])} → ${fd(W.w[b - 1])}</span></div>
-    <div class="grid c2">${pn('Matrice de corrélation (triée par la 1re composante)', 'CORR', mat, { np: true, lect: `Corrélation des rendements hebdomadaires sur la fenêtre. <b>Vert</b> = les deux actifs bougent ensemble, <b>rouge</b> = en sens opposé. Corrélation moyenne : <strong>${num(avg, 2)}</strong>. Cliquer une case pour étudier la paire.` })}
-    <div class="grid" style="align-content:start">${pn(`Paire · ${pair[0]} / ${pair[1]}`, 'CORR', `<div class="grid c2b"><div class="cv" id="cS" style="height:230px"></div><div class="kv2" id="cK"></div></div>${cvb('cR', 190)}`, { lect: '<span id="cL"></span>' })}
-      ${pn('Analyse en composantes principales', 'CORR', `<div class="grid c2b">${cvb('cE', 170)}${cvb('cA', 170)}</div>`, { lect: `La 1re composante explique <strong>${num(varEx[0] * 100, 0)} %</strong> de la variance commune (facteur « marché »). <b>Ratio d’absorption</b> (à droite) = part de la 1re composante sur 52 semaines glissantes : quand il monte, tout bouge ensemble et la diversification disparaît — typique des crises.` })}</div></div>`;
-  m.querySelectorAll('[data-cu]').forEach(x => x.onclick = () => { cs.u = x.dataset.cu; cs.pair = null; render(); }); m.querySelectorAll('[data-cw]').forEach(x => x.onclick = () => { cs.win = +x.dataset.cw; render(); });
-  $('cT').addEventListener('click', e => { const td = e.target.closest('[data-p]'); if (!td) return; const [p, q] = td.dataset.p.split('|'); if (p !== q) { cs.pair = [p, q]; render(); } });
-  $('cT').addEventListener('mousemove', e => { const td = e.target.closest('[data-p]'); if (!td) { untip(); return; } const [p, q] = td.dataset.p.split('|'); tip(e, `${p} / ${q} : <b>${td.textContent || '—'}</b>`); }); $('cT').addEventListener('mouseleave', untip);
-  const [p, q] = pair, xs = [], ys = []; for (let t = a; t < b; t++) if (R[p][t] != null && R[q][t] != null) { xs.push(R[q][t]); ys.push(R[p][t]); }
-  const mx = U.mean(xs), my = U.mean(ys); const beta = xs.reduce((s, v, i) => s + (v - mx) * (ys[i] - my), 0) / xs.reduce((s, v) => s + (v - mx) ** 2, 0), alpha = my - beta * mx; const rho = C[ids.indexOf(p)][ids.indexOf(q)];
-  scatter($('cS'), { pts: xs.map((v, i) => [v, ys[i]]), line: [alpha, beta], xlab: q, ylab: p, fx: fmtPctAxis, fy: fmtPctAxis });
-  $('cK').innerHTML = `<span>Corrélation</span><b>${num(rho, 2)}</b><span>Bêta ${p} / ${q}</span><b>${num(beta, 2)}</b><span>R²</span><b>${num(rho * rho, 2)}</b><span>Alpha hebdo</span><b>${pc(alpha, 2)}</b><span>Observations</span><b>${xs.length}</b><span>Vol. ${p}</span><b>${num(U.std(ys) * Math.sqrt(52) * 100, 1)}%</b><span>Vol. ${q}</span><b>${num(U.std(xs) * Math.sqrt(52) * 100, 1)}%</b>`;
-  const rc = []; for (let t = 0; t < T; t++) { if (t < 26) { rc.push(null); continue; } let sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0, k = 0; for (let u = t - 25; u <= t; u++) { const x0 = R[p][u], y0 = R[q][u]; if (x0 == null || y0 == null) continue; sx += x0; sy += y0; sxx += x0 * x0; syy += y0 * y0; sxy += x0 * y0; k++; }
-    if (k < 15) { rc.push(null); continue; } const cv = sxy / k - sx * sy / k / k, vx = sxx / k - sx * sx / k / k, vy = syy / k - sy * sy / k / k; rc.push(vx > 0 && vy > 0 ? cv / Math.sqrt(vx * vy) : null); }
-  new TSChart($('cR'), { panes: [{ h: 1, fixed: [-1, 1], refs: [{ v: 0, color: CL.dim2, dash: [] }, { v: rho, color: CL.amber }] }] }).set({ x: W.w, series: [{ y: rc, color: CL.cyan, label: 'Corrélation glissante 26 sem.', fmt: v => num(v, 2) }] }, [0, T - 1]);
-  const rcv = rc.filter(v => v != null); $('cL').innerHTML = `Nuage : rendements hebdomadaires de ${p} (vertical) contre ${q} (horizontal), droite de régression (pente = bêta). Corrélation glissante : entre <strong>${num(Math.min(...rcv), 2)}</strong> et <strong>${num(Math.max(...rcv), 2)}</strong> sur 10 ans, dernière valeur <strong>${num(rcv[rcv.length - 1], 2)}</strong>.`;
-  barChart($('cE'), { labels: varEx.map((_, i) => 'CP' + (i + 1)), values: varEx.map(v => v * 100), fmt: v => num(v, 0) + '%', pos: CL.cyan, labelsOnBars: true });
-  const ab = [], abx = []; for (let t = 52; t < T; t += 2) { const Cw = corrMat(R, ids, t - 52, t).map(r => r.map(v => v == null ? 0 : v)); const e = eigTop(Cw, 1); ab.push(e.vals[0] / ids.length); abx.push(W.w[t]); }
-  new TSChart($('cA'), { panes: [{ h: 1, fmt: fmtPctAxis }], padR: 44 }).set({ x: abx, series: [{ y: ab, color: CL.amber, label: 'Ratio d’absorption CP1 (52 sem.)', fmt: fmtPctAxis }] }, [0, abx.length - 1]);
-};
+/* PAGES.CORR : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ SEAS */
 PAGES.SEAS = async (m, alive) => {
@@ -2062,19 +2021,7 @@ PAGES.EVTS = async (m, alive) => {
 /* ================= FQT — menu du titre, aide, fonctions transverses ================= */
 
 /* ------------------------------------------------------------------ MENU (ticker + Entrée) */
-PAGES.MENU = async m => {
-  const s = sec(ST.sec); let n = 0;
-  const groups = MENU_GROUPS.map(([g, codes]) => `<div class="mg"><h4>${g}</h4>${codes.map(c => { n++; const why = avail(c, s);
-    return `<button class="mi${why ? ' off' : ''}" data-fn="${c}"><em>${n})</em><b>${c}</b><span>${FN[c][0]}</span><small>${why ? 'Non disponible : ' + esc(why) : esc(FN[c][3])}</small></button>`; }).join('')}</div>`).join('');
-  const kv = [['Dernier', `${px(s, s.last)} ${s.ccy}`], ['Variation', pc(s.pct)], ['1 mois', pc(s.r1m, 1)], ['YTD', pc(s.ytd, 1)], ['1 an', pc(s.r1y, 1)], ['3 ans', pc(s.r3y, 1)],
-    ['Plus haut / bas 52 sem.', `${px(s, s.hi52)} / ${px(s, s.lo52)}`], ['Écart au record', pc(s.dd, 1)], ['Volatilité 1 an', s.vol != null ? num(s.vol * 100, 1) + ' %' : '—'],
-    ['Bêta / ' + (s.bench || '—'), num(s.beta, 2)], s.mcap ? ['Capitalisation', big(s.mcap) + ' ' + (s.mkt === 'BRVM' ? 'XOF' : 'USD')] : null, s.per ? ['PER', num(s.per, 1)] : null,
-    s.yld ? ['Rendement', num(s.yld * 100, 2) + ' %'] : null, ['Historique', `${fd(s.first)} → ${fd(s.dt)}`]].filter(Boolean);
-  m.innerHTML = `<div class="grid side">${pn(`${s.tk} · menu des fonctions`, 'MENU', `<div class="mgrid">${groups}</div>`, { lect: 'Cliquez une fonction, ou tapez son numéro puis <b>Entrée</b>. Depuis n’importe où : <b>' + esc(s.id) + '</b> + espace affiche cette liste dans la ligne de commande.' })}
-    ${pn('Aperçu', s.id, `<div class="kv2">${kv.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div><div class="cv" id="mnS" style="height:120px;margin-top:8px"></div>`, { lect: `${esc(s.n)}${s.grp ? ' · ' + esc(s.grp) : ''}${s.cty ? ' · ' + esc(Q.sum.cty[s.cty] || s.cty) : ''}` })}</div>`;
-  const S = await series(s.id); const k = Math.max(0, S.c.length - 260);
-  new TSChart($('mnS'), { panes: [{ h: 1 }], padR: 50, padB: 16 }).set({ x: S.x.slice(k), series: [{ type: 'area', y: S.c.slice(k), color: CL.amber }] });
-};
+/* PAGES.MENU : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ HELP : démarrage, fonctions par thème (avec leurs onglets), raccourcis, repères */
 const HELP_MKT = () => [['BRVM et UEMOA', MKT_BRVM], ['Vue d’ensemble', ['BRIEF', 'MONITOR', 'NEWS']], ['Portefeuille et sélection', ['PORTF', 'SCREENER', 'ALRT']],
@@ -2199,6 +2146,8 @@ const P1 = (v, d = 1) => v == null || !isFinite(v) ? '—' : num(v * 100, d) + '
 const NDc = (why = '') => `<span class="dm" title="${esc(why)}">n.d.</span>`;
 const yLab = d => String(Math.floor(d / 10000));
 const isBRVM = s => s && s.mkt === 'BRVM';
+/* indice de référence d'un titre : jamais le titre lui-même (BRVMC → BRVM 30, SPY → QQQ) */
+const benchFor = s => [s.bench, isBRVM(s) ? 'BRVMC' : 'SPY', isBRVM(s) ? 'BRVM30' : 'QQQ', 'QQQ', 'SPY'].find(id => id && id !== s.id && Q.by[id]) || 'QQQ';
 /* montant échangé du jour : officiel (bulletin de la cote BRVM) ou estimation volume × cours, signalée « ≈ » */
 const valEst = s => !!s && (s.mkt !== 'BRVM' || !!s.vde);
 const valTxt = (s, v) => v ? `${valEst(s) ? '<span class="dm" title="Estimation en séance : volume × cours ; montant définitif le soir.">≈</span> ' : ''}${big(v)}` : '—';
@@ -2242,7 +2191,7 @@ function accountsTable(F, nY = 10, opts = {}) {
   const srcOf = y => { const i = ix(y); return i >= 0 && Y.src ? Y.src[i] : null; };
   /* en-tête sur deux lignes comme FA : « FY 2024 » puis la date de clôture de l'exercice (quand la source la donne) */
   const endOf = y => { const i = ix(y); return i >= 0 && F.mkt === 'US' && Y.y[i] > 99999 ? fd(Y.y[i]) : ''; };
-  const srMark = sr => !sr ? ['', ''] : /^référentiel/.test(sr) ? ['r', 'Comptes publiés dans l’autre ' + sr] : ['a', 'Exercice complété à partir des comptes publiés de la société'];
+  const srMark = sr => !sr ? ['', ''] : /^référentiel/.test(sr) ? ['r', 'Comptes publiés dans l’autre ' + sr] : /^converti/.test(sr) ? ['$', sr.replace(/^converti : /, 'Montants convertis : ')] : ['a', 'Exercice complété à partir des comptes publiés de la société'];
   const head = `<tr><th class="l">${U.lab}</th>${cols.map(y => { const [m, ti] = srMark(srcOf(y)); return `<th title="${esc(ti)}">FY ${y}${m ? `<sup class="am">${m}</sup>` : ''}</th>`; }).join('')}${opts.cagr ? '<th class="tc" title="taux de croissance annuel moyen sur 3 ans">TCAM<br>3 ans</th><th class="tc" title="taux de croissance annuel moyen sur 5 ans">TCAM<br>5 ans</th><th class="tc" title="taux de croissance annuel moyen sur 10 ans">TCAM<br>10 ans</th>' : ''}</tr>`
     + (F.mkt === 'US' ? `<tr class="h2"><th class="l">12 mois clos le</th>${cols.map(y => `<th>${endOf(y)}</th>`).join('')}${opts.cagr ? '<th></th><th></th><th></th>' : ''}</tr>` : '');
   const body = rows.filter(([k]) => Y[k] && (!opts.only || opts.only.has(k))).map(([k, l, t, hl]) => {
@@ -2257,7 +2206,7 @@ function accountsTable(F, nY = 10, opts = {}) {
 }
 function faSrcNote(F) {
   return F.mkt === 'US' ? `Comptes publiés (${F.annual_only ? 'rapports annuels' : 'rapports annuels et trimestriels'}), devise ${F.ccy || 'USD'}. FCF = flux d’exploitation − acquisitions d’immobilisations corporelles. Dette financière hors obligations locatives.`
-    : `Montants tirés des états financiers publiés par la société quand leurs totaux se vérifient (détail poste par poste et ratios dans les onglets) ; <sup class="am">a</sup> = exercice reconstitué à partir des chiffres clés (CA, résultat net, BNPA, dividende) ; <sup class="am">r</sup> = comptes publiés dans l’autre norme (SYSCOHADA avant le passage aux IFRS, ou l’inverse). FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
+    : `Montants tirés des états financiers publiés par la société quand leurs totaux se vérifient (détail poste par poste et ratios dans les onglets) ; <sup class="am">a</sup> = exercice reconstitué à partir des chiffres clés (CA, résultat net, BNPA, dividende) ; <sup class="am">r</sup> = comptes publiés dans l’autre norme (SYSCOHADA avant le passage aux IFRS, ou l’inverse).${F.Y && F.Y.src && F.Y.src.some(x => /^converti/.test(x || '')) ? ' <sup class="am">$</sup> = comptes publiés en dollars US seulement, convertis en FCFA au cours du jour de leur publication (cours au survol de l’année).' : ''} FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
 }
 
 /* Comptes publiés détaillés (BRVM) : postes des états financiers et ratios, sur tous les exercices lus.
@@ -2266,7 +2215,8 @@ function cptYears(F, all) { const ys = F.C.y; if (!ys.length) return []; const h
 function cptTable(F, sk, all) {
   const S = (F.C.s || []).find(x => x[0] === sk || x[0] === 'b' + sk); if (!S) return '<div class="empty">Poste non disponible dans les comptes lus.</div>';
   const cols = cptYears(F, all), ix = y => F.C.y.indexOf(y);
-  const head = `<tr><th class="l">M FCFA</th>${cols.map(y => `<th>FY ${y}</th>`).join('')}</tr>`;
+  const fxT = y => { const q = F.C.fx && F.C.fx[y]; return q ? `Comptes publiés en dollars US, convertis au cours de 1 USD = ${num(q[0], 2)} FCFA du ${q[1] ? fds(q[1]) : '—'} (date de publication)` : ''; };
+  const head = `<tr><th class="l">M FCFA</th>${cols.map(y => `<th${fxT(y) ? ` title="${esc(fxT(y))}"` : ''}>FY ${y}${fxT(y) ? '<sup class="am">$</sup>' : ''}</th>`).join('')}</tr>`;
   const strong = new Set(['chiffre_affaires', 'b_pnb', 'valeur_ajoutee', 'ebe', 'resultat_exploitation', 'b_rbe', 'rao', 'resultat_net', 'actif_immobilise', 'actif_circulant', 'total_actif', 'capitaux_propres', 'passif_circulant', 'total_passif', 'cafg', 'flux_operationnels']);
   const body = S[2].map(([k, lab, vals]) => `<tr><td class="l ${strong.has(k) ? 'yl' : 'am'}">${esc(lab)}</td>${cols.map(y => { const i = ix(y), v = i >= 0 ? vals[i] : null;
     return v == null ? `<td>${NDc(i < 0 ? 'comptes de cet exercice non disponibles' : 'poste non présenté ou non lisible dans les comptes de cet exercice')}</td>` : `<td class="${strong.has(k) ? 'yl' : 'wh'}">${num(v, Math.abs(v) < 100 ? 1 : 0)}</td>`; }).join('')}</tr>`).join('');
@@ -2296,7 +2246,7 @@ PAGES.FA = async (m, alive) => {
     const F0 = F, useAlt = !!(st.alt && F.C2 && tab !== 'r'), Fv = useAlt ? Object.assign({}, F, { C: F.C2 }) : F;
     const all = !!st.all, y0 = Fv.C.y[0], per = Fv.C.per === 'conso' ? 'consolidés' : 'sociaux', std = Fv.C.std === 'ifrs' ? 'IFRS' : 'SYSCOHADA';
     const tools = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Exercices</span><button class="tb ${all ? '' : 'on'}" data-all="0">10 derniers</button><button class="tb ${all ? 'on' : ''}" data-all="1">Tout l’historique (depuis ${y0})</button>${F0.C2 && tab !== 'r' ? `<span class="tlab" style="margin-left:14px">Comptes</span><button class="tb ${useAlt ? '' : 'on'}" data-alt="0">${refL(F0.C)}</button><button class="tb ${useAlt ? 'on' : ''}" data-alt="1">${refL(F0.C2)}</button>` : ''}</div>`;
-    const lect = `Comptes ${per} (${std}) publiés par la société, en millions de FCFA. Un exercice n’est repris que si ses totaux se vérifient dans le document (total actif = total passif, résultat du compte de résultat = résultat du bilan, soldes intermédiaires) ; n.d. = non disponible. Chaque exercice vient de ses propres comptes de préférence (sinon de la colonne « exercice précédent » des comptes suivants).`;
+    const lect = `Comptes ${per} (${std}) publiés par la société, en millions de FCFA. Un exercice n’est repris que si ses totaux se vérifient dans le document (total actif = total passif, résultat du compte de résultat = résultat du bilan, soldes intermédiaires) ; n.d. = non disponible. Chaque exercice vient de ses propres comptes de préférence (sinon de la colonne « exercice précédent » des comptes suivants).${Fv.C.fx ? ' <sup class="am">$</sup> = comptes publiés en dollars US seulement, convertis en FCFA au cours du jour de leur publication (cours et date au survol de l’année) ; les autres exercices sont en FCFA tels que publiés par la société.' : ''}`;
     if (tab === 'r') { const T = ratioTable(F, all); m.innerHTML = tools + pn(`${esc(s.tk)} · ${T.n || ''} ratios calculés sur les comptes publiés`, 'FA', T.html || T, { np: true, lect: 'Ratios calculés uniquement à partir des postes publiés (aucune estimation) ; « — » = un poste nécessaire manque ; <sup>a</sup> = exercice dont les comptes détaillés ne sont pas (encore) lus : ratios calculés sur ses chiffres clés publiés. Moyennes = (début + fin d’exercice) / 2. BNPA et dividende tels que publiés ; PER et rendement au dernier cours de chaque exercice. ' + lect }); }
     else { const lab = { is: 'Compte de résultat', bs: 'Bilan', cf: 'Flux de trésorerie' }[tab]; m.innerHTML = tools + pn(`${esc(s.tk)} · ${lab} · comptes publiés`, 'FA', cptTable(Fv, tab, all), { np: true, lect }); }
     m.querySelectorAll('[data-all]').forEach(b => b.onclick = () => { st.all = b.dataset.all === '1'; render(); });
@@ -2491,7 +2441,7 @@ async function trSeries(s, S) {
   if (!div) return null; const tr = [S.c[0]]; for (let i = 1; i < S.c.length; i++) tr.push(tr[i - 1] * (S.c[i] + (div[i] || 0)) / S.c[i - 1]); return tr;
 }
 PAGES.COMP = async (m, alive) => {
-  const s = sec(ST.sec); const st = ST.comp = ST.comp || {}; if (st.base !== s.id) { st.base = s.id; st.ids = [s.id]; st.bench = isBRVM(s) ? 'BRVMC' : Q.by.SPY ? 'SPY' : 'QQQ'; st.per = '3A'; st.tr = true;
+  const s = sec(ST.sec); const st = ST.comp = ST.comp || {}; if (st.base !== s.id) { st.base = s.id; st.ids = [s.id]; st.bench = benchFor(s); st.per = '3A'; st.tr = true;
     const peers = secsWhere(x => x.id !== s.id && x.mkt === s.mkt && x.grp === s.grp && x.cls === s.cls).sort((a, b) => (b.mcap || 0) - (a.mcap || 0)).slice(0, 3); st.ids.push(...peers.map(x => x.id)); }
   const ids = [...new Set(st.ids.concat([st.bench]))].filter(id => Q.by[id]); const SS = await Promise.all(ids.map(id => series(id))); if (!alive()) return;
   const TR = st.tr ? await Promise.all(ids.map((id, i) => trSeries(Q.by[id], SS[i]))) : ids.map(() => null); if (!alive()) return;
@@ -2530,7 +2480,7 @@ function retsBy(S, f) {
 }
 function isoWeekKey(d) { const t = new Date(Date.UTC(Math.floor(d / 10000), Math.floor(d / 100) % 100 - 1, d % 100)); const day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day + 4); return t.getUTCFullYear() * 100 + Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7); }
 PAGES.BETA = async (m, alive) => {
-  const s = sec(ST.sec); const st = ST.beta = ST.beta || {}; if (st.base !== s.id) { st.base = s.id; st.bench = s.bench && Q.by[s.bench] && s.bench !== s.id ? s.bench : isBRVM(s) ? 'BRVMC' : 'SPY'; if (!Q.by[st.bench]) st.bench = 'QQQ'; }
+  const s = sec(ST.sec); const st = ST.beta = ST.beta || {}; if (st.base !== s.id) { st.base = s.id; st.bench = benchFor(s); }
   const [S, B] = await Promise.all([series(s.id), series(st.bench)]); if (!alive()) return;
   const end = S.x[S.x.length - 1]; const win = [['6 mois', 'D', 126], ['1 an', 'D', 252], ['2 ans', 'W', 104], ['5 ans', 'M', 60]];
   const rs = { D: [retsBy(S, 'D'), retsBy(B, 'D')], W: [retsBy(S, 'W'), retsBy(B, 'W')], M: [retsBy(S, 'M'), retsBy(B, 'M')] };
@@ -2559,20 +2509,7 @@ PAGES.BETA = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ HP */
-PAGES.HP = async (m, alive) => {
-  const s = sec(ST.sec); const S = await series(s.id); if (!alive()) return; const st = ST.hp = ST.hp || { f: 'D', page: 0 }; if (st.id !== s.id) { st.id = s.id; st.page = 0; }
-  const rows = []; const key = d => st.f === 'D' ? d : st.f === 'W' ? isoWeekKey(d) : Math.floor(d / 100); let cur = null;
-  for (let i = 0; i < S.x.length; i++) { const k = key(S.x[i]); if (!cur || cur.k !== k) { if (cur) rows.push(cur); cur = { k, d: S.x[i], o: S.o[i], h: S.h[i], l: S.l[i], c: S.c[i], v: S.v[i] || 0, val: S.val ? S.val[i] || 0 : null, div: S.div[i] || 0 }; }
-    else { cur.d = S.x[i]; cur.h = Math.max(cur.h, S.h[i]); cur.l = Math.min(cur.l, S.l[i]); cur.c = S.c[i]; cur.v += S.v[i] || 0; if (cur.val != null) cur.val += S.val[i] || 0; cur.div += S.div[i] || 0; } }
-  if (cur) rows.push(cur); rows.forEach((r, i) => { r.ch = i ? r.c / rows[i - 1].c - 1 : null; }); const R = rows.reverse(), per = 60, np = Math.ceil(R.length / per); st.page = U.clamp(st.page, 0, np - 1); const pg = R.slice(st.page * per, st.page * per + per);
-  const hasV = S.v.some(v => v), hasVal = !!S.val;
-  m.innerHTML = pn(`${s.tk} · historique des cours`, 'HP', `<div class="tools"><span class="tlab">Fréquence</span>${[['D', 'Quotidien'], ['W', 'Hebdomadaire'], ['M', 'Mensuel']].map(([k, l]) => `<button class="tb ${st.f === k ? 'on' : ''}" data-f="${k}">${l}</button>`).join('')}
-    <span class="tlab">${R.length} lignes · page ${st.page + 1}/${np}</span><button class="tb" data-p="-1">◀</button><button class="tb" data-p="1">▶</button></div>
-    <div class="tw"><table class="t"><thead><tr><th class="l">Date</th><th>Ouverture</th><th>Plus haut</th><th>Plus bas</th><th>Clôture</th><th>Variation</th>${hasV ? '<th>Volume</th>' : ''}${hasVal ? '<th>Montant (FCFA)</th>' : ''}<th>Dividende</th></tr></thead><tbody>
-    ${pg.map(r => `<tr><td class="l">${fd(r.d)}</td><td>${px(s, r.o)}</td><td>${px(s, r.h)}</td><td>${px(s, r.l)}</td><td class="wh">${px(s, r.c)}</td><td>${pc(r.ch)}</td>${hasV ? `<td>${num(r.v, 0)}</td>` : ''}${hasVal ? `<td>${num(r.val, 0)}</td>` : ''}<td>${r.div ? num(r.div, 2) : ''}</td></tr>`).join('')}</tbody></table></div>`,
-    { np: true, lect: `Semaine = semaine ISO ; variation = clôture contre clôture précédente.` });
-  m.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { st.f = b.dataset.f; st.page = 0; render(); }); m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { st.page += +b.dataset.p; render(); });
-};
+/* PAGES.HP : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ CN */
 function aliasesOf(s) {
@@ -2581,16 +2518,7 @@ function aliasesOf(s) {
   (extra[s.id] || []).forEach(a => out.add(a)); return [...out].filter(a => a.length >= 3);
 }
 function newsRow(x) { return `<div class="nw"><span class="d">${new Date(x.t * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span><span class="c">${esc(x.c || '')}</span><span><a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.ti)}</a> ${hideSrc(x) ? '' : `<span class="src">${esc(x.s || '')}</span>`}${x.x ? `<small>${esc(x.x)}</small>` : ''}</span></div>`; }
-PAGES.CN = async (m, alive) => {
-  const s = sec(ST.sec); const [N, EV, RP] = await Promise.all([getJSON('news.json').catch(() => ({ items: [] })), isBRVM(s) ? getJSON('events.json') : Promise.resolve([]), isBRVM(s) ? getJSON('reports.json').catch(() => null) : Promise.resolve(null)]); if (!alive()) return;
-  const docs = RP ? Object.entries(RP.issuers || {}).filter(([, x]) => x.t === s.id).flatMap(([slug]) => (RP.docs || {})[slug] || []).sort((a, b) => (b.d || '').localeCompare(a.d || '')) : [];
-  const al = aliasesOf(s).map(a => a.toLowerCase()); const its = (N.items || []).filter(x => { const t = (x.ti + ' ' + (x.x || '')).toLowerCase(); return al.some(a => a === s.id.toLowerCase() ? new RegExp('\\b' + a + '\\b').test(t) : t.includes(a)); });
-  const ev = EV.filter(x => x.t === s.id).slice(0, 80);
-  m.innerHTML = `<div class="grid c2">${pn(`${s.tk} · articles qui citent la société (${its.length})`, 'CN', its.length ? its.slice(0, 120).map(newsRow).join('') : `<div class="empty">Aucun article récent ne cite ${esc(s.short || s.n)} dans les flux suivis (45 derniers jours).</div>`,
-      { lect: `Recherche de « ${al.map(esc).join(' », « ')} » dans les titres et résumés des flux d’actualités (Google Actualités, Financial Afrik, allAfrica, Les Echos, CNBC, MarketWatch…). Mise à jour toutes les 15 à 30 minutes. Fil complet : NEWS.` })}
-    ${isBRVM(s) ? pn(`Publications de la société · ${docs.length}`, 'CN', docs.length ? docs.map(d => `<div class="ev" style="grid-template-columns:72px 1fr"><span class="d">${d.d ? fd(+d.d) : '—'}</span><span><span class="c">${/etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Activité' : 'Rapport'}</span><a href="${esc(d.u)}" target="_blank" rel="noopener">${esc(d.ti)}</a></span></div>`).join('') : '<div class="dm">Liste en cours de constitution (relevée toutes les 15 minutes).</div>', { lect: `États financiers et rapports d’activité publiés par la société, relevés toutes les 15 minutes${RP && RP.ts ? ' (dernier relevé ' + new Date(RP.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ')' : ''}. Une nouvelle publication apparaît aussi dans NEWS.` }) : ''}
-    ${pn(isBRVM(s) ? `Avis officiels BRVM · ${ev.length}` : 'Avis officiels', 'EVTS', isBRVM(s) ? ev.map(e => `<div class="ev" style="grid-template-columns:72px 1fr"><span class="d">${fds(e.d)}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join('') || '<div class="dm">Aucun avis.</div>' : '<div class="empty">Avis officiels disponibles pour les titres BRVM uniquement. Pour les sociétés US, voir FA et SURP.</div>')}</div>`;
-};
+/* PAGES.CN : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 </script>
 <script>
@@ -2766,19 +2694,7 @@ PAGES.ALRT = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ NEWS (actualités, ex-TOP) */
-PAGES.NEWS = async (m, alive) => {
-  const N = await getJSON('news.json').catch(() => null); if (!alive()) return; const st = ST.top = ST.top || { c: 'ALL', q: '' };
-  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'NEWS', '<div class="empty">Fil d’actualités en cours de constitution (premier relevé au prochain passage de la collecte).</div>'); return; }
-  const cats = [...new Set(N.items.map(x => x.c))]; const brvmAl = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity').map(s => [s.id, aliasesOf(s).filter(a => a !== s.id).map(a => a.toLowerCase())]);
-  const tag = x => { const t = (x.ti + ' ' + (x.x || '')).toLowerCase(); return brvmAl.filter(([, al]) => al.some(a => a.length > 3 && t.includes(a))).map(([id]) => id).slice(0, 4); };
-  let L = N.items.filter(x => st.c === 'ALL' || x.c === st.c); if (st.q) { const q = st.q.toLowerCase(); L = L.filter(x => (x.ti + ' ' + (x.x || '') + ' ' + (x.s || '')).toLowerCase().includes(q)); }
-  const age = Math.round((Date.now() / 1000 - N.ts) / 60);
-  m.innerHTML = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Rubrique</span><button class="tb ${st.c === 'ALL' ? 'on' : ''}" data-c="ALL">Tout (${N.items.length})</button>${cats.map(c => `<button class="tb ${st.c === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)} (${N.items.filter(x => x.c === c).length})</button>`).join('')}
-    <form id="tpF" style="display:inline-flex;gap:6px;margin-left:10px"><input id="tpQ" value="${esc(st.q)}" placeholder="mot-clé : cacao, Sonatel, Fed…" style="width:220px"><button class="tb">Filtrer</button></form><span class="tlab">relevé il y a ${age < 120 ? age + ' min' : Math.round(age / 60) + ' h'}</span></div>
-    ${pn(`Fil d’actualités · ${L.length} articles`, 'NEWS', L.slice(0, 250).map(x => { const tg = tag(x); return newsRow(x).replace('</span></div>', `</span>${tg.length ? `<span class="tags">${tg.map(t => `<b data-sec="${t}" data-to="CN">${t}</b>`).join('')}</span>` : ''}</div>`); }).join(''),
-      { lect: `Flux publics : ${Object.values(N.feeds || {}).filter((v, i, a) => a.indexOf(v) === i && !/brvm|sika/i.test(v)).join(', ')}. Les titres BRVM cités sont repérés automatiquement (clic = actualités de la société). Les articles restent la propriété de leurs éditeurs ; le lien ouvre la source.` })}`;
-  m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { st.c = b.dataset.c; render(); }); $('tpF').onsubmit = e => { e.preventDefault(); st.q = $('tpQ').value.trim(); render(); };
-};
+/* PAGES.NEWS : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ ECWB : indicateurs US (FRED), ancien ECO */
 PAGES.ECWB = async (m, alive) => {
@@ -3511,45 +3427,10 @@ function newsRow2(x, o = {}) {
 }
 
 /* ------------------------------------------------------------------ NEWS (ex-TOP) : fil relié aux titres, typé par événement */
-PAGES.NEWS = async (m, alive) => {
-  const N = await getJSON('news.json').catch(() => null); if (!alive()) return; const st = ST.top = ST.top || { c: 'ALL', ev: 'ALL', mk: 'ALL', q: '' }; setTitle('Top News');
-  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'NEWS', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
-  const its = N.items, cats = [...new Set(its.map(x => x.c).filter(Boolean))], evs = Object.keys(EV_COL).filter(e => its.some(x => x.ev === e));
-  const mkOf = x => (x.tk || []).map(t => Q.by[t] && Q.by[t].mkt).filter(Boolean);
-  let L = its.filter(x => (st.c === 'ALL' || x.c === st.c) && (st.ev === 'ALL' || x.ev === st.ev) && (st.mk === 'ALL' || (st.mk === 'LINK' ? (x.tk || []).length : mkOf(x).includes(st.mk))));
-  if (st.q) { const q = st.q.toLowerCase(); L = L.filter(x => (x.ti + ' ' + (x.x || '') + ' ' + (x.s || '') + ' ' + (x.tk || []).join(' ')).toLowerCase().includes(q)); }
-  const age = Math.round((Date.now() / 1000 - N.ts) / 60), nLinked = its.filter(x => (x.tk || []).length).length;
-  setTabs([['ALL', 'Tout'], ['BRVM', 'Sociétés BRVM'], ['US', 'Sociétés US'], ['LINK', 'Toutes les sociétés citées']], st.mk, k => { st.mk = k; render(); });
-  m.innerHTML = `<div class="tools"><span class="tlab">Rubrique</span><select class="ofld" id="tpC"><option value="ALL">Toutes (${its.length})</option>${cats.map(c => `<option value="${esc(c)}" ${st.c === c ? 'selected' : ''}>${esc(c)} (${its.filter(x => x.c === c).length})</option>`).join('')}</select>
-      <span class="tlab">Événement</span><select class="ofld" id="tpE"><option value="ALL">Tous</option>${evs.map(e => `<option value="${esc(e)}" ${st.ev === e ? 'selected' : ''}>${esc(e)} (${its.filter(x => x.ev === e).length})</option>`).join('')}</select>
-      <form id="tpF" style="display:inline-flex;gap:4px;margin-left:6px"><input id="tpQ" value="${esc(st.q)}" placeholder="mot-clé, ticker…" style="width:200px"><button class="tb">Filtrer</button></form><span class="tlab">relevé il y a ${age < 120 ? age + ' min' : Math.round(age / 60) + ' h'} · ${nLinked} articles reliés à un titre</span></div>
-    ${pn(`Fil d’actualités · ${L.length} articles`, 'NEWS', L.slice(0, 300).map(x => newsRow2(x)).join('') || '<div class="empty">Aucun article pour ces filtres.</div>',
-      { lect: `Flux publics : ${Object.values(N.feeds || {}).filter((v, i, a) => a.indexOf(v) === i && !/brvm|sika/i.test(v)).join(', ')}. Chaque article est relié automatiquement aux sociétés citées (nom usuel, nom officiel ou code ; clic = actualités et historique de la société) et classé par type d’événement d’après son titre. Ce classement automatique peut se tromper : la source fait foi. Les articles restent la propriété de leurs éditeurs.` })}`;
-  $('tpC').onchange = e => { st.c = e.target.value; render(); }; $('tpE').onchange = e => { st.ev = e.target.value; render(); }; $('tpF').onsubmit = e => { e.preventDefault(); st.q = $('tpQ').value.trim(); render(); };
-};
+/* PAGES.NEWS : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ CN : actualités de la société + historique des événements */
-PAGES.CN = async (m, alive) => {
-  const s = sec(ST.sec), brvm = isBRVM(s); setTitle('Company News');
-  const [N, EV, RP, DV, AN] = await Promise.all([getJSON('news.json').catch(() => ({ items: [] })), brvm ? getJSON('events.json').catch(() => []) : [], brvm ? getJSON('reports.json').catch(() => null) : null, brvm ? getJSON('dividends.json').catch(() => []) : [], getJSON('anomalies.json').catch(() => null)]); if (!alive()) return;
-  const al = aliasesOf(s).map(a => a.toLowerCase());
-  const its = (N.items || []).filter(x => (x.tk || []).includes(s.id) || (() => { const t = (x.ti + ' ' + (x.x || '')).toLowerCase(); return al.some(a => a === s.id.toLowerCase() ? new RegExp('\\b' + a + '\\b').test(t) : a.length > 3 && t.includes(a)); })());
-  const docs = RP ? Object.entries(RP.issuers || {}).filter(([, x]) => x.t === s.id).flatMap(([slug]) => (RP.docs || {})[slug] || []) : [];
-  const H = [];
-  for (const x of its) H.push({ d: new Date(x.t * 1000).toISOString().slice(0, 10), k: x.ev || 'Actualité', t: deent(x.ti), u: x.u, s: srcCode(x) });
-  for (const e of EV.filter(x => x.t === s.id)) H.push({ d: e.d, k: 'Avis officiel · ' + (e.c || ''), t: e.ti, u: e.u, s: 'BRVM' });
-  for (const d of docs) if (d.d) H.push({ d: i2s(+d.d), k: /etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Rapport d’activité' : 'Publication', t: d.ti, u: d.u, s: 'BRVM' });
-  for (const x of DV.filter(x => x.t === s.id && x.dps)) { if (x.det) H.push({ d: x.det, k: 'Dividende', t: `Détachement du dividende de l’exercice ${x.ex} : ${num(x.dps, 2)} FCFA net`, s: 'BRVM' }); }
-  for (const a of ((AN && AN.by && AN.by[s.id]) || []).filter(a => a.d)) H.push({ d: i2s(a.d), k: 'Anomalie · ' + a.k, t: a.m, s: 'FQT', an: true });
-  H.sort((a, b) => (b.d || '').localeCompare(a.d || ''));
-  const types = [...new Set(H.map(h => h.k.split(' · ')[0]))]; const st = ST.cnh = ST.cnh || { k: 'ALL' }; if (st.k !== 'ALL' && !types.includes(st.k)) st.k = 'ALL';
-  const HL = H.filter(h => st.k === 'ALL' || h.k.split(' · ')[0] === st.k);
-  m.innerHTML = `<div class="grid c2">${pn(`${esc(s.tk)} · articles qui citent la société (${its.length})`, 'CN', its.length ? its.slice(0, 150).map(x => newsRow2(x)).join('') : `<div class="empty">Aucun article récent ne cite ${esc(s.short || s.n)} dans les flux suivis (45 derniers jours).</div>`,
-      { lect: `Articles reliés automatiquement à la société (« ${al.map(esc).join(' », « ')} ») dans les flux d’actualités, mis à jour toutes les 15 minutes. Fil complet : NEWS.` })}
-    ${pn(`Historique des événements · ${H.length}`, 'CN', `<div class="tw" style="max-height:72vh"><table class="t" style="table-layout:fixed;width:100%"><colgroup><col style="width:82px"><col style="width:150px"><col>${brvm ? '' : '<col style="width:62px">'}</colgroup><thead><tr><th class="l">Date</th><th class="l">Type</th><th class="l">Événement</th>${brvm ? '' : '<th class="l">Source</th>'}</tr></thead><tbody>${HL.slice(0, 400).map(h => `<tr><td class="l" style="vertical-align:top">${fds(h.d)}</td><td class="l" style="white-space:normal;vertical-align:top;color:${h.an ? 'var(--dn)' : EV_COL[h.k] || 'var(--amber)'}">${esc(h.k)}</td><td class="l" style="white-space:normal;vertical-align:top">${h.u ? `<a href="${esc(h.u)}" target="_blank" rel="noopener" style="color:var(--white)">${esc(h.t || '')}</a>` : esc(h.t || '')}</td>${brvm ? '' : `<td class="l dm" style="vertical-align:top;overflow:hidden;text-overflow:ellipsis">${esc(h.s || '')}</td>`}</tr>`).join('') || '<tr><td class="l dm" colspan="4">Aucun événement.</td></tr>'}</tbody></table></div>`,
-      { np: true, tools: `<span class="tlab">Type</span><select class="ofld" id="cnK"><option value="ALL">Tous</option>${types.map(t => `<option ${st.k === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`, lect: `Réunit les articles (typés automatiquement), ${brvm ? 'les avis officiels, les publications de la société, les détachements de dividendes et ' : ''}les anomalies statistiques détectées (ANOM).` })}</div>`;
-  if ($('cnK')) $('cnK').onchange = e => { st.k = e.target.value; render(); };
-};
+/* PAGES.CN : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ IMAP : Europe, Royaume-Uni, Asie, Afrique, Moyen-Orient (capitalisations mondiales) */
 const WREG = {
@@ -3641,6 +3522,7 @@ const parseFr = d => { const m = String(d || '').match(/(\d{2})\/(\d{2})\/(\d{4}
 /* Hypothèses explicites : coupon sur le nominal restant (estimé = dernier coupon ÷ taux, semestriel si le cours vaut ~2 fois ce nominal), remboursement in fine du nominal restant
    à la date anniversaire du dernier coupon, l'année d'échéance indiquée dans le nom ; base exact/365, taux actuariel annuel. */
 function bondCalc(b, today = new Date()) {
+  today = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));  /* date de valeur : le jour (GMT, Abidjan), pas l'heure — sinon le rendement dérive au fil des secondes */
   const o = { ok: false };
   if (!b.cpn || !b.y1 || !b.px) { o.why = b.cpn ? 'échéance ou cours absent' : 'taux variable ou coupon non publié'; return o; }
   const lp = parseFr(b.lp_d); let N = b.lp_v && b.cpn ? b.lp_v / b.cpn : null, f = 1;
@@ -3981,19 +3863,7 @@ async function wbView(m, alive) {
 }
 
 /* ------------------------------------------------------------------ MOST : valeurs les plus actives, hausses, baisses */
-PAGES.MOST = async (m, alive) => {
-  setTitle('Most Active Securities'); const st = ST.most = ST.most || { u: 'BRVM' };
-  setTabs([['BRVM', 'BRVM'], ['NDX', 'Nasdaq-100'], ['ETF', 'ETF US']], st.u, k => { st.u = k; render(); });
-  const U0 = st.u === 'BRVM' ? secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity') : st.u === 'NDX' ? secsWhere(s => s.mkt === 'US' && s.ndx) : secsWhere(s => s.mkt === 'US' && s.typ === 'ETF');
-  const val = s => s.mkt === 'BRVM' ? (s.vday || 0) : (s.shd || 0) * (s.last || 0);
-  const ccy = st.u === 'BRVM' ? 'FCFA' : '$';
-  const t = (title, L, k) => pn(title, 'MOST', `<table class="t"><thead><tr><th class="l">Titre</th><th class="l">Nom</th><th>Dernier</th><th>Var. %</th><th>${k === 'v' ? 'Montant échangé' : 'Volume'}</th></tr></thead><tbody>${L.map(s => `<tr data-sec="${s.id}" data-to="GP" style="cursor:pointer"><td class="l tk">${s.id}</td><td class="l nm">${esc(s.short || s.n)}</td><td class="wh">${px(s, s.last)}</td><td>${pc(s.pct)}</td><td>${k === 'v' ? big(val(s)) + ' ' + ccy : num(s.shd, 0)}</td></tr>`).join('') || '<tr><td class="l dm" colspan="5">Aucun.</td></tr>'}</tbody></table>`, { np: true });
-  const live = U0.filter(s => s.pct != null);
-  m.innerHTML = `<div class="grid c2">${t('Plus fortes hausses', live.filter(s => s.pct > 0).sort((a, b) => b.pct - a.pct).slice(0, 12))}${t('Plus fortes baisses', live.filter(s => s.pct < 0).sort((a, b) => a.pct - b.pct).slice(0, 12))}</div>
-    <div class="grid c2">${t('Plus actives (montant échangé)', U0.filter(s => val(s) > 0).sort((a, b) => val(b) - val(a)).slice(0, 12), 'v')}${pn('Largeur du jour', 'MOST', `<div class="kv2"><span>Titres en hausse</span><b class="up">${live.filter(s => s.pct > 0).length}</b><span>Titres en baisse</span><b class="dn">${live.filter(s => s.pct < 0).length}</b><span>Inchangés</span><b>${live.filter(s => s.pct === 0).length}</b><span>Montant total échangé</span><b>${big(U0.reduce((a, s) => a + val(s), 0))} ${ccy}</b><span>Variation moyenne</span><b>${pc(U.mean(live.map(s => s.pct)))}</b><span>Médiane</span><b>${pc(med(live.map(s => s.pct)))}</b></div>${cvb('moH', 170)}`, { lect: st.u === 'BRVM' ? 'Séance du jour, relevée toutes les 15 minutes.' : 'Cours Nasdaq différés ; volume = titres échangés dans la séance.' })}</div>`;
-  const bins = [-.1, -.05, -.03, -.02, -.01, 0, .01, .02, .03, .05, .1], cnt = new Array(bins.length + 1).fill(0); live.forEach(s => { let i = bins.findIndex(b => s.pct < b); if (i < 0) i = bins.length; cnt[i]++; });
-  barChart($('moH'), { labels: ['<-10', '-10/-5', '-5/-3', '-3/-2', '-2/-1', '-1/0', '0/1', '1/2', '2/3', '3/5', '5/10', '>10'], values: cnt, fmt: v => num(v, 0), labelsOnBars: true, pos: '#3d7cc9', padB: 22 });
-};
+/* PAGES.MOST : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ MEMB / MOV : composition et contributions d'un indice */
 const IDX_MEMBERS = { BRVMC: () => secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity' && s.mcap), QQQ: () => secsWhere(s => s.mkt === 'US' && s.ndx && s.mcap), NDX: () => secsWhere(s => s.mkt === 'US' && s.ndx && s.mcap) };
@@ -4377,7 +4247,9 @@ PAGES.HP = async (m, alive) => {
   if (cur) R.push(cur);
   const vma = U.sma(R.map(r => r.v), 15); R.forEach((r, i) => { r.vm = vma[i]; r.ch = i ? r.c - R[i - 1].c : null; r.pc = i && R[i - 1].c ? r.c / R[i - 1].c - 1 : null; });
   const last = R[R.length - 1].d, back = { '1M': 100, '3M': 300, '6M': 600, '1A': 10000, '2A': 20000, '5A': 50000, '10A': 100000 };
-  let d0 = st.d0, d1 = st.d1 || last; if (!d0) d0 = st.rg === 'YTD' ? Math.floor(last / 10000) * 10000 + 101 : st.rg === 'MAX' ? R[0].d : last - back[st.rg];
+  /* période effective : 1M / 3M trop courts en hebdomadaire ou mensuel → 1A / 5A, sans écraser le choix (retour en quotidien = période choisie) */
+  const rgE = st.f !== 'D' && ['1M', '3M'].includes(st.rg) ? (st.f === 'W' ? '1A' : '5A') : st.rg;
+  let d0 = st.d0, d1 = st.d1 || last; if (!d0) d0 = rgE === 'YTD' ? Math.floor(last / 10000) * 10000 + 101 : rgE === 'MAX' ? R[0].d : last - back[rgE];
   const W = R.filter(r => r.d >= d0 && r.d <= d1), hasV = W.some(r => r.v > 0), mk = { c: 'Dernier', o: 'Ouverture', h: 'Plus haut', l: 'Plus bas' }[st.mk];
   const V = r => r[st.mk];
   /* synthèse de la période (colonne de droite du terminal) */
@@ -4393,7 +4265,7 @@ PAGES.HP = async (m, alive) => {
   setActs([{ n: 1, l: 'Actions', menu: () => [{ l: 'Exporter le tableau (CSV)', run: exportCSV }, { l: 'Ouvrir le graphique (GP)', run: () => go('GP', s.id) }, { l: 'Imprimer', run: () => window.print() }] }]);
   const rg = ['1M', '3M', '6M', 'YTD', '1A', '2A', '5A', '10A', 'MAX'];
   m.innerHTML = `<div class="tools hpt"><span class="tlab">Période</span><input class="ofld dt" id="hpD0" value="${fd(d0)}"><span class="cal">▦</span><span class="dm">–</span><input class="ofld dt" id="hpD1" value="${fd(d1)}"><span class="cal">▦</span>
-      ${rg.map(r => `<button class="tb ${!st.d0 && st.rg === r ? 'on' : ''}" data-rg="${r}">${r === 'MAX' ? 'Max' : r}</button>`).join('')}
+      ${rg.map(r => `<button class="tb ${!st.d0 && rgE === r ? 'on' : ''}" data-rg="${r}">${r === 'MAX' ? 'Max' : r}</button>`).join('')}
       <span class="tlab">Fréquence</span><select class="ofld dk" id="hpF">${[['D', 'Quotidienne'], ['W', 'Hebdomadaire'], ['M', 'Mensuelle']].filter(([k]) => S.f !== 'M' || k === 'M').map(([k, l]) => `<option value="${k}" ${st.f === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <span class="tlab">Donnée</span><select class="ofld" id="hpM">${[['c', 'Dernier cours'], ['o', 'Ouverture'], ['h', 'Plus haut'], ['l', 'Plus bas']].map(([k, l]) => `<option value="${k}" ${st.mk === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <span class="tlab">Vue</span><select class="ofld" id="hpV"><option value="P" ${st.v === 'P' ? 'selected' : ''}>Tableau des cours${hasV ? ' et volumes' : ''}</option><option value="O" ${st.v === 'O' ? 'selected' : ''}>Ouverture / haut / bas / dernier</option></select>
@@ -4406,7 +4278,7 @@ PAGES.HP = async (m, alive) => {
     <div class="lect">MMV (15) = moyenne mobile du volume sur 15 périodes. Semaine = semaine ISO.</div>`;
   m.querySelectorAll('[data-rg]').forEach(b => b.onclick = () => { st.rg = b.dataset.rg; st.d0 = st.d1 = null; st.page = 0; render(); });
   m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { st.page += +b.dataset.p; render(); });
-  $('hpF').onchange = e => { st.f = e.target.value; st.page = 0; if (st.f !== 'D' && ['1M', '3M'].includes(st.rg) && !st.d0) st.rg = st.f === 'W' ? '1A' : '5A'; render(); };
+  $('hpF').onchange = e => { st.f = e.target.value; st.page = 0; render(); };
   $('hpM').onchange = e => { st.mk = e.target.value; render(); }; $('hpV').onchange = e => { st.v = e.target.value; st.page = 0; render(); };
   const dIn = () => { const a = parseDMY($('hpD0').value), b = parseDMY($('hpD1').value); if (!a || !b || b <= a) { toast('Dates au format jj/mm/aaaa, la fin après le début.'); return; } st.d0 = a; st.d1 = b; st.page = 0; render(); };
   ['hpD0', 'hpD1'].forEach(id => { $(id).onchange = dIn; $(id).onkeydown = e => { if (e.key === 'Enter') dIn(); }; });
@@ -4454,13 +4326,13 @@ PAGES.BETA = async (m, alive) => {
   const s = sec(ST.sec); setTitle('Historical Beta'); const tab = tabState('BETA', 'r');
   setTabs([['r', 'Régression'], ['a', 'Fenêtres, pairs et risque']], tab, k => { ST.tab.BETA = k; render(); });
   if (tab === 'a') return BETA_ANALYSE(m, alive);
-  const st = ST.beta = ST.beta || {}; if (st.base !== s.id) { st.base = s.id; st.bench = s.bench && Q.by[s.bench] && s.bench !== s.id ? s.bench : isBRVM(s) ? 'BRVMC' : 'SPY'; if (!Q.by[st.bench]) st.bench = 'QQQ'; }
+  const st = ST.beta = ST.beta || {}; if (st.base !== s.id) { st.base = s.id; st.bench = benchFor(s); }
   st.f = st.f || 'W'; st.rg = st.rg || '2A';
   const [S, B] = await Promise.all([series(s.id), series(st.bench)]); if (!alive()) return;
   const end = Math.min(S.x[S.x.length - 1], B.x[B.x.length - 1]), y0 = end - { '1A': 10000, '2A': 20000, '3A': 30000, '5A': 50000 }[st.rg];
   const a = retsBy(S, st.f), b = retsBy(B, st.f), kd = d => st.f === 'D' ? d : st.f === 'W' ? isoWeekKey(d) : Math.floor(d / 100);
   const ks = [...a.keys()].filter(k => b.has(k) && k >= kd(y0)).sort((p, q) => p - q), P = ks.map(k => [(Math.exp(a.get(k)) - 1) * 100, (Math.exp(b.get(k)) - 1) * 100]);
-  const o = olsBeta(P); const benches = isBRVM(s) ? ['BRVMC', 'BRVM30', 'SPY', 'QQQ', 'EEM', 'AFK'] : ['SPY', 'QQQ', 'VTI', 'SOXX', 'EEM', 'BRVMC'];
+  const o = olsBeta(P); const benches = [...new Set([benchFor(s), st.bench].concat(isBRVM(s) ? ['BRVMC', 'BRVM30', 'SPY', 'QQQ', 'EEM', 'AFK'] : ['SPY', 'QQQ', 'VTI', 'SOXX', 'EEM', 'BRVMC']))];  /* l'indice calculé figure toujours dans la liste */
   let stats = '<div class="empty">Historique commun insuffisant pour cette période.</div>';
   if (o) { const n = o.n, mx = U.mean(P.map(p => p[1])), sxx = P.reduce((t, p) => t + (p[1] - mx) ** 2, 0), res = P.reduce((t, [y, x]) => t + (y - o.a - o.b * x) ** 2, 0), sde = Math.sqrt(res / (n - 2)), sea = sde * Math.sqrt(1 / n + mx * mx / sxx);
     const pval = (() => { const t = Math.abs(o.t), z = t * (1 - 1 / (4 * (n - 2))) / Math.sqrt(1 + t * t / (2 * (n - 2))); const e = Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI), k = 1 / (1 + .2316419 * z); return 2 * e * k * (.31938153 + k * (-.356563782 + k * (1.781477937 + k * (-1.821255978 + k * 1.330274429)))); })();
@@ -4804,7 +4676,7 @@ PAGES.GC = async (m, alive) => {
   const foc = st.foc, chg = mats.map(l => { const a = at(dL, foc, l), b = st.cmp ? at(st.cmp, foc, l) : null; return a != null && b != null ? (a - b) * 1e4 : NaN; });
   const legend = ctys.map((c, i) => { const on = st.sel.includes(c), t = ten(c), tl = tenLab(c), tp = st.cmp && tl ? at(st.cmp, c, tl) : null;
     return `<tr class="${c === foc ? 'cur' : ''}"><td class="l"><span class="rn">${i + 1})</span><label class="gck"><input type="checkbox" data-cy="${esc(c)}" ${on ? 'checked' : ''}><i></i></label><span class="gsw" style="background:${col(c)}"></span></td><td class="l am" data-fo="${esc(c)}" style="cursor:pointer">${esc(ctyName(c))}</td><td class="dm">${esc(tl || '')}</td><td class="wh">${t != null ? num(t * 100, 3) : '—'}</td><td>${t != null && tp != null ? bpS((t - tp) * 1e4) : '<span class="dm">—</span>'}</td></tr>`; }).join('');
-  const c2 = st.sel.find(c => c !== foc), act = mats.filter(l => at(dL, foc, l) != null);
+  const c2 = ctys.find(c => c !== foc && st.sel.includes(c)), act = mats.filter(l => at(dL, foc, l) != null);
   const tbl = `<table class="t"><thead><tr><th class="l">Maturité</th><th>Taux %</th><th>au ${st.cmp ? fds(st.cmp) : '—'}</th><th>Var. pb</th>${c2 ? `<th>Écart vs ${esc(ctyName(c2))} (pb)</th>` : ''}</tr></thead><tbody>${act.map(l => { const a = at(dL, foc, l), b = st.cmp ? at(st.cmp, foc, l) : null, o = c2 ? at(dL, c2, l) : null;
     return `<tr><td class="l am">${esc(l)}</td><td class="wh">${num(a * 100, 3)}</td><td class="dm">${b == null ? '—' : num(b * 100, 3)}</td><td>${b != null ? bpS((a - b) * 1e4) : '—'}</td>${c2 ? `<td>${o != null ? bpS((a - o) * 1e4, 0) : '—'}</td>` : ''}</tr>`; }).join('')}</tbody></table>`;
   m.innerHTML = `<div class="tools weic"><span class="tlab">Taux</span><select class="ofld" id="gcK"><option value="3" ${st.kind === 3 ? 'selected' : ''}>Après lissage</option><option value="2" ${st.kind === 2 ? 'selected' : ''}>Zéro-coupon</option></select>
@@ -5154,7 +5026,7 @@ PAGES.ALRT = async (m, alive) => {
 /* ------------------------------------------------------------------ HS : écran « Historical Spread » — rapport ou écart entre deux titres,
    moyenne et bandes à ±1 et ±2 écarts-types, score z, centile (valeur relative, paires) */
 PAGES.HS = async (m, alive) => {
-  const s = sec(ST.sec); setTitle('Historical Spread'); const st = ST.hs = ST.hs || {}; if (st.a !== s.id) { st.a = s.id; st.b = s.bench && s.bench !== s.id ? s.bench : s.mkt === 'BRVM' ? 'BRVMC' : 'QQQ'; }
+  const s = sec(ST.sec); setTitle('Historical Spread'); const st = ST.hs = ST.hs || {}; if (st.a !== s.id) { st.a = s.id; st.b = benchFor(s); }
   st.mode = st.mode || 'r'; st.y = st.y || 3; st.fx = st.fx ?? true;
   const b = Q.by[st.b] ? st.b : 'BRVMC';
   const [A, B] = await Promise.all([series(s.id).catch(() => null), series(b).catch(() => null)]); if (!alive()) return;
@@ -5881,7 +5753,7 @@ function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hi
 /* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
 /* ---------- mise à jour silencieuse du terminal : quand une nouvelle version est en ligne, la page se recharge d'elle-même
    au premier moment calme (onglet en arrière-plan, retour sur l'onglet, ou une minute sans action), en gardant l'écran et ses onglets ---------- */
-const APP_V = '1c7776ae844b';
+const APP_V = '19ae72fb9d5f';
 let APP_NEW = false, APP_ACT = Date.now();
 function appReload() { try { sessionStorage.setItem('fqt_tabs', JSON.stringify(ST.tab)); } catch (e) { } location.reload(); }
 function appMaybe(now) { if (!APP_NEW) return; const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value; if (document.hidden || now || (!typing && Date.now() - APP_ACT > 60000)) appReload(); }

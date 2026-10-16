@@ -48,6 +48,12 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   l'emporte. Les états lus par reconnaissance de caractères ne gardent que les montants confirmés par deux lectures ou par une
   identité comptable. Un jeu d'états dont un chiffre est faux (unité, année, ordre de grandeur) est écarté en entier ; les
   présentations de résultats et les notations ne servent jamais de source.
+- Société qui publie en dollars US (Ecobank Transnational, ETIT) : quand la société publie elle-même la contre-valeur en FCFA
+  (états à deux monnaies « milliers $EU | millions FCFA », depuis les comptes 2024), seules ses colonnes FCFA sont reprises ;
+  pour les autres exercices, les états en dollars sont convertis au cours USD/FCFA du jour de leur publication (655,957 FCFA
+  pour 1 euro × cours euro/dollar publié par la Réserve fédérale), un seul cours par exercice, figé à cette date (cours et date
+  indiqués dans FA). Seuls ses états financiers consolidés sont lus (ses rapports annuels et communiqués mêlent comptes de la
+  holding, trimestres et semestres) ; les états en FCFA d'une filiale déposés sous son nom ne sont pas repris.
 - Capitaux propres d'un bilan de synthèse sans ligne de total : somme des composantes publiées (capital, primes, réserves, report à
   nouveau, résultat, autres), retenue seulement si le passif la vérifie (total − dettes financières − passif circulant − trésorerie passif).
 - Flux de trésorerie (flux opérationnels, acquisitions d'immobilisations, flux disponible) : uniquement ceux lus dans les états

@@ -97,19 +97,7 @@ async function wbView(m, alive) {
 }
 
 /* ------------------------------------------------------------------ MOST : valeurs les plus actives, hausses, baisses */
-PAGES.MOST = async (m, alive) => {
-  setTitle('Most Active Securities'); const st = ST.most = ST.most || { u: 'BRVM' };
-  setTabs([['BRVM', 'BRVM'], ['NDX', 'Nasdaq-100'], ['ETF', 'ETF US']], st.u, k => { st.u = k; render(); });
-  const U0 = st.u === 'BRVM' ? secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity') : st.u === 'NDX' ? secsWhere(s => s.mkt === 'US' && s.ndx) : secsWhere(s => s.mkt === 'US' && s.typ === 'ETF');
-  const val = s => s.mkt === 'BRVM' ? (s.vday || 0) : (s.shd || 0) * (s.last || 0);
-  const ccy = st.u === 'BRVM' ? 'FCFA' : '$';
-  const t = (title, L, k) => pn(title, 'MOST', `<table class="t"><thead><tr><th class="l">Titre</th><th class="l">Nom</th><th>Dernier</th><th>Var. %</th><th>${k === 'v' ? 'Montant échangé' : 'Volume'}</th></tr></thead><tbody>${L.map(s => `<tr data-sec="${s.id}" data-to="GP" style="cursor:pointer"><td class="l tk">${s.id}</td><td class="l nm">${esc(s.short || s.n)}</td><td class="wh">${px(s, s.last)}</td><td>${pc(s.pct)}</td><td>${k === 'v' ? big(val(s)) + ' ' + ccy : num(s.shd, 0)}</td></tr>`).join('') || '<tr><td class="l dm" colspan="5">Aucun.</td></tr>'}</tbody></table>`, { np: true });
-  const live = U0.filter(s => s.pct != null);
-  m.innerHTML = `<div class="grid c2">${t('Plus fortes hausses', live.filter(s => s.pct > 0).sort((a, b) => b.pct - a.pct).slice(0, 12))}${t('Plus fortes baisses', live.filter(s => s.pct < 0).sort((a, b) => a.pct - b.pct).slice(0, 12))}</div>
-    <div class="grid c2">${t('Plus actives (montant échangé)', U0.filter(s => val(s) > 0).sort((a, b) => val(b) - val(a)).slice(0, 12), 'v')}${pn('Largeur du jour', 'MOST', `<div class="kv2"><span>Titres en hausse</span><b class="up">${live.filter(s => s.pct > 0).length}</b><span>Titres en baisse</span><b class="dn">${live.filter(s => s.pct < 0).length}</b><span>Inchangés</span><b>${live.filter(s => s.pct === 0).length}</b><span>Montant total échangé</span><b>${big(U0.reduce((a, s) => a + val(s), 0))} ${ccy}</b><span>Variation moyenne</span><b>${pc(U.mean(live.map(s => s.pct)))}</b><span>Médiane</span><b>${pc(med(live.map(s => s.pct)))}</b></div>${cvb('moH', 170)}`, { lect: st.u === 'BRVM' ? 'Séance du jour, relevée toutes les 15 minutes.' : 'Cours Nasdaq différés ; volume = titres échangés dans la séance.' })}</div>`;
-  const bins = [-.1, -.05, -.03, -.02, -.01, 0, .01, .02, .03, .05, .1], cnt = new Array(bins.length + 1).fill(0); live.forEach(s => { let i = bins.findIndex(b => s.pct < b); if (i < 0) i = bins.length; cnt[i]++; });
-  barChart($('moH'), { labels: ['<-10', '-10/-5', '-5/-3', '-3/-2', '-2/-1', '-1/0', '0/1', '1/2', '2/3', '3/5', '5/10', '>10'], values: cnt, fmt: v => num(v, 0), labelsOnBars: true, pos: '#3d7cc9', padB: 22 });
-};
+/* PAGES.MOST : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ MEMB / MOV : composition et contributions d'un indice */
 const IDX_MEMBERS = { BRVMC: () => secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity' && s.mcap), QQQ: () => secsWhere(s => s.mkt === 'US' && s.ndx && s.mcap), NDX: () => secsWhere(s => s.mkt === 'US' && s.ndx && s.mcap) };

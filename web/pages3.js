@@ -1,19 +1,7 @@
 /* ================= FQT — menu du titre, aide, fonctions transverses ================= */
 
 /* ------------------------------------------------------------------ MENU (ticker + Entrée) */
-PAGES.MENU = async m => {
-  const s = sec(ST.sec); let n = 0;
-  const groups = MENU_GROUPS.map(([g, codes]) => `<div class="mg"><h4>${g}</h4>${codes.map(c => { n++; const why = avail(c, s);
-    return `<button class="mi${why ? ' off' : ''}" data-fn="${c}"><em>${n})</em><b>${c}</b><span>${FN[c][0]}</span><small>${why ? 'Non disponible : ' + esc(why) : esc(FN[c][3])}</small></button>`; }).join('')}</div>`).join('');
-  const kv = [['Dernier', `${px(s, s.last)} ${s.ccy}`], ['Variation', pc(s.pct)], ['1 mois', pc(s.r1m, 1)], ['YTD', pc(s.ytd, 1)], ['1 an', pc(s.r1y, 1)], ['3 ans', pc(s.r3y, 1)],
-    ['Plus haut / bas 52 sem.', `${px(s, s.hi52)} / ${px(s, s.lo52)}`], ['Écart au record', pc(s.dd, 1)], ['Volatilité 1 an', s.vol != null ? num(s.vol * 100, 1) + ' %' : '—'],
-    ['Bêta / ' + (s.bench || '—'), num(s.beta, 2)], s.mcap ? ['Capitalisation', big(s.mcap) + ' ' + (s.mkt === 'BRVM' ? 'XOF' : 'USD')] : null, s.per ? ['PER', num(s.per, 1)] : null,
-    s.yld ? ['Rendement', num(s.yld * 100, 2) + ' %'] : null, ['Historique', `${fd(s.first)} → ${fd(s.dt)}`]].filter(Boolean);
-  m.innerHTML = `<div class="grid side">${pn(`${s.tk} · menu des fonctions`, 'MENU', `<div class="mgrid">${groups}</div>`, { lect: 'Cliquez une fonction, ou tapez son numéro puis <b>Entrée</b>. Depuis n’importe où : <b>' + esc(s.id) + '</b> + espace affiche cette liste dans la ligne de commande.' })}
-    ${pn('Aperçu', s.id, `<div class="kv2">${kv.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div><div class="cv" id="mnS" style="height:120px;margin-top:8px"></div>`, { lect: `${esc(s.n)}${s.grp ? ' · ' + esc(s.grp) : ''}${s.cty ? ' · ' + esc(Q.sum.cty[s.cty] || s.cty) : ''}` })}</div>`;
-  const S = await series(s.id); const k = Math.max(0, S.c.length - 260);
-  new TSChart($('mnS'), { panes: [{ h: 1 }], padR: 50, padB: 16 }).set({ x: S.x.slice(k), series: [{ type: 'area', y: S.c.slice(k), color: CL.amber }] });
-};
+/* PAGES.MENU : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ HELP : démarrage, fonctions par thème (avec leurs onglets), raccourcis, repères */
 const HELP_MKT = () => [['BRVM et UEMOA', MKT_BRVM], ['Vue d’ensemble', ['BRIEF', 'MONITOR', 'NEWS']], ['Portefeuille et sélection', ['PORTF', 'SCREENER', 'ALRT']],

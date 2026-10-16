@@ -170,19 +170,7 @@ PAGES.ALRT = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ NEWS (actualités, ex-TOP) */
-PAGES.NEWS = async (m, alive) => {
-  const N = await getJSON('news.json').catch(() => null); if (!alive()) return; const st = ST.top = ST.top || { c: 'ALL', q: '' };
-  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'NEWS', '<div class="empty">Fil d’actualités en cours de constitution (premier relevé au prochain passage de la collecte).</div>'); return; }
-  const cats = [...new Set(N.items.map(x => x.c))]; const brvmAl = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity').map(s => [s.id, aliasesOf(s).filter(a => a !== s.id).map(a => a.toLowerCase())]);
-  const tag = x => { const t = (x.ti + ' ' + (x.x || '')).toLowerCase(); return brvmAl.filter(([, al]) => al.some(a => a.length > 3 && t.includes(a))).map(([id]) => id).slice(0, 4); };
-  let L = N.items.filter(x => st.c === 'ALL' || x.c === st.c); if (st.q) { const q = st.q.toLowerCase(); L = L.filter(x => (x.ti + ' ' + (x.x || '') + ' ' + (x.s || '')).toLowerCase().includes(q)); }
-  const age = Math.round((Date.now() / 1000 - N.ts) / 60);
-  m.innerHTML = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Rubrique</span><button class="tb ${st.c === 'ALL' ? 'on' : ''}" data-c="ALL">Tout (${N.items.length})</button>${cats.map(c => `<button class="tb ${st.c === c ? 'on' : ''}" data-c="${esc(c)}">${esc(c)} (${N.items.filter(x => x.c === c).length})</button>`).join('')}
-    <form id="tpF" style="display:inline-flex;gap:6px;margin-left:10px"><input id="tpQ" value="${esc(st.q)}" placeholder="mot-clé : cacao, Sonatel, Fed…" style="width:220px"><button class="tb">Filtrer</button></form><span class="tlab">relevé il y a ${age < 120 ? age + ' min' : Math.round(age / 60) + ' h'}</span></div>
-    ${pn(`Fil d’actualités · ${L.length} articles`, 'NEWS', L.slice(0, 250).map(x => { const tg = tag(x); return newsRow(x).replace('</span></div>', `</span>${tg.length ? `<span class="tags">${tg.map(t => `<b data-sec="${t}" data-to="CN">${t}</b>`).join('')}</span>` : ''}</div>`); }).join(''),
-      { lect: `Flux publics : ${Object.values(N.feeds || {}).filter((v, i, a) => a.indexOf(v) === i && !/brvm|sika/i.test(v)).join(', ')}. Les titres BRVM cités sont repérés automatiquement (clic = actualités de la société). Les articles restent la propriété de leurs éditeurs ; le lien ouvre la source.` })}`;
-  m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { st.c = b.dataset.c; render(); }); $('tpF').onsubmit = e => { e.preventDefault(); st.q = $('tpQ').value.trim(); render(); };
-};
+/* PAGES.NEWS : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ ECWB : indicateurs US (FRED), ancien ECO */
 PAGES.ECWB = async (m, alive) => {

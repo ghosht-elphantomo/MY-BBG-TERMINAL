@@ -1372,6 +1372,9 @@ def brvm_company(sid, s, fd_, fcf, dps_hist, b, tax):
                 yk.append(y)
         Yr, groups = brvm_ratios(ccr, bank, eps_y, dps_y, px_y)
         r["C"] = {"y": Ys, "per": cc.get("per"), "std": cc.get("std"), "s": secs_}
+        fxy = {str(y): [x["fx"], x.get("d")] for y, x in cc["y"].items() if x.get("fx")}
+        if fxy:  # (états publiés en dollars, convertis au cours du jour de publication : cours et date par exercice)
+            r["C"]["fx"] = fxy
         r["R"] = {"y": Yr, "g": groups, "k": [y for y in yk if y in Yr]}
         alt = cc.get("alt") or {}
         if len(alt.get("y") or {}) >= 2:  # l'autre référentiel publié par la société (sociaux / consolidés, SYSCOHADA / IFRS)

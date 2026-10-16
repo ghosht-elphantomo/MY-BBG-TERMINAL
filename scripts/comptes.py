@@ -1533,10 +1533,12 @@ CHARGES = {"charges_personnel", "dotations", "frais_financiers", "impots_resulta
 def unit_choice(P, items, y):
     """Unité des montants : annoncée ou déduite du capital, si l'ordre de grandeur du total du bilan la confirme ;
     sinon la seule unité plausible (total du bilan entre 0,3 et 60 000 milliards de FCFA). None si plusieurs restent possibles."""
+    fxk = P.get("fxk") or 1.0  # (montants en dollars : ordre de grandeur en FCFA)
     tot = (items.get("total_actif") or {}).get(y) or (items.get("total_passif") or {}).get(y)
     ca = (items.get("chiffre_affaires") or items.get("b_pnb") or {}).get(y)
-    allv = [abs(v[y]) for k, v in items.items() if y in v]
-    bs_v = [abs(v[y]) for k, v in items.items() if y in v and k not in ("total_actif", "total_passif")
+    tot, ca = tot and tot * fxk, ca and ca * fxk
+    allv = [abs(v[y]) * fxk for k, v in items.items() if y in v]
+    bs_v = [abs(v[y]) * fxk for k, v in items.items() if y in v and k not in ("total_actif", "total_passif")
             and set(SECS.get(k, ())) & {S_ACT, S_PAS}]
     ta_, tp_ = (items.get("total_actif") or {}).get(y), (items.get("total_passif") or {}).get(y)
     if tot and bs_v and abs(tot) < max(bs_v) * 0.9 and not (ta_ and tp_ and abs(ta_ - tp_) <= 0.5):
@@ -1606,6 +1608,36 @@ OCR_SRC = ("fra", "eng", "fra4", "eng4")
 
 
 USD_REPORTERS = {"ETIT"}  # Ecobank Transnational : états financiers en dollars américains
+# ETI publie ses états en dollars ; depuis l'exercice 2024 (et dans ses chiffres clés), chaque montant est suivi de sa contre-valeur
+# en FCFA calculée par la société (« milliers $EU | millions FCFA » pour N puis N-1). Les états entièrement à deux monnaies sont lus
+# dans leurs colonnes FCFA (chiffres officiels de la société) ; les autres sont lus en dollars, puis convertis à la consolidation au
+# cours USD/FCFA du jour de leur publication (montants figés à cette date).
+DUAL_LINE = re.compile(r"(?:\$ ?eu|dollars?\b|us ?\$|\busd\b).{0,90}(?:fcfa|f ?cfa|francs? cfa)", re.I)
+DUAL_STMT = re.compile(r"montants? en milliers de dollars? (?:eu|us)\w* et (?:en )?millions de (?:francs? )?cfa")
+USD_STMT = re.compile(r"montants? en milliers de dollars? (?:eu|us)\w*(?: americains)? sauf")
+_NUMCELL = re.compile(r"\(?-?\d[\d ,.]*\)?|-|—")
+
+
+def dual_cols(txt, keep):
+    """Lignes à deux monnaies d'ETI (« 2,097,113   1,219,618   1,849,700   1,123,045 [variations %] ») : ne garde que les colonnes
+    FCFA (keep="fcfa" : 2e et 4e montants) ou dollars (keep="usd" : 1er et 3e). Les en-têtes de colonnes deviennent l'unité unique."""
+    out = []
+    for l in txt.split("\n"):
+        nl = nrm(l)
+        if DUAL_LINE.search(nl) and not re.search(r"\d{3}", re.sub(r"\b(?:19|20)\d\d\b", "", nl)):
+            ind = re.match(r"\s*", l).group(0)
+            out.append(ind + ("(Montants en millions de FCFA)" if keep == "fcfa" else "(Montants en milliers de dollars EU)"))
+            continue
+        cells = re.split(r"\s{2,}", l.strip())
+        nums = [i for i, c in enumerate(cells) if _NUMCELL.fullmatch(c.strip())]
+        pct = [i for i, c in enumerate(cells) if c.strip().endswith("%")]
+        if len(nums) == 4 and nums[0] > 0 and all(i > nums[-1] for i in pct):
+            k = (nums[1], nums[3]) if keep == "fcfa" else (nums[0], nums[2])
+            ind = re.match(r"\s*", l).group(0)
+            out.append(ind + "   ".join(c for i, c in enumerate(cells) if i < nums[0]) + "        " + "        ".join(cells[i] for i in k))
+            continue
+        out.append(l)
+    return "\n".join(out)
 
 
 def read_doc(texts, meta):
@@ -1618,9 +1650,19 @@ def read_doc(texts, meta):
     allres = {}  # exercices vérifiés par lecture (src → {périmètre: {année: (contrôles, postes gardés)}})
     scores = {}
     variants = []
+    oc0 = other_company(meta["t"], (meta.get("u") or "").rsplit("/", 1)[-1]) if meta.get("t") else None
+    usd_rep = (meta.get("t") if oc0 in (None, "?") else oc0) in USD_REPORTERS
+    dual_src = set()
     for src, (txt, ocr) in texts.items():
         if not txt or len(txt.strip()) < 200:
             continue
+        if usd_rep:
+            nt_ = nrm(txt)
+            if DUAL_STMT.search(nt_) and not USD_STMT.search(nt_):
+                txt = dual_cols(txt, "fcfa")  # états à deux monnaies : contre-valeur FCFA publiée par la société
+                dual_src.update((src, src + "~", src + "!"))
+            elif DUAL_LINE.search(nt_):
+                txt = dual_cols(txt, "usd")  # chiffres clés à deux monnaies dans un document en dollars : colonnes en dollars
         variants.append((src, txt, ocr, False))
         if ocr:
             variants.append((src + "~", txt, ocr, True))  # (libellés nettoyés de leurs débris : seconde lecture du même texte)
@@ -1638,6 +1680,10 @@ def read_doc(texts, meta):
         finally:
             _TOLERANT[0] = False
             _COMMA_FORCE[0] = False
+        if src in dual_src:
+            P["cur"], P["dual"] = "XOF", True
+        elif usd_rep and P["cur"] == "USD":
+            P["fxk"] = 600.0  # (ordre de grandeur du cours, pour la vraisemblance des unités seulement)
         parsed[src] = P
         res = {}
         for per, items in P["perims"].items():
@@ -1715,9 +1761,13 @@ def read_doc(texts, meta):
            "cur": P["cur"], "main": P["main"], "n": len(P["items"]), "y": {}, "guess": P.get("guess") or []}
     oc_ = other_company(meta["t"], (meta.get("u") or "").rsplit("/", 1)[-1]) if meta.get("t") else None
     t_eff = meta.get("t") if oc_ in (None, "?") else oc_  # (document déposé sous une autre société : voir other_company)
-    if t_eff in USD_REPORTERS and P["cur"] == "XOF":
-        P["cur"] = "USD"  # société qui publie en dollars : ses états ne sont pas repris, même les tableaux à deux monnaies
-    if P["cur"] != "XOF":
+    if t_eff in USD_REPORTERS and P["cur"] == "XOF" and not P.get("dual"):
+        # (ni dollars annoncés ni colonnes FCFA de la société : comptes en FCFA d'une filiale, ou tableaux mal lus) : pas repris
+        out["st"], out["cur"] = "devise USD", "USD"
+        return out
+    if P["cur"] == "USD" and t_eff in USD_REPORTERS:
+        out["cur"] = "USD"  # converti à la consolidation, au cours du jour de publication
+    elif P["cur"] != "XOF":
         out["st"], out["cur"] = "devise " + P["cur"], P["cur"]
         return out
     def _emit(per, y, rec, chk, keep, ok_id, cf, unit, cands, mg=(), alt=None):
@@ -1877,7 +1927,7 @@ CA_LIKE = {"chiffre_affaires", "ventes_marchandises", "ventes_produits", "travau
            "valeur_ajoutee", "achats_marchandises", "achats_matieres", "b_interets_produits", "b_interets_charges", "b_pnb"}
 
 
-def consolidate(cj, mirror=None):
+def consolidate(cj, mirror=None, fx=None):
     """comptes.json (documents lus) -> {titre: {"y": {exercice: {"v": {poste: millions de FCFA}, "n", "d", "own"}}, "per", "std",
     "agree" (part des montants communs égaux à ceux de la base de référence), "ncmp" (nombre de montants comparés)}}.
 
@@ -1889,10 +1939,28 @@ def consolidate(cj, mirror=None):
          reprend des comptes de même rang : jamais des chiffres provisoires contre des comptes définitifs) ;
       4. puis celui du document le plus probant (comptes de l'exercice, définitifs, le plus récent).
     Un montant décalé d'un facteur 1 000 (ou 1 000 000) par rapport à une autre source est une erreur d'unité : écarté.
-    Les états par secteur d'activité ne sont pas des comptes de la société : ignorés."""
+    Les états par secteur d'activité ne sont pas des comptes de la société : ignorés.
+
+    Société qui publie en dollars (ETI) : contre-valeur FCFA publiée par la société quand elle existe (seule retenue pour l'exercice),
+    sinon états en dollars convertis au cours USD/FCFA du jour de leur publication (fx : date « AAAA-MM-JJ » -> FCFA pour 1 USD).
+    Seuls ses états financiers consolidés sont repris (rapports annuels et communiqués mêlent comptes de la holding, trimestres
+    et semestres) ; la base de référence, convertie à d'autres cours, ne sert pas de recoupement pour elle."""
     recs = []
+    if fx:
+        mirror = {t_: v_ for t_, v_ in (mirror or {}).items() if t_ not in USD_REPORTERS}
     for u, r in (cj.get("docs") or {}).items():
-        if not r.get("y") or r.get("per") != "annuel" or r.get("cur", "XOF") != "XOF" or not r.get("t"):
+        if not r.get("y") or r.get("per") != "annuel" or not r.get("t"):
+            continue
+        rate = None
+        if r["t"] in USD_REPORTERS:
+            ti_ = nrm(r.get("ti") or "")
+            if not re.search(r"etats? financiers", ti_) or re.search(r"rapport annuel|communique|trimestr|semestr|septembre|partie 1", ti_):
+                continue
+            if r.get("cur", "XOF") == "USD":
+                rate = fx(r.get("d")) if fx and r.get("d") else None
+                if not rate:
+                    continue
+        if r.get("cur", "XOF") != "XOF" and not rate:
             continue
         if re.search(r"par secteur|sectoriel|segment|par activite|par pays", nrm((r.get("ti") or "") + " " + u)):
             continue
@@ -1912,6 +1980,10 @@ def consolidate(cj, mirror=None):
         if re.search(r"presentation|slides?\b|webinar|roadshow|investor.?day|conference.?(?:des )?analystes", nrm((r.get("ti") or "") + " " + u)):
             continue
         for per, ys in r["y"].items():
+            if t_doc in USD_REPORTERS:
+                if per not in ("conso", "conso_ifrs"):
+                    continue  # (comptes de la holding ou d'une filiale)
+                per = "conso_ifrs"  # (ETI ne publie ses comptes de groupe qu'en IFRS)
             for y, x in ys.items():
                 v_, vk_ = dict(x.get("v") or {}), set(x.get("vk") or [])
                 if v_.get("resultat_net") is None and v_.get("resultat_bilan") is not None:
@@ -1925,13 +1997,17 @@ def consolidate(cj, mirror=None):
                              # (communiqué ou rapport numérisé : deux lectures identiques d'un chiffre ne garantissent pas sa ligne ni sa
                              # colonne ; seuls les montants vérifiés par une identité sont gardés)
                              "guess": per in (r.get("guess") or []), "cf": set(x.get("cf") or []) if r.get("cat") in (None, "financial_statements", "auditor_report") else set(),
-                             "strong": len({c_[0] for c_ in (x.get("c") or []) if c_[0] in STRONG and c_[1] is not None and c_[1] <= 0.001})})
+                             "strong": len({c_[0] for c_ in (x.get("c") or []) if c_[0] in STRONG and c_[1] is not None and c_[1] <= 0.001}),
+                             "fx": rate})
+    # exercice dont la société publie elle-même la contre-valeur FCFA : les conversions de ses états en dollars sont écartées
+    off_ = {(x["t"], x["y"], x["per"]) for x in recs if not x["fx"]}
+    recs = [x for x in recs if not x["fx"] or (x["t"], x["y"], x["per"]) not in off_]
     known = {}
     for x in recs:
         if x["u"]:
             for k in ("total_actif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres"):
                 if x["v"].get(k):
-                    known.setdefault((x["t"], x["y"], x["per"], x["std"], k), []).append(x["v"][k] * x["u"])
+                    known.setdefault((x["t"], x["y"], x["per"], x["std"], k), []).append(x["v"][k] * x["u"] * (x["fx"] or 1.0))
     MS = {"total_actif": "total_bilan", "resultat_net": "resultat_net", "chiffre_affaires": "ca", "b_pnb": "ca", "capitaux_propres": "capitaux_propres"}
     for x in recs:
         if x["u"]:
@@ -1946,7 +2022,7 @@ def consolidate(cj, mirror=None):
                 if not v:
                     continue
                 for kv in known.get((x["t"], x["y"], x["per"], x["std"], k), []):
-                    if abs(v * cand - kv) <= abs(kv) * 0.002:
+                    if abs(v * cand * (x["fx"] or 1.0) - kv) <= abs(kv) * 0.002:
                         hit += 1
                 mv = (((mirror or {}).get(x["t"]) or {}).get(mk) or {}).get(str(x["y"]))
                 if mv and abs(v * cand / 1e6 - mv) <= abs(mv) * 0.01 + 0.5:
@@ -1963,7 +2039,7 @@ def consolidate(cj, mirror=None):
         if x["u"]:
             for k in ("total_actif", "chiffre_affaires", "b_pnb"):
                 if x["v"].get(k) and x["v"][k] > 0:
-                    scale.setdefault((x["t"], k), []).append(math.log10(x["v"][k] * x["u"] / 1e6))
+                    scale.setdefault((x["t"], k), []).append(math.log10(x["v"][k] * x["u"] * (x["fx"] or 1.0) / 1e6))
     for t_, ser_ in (mirror or {}).items():
         for k, mk in (("total_actif", "total_bilan"), ("chiffre_affaires", "ca"), ("b_pnb", "ca")):
             for y_, mv in (ser_.get(mk) or {}).items():
@@ -1974,7 +2050,7 @@ def consolidate(cj, mirror=None):
             continue
         dist = {}
         for cand in x["uc"]:
-            ds = [abs(math.log10(x["v"][k] * cand / 1e6) - statistics.median(scale[(x["t"], k)]))
+            ds = [abs(math.log10(x["v"][k] * cand * (x["fx"] or 1.0) / 1e6) - statistics.median(scale[(x["t"], k)]))
                   for k in ("total_actif", "chiffre_affaires", "b_pnb") if x["v"].get(k) and x["v"][k] > 0 and scale.get((x["t"], k))]
             if ds:
                 dist[cand] = max(ds)
@@ -1984,7 +2060,7 @@ def consolidate(cj, mirror=None):
                 x["u"] = o_[0]
     recs = [x for x in recs if x["u"]]
     for x in recs:
-        x["m"] = {k: round(v * x["u"] / 1e6, 3) for k, v in x["v"].items()}
+        x["m"] = {k: round(v * x["u"] * (x["fx"] or 1.0) / 1e6, 3) for k, v in x["v"].items()}
     MK = {"chiffre_affaires": "ca", "b_pnb": "ca", "resultat_net": "resultat_net", "resultat_bilan": "resultat_net", "total_actif": "total_bilan",
           "total_passif": "total_bilan", "capitaux_propres": "capitaux_propres", "resultat_exploitation": "ebit", "ebe": "ebitda"}
 
@@ -2234,9 +2310,12 @@ def consolidate(cj, mirror=None):
                 # un autre document (comptes au moins aussi définitifs, en couche texte) dont les chiffres clés vérifiés sont repris
                 # par plus de sources (documents distincts, base de référence) que ceux du document principal, sans jamais l'être
                 # moins : ce sont les chiffres retenus par la société après coup (exercice corrigé) ; il devient le document principal
+                def nat(x, k):  # (montant dans la monnaie du document : les états en dollars se comparent en dollars)
+                    return x["m"][k] / (x["fx"] or 1.0)
+
                 def votes(x, k):
-                    v_ = x["m"][k]
-                    n_ = len({o.get("fy") for o in cand if o["m"].get(k) is not None and abs(o["m"][k] - v_) <= max(0.5, abs(v_) * 0.001)})
+                    v_ = nat(x, k)
+                    n_ = len({o.get("fy") for o in cand if o["m"].get(k) is not None and abs(nat(o, k) - v_) <= max(0.5 / (x["fx"] or 1.0), abs(v_) * 0.001)})
                     mv_ = mirror_v(t, y, k)
                     return n_ + (1 if mv_ is not None and abs(v_ - mv_) <= abs(mv_) * 0.005 + 0.5 else 0)
                 better = []
@@ -2245,7 +2324,7 @@ def consolidate(cj, mirror=None):
                         continue
                     win = lose = 0
                     for k in ("total_actif", "resultat_net", "chiffre_affaires", "b_pnb"):
-                        if k not in x["vk"] or k not in prim["vk"] or abs(x["m"][k] - prim["m"][k]) <= max(0.5, abs(x["m"][k]) * 0.001):
+                        if k not in x["vk"] or k not in prim["vk"] or abs(nat(x, k) - nat(prim, k)) <= max(0.5 / (x["fx"] or 1.0), abs(nat(x, k)) * 0.001):
                             continue
                         if votes(x, k) > votes(prim, k):
                             win += 1
@@ -2255,6 +2334,8 @@ def consolidate(cj, mirror=None):
                         better.append(x)
                 if better:
                     prim = max(better, key=lambda x: (x["rank"][1], len(x["vk"]), x["rank"][2]))
+                if prim.get("fx"):  # (états en dollars : un seul cours par exercice, celui du document principal)
+                    cand = [x for x in cand if x.get("fx") == prim["fx"]]
                 v, nsrc, over = {}, {}, {}  # (over : postes repris d'un autre document que le principal, chiffre corrigé après coup)
                 for k in sorted({k for x in cand for k in x["m"]}):
                     vals = {}
@@ -2415,6 +2496,8 @@ def consolidate(cj, mirror=None):
                 best = cand[0]
                 res[y] = {"v": v, "n": max(nsrc.get(k, 1) for k in ("total_actif", "resultat_net") if k in nsrc) if any(k in nsrc for k in ("total_actif", "resultat_net")) else 1,
                           "d": best["d"], "own": best["rank"][0], "ns": nsrc}
+                if best.get("fx"):
+                    res[y]["fx"] = round(best["fx"], 4)  # (états en dollars convertis au cours du jour de publication « d »)
                 if weak:
                     res[y]["w"] = sorted(weak)
             return res

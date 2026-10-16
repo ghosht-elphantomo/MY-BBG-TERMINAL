@@ -6,6 +6,8 @@ const P1 = (v, d = 1) => v == null || !isFinite(v) ? '—' : num(v * 100, d) + '
 const NDc = (why = '') => `<span class="dm" title="${esc(why)}">n.d.</span>`;
 const yLab = d => String(Math.floor(d / 10000));
 const isBRVM = s => s && s.mkt === 'BRVM';
+/* indice de référence d'un titre : jamais le titre lui-même (BRVMC → BRVM 30, SPY → QQQ) */
+const benchFor = s => [s.bench, isBRVM(s) ? 'BRVMC' : 'SPY', isBRVM(s) ? 'BRVM30' : 'QQQ', 'QQQ', 'SPY'].find(id => id && id !== s.id && Q.by[id]) || 'QQQ';
 /* montant échangé du jour : officiel (bulletin de la cote BRVM) ou estimation volume × cours, signalée « ≈ » */
 const valEst = s => !!s && (s.mkt !== 'BRVM' || !!s.vde);
 const valTxt = (s, v) => v ? `${valEst(s) ? '<span class="dm" title="Estimation en séance : volume × cours ; montant définitif le soir.">≈</span> ' : ''}${big(v)}` : '—';
@@ -49,7 +51,7 @@ function accountsTable(F, nY = 10, opts = {}) {
   const srcOf = y => { const i = ix(y); return i >= 0 && Y.src ? Y.src[i] : null; };
   /* en-tête sur deux lignes comme FA : « FY 2024 » puis la date de clôture de l'exercice (quand la source la donne) */
   const endOf = y => { const i = ix(y); return i >= 0 && F.mkt === 'US' && Y.y[i] > 99999 ? fd(Y.y[i]) : ''; };
-  const srMark = sr => !sr ? ['', ''] : /^référentiel/.test(sr) ? ['r', 'Comptes publiés dans l’autre ' + sr] : ['a', 'Exercice complété à partir des comptes publiés de la société'];
+  const srMark = sr => !sr ? ['', ''] : /^référentiel/.test(sr) ? ['r', 'Comptes publiés dans l’autre ' + sr] : /^converti/.test(sr) ? ['$', sr.replace(/^converti : /, 'Montants convertis : ')] : ['a', 'Exercice complété à partir des comptes publiés de la société'];
   const head = `<tr><th class="l">${U.lab}</th>${cols.map(y => { const [m, ti] = srMark(srcOf(y)); return `<th title="${esc(ti)}">FY ${y}${m ? `<sup class="am">${m}</sup>` : ''}</th>`; }).join('')}${opts.cagr ? '<th class="tc" title="taux de croissance annuel moyen sur 3 ans">TCAM<br>3 ans</th><th class="tc" title="taux de croissance annuel moyen sur 5 ans">TCAM<br>5 ans</th><th class="tc" title="taux de croissance annuel moyen sur 10 ans">TCAM<br>10 ans</th>' : ''}</tr>`
     + (F.mkt === 'US' ? `<tr class="h2"><th class="l">12 mois clos le</th>${cols.map(y => `<th>${endOf(y)}</th>`).join('')}${opts.cagr ? '<th></th><th></th><th></th>' : ''}</tr>` : '');
   const body = rows.filter(([k]) => Y[k] && (!opts.only || opts.only.has(k))).map(([k, l, t, hl]) => {
@@ -64,7 +66,7 @@ function accountsTable(F, nY = 10, opts = {}) {
 }
 function faSrcNote(F) {
   return F.mkt === 'US' ? `Comptes publiés (${F.annual_only ? 'rapports annuels' : 'rapports annuels et trimestriels'}), devise ${F.ccy || 'USD'}. FCF = flux d’exploitation − acquisitions d’immobilisations corporelles. Dette financière hors obligations locatives.`
-    : `Montants tirés des états financiers publiés par la société quand leurs totaux se vérifient (détail poste par poste et ratios dans les onglets) ; <sup class="am">a</sup> = exercice reconstitué à partir des chiffres clés (CA, résultat net, BNPA, dividende) ; <sup class="am">r</sup> = comptes publiés dans l’autre norme (SYSCOHADA avant le passage aux IFRS, ou l’inverse). FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
+    : `Montants tirés des états financiers publiés par la société quand leurs totaux se vérifient (détail poste par poste et ratios dans les onglets) ; <sup class="am">a</sup> = exercice reconstitué à partir des chiffres clés (CA, résultat net, BNPA, dividende) ; <sup class="am">r</sup> = comptes publiés dans l’autre norme (SYSCOHADA avant le passage aux IFRS, ou l’inverse).${F.Y && F.Y.src && F.Y.src.some(x => /^converti/.test(x || '')) ? ' <sup class="am">$</sup> = comptes publiés en dollars US seulement, convertis en FCFA au cours du jour de leur publication (cours au survol de l’année).' : ''} FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
 }
 
 /* Comptes publiés détaillés (BRVM) : postes des états financiers et ratios, sur tous les exercices lus.
@@ -73,7 +75,8 @@ function cptYears(F, all) { const ys = F.C.y; if (!ys.length) return []; const h
 function cptTable(F, sk, all) {
   const S = (F.C.s || []).find(x => x[0] === sk || x[0] === 'b' + sk); if (!S) return '<div class="empty">Poste non disponible dans les comptes lus.</div>';
   const cols = cptYears(F, all), ix = y => F.C.y.indexOf(y);
-  const head = `<tr><th class="l">M FCFA</th>${cols.map(y => `<th>FY ${y}</th>`).join('')}</tr>`;
+  const fxT = y => { const q = F.C.fx && F.C.fx[y]; return q ? `Comptes publiés en dollars US, convertis au cours de 1 USD = ${num(q[0], 2)} FCFA du ${q[1] ? fds(q[1]) : '—'} (date de publication)` : ''; };
+  const head = `<tr><th class="l">M FCFA</th>${cols.map(y => `<th${fxT(y) ? ` title="${esc(fxT(y))}"` : ''}>FY ${y}${fxT(y) ? '<sup class="am">$</sup>' : ''}</th>`).join('')}</tr>`;
   const strong = new Set(['chiffre_affaires', 'b_pnb', 'valeur_ajoutee', 'ebe', 'resultat_exploitation', 'b_rbe', 'rao', 'resultat_net', 'actif_immobilise', 'actif_circulant', 'total_actif', 'capitaux_propres', 'passif_circulant', 'total_passif', 'cafg', 'flux_operationnels']);
   const body = S[2].map(([k, lab, vals]) => `<tr><td class="l ${strong.has(k) ? 'yl' : 'am'}">${esc(lab)}</td>${cols.map(y => { const i = ix(y), v = i >= 0 ? vals[i] : null;
     return v == null ? `<td>${NDc(i < 0 ? 'comptes de cet exercice non disponibles' : 'poste non présenté ou non lisible dans les comptes de cet exercice')}</td>` : `<td class="${strong.has(k) ? 'yl' : 'wh'}">${num(v, Math.abs(v) < 100 ? 1 : 0)}</td>`; }).join('')}</tr>`).join('');
@@ -103,7 +106,7 @@ PAGES.FA = async (m, alive) => {
     const F0 = F, useAlt = !!(st.alt && F.C2 && tab !== 'r'), Fv = useAlt ? Object.assign({}, F, { C: F.C2 }) : F;
     const all = !!st.all, y0 = Fv.C.y[0], per = Fv.C.per === 'conso' ? 'consolidés' : 'sociaux', std = Fv.C.std === 'ifrs' ? 'IFRS' : 'SYSCOHADA';
     const tools = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Exercices</span><button class="tb ${all ? '' : 'on'}" data-all="0">10 derniers</button><button class="tb ${all ? 'on' : ''}" data-all="1">Tout l’historique (depuis ${y0})</button>${F0.C2 && tab !== 'r' ? `<span class="tlab" style="margin-left:14px">Comptes</span><button class="tb ${useAlt ? '' : 'on'}" data-alt="0">${refL(F0.C)}</button><button class="tb ${useAlt ? 'on' : ''}" data-alt="1">${refL(F0.C2)}</button>` : ''}</div>`;
-    const lect = `Comptes ${per} (${std}) publiés par la société, en millions de FCFA. Un exercice n’est repris que si ses totaux se vérifient dans le document (total actif = total passif, résultat du compte de résultat = résultat du bilan, soldes intermédiaires) ; n.d. = non disponible. Chaque exercice vient de ses propres comptes de préférence (sinon de la colonne « exercice précédent » des comptes suivants).`;
+    const lect = `Comptes ${per} (${std}) publiés par la société, en millions de FCFA. Un exercice n’est repris que si ses totaux se vérifient dans le document (total actif = total passif, résultat du compte de résultat = résultat du bilan, soldes intermédiaires) ; n.d. = non disponible. Chaque exercice vient de ses propres comptes de préférence (sinon de la colonne « exercice précédent » des comptes suivants).${Fv.C.fx ? ' <sup class="am">$</sup> = comptes publiés en dollars US seulement, convertis en FCFA au cours du jour de leur publication (cours et date au survol de l’année) ; les autres exercices sont en FCFA tels que publiés par la société.' : ''}`;
     if (tab === 'r') { const T = ratioTable(F, all); m.innerHTML = tools + pn(`${esc(s.tk)} · ${T.n || ''} ratios calculés sur les comptes publiés`, 'FA', T.html || T, { np: true, lect: 'Ratios calculés uniquement à partir des postes publiés (aucune estimation) ; « — » = un poste nécessaire manque ; <sup>a</sup> = exercice dont les comptes détaillés ne sont pas (encore) lus : ratios calculés sur ses chiffres clés publiés. Moyennes = (début + fin d’exercice) / 2. BNPA et dividende tels que publiés ; PER et rendement au dernier cours de chaque exercice. ' + lect }); }
     else { const lab = { is: 'Compte de résultat', bs: 'Bilan', cf: 'Flux de trésorerie' }[tab]; m.innerHTML = tools + pn(`${esc(s.tk)} · ${lab} · comptes publiés`, 'FA', cptTable(Fv, tab, all), { np: true, lect }); }
     m.querySelectorAll('[data-all]').forEach(b => b.onclick = () => { st.all = b.dataset.all === '1'; render(); });
@@ -298,7 +301,7 @@ async function trSeries(s, S) {
   if (!div) return null; const tr = [S.c[0]]; for (let i = 1; i < S.c.length; i++) tr.push(tr[i - 1] * (S.c[i] + (div[i] || 0)) / S.c[i - 1]); return tr;
 }
 PAGES.COMP = async (m, alive) => {
-  const s = sec(ST.sec); const st = ST.comp = ST.comp || {}; if (st.base !== s.id) { st.base = s.id; st.ids = [s.id]; st.bench = isBRVM(s) ? 'BRVMC' : Q.by.SPY ? 'SPY' : 'QQQ'; st.per = '3A'; st.tr = true;
+  const s = sec(ST.sec); const st = ST.comp = ST.comp || {}; if (st.base !== s.id) { st.base = s.id; st.ids = [s.id]; st.bench = benchFor(s); st.per = '3A'; st.tr = true;
     const peers = secsWhere(x => x.id !== s.id && x.mkt === s.mkt && x.grp === s.grp && x.cls === s.cls).sort((a, b) => (b.mcap || 0) - (a.mcap || 0)).slice(0, 3); st.ids.push(...peers.map(x => x.id)); }
   const ids = [...new Set(st.ids.concat([st.bench]))].filter(id => Q.by[id]); const SS = await Promise.all(ids.map(id => series(id))); if (!alive()) return;
   const TR = st.tr ? await Promise.all(ids.map((id, i) => trSeries(Q.by[id], SS[i]))) : ids.map(() => null); if (!alive()) return;
@@ -337,7 +340,7 @@ function retsBy(S, f) {
 }
 function isoWeekKey(d) { const t = new Date(Date.UTC(Math.floor(d / 10000), Math.floor(d / 100) % 100 - 1, d % 100)); const day = (t.getUTCDay() + 6) % 7; t.setUTCDate(t.getUTCDate() - day + 4); return t.getUTCFullYear() * 100 + Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7); }
 PAGES.BETA = async (m, alive) => {
-  const s = sec(ST.sec); const st = ST.beta = ST.beta || {}; if (st.base !== s.id) { st.base = s.id; st.bench = s.bench && Q.by[s.bench] && s.bench !== s.id ? s.bench : isBRVM(s) ? 'BRVMC' : 'SPY'; if (!Q.by[st.bench]) st.bench = 'QQQ'; }
+  const s = sec(ST.sec); const st = ST.beta = ST.beta || {}; if (st.base !== s.id) { st.base = s.id; st.bench = benchFor(s); }
   const [S, B] = await Promise.all([series(s.id), series(st.bench)]); if (!alive()) return;
   const end = S.x[S.x.length - 1]; const win = [['6 mois', 'D', 126], ['1 an', 'D', 252], ['2 ans', 'W', 104], ['5 ans', 'M', 60]];
   const rs = { D: [retsBy(S, 'D'), retsBy(B, 'D')], W: [retsBy(S, 'W'), retsBy(B, 'W')], M: [retsBy(S, 'M'), retsBy(B, 'M')] };
@@ -366,20 +369,7 @@ PAGES.BETA = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ HP */
-PAGES.HP = async (m, alive) => {
-  const s = sec(ST.sec); const S = await series(s.id); if (!alive()) return; const st = ST.hp = ST.hp || { f: 'D', page: 0 }; if (st.id !== s.id) { st.id = s.id; st.page = 0; }
-  const rows = []; const key = d => st.f === 'D' ? d : st.f === 'W' ? isoWeekKey(d) : Math.floor(d / 100); let cur = null;
-  for (let i = 0; i < S.x.length; i++) { const k = key(S.x[i]); if (!cur || cur.k !== k) { if (cur) rows.push(cur); cur = { k, d: S.x[i], o: S.o[i], h: S.h[i], l: S.l[i], c: S.c[i], v: S.v[i] || 0, val: S.val ? S.val[i] || 0 : null, div: S.div[i] || 0 }; }
-    else { cur.d = S.x[i]; cur.h = Math.max(cur.h, S.h[i]); cur.l = Math.min(cur.l, S.l[i]); cur.c = S.c[i]; cur.v += S.v[i] || 0; if (cur.val != null) cur.val += S.val[i] || 0; cur.div += S.div[i] || 0; } }
-  if (cur) rows.push(cur); rows.forEach((r, i) => { r.ch = i ? r.c / rows[i - 1].c - 1 : null; }); const R = rows.reverse(), per = 60, np = Math.ceil(R.length / per); st.page = U.clamp(st.page, 0, np - 1); const pg = R.slice(st.page * per, st.page * per + per);
-  const hasV = S.v.some(v => v), hasVal = !!S.val;
-  m.innerHTML = pn(`${s.tk} · historique des cours`, 'HP', `<div class="tools"><span class="tlab">Fréquence</span>${[['D', 'Quotidien'], ['W', 'Hebdomadaire'], ['M', 'Mensuel']].map(([k, l]) => `<button class="tb ${st.f === k ? 'on' : ''}" data-f="${k}">${l}</button>`).join('')}
-    <span class="tlab">${R.length} lignes · page ${st.page + 1}/${np}</span><button class="tb" data-p="-1">◀</button><button class="tb" data-p="1">▶</button></div>
-    <div class="tw"><table class="t"><thead><tr><th class="l">Date</th><th>Ouverture</th><th>Plus haut</th><th>Plus bas</th><th>Clôture</th><th>Variation</th>${hasV ? '<th>Volume</th>' : ''}${hasVal ? '<th>Montant (FCFA)</th>' : ''}<th>Dividende</th></tr></thead><tbody>
-    ${pg.map(r => `<tr><td class="l">${fd(r.d)}</td><td>${px(s, r.o)}</td><td>${px(s, r.h)}</td><td>${px(s, r.l)}</td><td class="wh">${px(s, r.c)}</td><td>${pc(r.ch)}</td>${hasV ? `<td>${num(r.v, 0)}</td>` : ''}${hasVal ? `<td>${num(r.val, 0)}</td>` : ''}<td>${r.div ? num(r.div, 2) : ''}</td></tr>`).join('')}</tbody></table></div>`,
-    { np: true, lect: `Semaine = semaine ISO ; variation = clôture contre clôture précédente.` });
-  m.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { st.f = b.dataset.f; st.page = 0; render(); }); m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { st.page += +b.dataset.p; render(); });
-};
+/* PAGES.HP : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ CN */
 function aliasesOf(s) {
@@ -388,13 +378,4 @@ function aliasesOf(s) {
   (extra[s.id] || []).forEach(a => out.add(a)); return [...out].filter(a => a.length >= 3);
 }
 function newsRow(x) { return `<div class="nw"><span class="d">${new Date(x.t * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span><span class="c">${esc(x.c || '')}</span><span><a href="${esc(x.u)}" target="_blank" rel="noopener">${esc(x.ti)}</a> ${hideSrc(x) ? '' : `<span class="src">${esc(x.s || '')}</span>`}${x.x ? `<small>${esc(x.x)}</small>` : ''}</span></div>`; }
-PAGES.CN = async (m, alive) => {
-  const s = sec(ST.sec); const [N, EV, RP] = await Promise.all([getJSON('news.json').catch(() => ({ items: [] })), isBRVM(s) ? getJSON('events.json') : Promise.resolve([]), isBRVM(s) ? getJSON('reports.json').catch(() => null) : Promise.resolve(null)]); if (!alive()) return;
-  const docs = RP ? Object.entries(RP.issuers || {}).filter(([, x]) => x.t === s.id).flatMap(([slug]) => (RP.docs || {})[slug] || []).sort((a, b) => (b.d || '').localeCompare(a.d || '')) : [];
-  const al = aliasesOf(s).map(a => a.toLowerCase()); const its = (N.items || []).filter(x => { const t = (x.ti + ' ' + (x.x || '')).toLowerCase(); return al.some(a => a === s.id.toLowerCase() ? new RegExp('\\b' + a + '\\b').test(t) : t.includes(a)); });
-  const ev = EV.filter(x => x.t === s.id).slice(0, 80);
-  m.innerHTML = `<div class="grid c2">${pn(`${s.tk} · articles qui citent la société (${its.length})`, 'CN', its.length ? its.slice(0, 120).map(newsRow).join('') : `<div class="empty">Aucun article récent ne cite ${esc(s.short || s.n)} dans les flux suivis (45 derniers jours).</div>`,
-      { lect: `Recherche de « ${al.map(esc).join(' », « ')} » dans les titres et résumés des flux d’actualités (Google Actualités, Financial Afrik, allAfrica, Les Echos, CNBC, MarketWatch…). Mise à jour toutes les 15 à 30 minutes. Fil complet : NEWS.` })}
-    ${isBRVM(s) ? pn(`Publications de la société · ${docs.length}`, 'CN', docs.length ? docs.map(d => `<div class="ev" style="grid-template-columns:72px 1fr"><span class="d">${d.d ? fd(+d.d) : '—'}</span><span><span class="c">${/etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Activité' : 'Rapport'}</span><a href="${esc(d.u)}" target="_blank" rel="noopener">${esc(d.ti)}</a></span></div>`).join('') : '<div class="dm">Liste en cours de constitution (relevée toutes les 15 minutes).</div>', { lect: `États financiers et rapports d’activité publiés par la société, relevés toutes les 15 minutes${RP && RP.ts ? ' (dernier relevé ' + new Date(RP.ts * 1000).toLocaleString('fr-FR', { timeZone: 'Africa/Abidjan', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ')' : ''}. Une nouvelle publication apparaît aussi dans NEWS.` }) : ''}
-    ${pn(isBRVM(s) ? `Avis officiels BRVM · ${ev.length}` : 'Avis officiels', 'EVTS', isBRVM(s) ? ev.map(e => `<div class="ev" style="grid-template-columns:72px 1fr"><span class="d">${fds(e.d)}</span><span><span class="c">${esc(e.c || '')}</span><a href="${esc(e.u)}" target="_blank" rel="noopener">${esc(e.ti || '')}</a></span></div>`).join('') || '<div class="dm">Aucun avis.</div>' : '<div class="empty">Avis officiels disponibles pour les titres BRVM uniquement. Pour les sociétés US, voir FA et SURP.</div>')}</div>`;
-};
+/* PAGES.CN : définition remplacée plus loin (version active dans un fichier suivant) — retirée */

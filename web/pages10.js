@@ -9,45 +9,10 @@ function newsRow2(x, o = {}) {
 }
 
 /* ------------------------------------------------------------------ NEWS (ex-TOP) : fil relié aux titres, typé par événement */
-PAGES.NEWS = async (m, alive) => {
-  const N = await getJSON('news.json').catch(() => null); if (!alive()) return; const st = ST.top = ST.top || { c: 'ALL', ev: 'ALL', mk: 'ALL', q: '' }; setTitle('Top News');
-  if (!N || !N.items || !N.items.length) { m.innerHTML = pn('Actualités', 'NEWS', '<div class="empty">Fil d’actualités en cours de constitution.</div>'); return; }
-  const its = N.items, cats = [...new Set(its.map(x => x.c).filter(Boolean))], evs = Object.keys(EV_COL).filter(e => its.some(x => x.ev === e));
-  const mkOf = x => (x.tk || []).map(t => Q.by[t] && Q.by[t].mkt).filter(Boolean);
-  let L = its.filter(x => (st.c === 'ALL' || x.c === st.c) && (st.ev === 'ALL' || x.ev === st.ev) && (st.mk === 'ALL' || (st.mk === 'LINK' ? (x.tk || []).length : mkOf(x).includes(st.mk))));
-  if (st.q) { const q = st.q.toLowerCase(); L = L.filter(x => (x.ti + ' ' + (x.x || '') + ' ' + (x.s || '') + ' ' + (x.tk || []).join(' ')).toLowerCase().includes(q)); }
-  const age = Math.round((Date.now() / 1000 - N.ts) / 60), nLinked = its.filter(x => (x.tk || []).length).length;
-  setTabs([['ALL', 'Tout'], ['BRVM', 'Sociétés BRVM'], ['US', 'Sociétés US'], ['LINK', 'Toutes les sociétés citées']], st.mk, k => { st.mk = k; render(); });
-  m.innerHTML = `<div class="tools"><span class="tlab">Rubrique</span><select class="ofld" id="tpC"><option value="ALL">Toutes (${its.length})</option>${cats.map(c => `<option value="${esc(c)}" ${st.c === c ? 'selected' : ''}>${esc(c)} (${its.filter(x => x.c === c).length})</option>`).join('')}</select>
-      <span class="tlab">Événement</span><select class="ofld" id="tpE"><option value="ALL">Tous</option>${evs.map(e => `<option value="${esc(e)}" ${st.ev === e ? 'selected' : ''}>${esc(e)} (${its.filter(x => x.ev === e).length})</option>`).join('')}</select>
-      <form id="tpF" style="display:inline-flex;gap:4px;margin-left:6px"><input id="tpQ" value="${esc(st.q)}" placeholder="mot-clé, ticker…" style="width:200px"><button class="tb">Filtrer</button></form><span class="tlab">relevé il y a ${age < 120 ? age + ' min' : Math.round(age / 60) + ' h'} · ${nLinked} articles reliés à un titre</span></div>
-    ${pn(`Fil d’actualités · ${L.length} articles`, 'NEWS', L.slice(0, 300).map(x => newsRow2(x)).join('') || '<div class="empty">Aucun article pour ces filtres.</div>',
-      { lect: `Flux publics : ${Object.values(N.feeds || {}).filter((v, i, a) => a.indexOf(v) === i && !/brvm|sika/i.test(v)).join(', ')}. Chaque article est relié automatiquement aux sociétés citées (nom usuel, nom officiel ou code ; clic = actualités et historique de la société) et classé par type d’événement d’après son titre. Ce classement automatique peut se tromper : la source fait foi. Les articles restent la propriété de leurs éditeurs.` })}`;
-  $('tpC').onchange = e => { st.c = e.target.value; render(); }; $('tpE').onchange = e => { st.ev = e.target.value; render(); }; $('tpF').onsubmit = e => { e.preventDefault(); st.q = $('tpQ').value.trim(); render(); };
-};
+/* PAGES.NEWS : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ CN : actualités de la société + historique des événements */
-PAGES.CN = async (m, alive) => {
-  const s = sec(ST.sec), brvm = isBRVM(s); setTitle('Company News');
-  const [N, EV, RP, DV, AN] = await Promise.all([getJSON('news.json').catch(() => ({ items: [] })), brvm ? getJSON('events.json').catch(() => []) : [], brvm ? getJSON('reports.json').catch(() => null) : null, brvm ? getJSON('dividends.json').catch(() => []) : [], getJSON('anomalies.json').catch(() => null)]); if (!alive()) return;
-  const al = aliasesOf(s).map(a => a.toLowerCase());
-  const its = (N.items || []).filter(x => (x.tk || []).includes(s.id) || (() => { const t = (x.ti + ' ' + (x.x || '')).toLowerCase(); return al.some(a => a === s.id.toLowerCase() ? new RegExp('\\b' + a + '\\b').test(t) : a.length > 3 && t.includes(a)); })());
-  const docs = RP ? Object.entries(RP.issuers || {}).filter(([, x]) => x.t === s.id).flatMap(([slug]) => (RP.docs || {})[slug] || []) : [];
-  const H = [];
-  for (const x of its) H.push({ d: new Date(x.t * 1000).toISOString().slice(0, 10), k: x.ev || 'Actualité', t: deent(x.ti), u: x.u, s: srcCode(x) });
-  for (const e of EV.filter(x => x.t === s.id)) H.push({ d: e.d, k: 'Avis officiel · ' + (e.c || ''), t: e.ti, u: e.u, s: 'BRVM' });
-  for (const d of docs) if (d.d) H.push({ d: i2s(+d.d), k: /etats? financiers/i.test(d.ti) ? 'États financiers' : /activit/i.test(d.ti) ? 'Rapport d’activité' : 'Publication', t: d.ti, u: d.u, s: 'BRVM' });
-  for (const x of DV.filter(x => x.t === s.id && x.dps)) { if (x.det) H.push({ d: x.det, k: 'Dividende', t: `Détachement du dividende de l’exercice ${x.ex} : ${num(x.dps, 2)} FCFA net`, s: 'BRVM' }); }
-  for (const a of ((AN && AN.by && AN.by[s.id]) || []).filter(a => a.d)) H.push({ d: i2s(a.d), k: 'Anomalie · ' + a.k, t: a.m, s: 'FQT', an: true });
-  H.sort((a, b) => (b.d || '').localeCompare(a.d || ''));
-  const types = [...new Set(H.map(h => h.k.split(' · ')[0]))]; const st = ST.cnh = ST.cnh || { k: 'ALL' }; if (st.k !== 'ALL' && !types.includes(st.k)) st.k = 'ALL';
-  const HL = H.filter(h => st.k === 'ALL' || h.k.split(' · ')[0] === st.k);
-  m.innerHTML = `<div class="grid c2">${pn(`${esc(s.tk)} · articles qui citent la société (${its.length})`, 'CN', its.length ? its.slice(0, 150).map(x => newsRow2(x)).join('') : `<div class="empty">Aucun article récent ne cite ${esc(s.short || s.n)} dans les flux suivis (45 derniers jours).</div>`,
-      { lect: `Articles reliés automatiquement à la société (« ${al.map(esc).join(' », « ')} ») dans les flux d’actualités, mis à jour toutes les 15 minutes. Fil complet : NEWS.` })}
-    ${pn(`Historique des événements · ${H.length}`, 'CN', `<div class="tw" style="max-height:72vh"><table class="t" style="table-layout:fixed;width:100%"><colgroup><col style="width:82px"><col style="width:150px"><col>${brvm ? '' : '<col style="width:62px">'}</colgroup><thead><tr><th class="l">Date</th><th class="l">Type</th><th class="l">Événement</th>${brvm ? '' : '<th class="l">Source</th>'}</tr></thead><tbody>${HL.slice(0, 400).map(h => `<tr><td class="l" style="vertical-align:top">${fds(h.d)}</td><td class="l" style="white-space:normal;vertical-align:top;color:${h.an ? 'var(--dn)' : EV_COL[h.k] || 'var(--amber)'}">${esc(h.k)}</td><td class="l" style="white-space:normal;vertical-align:top">${h.u ? `<a href="${esc(h.u)}" target="_blank" rel="noopener" style="color:var(--white)">${esc(h.t || '')}</a>` : esc(h.t || '')}</td>${brvm ? '' : `<td class="l dm" style="vertical-align:top;overflow:hidden;text-overflow:ellipsis">${esc(h.s || '')}</td>`}</tr>`).join('') || '<tr><td class="l dm" colspan="4">Aucun événement.</td></tr>'}</tbody></table></div>`,
-      { np: true, tools: `<span class="tlab">Type</span><select class="ofld" id="cnK"><option value="ALL">Tous</option>${types.map(t => `<option ${st.k === t ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`, lect: `Réunit les articles (typés automatiquement), ${brvm ? 'les avis officiels, les publications de la société, les détachements de dividendes et ' : ''}les anomalies statistiques détectées (ANOM).` })}</div>`;
-  if ($('cnK')) $('cnK').onchange = e => { st.k = e.target.value; render(); };
-};
+/* PAGES.CN : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ IMAP : Europe, Royaume-Uni, Asie, Afrique, Moyen-Orient (capitalisations mondiales) */
 const WREG = {
@@ -139,6 +104,7 @@ const parseFr = d => { const m = String(d || '').match(/(\d{2})\/(\d{2})\/(\d{4}
 /* Hypothèses explicites : coupon sur le nominal restant (estimé = dernier coupon ÷ taux, semestriel si le cours vaut ~2 fois ce nominal), remboursement in fine du nominal restant
    à la date anniversaire du dernier coupon, l'année d'échéance indiquée dans le nom ; base exact/365, taux actuariel annuel. */
 function bondCalc(b, today = new Date()) {
+  today = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));  /* date de valeur : le jour (GMT, Abidjan), pas l'heure — sinon le rendement dérive au fil des secondes */
   const o = { ok: false };
   if (!b.cpn || !b.y1 || !b.px) { o.why = b.cpn ? 'échéance ou cours absent' : 'taux variable ou coupon non publié'; return o; }
   const lp = parseFr(b.lp_d); let N = b.lp_v && b.cpn ? b.lp_v / b.cpn : null, f = 1;

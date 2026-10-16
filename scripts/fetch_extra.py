@@ -2051,6 +2051,23 @@ def _doc_recent(d8, days=30):
         return False
 
 
+# rubriques « rapports des sociétés cotées » de brvm.org -> titre coté (rapprochement vérifié à la main ; None = émetteur sans action cotée :
+# fonds de titrisation, sociétés radiées). Les rubriques inconnues (nouvelles cotations) passent par le rapprochement des noms.
+ISSUER_T = {
+    "bank-africa-bf": "BOABF", "bank-africa-bn": "BOAB", "bank-africa-ci": "BOAC", "bank-africa-ml": "BOAM", "bank-africa-ng": "BOAN",
+    "bank-africa-sn": "BOAS", "ecobank-ci": "ECOC", "ecobank-tg": "ETIT", "sonatel": "SNTS", "total": "TTLC", "total-senegal-sa": "TTLS",
+    "totalenergies-marketing-sn": "TTLS", "air-liquide-ci": "SIVC", "bbgci": "BBGC", "bollore-transport-logistics": "SDSC",
+    "crown-siem-ci": "SEMC", "lnb": "LNBB", "nsbc": "NSBC", "sgb-ci": "SGBC", "sgci": "SGBC", "sib": "SIBC", "sodeci": "SDCC", "biic": "BICB",
+    "coris-bank-international": "CBIBF", "oragroup": "ORGT", "servair-abidjan-ci": "ABJC", "bici-ci": "BICC", "bernabe-ci": "BNBC",
+    "sicable": "CABC", "cfao-motors-ci": "CFAC", "cie-ci": "CIEC", "filtisac-ci": "FTSC", "nei-ceda-ci": "NEIC", "nestle-ci": "NTLC",
+    "onatel-bf": "ONTBF", "orange-ci": "ORAC", "palm-ci": "PALC", "tractafric-ci": "PRSC", "safca-ci": "SAFC", "sucrivoire": "SCRC",
+    "vivo-energy-ci": "SHEC", "sicor": "SICC", "solibra": "SLBC", "smb": "SMBC", "sogb": "SOGC", "saph-ci": "SPHC", "setao-ci": "STAC",
+    "sitab": "STBC", "unilever-ci": "UNLC", "uniwax-ci": "UNXC",
+    "fctc-sonatel": None, "societe-ivoirienne-de-raffinage": None, "movis-ci": None, "cote-divoire-telecom": None, "tritraf-ci": None,
+}
+_ISS_GENERIC = {"bank", "africa", "of", "ci", "sa", "s", "a", "cote", "d", "ivoire", "divoire", "group", "groupe", "banque", "senegal", "sn", "bf", "bn", "ml", "ng", "tg", "de", "la", "le", "et"}
+
+
 def run_watch(raw, site_data):
     """Nouvelles publications des sociétés cotées (brvm.org) et nouveaux 10-K/10-Q (SEC) : actualités + données à jour."""
     path = os.path.join(site_data, "reports.json")
@@ -2071,16 +2088,23 @@ def run_watch(raw, site_data):
             for slug, name in found:
                 iss[slug] = {"n": re.sub(r"\s+", " ", name).strip()}
         if iss:
-            for slug, x in iss.items():  # rapprochement nom -> ticker
-                a = set(norm_name(x["n"] + " " + slug.replace("-", " ")).split())
-                best = None
-                for s in brvm:
-                    b = set(norm_name((s.get("n") or "") + " " + (s.get("short") or "")).split())
-                    sc = len(a & b) / max(1, len(a | b))
-                    if sc > (best[0] if best else 0.34):
-                        best = (sc, s["id"])
-                x["t"] = best[1] if best else None
             st["issuers"], st["its"] = iss, int(time.time())
+    known_t = {v for v in ISSUER_T.values() if v}
+    for slug, x in st["issuers"].items():  # rapprochement rubrique -> ticker, refait à chaque passage
+        x["n"] = re.sub(r"\s+", " ", HTML.unescape(HTML.unescape(x.get("n") or ""))).strip()
+        if slug in ISSUER_T:
+            x["t"] = ISSUER_T[slug]
+            continue
+        a = set(norm_name(x["n"] + " " + slug.replace("-", " ")).split()) - _ISS_GENERIC
+        best = None
+        for s in brvm:
+            if s["id"] in known_t:
+                continue
+            b = set(norm_name((s.get("n") or "") + " " + (s.get("short") or "")).split()) - _ISS_GENERIC
+            sc = len(a & b) / max(1, len(a | b))
+            if a & b and sc > (best[0] if best else 0.5):
+                best = (sc, s["id"])
+        x["t"] = best[1] if best else None
     fresh = []
 
     def one(slug):
@@ -2095,7 +2119,7 @@ def run_watch(raw, site_data):
             if not u:
                 continue
             title = re.sub(r"<[^>]+>", " ", cell)
-            title = re.sub(r"\s+", " ", title).replace("Télécharger", "").strip()
+            title = re.sub(r"\s+", " ", HTML.unescape(HTML.unescape(title))).replace("\xa0", " ").replace("Télécharger", "").strip()
             url = u.group(1) if u.group(1).startswith("http") else "https://www.brvm.org" + u.group(1)
             dm = re.search(r"/(20\d{6})", url)
             rows.append({"d": dm.group(1) if dm else None, "ti": title[:200], "u": url})
@@ -2103,6 +2127,9 @@ def run_watch(raw, site_data):
     # une publication n'est « nouvelle » que si son adresse n'a jamais été vue ET si elle est datée de moins de 30 jours
     # (les pages de brvm.org ne sont pas triées : d'anciens rapports y réapparaissent régulièrement)
     seen_u = set(st.get("seen") or [])
+    for rows_ in st["docs"].values():  # titres relevés avant le décodage des entités HTML (« d&#039;activités »)
+        for r_ in rows_:
+            r_["ti"] = re.sub(r"\s+", " ", HTML.unescape(HTML.unescape(r_.get("ti") or ""))).replace("\xa0", " ").strip()
     with ThreadPoolExecutor(8) as ex:
         for slug, rows, err in ex.map(one, list(st["issuers"])):
             if rows is None:
@@ -2312,11 +2339,18 @@ def run_news(path):
     with ThreadPoolExecutor(6) as ex:
         fresh = [x for lst in ex.map(one, NEWS) for x in lst]
     cutoff = time.time() - 45 * 86400
+    import unicodedata
+    seen_u = set()
     for x in sorted(fresh + old, key=lambda x: -x["t"]):
-        k = re.sub(r"[^a-z0-9]", "", x["ti"].lower())[:90]
-        if k in seen or x["t"] < cutoff or x["t"] > time.time() + 3600:
+        # doublons : même titre (accents composés ou non, entités HTML) ou même article (adresse), titre révisé compris
+        x["ti"] = re.sub(r"\s+", " ", HTML.unescape(x.get("ti") or "")).strip()
+        k = re.sub(r"[^a-z0-9]", "", unicodedata.normalize("NFKD", x["ti"]).encode("ascii", "ignore").decode().lower())[:90]
+        u = re.sub(r"(?<=[?&])(?:utm_\w+|mod)=[^&]*&?", "", (x.get("u") or "").split("#")[0]).rstrip("?&")  # paramètres de suivi seulement
+        if k in seen or (u and u in seen_u) or x["t"] < cutoff or x["t"] > time.time() + 3600:
             continue
         seen.add(k)
+        if u:
+            seen_u.add(u)
         items.append(x)
     items = tag_news(items[:900], os.path.join(os.path.dirname(path), "summary.json"))
     save(path, {"ts": int(time.time()), "items": items, "feeds": {f[0]: f[1] for f in NEWS}})
@@ -2902,7 +2936,7 @@ def run_cmc(out, site_data=None):
             sym, mc, pxx = r[ix["symbol"]], float(r[ix["marketcap"]]), float(r[ix["price (usd)"]])
         except (ValueError, IndexError, KeyError):
             continue
-        cur[sym] = [r[ix["name"]], r[ix["country"]], mc, pxx]
+        cur[sym] = [HTML.unescape(r[ix["name"]]).strip(), r[ix["country"]], mc, pxx]
     now = int(time.time())
     prev = eod.get("px") or {}
     out_rows = []

@@ -13,7 +13,9 @@ PAGES.HP = async (m, alive) => {
   if (cur) R.push(cur);
   const vma = U.sma(R.map(r => r.v), 15); R.forEach((r, i) => { r.vm = vma[i]; r.ch = i ? r.c - R[i - 1].c : null; r.pc = i && R[i - 1].c ? r.c / R[i - 1].c - 1 : null; });
   const last = R[R.length - 1].d, back = { '1M': 100, '3M': 300, '6M': 600, '1A': 10000, '2A': 20000, '5A': 50000, '10A': 100000 };
-  let d0 = st.d0, d1 = st.d1 || last; if (!d0) d0 = st.rg === 'YTD' ? Math.floor(last / 10000) * 10000 + 101 : st.rg === 'MAX' ? R[0].d : last - back[st.rg];
+  /* période effective : 1M / 3M trop courts en hebdomadaire ou mensuel → 1A / 5A, sans écraser le choix (retour en quotidien = période choisie) */
+  const rgE = st.f !== 'D' && ['1M', '3M'].includes(st.rg) ? (st.f === 'W' ? '1A' : '5A') : st.rg;
+  let d0 = st.d0, d1 = st.d1 || last; if (!d0) d0 = rgE === 'YTD' ? Math.floor(last / 10000) * 10000 + 101 : rgE === 'MAX' ? R[0].d : last - back[rgE];
   const W = R.filter(r => r.d >= d0 && r.d <= d1), hasV = W.some(r => r.v > 0), mk = { c: 'Dernier', o: 'Ouverture', h: 'Plus haut', l: 'Plus bas' }[st.mk];
   const V = r => r[st.mk];
   /* synthèse de la période (colonne de droite du terminal) */
@@ -29,7 +31,7 @@ PAGES.HP = async (m, alive) => {
   setActs([{ n: 1, l: 'Actions', menu: () => [{ l: 'Exporter le tableau (CSV)', run: exportCSV }, { l: 'Ouvrir le graphique (GP)', run: () => go('GP', s.id) }, { l: 'Imprimer', run: () => window.print() }] }]);
   const rg = ['1M', '3M', '6M', 'YTD', '1A', '2A', '5A', '10A', 'MAX'];
   m.innerHTML = `<div class="tools hpt"><span class="tlab">Période</span><input class="ofld dt" id="hpD0" value="${fd(d0)}"><span class="cal">▦</span><span class="dm">–</span><input class="ofld dt" id="hpD1" value="${fd(d1)}"><span class="cal">▦</span>
-      ${rg.map(r => `<button class="tb ${!st.d0 && st.rg === r ? 'on' : ''}" data-rg="${r}">${r === 'MAX' ? 'Max' : r}</button>`).join('')}
+      ${rg.map(r => `<button class="tb ${!st.d0 && rgE === r ? 'on' : ''}" data-rg="${r}">${r === 'MAX' ? 'Max' : r}</button>`).join('')}
       <span class="tlab">Fréquence</span><select class="ofld dk" id="hpF">${[['D', 'Quotidienne'], ['W', 'Hebdomadaire'], ['M', 'Mensuelle']].filter(([k]) => S.f !== 'M' || k === 'M').map(([k, l]) => `<option value="${k}" ${st.f === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <span class="tlab">Donnée</span><select class="ofld" id="hpM">${[['c', 'Dernier cours'], ['o', 'Ouverture'], ['h', 'Plus haut'], ['l', 'Plus bas']].map(([k, l]) => `<option value="${k}" ${st.mk === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <span class="tlab">Vue</span><select class="ofld" id="hpV"><option value="P" ${st.v === 'P' ? 'selected' : ''}>Tableau des cours${hasV ? ' et volumes' : ''}</option><option value="O" ${st.v === 'O' ? 'selected' : ''}>Ouverture / haut / bas / dernier</option></select>
@@ -42,7 +44,7 @@ PAGES.HP = async (m, alive) => {
     <div class="lect">MMV (15) = moyenne mobile du volume sur 15 périodes. Semaine = semaine ISO.</div>`;
   m.querySelectorAll('[data-rg]').forEach(b => b.onclick = () => { st.rg = b.dataset.rg; st.d0 = st.d1 = null; st.page = 0; render(); });
   m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { st.page += +b.dataset.p; render(); });
-  $('hpF').onchange = e => { st.f = e.target.value; st.page = 0; if (st.f !== 'D' && ['1M', '3M'].includes(st.rg) && !st.d0) st.rg = st.f === 'W' ? '1A' : '5A'; render(); };
+  $('hpF').onchange = e => { st.f = e.target.value; st.page = 0; render(); };
   $('hpM').onchange = e => { st.mk = e.target.value; render(); }; $('hpV').onchange = e => { st.v = e.target.value; st.page = 0; render(); };
   const dIn = () => { const a = parseDMY($('hpD0').value), b = parseDMY($('hpD1').value); if (!a || !b || b <= a) { toast('Dates au format jj/mm/aaaa, la fin après le début.'); return; } st.d0 = a; st.d1 = b; st.page = 0; render(); };
   ['hpD0', 'hpD1'].forEach(id => { $(id).onchange = dIn; $(id).onkeydown = e => { if (e.key === 'Enter') dIn(); }; });
@@ -90,13 +92,13 @@ PAGES.BETA = async (m, alive) => {
   const s = sec(ST.sec); setTitle('Historical Beta'); const tab = tabState('BETA', 'r');
   setTabs([['r', 'Régression'], ['a', 'Fenêtres, pairs et risque']], tab, k => { ST.tab.BETA = k; render(); });
   if (tab === 'a') return BETA_ANALYSE(m, alive);
-  const st = ST.beta = ST.beta || {}; if (st.base !== s.id) { st.base = s.id; st.bench = s.bench && Q.by[s.bench] && s.bench !== s.id ? s.bench : isBRVM(s) ? 'BRVMC' : 'SPY'; if (!Q.by[st.bench]) st.bench = 'QQQ'; }
+  const st = ST.beta = ST.beta || {}; if (st.base !== s.id) { st.base = s.id; st.bench = benchFor(s); }
   st.f = st.f || 'W'; st.rg = st.rg || '2A';
   const [S, B] = await Promise.all([series(s.id), series(st.bench)]); if (!alive()) return;
   const end = Math.min(S.x[S.x.length - 1], B.x[B.x.length - 1]), y0 = end - { '1A': 10000, '2A': 20000, '3A': 30000, '5A': 50000 }[st.rg];
   const a = retsBy(S, st.f), b = retsBy(B, st.f), kd = d => st.f === 'D' ? d : st.f === 'W' ? isoWeekKey(d) : Math.floor(d / 100);
   const ks = [...a.keys()].filter(k => b.has(k) && k >= kd(y0)).sort((p, q) => p - q), P = ks.map(k => [(Math.exp(a.get(k)) - 1) * 100, (Math.exp(b.get(k)) - 1) * 100]);
-  const o = olsBeta(P); const benches = isBRVM(s) ? ['BRVMC', 'BRVM30', 'SPY', 'QQQ', 'EEM', 'AFK'] : ['SPY', 'QQQ', 'VTI', 'SOXX', 'EEM', 'BRVMC'];
+  const o = olsBeta(P); const benches = [...new Set([benchFor(s), st.bench].concat(isBRVM(s) ? ['BRVMC', 'BRVM30', 'SPY', 'QQQ', 'EEM', 'AFK'] : ['SPY', 'QQQ', 'VTI', 'SOXX', 'EEM', 'BRVMC']))];  /* l'indice calculé figure toujours dans la liste */
   let stats = '<div class="empty">Historique commun insuffisant pour cette période.</div>';
   if (o) { const n = o.n, mx = U.mean(P.map(p => p[1])), sxx = P.reduce((t, p) => t + (p[1] - mx) ** 2, 0), res = P.reduce((t, [y, x]) => t + (y - o.a - o.b * x) ** 2, 0), sde = Math.sqrt(res / (n - 2)), sea = sde * Math.sqrt(1 / n + mx * mx / sxx);
     const pval = (() => { const t = Math.abs(o.t), z = t * (1 - 1 / (4 * (n - 2))) / Math.sqrt(1 + t * t / (2 * (n - 2))); const e = Math.exp(-z * z / 2) / Math.sqrt(2 * Math.PI), k = 1 / (1 + .2316419 * z); return 2 * e * k * (.31938153 + k * (-.356563782 + k * (1.781477937 + k * (-1.821255978 + k * 1.330274429)))); })();

@@ -360,7 +360,23 @@ def main():
                     for k, sk in (("ca", "ca"), ("rn", "resultat_net")):
                         if rec.get(k) is not None and (ser_.get(sk) or {}).get(str(y)) is None:
                             ser_.setdefault(sk, {})[str(y)] = rec[k]
-            CONS = CPT.consolidate(json.load(open(a.comptes, encoding="utf8")), mir)
+            # cours USD/FCFA du jour (parité fixe 655,957 FCFA pour 1 euro × cours euro/dollar publié par la Réserve fédérale) :
+            # états d'une société qui publie en dollars, convertis au cours du jour de leur publication
+            fx_ = None
+            try:
+                import bisect
+                eur_ = series_from_csv(fetch(DS.format("exchange-rates/main/data/daily.csv"), a.cache).decode("utf8"), "Date", "Exchange rate",
+                                       lambda r: r.get("Country") == "Euro")
+                fd_ = [x[0] for x in eur_ if x[1]]
+                fv_ = [x[1] * XOF_PER_EUR for x in eur_ if x[1]]
+
+                def fx_(d):
+                    k_ = int(str(d).replace("-", "")[:8])
+                    i_ = bisect.bisect_right(fd_, k_) - 1
+                    return round(fv_[i_], 3) if i_ >= 0 and k_ - fd_[i_] <= 10000 else None  # (dernier cours connu, moins d'un an)
+            except Exception as e:  # noqa: BLE001
+                log("cours USD/FCFA indisponible (états en dollars non convertis) :", e)
+            CONS = CPT.consolidate(json.load(open(a.comptes, encoding="utf8")), mir, fx_)
             bank_t = {x.get("symbole") or x.get("ticker"): bool(x.get("banque")) for x in acts}
             MAPC = (("resultat_net", "resultat_net"), ("total_bilan", "total_actif"), ("capitaux_propres", "capitaux_propres"),
                     ("ebit", "resultat_exploitation"), ("ebitda", "ebe"), ("depots_clientele", "b_dettes_clientele"),
@@ -377,6 +393,7 @@ def main():
                 # sinon l'autre référentiel publié par la société, s'il est celui de la base, sert aux chiffres clés
                 def same_basis(g_):
                     return g_["ncmp"] < 3 or (g_["agree"] >= .5 and (g_.get("n_rn", 0) < 2 or (g_.get("agree_rn") or 0) >= .5))
+                usd_t = t in CPT.USD_REPORTERS  # (base convertie à d'autres cours : les comptes publiés, convertis au jour de publication, la remplacent)
                 src_g = cc if same_basis(cc) else (cc["alt"] if cc.get("alt") and cc["alt"].get("ncmp", 0) >= 3 and same_basis(cc["alt"]) else None)
                 if src_g is None:
                     cpt_chk["detail_only"].append(f'{t} ({cc["per"]}, {cc["agree"]:.0%} de {cc["ncmp"]})')
@@ -411,7 +428,7 @@ def main():
                         new = round(v[ck], 1)
                         if old is not None and abs(old - new) <= 0.6:
                             continue  # même montant (arrondi au million près)
-                        if old is not None and ck in weak_:
+                        if old is not None and ck in weak_ and not usd_t:
                             continue  # montant d'un seul document, sans identité vérifiée : ne remplace pas un montant existant
                         if old is None:
                             cpt_chk["fill"] += 1
@@ -422,6 +439,11 @@ def main():
                                 cpt_chk["ex"].append(f"{t} {y} {sk} {old:g} -> {new:g}")
                         o[ys] = new
                         cpt_chk["set"] += 1
+                    if usd_t and r.get("fx"):
+                        dd_ = str(r.get("d") or "")
+                        f.setdefault("src_years", {})[ys] = (f"converti : comptes publiés en dollars US, 1 USD = {r['fx']:.2f} FCFA".replace(".", ",")
+                                                             + (f" au {dd_[8:10]}/{dd_[5:7]}/{dd_[:4]} (date de publication)" if dd_ else ""))
+                        changed = True
                     if changed:  # ratios de la base tierce calculés sur les montants corrigés : retirés (recalculés plus loin)
                         for dk in DERIVED:
                             (ser.get(dk) or {}).pop(ys, None)
@@ -474,7 +496,7 @@ def main():
                     if o.get(y) is None:
                         o[y] = rec[k]
                         added = True
-                if added:
+                if added and not src_y.get(y):  # (un exercice déjà signalé — autre référentiel, montants convertis — garde sa mention)
                     src_y[y] = "archive SikaFinance " + rec.get("src", "")
     # flux de trésorerie : ceux des états financiers publiés à la BRVM et vérifiés (flux des activités opérationnelles et
     # acquisitions d'immobilisations du même document) ; l'ancienne lecture sans contrôle (pdf_fin.json) n'est plus utilisée

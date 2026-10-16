@@ -144,7 +144,7 @@ const dmy = d => fmtD(d); const dmyShort = d => fmtD(d).slice(0, 6) + fmtD(d).sl
 function parseDMY(t) { const m = String(t || '').trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/); if (!m) return null; let y = +m[3]; if (y < 100) y += 2000; return y * 10000 + (+m[2]) * 100 + (+m[1]); }
 /* conversion de devise (champ « Devise » du GP) : facteurs alignés sur les dates, XOF ↔ EUR à la parité fixe de 655,957 */
 const XOF_EUR = 655.957, FX_SER = { XOF: 'USDXOF', EUR: 'EURUSD', TWD: 'USDTWD' };
-const FX_OK = s => s && ['XOF', 'USD', 'EUR', 'TWD'].includes(s.ccy) && !['Rate'].includes(s.cls) && !/%/.test(s.ccy || '');
+const FX_OK = s => s && ['XOF', 'USD', 'EUR', 'TWD'].includes(s.ccy) && !['Rate', 'Curncy'].includes(s.cls) && !/%/.test(s.ccy || '');  /* (une paire de devises convertie dans l'une de ses devises n'a pas de sens) */
 async function fxFactor(from, to, xs) {
   if (!from || !to || from === to) return null;
   if (from === 'XOF' && to === 'EUR') return xs.map(() => 1 / XOF_EUR); if (from === 'EUR' && to === 'XOF') return xs.map(() => XOF_EUR);
@@ -336,13 +336,4 @@ PAGES.GP = async (m, alive) => {
 };
 
 /* ------------------------------------------------------------------ HELP */
-PAGES.HELP = async m => {
-  const rows = [['MONITOR', 'Marchés : tous les titres, signal SMA200 de QQQ, séance BRVM, carte des capitalisations', 'MONITOR'], ['BRVM', '48 actions triables (PER, rendement, bêta, liquidité…), indices, largeur du marché, secteurs', 'BRVM'],
-    ['GP', 'Graphique interactif : bougies, MM, Bollinger, RSI, MACD, drawdown, comparaison, échelle log, 5 min pour QQQ', 'SNTS GP · QQQ GP'], ['DES', 'Fiche : comptes sur plusieurs exercices, dividendes, avis (BRVM) ; perfs annuelles et drawdowns (tous)', 'SNTS DES'],
-    ['BTST', 'Backtest de 8 stratégies sur le titre actif, levier simulé (US), Monte Carlo, durée des drawdowns', 'QQQ BTST'], ['QLAB', 'Statistiques : distribution, VaR, QQ-plot, cône de volatilité, autocorrélation, Hurst, analogues, probabilité bayésienne', 'NVDA QLAB'],
-    ['CORR', 'Matrice de corrélation (hebdo), ACP et ratio d’absorption, paire au choix', 'CORR'], ['SEAS', 'Saisonnalité : années × mois, effet jour de semaine, « Sell in May »', 'BRVMC SEAS'],
-    ['MACRO', 'Or depuis 1833, S&P 500 depuis 1871, CAPE, inflation, taux 10 ans, pétrole, gaz, VIX ; l’or pendant les krachs', 'MACRO'], ['FX', 'Franc CFA : USD/XOF, effet change sur QQQ et la BRVM', 'FX'],
-    ['DVD', 'Dividendes BRVM : prochains paiements, rendements, historique complet', 'DVD'], ['EVTS', 'Les avis officiels BRVM (AG, dividendes, états financiers…) filtrables', 'EVTS']];
-  m.innerHTML = pn('Aide · fonctions', 'HELP', `<table class="t"><thead><tr><th class="l">Code</th><th class="l">Ce que fait la fonction</th><th class="l">Exemple à taper</th></tr></thead><tbody>${rows.map(r => `<tr data-fn="${r[0]}" style="cursor:pointer"><td class="l tk">${r[0]}</td><td class="l nm">${r[1]}</td><td class="l am">${r[2]} &lt;GO&gt;</td></tr>`).join('')}</tbody></table>`,
-    { np: true, lect: 'Tapez n’importe où pour écrire dans la ligne de commande. Un ticker seul ouvre son graphique (ou la fonction en cours). <b>Échap</b> revient à MONITOR. Sur les graphiques : molette = zoom, glisser = déplacer, double-clic = vue initiale.' });
-};
+/* PAGES.HELP : définition remplacée plus loin (version active dans un fichier suivant) — retirée */

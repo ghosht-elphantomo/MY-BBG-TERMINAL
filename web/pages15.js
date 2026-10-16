@@ -232,7 +232,7 @@ PAGES.ALRT = async (m, alive) => {
 /* ------------------------------------------------------------------ HS : écran « Historical Spread » — rapport ou écart entre deux titres,
    moyenne et bandes à ±1 et ±2 écarts-types, score z, centile (valeur relative, paires) */
 PAGES.HS = async (m, alive) => {
-  const s = sec(ST.sec); setTitle('Historical Spread'); const st = ST.hs = ST.hs || {}; if (st.a !== s.id) { st.a = s.id; st.b = s.bench && s.bench !== s.id ? s.bench : s.mkt === 'BRVM' ? 'BRVMC' : 'QQQ'; }
+  const s = sec(ST.sec); setTitle('Historical Spread'); const st = ST.hs = ST.hs || {}; if (st.a !== s.id) { st.a = s.id; st.b = benchFor(s); }
   st.mode = st.mode || 'r'; st.y = st.y || 3; st.fx = st.fx ?? true;
   const b = Q.by[st.b] ? st.b : 'BRVMC';
   const [A, B] = await Promise.all([series(s.id).catch(() => null), series(b).catch(() => null)]); if (!alive()) return;
