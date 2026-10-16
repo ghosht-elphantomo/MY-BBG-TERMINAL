@@ -1592,7 +1592,7 @@ def consolidate(cj, mirror=None):
             for y, x in ys.items():
                 recs.append({"t": t_doc, "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"),
                              "uc": x.get("uc") or [], "v": x.get("v") or {}, "vk": set(x.get("vk") or []), "c": x.get("c"), "doc": u,
-                             "rank": _doc_rank(r, int(y)), "d": r.get("d"), "ocr": r.get("src") in OCR_SRC,
+                             "rank": _doc_rank(r, int(y)), "d": r.get("d"), "ocr": r.get("src") in OCR_SRC, "fy": r.get("fy"),
                              # (communiqué ou rapport numérisé : deux lectures identiques d'un chiffre ne garantissent pas sa ligne ni sa
                              # colonne ; seuls les montants vérifiés par une identité sont gardés)
                              "guess": per in (r.get("guess") or []), "cf": set(x.get("cf") or []) if r.get("cat") in (None, "financial_statements", "auditor_report") else set(),
@@ -1653,8 +1653,8 @@ def consolidate(cj, mirror=None):
     recs = [x for x in recs if x["u"]]
     for x in recs:
         x["m"] = {k: round(v * x["u"] / 1e6, 3) for k, v in x["v"].items()}
-    MK = {"chiffre_affaires": "ca", "b_pnb": "ca", "resultat_net": "resultat_net", "total_actif": "total_bilan", "capitaux_propres": "capitaux_propres",
-          "resultat_exploitation": "ebit", "ebe": "ebitda"}
+    MK = {"chiffre_affaires": "ca", "b_pnb": "ca", "resultat_net": "resultat_net", "resultat_bilan": "resultat_net", "total_actif": "total_bilan",
+          "total_passif": "total_bilan", "capitaux_propres": "capitaux_propres", "resultat_exploitation": "ebit", "ebe": "ebitda"}
 
     def mirror_v(t, y, k):
         mk = MK.get(k)
@@ -1893,7 +1893,7 @@ def consolidate(cj, mirror=None):
                 # moins : ce sont les chiffres retenus par la société après coup (exercice corrigé) ; il devient le document principal
                 def votes(x, k):
                     v_ = x["m"][k]
-                    n_ = len({o["doc"] for o in cand if o["m"].get(k) is not None and abs(o["m"][k] - v_) <= max(0.5, abs(v_) * 0.001)})
+                    n_ = len({o.get("fy") for o in cand if o["m"].get(k) is not None and abs(o["m"][k] - v_) <= max(0.5, abs(v_) * 0.001)})
                     mv_ = mirror_v(t, y, k)
                     return n_ + (1 if mv_ is not None and abs(v_ - mv_) <= abs(mv_) * 0.005 + 0.5 else 0)
                 better = []
@@ -1924,7 +1924,8 @@ def consolidate(cj, mirror=None):
                         o["ver"] |= k in x["vk"]
                         o["txt"] |= not x["ocr"]
                         o["docs"].add(x["doc"])
-                        o["n"] = len(o["docs"])
+                        o["n"] = len({x_fy for x_fy in (o.setdefault("fys", set()) | {x.get("fy")})})  # (publications distinctes : par exercice
+                        o["fys"].add(x.get("fy"))  # d'origine — comptes provisoires et définitifs d'un même exercice comptent une fois)
                         o["rank"] = max(o["rank"], x["rank"])
                         o["fin"] = max(o["fin"], x["rank"][1])
                     mv = mirror_v(t, y, k)
