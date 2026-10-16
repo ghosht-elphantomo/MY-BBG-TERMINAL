@@ -1,4 +1,2 @@
-boc_20261015.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20261015.pdf
-boc_20261014.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20261014.pdf
-boc_20250602.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20250602.pdf
-boc_20231002.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20231002.pdf
+gn_lesechos.xml|https://news.google.com/rss/search?q=site:lesechos.fr+march%C3%A9s+OR+bourse+OR+finance&hl=fr&gl=FR&ceid=FR:fr
+lesechos_old.xml|https://syndication.lesechos.fr/rss/rss_finance-marches.xml
