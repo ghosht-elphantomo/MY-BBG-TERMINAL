@@ -1842,10 +1842,10 @@ def consolidate(cj, mirror=None):
     for x in recs:
         s0 = support(x, x["y"])
         sh = max(support(x, x["y"] - 1, True), support(x, x["y"] + 1, True))
-        if sh >= 2 and s0 == 0 and not x["guess"]:
+        if sh >= 2 and s0 == 0 and not x["guess"] and not x["ocr"]:
             bad.add((x["doc"], x["per"]))  # montants d'une autre année (en-tête lu, donc colonnes inversées : document discrédité)
             continue
-        if x["guess"] and s0 == 0:
+        if (x["guess"] or (x["ocr"] and sh >= 2)) and s0 == 0:  # (en-tête d'un scan mal lu : traité comme un sens supposé)
             # sens des colonnes supposé (aucun en-tête lisible) : si les autres sources donnent ces montants pour l'exercice voisin
             # (au moins deux postes) et rien pour celui-ci, les colonnes étaient dans l'autre ordre — l'exercice est réattribué
             dy_ = [dy for dy in (-1, 1) if support(x, x["y"] + dy, True) >= 2]
@@ -1968,8 +1968,8 @@ def consolidate(cj, mirror=None):
                             continue
                         if votes(x, k) > votes(prim, k):
                             win += 1
-                        else:
-                            lose += 1
+                        elif votes(x, k) < votes(prim, k):
+                            lose += 1  # (à égalité de sources, ni gagné ni perdu : un seul chiffre clé mieux repris fait basculer)
                     if win and not lose:
                         better.append(x)
                 if better:
