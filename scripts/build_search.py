@@ -1,0 +1,267 @@
+"""Index de la recherche MOTS CLÉ : tous les documents de la BRVM connus du terminal, un par adresse.
+
+Sources (les plus riches d'abord pour les métadonnées) : publications des sociétés cotées (liste de la base des cours, avec
+exercice et catégorie), pages « rapports des sociétés cotées » de brvm.org, documents lus pour les états financiers et pour les
+dividendes (avis BRVM et DC/BR, calendriers, anciens bulletins et revues de l'ancien site), avis de brvm.org, notations,
+bulletins officiels de la cote quotidiens. Documents hébergés par la BRVM seulement (brvm.org, bfin.brvm.org, archives de
+l'ancien site brvm.org).
+
+Une ligne : [nature, titre (symbole), exercice, date AAAAMMJJ, intitulé, adresse abrégée, marques]
+  nature : ef états financiers, ra rapport d'activité, rann rapport annuel, cac rapport des commissaires aux comptes,
+           res résultats, com communiqué, ag assemblée générale, not notation, div dividende, obl obligation,
+           ost opération sur titres, dir dirigeants, boc bulletin officiel de la cote, rev revue trimestrielle,
+           opcvm OPCVM, seance compte rendu de séance, regl réglementation, avis autre avis
+  marques : D Dépositaire central / Banque de règlement, R rectificatif, S semestriel, T trimestriel, C consolidé, A ancien site
+  adresse : « B:… » = https://www.brvm.org/sites/default/files/… ; « F:… » = https://bfin.brvm.org/boc/BOC_JOUR/… ;
+            « W<horodatage>:… » = archive web.archive.org de l'ancien site.
+"""
+import datetime as dt
+import json
+import os
+import re
+import sys
+import time
+import unicodedata
+import urllib.parse
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from dividendes import ticker_of
+except Exception:  # noqa: BLE001
+    def ticker_of(_):
+        return None
+
+B_ = "https://www.brvm.org/sites/default/files/"
+F_ = "https://bfin.brvm.org/boc/BOC_JOUR/"
+
+CAT = {"financial_statements": "ef", "activity_report": "ra", "annual_report": "rann", "company_report": "rann", "auditor_report": "cac",
+       "financial_results": "res", "communique": "com", "ag_announcement": "ag", "ag_meeting": "ag", "resolution_project": "ag",
+       "rating": "not", "dividend_announcement": "div", "dividend_payment": "div", "dividend_ex_date": "div", "dividend_amount_change": "div",
+       "management_change": "dir", "stock_split": "ost", "bonus_issue": "ost", "rights_issue": "ost", "rights_delisting": "ost",
+       "capital_operation_notice": "ost", "capital_reduction": "ost", "first_listing": "ost", "first_listing_result": "ost",
+       "shares_admitted": "ost", "symbol_change": "ost", "trading_suspension": "ost", "trading_resumed": "ost",
+       "theoretical_value_notice": "ost", "transaction_cancelled": "avis", "market_closed": "avis", "market_calendar": "avis",
+       "index_composition": "avis", "index_change": "avis", "company_notice": "com"}
+
+
+def nrm(s):
+    s = unicodedata.normalize("NFKD", s or "")
+    return "".join(c for c in s if not unicodedata.combining(c)).lower().replace("’", "'")
+
+
+def kind_of(ti, u, k0=None):
+    """Nature d'un document d'après sa catégorie connue, sinon son intitulé et le nom de son fichier."""
+    n = nrm(ti) + " " + nrm(urllib.parse.unquote(u.rsplit("/", 1)[-1], encoding="latin-1"))
+    # (emprunt obligataire : « TPCI 5,45 % 2026-2031 », « (EOS.O30) », sukuk… quelle que soit la catégorie de la liste)
+    if re.search(r"\d+(?:,\d+)? ?% ?(?:19|20)\d\d ?- ?(?:19|20)\d\d|\.o\d+\b|emprunt obligataire|obligataire|sukuk|diaspora bonds", n):
+        return "obl"
+    if k0 == "rann" and re.search(r"rapport (?:d.activites? )?(?:semestriel|trimestriel)|rapport d.activite", nrm(ti)):
+        return "ra"  # (ancien site : « Rapport semestriel » rangé avec les rapports annuels)
+    if k0 and k0 not in ("avis", "com"):
+        return k0
+    rules = (("boc", r"bulletin officiel de la cote|\bboc_\d"), ("rev", r"revue trimestrielle"),
+             ("div", r"dividende|calendrier de paiement"),
+             ("obl", r"obligat|emprunt|sukuk|interets|remboursement (?:partiel|total|anticipe)|amortissement|coupon|titres? de creance"),
+             ("ef", r"etats? financiers?|bilan|comptes (?:annuels|consolides|sociaux|semestriels)"),
+             ("ra", r"rapport d.activite"), ("cac", r"commissaires? aux comptes"), ("rann", r"rapport annuel|rapport de gestion"),
+             ("res", r"resultats?\b"), ("not", r"notation"), ("ag", r"assemblee|convocation|resolution"),
+             ("ost", r"fractionnement|augmentation de capital|attribution gratuite|introduction en bourse|radiation|suspension|"
+                     r"reprise de cotation|valeur theorique|offre publique|droits? (?:de souscription|d.attribution)"),
+             ("opcvm", r"valeur liquidative|\bfcp\b|opcvm|\bsicav\b"), ("seance", r"seance de cotation|a cloture sa seance"),
+             ("regl", r"\binstruction\b|\bdecision n|\breglement\b|\bcirculaire\b"), ("dir", r"nomination|directeur general|dirigeant"))
+    for k, rx in rules:
+        if re.search(rx, n):
+            return k
+    return k0 or ("com" if "communiqu" in n else "avis")
+
+
+def flags_of(ti, u, k):
+    n = nrm(ti) + " " + nrm(urllib.parse.unquote(u, encoding="latin-1"))
+    f = ""
+    if re.search(r"dc ?/ ?br|dcbr|depositaire central", n):
+        f += "D"
+    if re.search(r"rectif|annule et remplace", n):
+        f += "R"
+    if re.search(r"semestr|1er semestre|s1\b", n):
+        f += "S"
+    if re.search(r"trimestr|\b[1-4](?:er|e|eme)? trimestre|\bt[1-4]\b|[1-4]t20", n) and k != "rev":
+        f += "T"
+    if re.search(r"consolid", n):
+        f += "C"
+    return f
+
+
+def year_of(ti, u):
+    n = nrm(ti) + " " + nrm(urllib.parse.unquote(u.rsplit("/", 1)[-1], encoding="latin-1"))
+    m = (re.search(r"(?:exercice|exo|ex|annee|fy)[\s_\-:]*((?:19|20)\d\d)(?!\d)", n) or re.search(r"(?:semestre|trimestre)[\s_\-]*((?:19|20)\d\d)(?!\d)", n)
+         or re.search(r"(?:etats? financiers?|resultats?|rapport annuel|rapport d.activites?|comptes)[^0-9]{0,25}((?:19|20)\d\d)(?!\d)", n))
+    return int(m.group(1)) if m else 0
+
+
+def date_of(*vals):
+    for v in vals:
+        if not v:
+            continue
+        s = re.sub(r"\D", "", str(v))[:8]
+        if len(s) == 8 and "19900101" <= s <= "20991231":
+            return int(s)
+    return 0
+
+
+def url_date(u):
+    m = re.search(r"/((?:19|20)\d{6})[_\-]", u or "")
+    return m.group(1) if m else None
+
+
+def canon(u):
+    """Adresse ramenée à une forme unique (http/https, port 80, paramètre de téléchargement forcé)."""
+    u = (u or "").strip()
+    u = re.sub(r"^http://", "https://", u)
+    u = u.replace("www.brvm.org:80/", "www.brvm.org/").replace("brvm.org:80/", "brvm.org/")
+    u = re.sub(r"[&?]forcedownload=true", "", u, flags=re.I)
+    return u
+
+
+def short(u, wb=None):
+    if wb:
+        return f"W{wb}:" + u
+    if u.startswith(B_):
+        return "B:" + u[len(B_):]
+    if u.startswith(F_):
+        return "F:" + u[len(F_):]
+    return u
+
+
+def official(u):
+    h = re.sub(r"^https?://([^/]+)/.*", r"\1", u or "").lower()
+    return h.endswith("brvm.org")
+
+
+def jload(p, default=None):
+    try:
+        return json.load(open(p, encoding="utf8"))
+    except Exception:  # noqa: BLE001
+        return default
+
+
+def build(out, brvm_src, search_src=None, boc_dir=None, log=print):
+    t0 = time.time()
+    R = {}  # adresse canonique -> ligne
+
+    def add(u, ti, t=None, y=0, d=0, k0=None, wb=None, f0=""):
+        if not u or not ti:
+            return
+        u0 = u
+        cu = canon(u)
+        if not (official(cu) or wb):
+            return
+        ti = re.sub(r"\s+", " ", str(ti)).strip()[:180]
+        k = kind_of(ti, cu, k0)
+        f = "".join(sorted(set(flags_of(ti, cu, k) + (f0 or "") + ("A" if wb or "LinkClick" in cu or "/fr/marche/" in cu else ""))))
+        y = int(y or 0) or year_of(ti, cu)
+        r = R.get(cu)
+        if r is None:
+            R[cu] = [k, t or "", y, d or 0, ti, short(cu if not wb else u0.replace(":80/", "/"), wb), f]
+            return
+        # (même document vu par plusieurs sources : chaque champ manquant est complété, l'intitulé le plus parlant gardé)
+        if not r[1] and t:
+            r[1] = t
+        if not r[2] and y:
+            r[2] = y
+        if not r[3] and d:
+            r[3] = d
+        if r[0] in ("avis", "com") and k not in ("avis", "com"):
+            r[0] = k
+        if len(ti) > len(r[4]) and not re.search(r"linkclick|fileticket", ti, re.I):
+            r[4] = ti
+        r[6] = "".join(sorted(set(r[6] + f)))
+
+    # 1. publications des sociétés cotées (catégorie, exercice, date)
+    ev = (jload(os.path.join(brvm_src, "events.json"), {}) or {}).get("events") or []
+    for e in ev:
+        # (date de publication seulement quand elle est lue : nom du fichier, liste officielle, texte ou signature du document)
+        d_ = date_of(e.get("published_at")) if e.get("date_source") not in (None, "unknown") else 0
+        add(e.get("document_url"), e.get("title"), e.get("ticker"), e.get("fiscal_year"), d_, CAT.get(e.get("category")))
+        for doc in e.get("documents") or []:
+            add(doc.get("url"), (e.get("title") or "") + (f" ({doc.get('kind')})" if doc.get("kind") else ""), e.get("ticker"), e.get("fiscal_year"),
+                d_, CAT.get(e.get("category")))
+    # 2. documents lus pour les états financiers et pages « rapports » de brvm.org
+    if search_src:
+        ci = (jload(os.path.join(search_src, "comptes_index.json"), {}) or {}).get("docs") or {}
+        for u, m in ci.items():  # (date seulement si le nom du fichier la porte : sinon c'est le jour où la liste a été relevée)
+            add(u, m.get("ti"), m.get("t"), m.get("fy"), date_of(url_date(u)), CAT.get(m.get("cat")))
+        br = (jload(os.path.join(search_src, "brvm_rapports.json"), {}) or {}).get("docs") or {}
+        for u, m in br.items():
+            add(u, m.get("ti"), m.get("t"), 0, date_of(url_date(u)))
+        # 3. documents lus pour les dividendes (avis BRVM et DC/BR, calendriers, anciens bulletins, revues, ancien site)
+        dc = (jload(os.path.join(search_src, "div_catalog.json"), {}) or {}).get("docs") or []
+        for x in dc:
+            add(x.get("u"), x.get("ti"), x.get("t"), x.get("y"), date_of(x.get("d")), x.get("k") if x.get("k") != "avis" else None, x.get("wb"), x.get("f", ""))
+    # 4. pages du terminal : rapports suivis, avis de brvm.org, notations
+    rp = jload(os.path.join(out, "reports.json"), {}) or {}
+    iss = rp.get("issuers") or {}
+    for sl, L in (rp.get("docs") or {}).items():
+        for x in L or []:
+            add(x.get("u"), x.get("ti"), (iss.get(sl) or {}).get("t"), 0, date_of(x.get("d")))
+    AVK = {"comm": "com", "resol": "ag", "ag": "ag", "dirig": "dir", "capital": "ost", "frac": "ost", "notation": "not", "div": "div"}
+    for u, x in ((jload(os.path.join(out, "avis_brvm.json"), {}) or {}).get("items") or {}).items():
+        add(u, x.get("ti") or x.get("c"), x.get("t") if isinstance(x.get("t"), str) else (ticker_of(x.get("soc") or "") if x.get("soc") else None),
+            0, date_of(x.get("d")), AVK.get(x.get("k")))
+    for x in (jload(os.path.join(out, "ratings.json"), {}) or {}).get("rows") or []:
+        add(x.get("u"), x.get("ti"), x.get("t"), 0, date_of(x.get("d")), "not")
+    # 5. bulletins officiels de la cote, un par séance (adresse de bfin.brvm.org)
+    bi = jload(os.path.join(boc_dir, "_index.json"), {}) if boc_dir else {}
+    for k in (bi or {}).get("done") or []:
+        try:
+            x = dt.date(int(k[:4]), int(k[4:6]), int(k[6:8]))
+        except ValueError:
+            continue
+        mois = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre")
+        jours = ("lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche")
+        add(F_ + f"BOC_{k}.pdf", f"Bulletin officiel de la cote du {jours[x.weekday()]} {x.day}{'er' if x.day == 1 else ''} {mois[x.month - 1]} {x.year}",
+            None, 0, int(k), "boc")
+    # sociétés : noms officiels, noms courants, anciens noms, noms des émetteurs dans les publications (reconnaissance dans la requête)
+    co = {}
+    acts = (jload(os.path.join(brvm_src, "actions.json"), {}) or {}).get("actions") or []
+    for a in acts:
+        t = a.get("ticker")
+        for n in (a.get("nom"), a.get("nom_officiel")):
+            if n:
+                co.setdefault(t, set()).add(n)
+    def alias(t, n):  # (nom d'émetteur gardé seulement s'il ne désigne pas une autre société : listes parfois mal rattachées)
+        if t and n and ticker_of(n) in (None, t):
+            co.setdefault(t, set()).add(n)
+    for e in ev:
+        alias(e.get("ticker"), e.get("issuer"))
+        alias(e.get("ticker"), e.get("company"))
+    for sl, x in iss.items():
+        alias(x.get("t"), x.get("n"))
+        alias(x.get("t"), sl.replace("-", " "))
+    rows = sorted(R.values(), key=lambda r: (-r[3], r[4]))
+    # société manquante : reconnue dans l'intitulé (noms des sociétés)
+    for r in rows:  # société rattachée par la liste démentie par le nom écrit dans l'intitulé (« … ONATEL-SA » rattaché à Sonatel)
+        if r[1]:
+            t2 = ticker_of(r[4])
+            if t2 and t2 != r[1] and t2 not in ("TTLC", "ORAC", "CIEC") and not re.search(r"\b" + re.escape(r[1].lower()) + r"\b", nrm(r[4])):
+                r[1] = t2
+    for r in rows:  # (seulement sur l'émetteur écrit en tête de l'intitulé : « UNIWAX CI : … », « … — BOA BENIN — … »)
+        if not r[1] and r[0] not in ("boc", "rev", "seance", "regl", "opcvm", "obl"):
+            m = re.match(r"([^:—]{3,60}?)\s*[:—]", r[4])
+            if m and not re.match(r"\s*(?:avis|communiqu|bulletin|brvm\b|instruction|decision|note)", nrm(m.group(1))):
+                r[1] = ticker_of(m.group(1)) or ""
+    res = {"v": 1, "ts": int(time.time()), "n": len(rows), "co": {t: sorted(n for n in v if n) for t, v in co.items() if t},
+           "r": rows}
+    json.dump(res, open(os.path.join(out, "search.json"), "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))
+    log(f"recherche MOTS CLÉ : {len(rows)} documents indexés ({time.time() - t0:.1f} s)")
+    return res
+
+
+if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--brvm-src", required=True)
+    ap.add_argument("--search-src", default=None)
+    ap.add_argument("--boc", default=None)
+    a = ap.parse_args()
+    build(a.out, a.brvm_src, a.search_src, a.boc)

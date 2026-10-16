@@ -8,6 +8,7 @@ const ST = { fn: 'MONITOR', sec: 'QQQ', gp: { range: '1A', type: 'bbg', ov: { sm
 /* Registre des fonctions : code -> [libellé, portée (sec = titre, mkt = marché), groupe, définition courte, titre Bloomberg]
    Les définitions suivent celles de l'autocomplétion Bloomberg (nom anglais de la fonction + ce qu'elle montre). */
 const FN = {
+  'MOTS CLÉ': ['Recherche par mots clés', 'mkt', 'Recherche', 'Tous les documents de la BRVM depuis 1998 (états financiers, rapports, avis de la BRVM et du DC/BR, bulletins de la cote, dividendes, notations), obligations, titres, fonctions et actualités', 'Keyword Search'],
   BRIEF: ['Synthèse du jour', 'mkt', 'Marchés', 'BRVM, portefeuille, alertes, marchés mondiaux, changes, matières, taux, agenda du jour et actualités sur une page', 'Daily Briefing'],
   MONITOR: ['Moniteur de marchés', 'mkt', 'Marchés', 'Tous les titres suivis, signal SMA 200 de QQQ, séance BRVM, carte des capitalisations', 'Market Monitor'],
   BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs ; en option : flottant officiel, valorisation du marché (PER)', 'BRVM Overview'],
@@ -75,7 +76,7 @@ const FN = {
 };
 /* touches de marché : BRIEF, puis les fonctions de la BRVM et de l'UEMOA, puis les autres marchés */
 const MKT_BRVM = ['BRVM', 'MOST', 'LIQ', 'DIVC', 'EVTS', 'NOT', 'SGI', 'UEMOA BONDS', 'GC', 'UEMOA/DATA'];
-const MKT_KEYS = ['BRIEF'].concat(MKT_BRVM, ['PORTF', 'SCREENER', 'ALRT', 'MAP', 'INDX', 'FG', 'NEWS ECO', 'ECWB', 'RATES', 'FX', 'COMMO', 'BMAP', 'MACRO', 'CORR', 'RRG', 'CORP RESULT', 'HELP']);
+const MKT_KEYS = ['BRIEF', 'MOTS CLÉ'].concat(MKT_BRVM, ['PORTF', 'SCREENER', 'ALRT', 'MAP', 'INDX', 'FG', 'NEWS ECO', 'ECWB', 'RATES', 'FX', 'COMMO', 'BMAP', 'MACRO', 'CORR', 'RRG', 'CORP RESULT', 'HELP']);
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'STOCK BONDS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -172,10 +173,16 @@ function parseCmd(txt) {
 function numCmd(t) { const el = document.querySelector(`[data-n="${t}"]`); if (el) { el.click(); return true; } return false; }
 function runCmd(txt) {
   const t = txt.trim(); if (/^\d{1,3}$/.test(t)) { if (numCmd(t)) return; if (ST.fn === 'MENU') { const it = menuItems(sec(ST.sec))[+t - 1]; if (it) { go(it, ST.sec); return; } } toast('Aucun élément numéroté ' + t + ' sur cet écran.'); return; }
-  const { fn, s } = parseCmd(txt); if (!fn && !s) { toast('Commande inconnue. Exemples : SNTS (menu du titre) · SNTS FA · AAPL GP · FG · NEWS · MAP'); return; }
+  const mk = t.match(KW_CMD); if (mk) { kwGo(mk[1] == null || !mk[1].trim() ? null : mk[1].trim()); return; }
+  const { fn, s } = parseCmd(txt), tc = kwClean(t);
+  /* texte libre (« états financiers sonatel 2017 », « avis dcbr ») : recherche par mots clés */
+  if (!fn && tc && (!s || (tc.split(/\s+/).length > 1 && !searchSecs(tc).length))) { kwGo(tc); return; }
   if (fn && FN[fn][1] === 'mkt') { go(fn, s); return; }
   go(fn || 'MENU', s || ST.sec);
 }
+const KW_CMD = /^(?:mots?[\s-]*cl[eé]s?|motscl[eé]s?|recherche|kw|docs)(?:\s+([\s\S]*))?$/i;
+const kwClean = t => String(t || '').replace(/<GO>|\b(?:GO|EQUITY|INDEX|CURNCY|COMDTY)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+function kwGo(q) { const k = ST.kw = ST.kw || { q: '', k: '', n: 60, sel: 0 }; if (q != null) Object.assign(k, { q, k: '', n: 60, sel: 0 }); go('MOTS CLÉ'); }
 function menuItems(s) { return SEC_TABS.filter(has); }
 function exactSec(t) { const u = (t || '').toUpperCase(); return Q.by[u] || Q.sum.secs.find(s => s.tk.toUpperCase().split(' ')[0] === u) || null; }
 /* Saisie façon Bloomberg : « SNTS » propose les titres ; « SNTS » + espace (ou Tab) liste les fonctions du titre avec leur définition. */
@@ -190,18 +197,25 @@ function initCmd() {
       items = [{ k: 'h', a: `${ykey(S)} · ${S.n}` }];
       for (const [g, cs] of MENU_GROUPS) { const gc = cs.filter(c => codes.includes(c)); if (!gc.length) continue; if (!part) items.push({ k: 'h', a: g });
         for (const c of gc) { const why = avail(c, S); items.push({ k: 'sfn', id: c, sec: S.id, a: c, b: `${esc(FN[c][4])} <i>— ${esc(FN[c][3])}</i>`, c: why ? 'n.d.' : FN[c][0], off: !!why, tt: why ? 'Non disponible : ' + why : FN[c][3] }); } }
+      if (part && items.length === 1) { const q = v.trim(); items.push({ k: 'kw', id: q, a: 'MOTS CLÉ', b: `Rechercher « ${esc(q)} » dans tous les documents de la BRVM`, c: 'recherche', tt: FN['MOTS CLÉ'][3] }); }
     } else {
       const last = toks[toks.length - 1] || '', L = last.toUpperCase();
       const LL = v.trim().toUpperCase(), multi = /\s/.test(LL);
       const fns = Object.keys(FN).filter(k => has(k) && k !== 'MENU' && L && (multi ? k.startsWith(LL) : k.startsWith(L) || FN[k][0].toUpperCase().startsWith(L) || FN[k][4].toUpperCase().startsWith(L)))
         .map(k => ({ k: 'fn', id: k, a: k, b: `${esc(FN[k][4])} <i>— ${esc(FN[k][3])}</i>`, c: FN[k][1] === 'sec' ? 'fonction titre' : 'fonction', tt: FN[k][3] }));
-      const ss = searchSecs(last).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: ykey(s), b: esc(s.n), c: s.mkt === 'BRVM' ? 'BRVM' : s.mkt === 'US' ? (s.typ === 'ETF' ? 'ETF US' : 'US') : s.cls }));
+      const ssm = multi ? searchSecs(kwClean(v)).slice(0, 6) : [];  /* (nom en plusieurs mots : « orange ci ») */
+      const ss = ssm.concat(searchSecs(last).filter(s => !ssm.includes(s))).slice(0, 12).map(s => ({ k: 'sec', id: s.id, a: ykey(s), b: esc(s.n), c: s.mkt === 'BRVM' ? 'BRVM' : s.mkt === 'US' ? (s.typ === 'ETF' ? 'ETF US' : 'US') : s.cls }));
       /* sections comme l'autocomplétion du terminal : FONCTIONS puis TITRES (ou l'inverse si le texte est un ticker exact) */
       for (const [k, [f, t]] of Object.entries(FN_SHORT)) if (L && (multi ? k.startsWith(LL) : k.startsWith(L)) && has(f)) fns.unshift({ k: 'fn', id: k, a: k, b: `${esc(tabLabel(f, t) || '')} <i>— onglet de ${f}</i>`, c: 'fonction', tt: FN[f][3] });
       for (const [k, [f, t]] of Object.entries(FN_ALIAS)) if (L && (multi ? k.startsWith(LL) : k.startsWith(L)) && has(f)) { const tl = t ? tabLabel(f, t) : null; fns.unshift({ k: 'fn', id: k, a: k, b: `${esc(FN[f][4])} <i>— ${tl ? `désormais dans ${f}, onglet « ${esc(tl)} »` : `s’appelle désormais ${f}`}</i>`, c: 'fonction', tt: FN[f][3] }); }
-      const F = fns.slice(0, 8), T = ss.slice(0, 10), secFirst = ss.length && ss[0].id.toUpperCase() === L;
+      const F = fns.slice(0, 8), T = ss.slice(0, 10), secFirst = ss.length && (ss[0].id.toUpperCase() === L || ssm.length > 0);
       const blk = (lab, arr) => arr.length ? [{ k: 'h', a: lab }].concat(arr) : [];
       items = secFirst ? blk('TITRES', T).concat(blk('FONCTIONS', F)) : blk('FONCTIONS', F).concat(blk('TITRES', T));
+      /* recherche par mots clés : en tête pour un texte libre de plusieurs mots, sinon en dernier choix */
+      const kv = v.trim(), mq = kv.match(KW_CMD), q = mq ? (mq[1] || '').trim() : kv;
+      if (q.length >= 2) { const K = [{ k: 'kw', id: q, a: 'MOTS CLÉ', b: `Rechercher « ${esc(q)} » dans tous les documents de la BRVM`, c: 'recherche', tt: FN['MOTS CLÉ'][3] }];
+        const first = (mq && q) || (toks.length > 1 && !F.length && !searchSecs(kwClean(kv)).length) || (!F.length && !T.length);
+        items = first ? blk('RECHERCHE', K).concat(items) : items.concat(blk('RECHERCHE', K)); }
     }
     sel = Math.max(0, items.findIndex(it => it.k !== 'h' && !it.off)); ac.hidden = !items.length;
     ac.innerHTML = (items.length ? '<p class="ahd"><i>&lt;FLÈCHE HAUT&gt; pour masquer</i><span>Autocomplétion</span></p>' : '') + items.map(row).join('') + (items.length && items.some(it => it.k === 'sec') ? '<p class="hint">Entrée : menu du titre · espace ou Tab : ses fonctions avec leur définition</p>' : items.some(it => it.k === 'sfn') ? '<p class="hint">↑ ↓ puis Entrée · ou tapez le code (ex. FA) · grisé = non disponible pour ce titre</p>' : '');
@@ -209,7 +223,7 @@ function initCmd() {
   const pick = (i, tab) => { const it = items[i]; if (!it || it.k === 'h') return;
     if (it.k === 'sec' && tab) { inp.value = it.id + ' '; show(); return; }
     ac.hidden = true; inp.value = ''; inp.blur();
-    if (it.k === 'sfn') go(it.id, it.sec); else if (it.k === 'fn') go(it.id, ST.sec); else go('MENU', it.id); };
+    if (it.k === 'kw') kwGo(it.id || null); else if (it.k === 'sfn') go(it.id, it.sec); else if (it.k === 'fn') go(it.id, ST.sec); else go('MENU', it.id); };
   const step = d => { let k = sel; for (let j = 0; j < items.length; j++) { k = (k + d + items.length) % items.length; if (items[k].k !== 'h') break; } sel = k;
     [...ac.querySelectorAll('[data-i]')].forEach(c => c.classList.toggle('on', +c.dataset.i === sel)); const d0 = ac.querySelector('div.on'); if (d0) d0.scrollIntoView({ block: 'nearest' }); };
   inp.addEventListener('input', show); inp.addEventListener('focus', () => { if (inp.value) show(); });
@@ -220,7 +234,7 @@ function initCmd() {
   ac.addEventListener('mousedown', e => { const d = e.target.closest('[data-i]'); if (d) { e.preventDefault(); pick(+d.dataset.i); } });
   $('cmdForm').addEventListener('submit', e => { e.preventDefault(); const v = inp.value.trim();
     if (!ac.hidden && items.length && !/^\d{1,3}$/.test(v)) { const w = v.toUpperCase().split(/\s+/); for (let i = 0; i + 1 < w.length; i++) if (FN[w[i] + ' ' + w[i + 1]]) w.splice(i, 2, w[i] + ' ' + w[i + 1]); const typedFn = w.length === 1 && FN[w[0]] && has(w[0]);
-      const it = items[sel]; const typedSecFn = w.length === 2 && exactSec(w[0]) && FN[w[1]] && has(w[1]);
+      const it = items[sel]; const typedSecFn = w.length === 2 && exactSec(w[0]) && ((FN[w[1]] && has(w[1])) || /^(?:EQUITY|INDEX|CURNCY|COMDTY|GO|<GO>)$/.test(w[1]));
       if (!typedSecFn && it && (!typedFn || it.a === w[0])) { pick(sel); return; } }
     ac.hidden = true; inp.value = ''; inp.blur(); runCmd(v); });
   inp.addEventListener('blur', () => setTimeout(() => { ac.hidden = true; }, 150));

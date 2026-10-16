@@ -10,7 +10,7 @@ Aucun montant n'est calculé pour combler un manque ; un montant net n'est dédu
 
 Usage : dividendes.py --dir DOSSIER   (index.json et txt/ écrits par fetch_extra.py --only divhist) -> DOSSIER/dividendes.json
 """
-import argparse, datetime as dt, gzip, json, os, re, unicodedata
+import argparse, datetime as dt, gzip, json, os, re, unicodedata, urllib.parse
 
 FR_MOIS = {"janvier": 1, "janv": 1, "fevrier": 2, "fevr": 2, "fev": 2, "mars": 3, "avril": 4, "avr": 4, "mai": 5, "juin": 6, "juillet": 7, "juil": 7,
            "aout": 8, "septembre": 9, "sept": 9, "octobre": 10, "oct": 10, "novembre": 11, "nov": 11, "decembre": 12, "dec": 12}
@@ -281,6 +281,45 @@ def _boc_old_amt(tok, px):
 
 BOC_EN_MOIS = {m: i for i, m in enumerate(("january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
                                             "november", "december"), 1)}
+
+
+_BOILER = re.compile(r"bourse regionale des valeurs|siege social|\btel\b|t[eé]l ?:|fax|e-?mail|site internet|antennes|\bb\.?p\.?\b|"
+                     r"depositaire central|banque de reglement|www\.|@|\brc \d|\brc abidjan|rccm|r.?gistre du commerce|agrement|"
+                     r"^(?:societe anonyme|s\.? ?a\.? avec)|societe anonyme.{0,40}capital|\bau capital de\b.*\d{3}|capital social|"
+                     r"zone industrielle|\bimmeuble\b|\bpage \d+\b|\d\d?:\d\d|afrique de (?:l.? ?)?p?ouest\s*$|"
+                     r"^(?!.*(?:ordre|seance|cotation|transaction)).*\b[bge]?o?urse\b.*(?:mob|nob|valeu|valeh|regon|regional|\brer\b)", re.I)
+
+
+def _head_title(t):
+    """Intitulé d'un document sans titre connu : ligne « Avis n° … / Communiqué … » et les deux lignes suivantes, sinon les deux
+    premières lignes de texte (en-tête et coordonnées de l'émetteur écartés)."""
+    L = []
+    for l in t.split("\n")[:80]:
+        l = re.sub(r"\s{2,}", " ", l).strip(" |=-—_*")
+        n = nrm(l)
+        if len(re.findall(r"[a-z]", n)) < 4 or _BOILER.search(n) or len(re.findall(r"[a-z]", n)) < 0.5 * len(n.replace(" ", "")) \
+                or re.search(r"(?:[\s(][+\-]?\d[\d.,]*\s?%?\)?){3,}\s*$", l) or len(re.findall(r"\d[\d.,]*\s?(?:MF\b|%)", l)) >= 3 \
+                or (not re.match(r"\W*(?:avis|communiqu)", n) and len(re.findall(r"[a-z]+", n)) >= 3
+                    and sum(len(w) <= 2 for w in re.findall(r"[a-z]+", n)) > 0.6 * len(re.findall(r"[a-z]+", n))
+                    and sum(len(w) >= 5 for w in re.findall(r"[a-z]+", n)) <= 1):  # (tableau chiffré, bruit de lecture)
+            continue
+        L.append(l)
+    if not L:
+        return None
+    i = next((i for i, l in enumerate(L[:15]) if re.match(r"(avis|communiqu|note|decision|instruction|resultat)", nrm(l))), None)
+    parts = L[i:i + 3] if i is not None else L[:2]
+    return " — ".join(p[:90] for p in parts)
+
+
+FR_MOIS_LONG = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre")
+
+
+def _fr_long(iso):
+    try:
+        x = dt.date.fromisoformat(iso[:10])
+        return f"{x.day}{'er' if x.day == 1 else ''} {FR_MOIS_LONG[x.month - 1]} {x.year}"
+    except (TypeError, ValueError):
+        return iso
 
 
 def _boc_date(txt):
@@ -555,15 +594,19 @@ def run(d):
     cal_rows, avis, n_boc = [], [], 0
     boc_old, revue = {}, {}
     tick = {t_ for _, t_ in ALIAS if t_}
+    cat = []  # catalogue des documents lus (recherche MOTS CLÉ du terminal) : intitulé, nature, date, société, exercice
     for u, m in (idx.get("docs") or {}).items():
         if m.get("st") != "lu":
             continue
         t, ocr = read_text(d, m["h"])
         if not t:
             continue
+        c_ = {"u": u, **({"wb": m["wb"]} if m.get("wb") else {})}
+        cat.append(c_)
         if re.search(r"bulletin officiel de la cote", nrm(t[:3000])):
             n_boc += 1
             bd_ = _boc_date(t)
+            c_.update(k="boc", d=bd_, ti="Bulletin officiel de la cote" + (f" du {_fr_long(bd_)}" if bd_ else ""))
             for tk, a, dd, px_ in parse_boc_old(t):
                 if tk in tick and dd <= "2013-12-31":  # (bulletins récents : lus par ailleurs, base des cours)
                     x = boc_old.setdefault((tk, dd), {"a": {}, "u": u, "px": []})
@@ -572,6 +615,13 @@ def run(d):
                         x["px"].append((bd_, px_, a))  # (cours du jour du bulletin, dans les quatre mois suivant le paiement)
             continue
         if re.search(r"revue trimestrielle", nrm(t[:1500])):
+            mq = re.search(r"(\d)\s*(?:er|e|eme|ème)?\s+trimestre\s+((?:19|20)\d\d)", nrm(t[:3000]))
+            q_, y_ = (int(mq.group(1)), int(mq.group(2))) if mq else (None, None)
+            mf = re.search(r"(janv\w*|avril|juil\w*|oct\w*)[_\-]\w+?[_\-]((?:19|20)\d\d)", nrm(urllib.parse.unquote(u.rsplit("/", 1)[-1])).replace(" ", "_"))
+            if not mq and mf:  # (« revue_trim_avril_juin_2000.pdf » : 2e trimestre 2000)
+                q_, y_ = {"j": 1, "a": 2, "o": 4}.get(mf.group(1)[0], 3) if not mf.group(1).startswith("juil") else 3, int(mf.group(2))
+            c_.update(k="rev", y=y_,  # (période couverte ; la date de parution n'est pas connue)
+                      ti="Revue trimestrielle de la BRVM" + (f" — {q_}{'er' if q_ == 1 else 'e'} trimestre {y_}" if q_ else ""))
             for tk, ex_, a, dd in parse_revue(t, tick):
                 revue.setdefault((tk, ex_), []).append((a, dd, u))
             continue
@@ -580,6 +630,7 @@ def run(d):
             cd = _pubdate(u) or ""
             mx = re.search(r"exercice[\s_\-]*((?:19|20)\d\d)", nrm(u.rsplit("/", 1)[-1]) + " " + nrm(t[:1500]))
             ex_cal = int(mx.group(1)) if mx else None  # (« calendrier de paiement des dividendes de l'exercice 2017 »)
+            c_.update(k="div", d=cd or None, y=ex_cal, ti="BRVM : calendrier de paiement des dividendes" + (f" — exercice {ex_cal}" if ex_cal else ""))
             for r in rows:
                 tk = ticker_of(r["name"])
                 if tk:
@@ -595,6 +646,38 @@ def run(d):
             tk = r.get("sym") if r.get("sym") and any(t_ == r["sym"] for _, t_ in ALIAS) else None
             tk = tk or ticker_of(r.get("soc") or "") or ticker_of(m.get("soc") or "") or ticker_of(u.rsplit("/", 1)[-1].replace("_", " "))
             avis.append({**r, "t": tk, "u": u, "ocr": ocr})
+            if "k" not in c_:
+                org_ = "DC/BR" if r.get("org") == "DC/BR" else "BRVM"
+                num_ = f" n° {r['num']}" + (f"-{r['yr']}" if r.get("yr") else "") if r.get("num") else ""
+                soc_ = (r.get("soc") or m.get("soc") or "").strip().upper()
+                if re.match(r"(LUNDI|MARDI|MERCREDI|JEUDI|VENDREDI|SAMEDI|DIMANCHE)\b|\d", soc_):
+                    soc_ = ""  # (date lue à la place de la société)
+                c_.update(k="div", t=tk, y=int(r["ex"]) if str(r.get("ex") or "").isdigit() else None, d=_pubdate(u, r),
+                          f="D" if org_ == "DC/BR" else "", ti=f"Avis{num_} {org_} : {'report du ' if re.search(r'report', nrm(u.rsplit('/', 1)[-1])) else ''}paiement de dividendes{' (rectificatif)' if r.get('rect') else ''}"
+                                                              + (f" — {soc_}" if soc_ else "") + (f" — exercice {r['ex']}" if r.get("ex") else ""))
+    for c_ in cat:
+        if not c_.get("d"):  # (ancien site : « …/avis/2002/juillet/… » : premier jour du mois)
+            mp = re.search(r"/((?:19|20)\d\d)/(" + MOIS_RX + r")/", nrm(urllib.parse.unquote(c_["u"], encoding="latin-1")))
+            if mp:
+                c_["d"] = f"{mp.group(1)}-{FR_MOIS[mp.group(2)]:02d}-01"
+    for c_ in cat:  # (autres documents : intitulé tiré de la liste de brvm.org, du nom du fichier ou de l'en-tête du document)
+        if "k" not in c_:
+            m = idx["docs"][c_["u"]]
+            fn_ = urllib.parse.unquote(c_["u"].rsplit("/", 1)[-1], encoding="latin-1")
+            ti_ = m.get("ti")
+            if not ti_ and not re.search(r"linkclick|fileticket", fn_, re.I):
+                ti_ = re.sub(r"\s+", " ", re.sub(r"\.pdf$|[_]+", " ", fn_, flags=re.I)).strip()
+            t, _ = read_text(d, m["h"])
+            ti_ = ti_ or _head_title(t or "")
+            if not ti_:
+                continue
+            c_.update(k="avis", ti=ti_[:160], d=c_.get("d") or _pubdate(c_["u"]) or (fr_date(nrm((t or "")[:2500])) if t else None))
+    for c_ in cat:  # (date lue dans le texte d'une archive : gardée seulement si elle précède de moins de 3 ans la capture de l'archive)
+        if c_.get("d") and c_.get("wb") and not (str(int(c_["wb"][:4]) - 3) <= c_["d"][:4] and c_["d"].replace("-", "") <= c_["wb"][:8]):
+            c_["d"] = None
+    cat = [c_ for c_ in cat if c_.get("ti")]
+    json.dump({"v": 1, "docs": [{k: v for k, v in c_.items() if v not in (None, "")} for c_ in cat]},
+              open(os.path.join(d, "catalog.json"), "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))
     rows = consolidate(cal_rows, avis, boc_old, revue)
     json.dump({"v": 2, "ts": int(dt.datetime.now().timestamp()), "rows": rows,
                "n": {"calendriers": len({r["u"] for r in cal_rows}), "lignes_calendrier": len(cal_rows), "avis": len(avis), "bulletins": n_boc, "versements_bulletins": len(boc_old), "revues": len(revue)}},
