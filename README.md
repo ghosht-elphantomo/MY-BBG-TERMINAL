@@ -60,8 +60,7 @@ web/                       style.css, body.html, engine.js (moteur quant), chart
 scripts/scrape.py          relevé QQQ + séance BRVM (bibliothèque standard Python)
 scripts/fetch_extra.py     sources complémentaires (Nasdaq, FRED, SEC, CBOE, CNN, Coinbase, Banque mondiale, BRVM, actualités)
 scripts/build_terminal.py  construction de toute la base data/
-scripts/fcf_extract.py     flux de trésorerie lus dans les états financiers BRVM (hebdomadaire)
-seed/                      séance BRVM de départ, archive brvm_daily.csv, fcf_brvm.json, CSV bruts US
+seed/                      séance BRVM de départ, archive brvm_daily.csv, CSV bruts US
 ```
 
 ## En local

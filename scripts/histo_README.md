@@ -50,3 +50,6 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   présentations de résultats et les notations ne servent jamais de source.
 - Capitaux propres d'un bilan de synthèse sans ligne de total : somme des composantes publiées (capital, primes, réserves, report à
   nouveau, résultat, autres), retenue seulement si le passif la vérifie (total − dettes financières − passif circulant − trésorerie passif).
+- Flux de trésorerie (flux opérationnels, acquisitions d'immobilisations, flux disponible) : uniquement ceux lus dans les états
+  financiers publiés et contrôlés par les identités du document. Le fichier de départ `seed/fcf_brvm.json` (lecture sans contrôle,
+  31 exercices faux sur 32 recoupés : unités, lignes confondues avec le chiffre d'affaires) a été retiré ; aucun flux n'est estimé.

@@ -1038,15 +1038,14 @@ def main():
     emeta.sort(key=lambda x: x["d"] or "", reverse=True)
 
     # Calculs dérivés (macro, sentiment, liquidité, comptes, consensus, valorisation BRVM, UEMOA) ----
-    fcf_path = a.fcf
-    if pdf_cf:  # flux de trésorerie : ceux des états financiers publiés et vérifiés l'emportent sur le fichier de départ
-        base = json.load(open(a.fcf, encoding="utf8")) if a.fcf and os.path.exists(a.fcf) else {"series": {}}
-        for t, yrs in pdf_cf.items():
-            for y, r in yrs.items():
-                base.setdefault("series", {}).setdefault(t, {})[y] = r
+    # flux de trésorerie : uniquement ceux lus et vérifiés dans les états financiers publiés (pdf_cf). L'ancien fichier de départ
+    # (--fcf, lecture sans contrôle d'identités : unités et lignes erronées sur 31 des 32 exercices recoupés) n'est plus utilisé.
+    fcf_path = None
+    if pdf_cf:
         import tempfile
-        fcf_path = os.path.join(tempfile.gettempdir(), "fqt_fcf_merged.json")
-        json.dump(base, open(fcf_path, "w", encoding="utf8"))
+        fcf_path = os.path.join(tempfile.gettempdir(), "fqt_fcf_verified.json")
+        json.dump({"series": pdf_cf}, open(fcf_path, "w", encoding="utf8"))
+    log("flux de trésorerie vérifiés :", sum(len(v) for v in pdf_cf.values()), "exercices,", len(pdf_cf), "sociétés")
     build_extra.derive(a.extra, out, files, secs, fund, fcf_path, dmeta, xinfo["ndx"], log)
 
     # write ------------------------------------------------------------------

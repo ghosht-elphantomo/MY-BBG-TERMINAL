@@ -1296,6 +1296,30 @@ CAT_STATEMENTS = {"financial_statements", "financial_results", "auditor_report",
 # documents d'une autre entité classés sous le titre : PH-CI (sous Palm CI), SDA CI (sous Bolloré Transport & Logistics CI),
 # SARI CI (sous CFAO Motors CI)
 OTHER_ENTITY = {"PALC": r"\bph ?ci\b|\bphci\b", "SDSC": r"\bsda\b", "CFAC": r"\bsari\b"}
+# nom distinctif de chaque société dans les intitulés de fichiers : un document dont le nom désigne une autre société cotée
+# (erreur de classement de la liste) n'est pas rattaché au titre
+NAME_TOKENS = {"ABJC": r"servair", "BNBC": r"bernabe", "BICC": r"\bbici", "CABC": r"sicable", "CFAC": r"cfao", "CIEC": r"\bcie\b|\bcie ci\b",
+               "FTSC": r"filtisac", "NEIC": r"\bnei\b|nei.ceda", "NSBC": r"nsia", "NTLC": r"nestle", "ONTBF": r"onatel", "ORAC": r"orange",
+               "ORGT": r"oragroup", "PALC": r"palm.?ci|\bpalm\b", "PRSC": r"tractafric|peyrissac", "SAFC": r"alios|safca", "SCRC": r"sucrivoire",
+               "SDCC": r"sode.?ci|sodeci", "SDSC": r"bollore|africa global|\bagl\b", "SEMC": r"siem", "SGBC": r"\bsgb|societe generale|\bsgci\b",
+               "SHEC": r"vivo", "SIBC": r"\bsib\b|\bsib ci\b", "SICC": r"sicor", "SIVC": r"air liquide", "SLBC": r"solibra", "SMBC": r"\bsmb\b",
+               "SNTS": r"sonatel", "SOGC": r"\bsogb\b", "SPHC": r"\bsaph\b", "STAC": r"setao", "STBC": r"sitab", "UNLC": r"unilever",
+               "UNXC": r"uniwax", "ECOC": r"ecobank ci|ecobank cote", "ETIT": r"ecobank tg|\beti\b|\beti tg\b", "CBIBF": r"coris", "LNBB": r"\blnb\b|loterie",
+               "BICB": r"\bbiic\b|\bbidc\b", "BOAB": r"boa bn|boa benin|africa bn|africa benin", "BOABF": r"boa bf|boa burkina|africa bf|africa burkina",
+               "BOAC": r"boa ci|boa cote|africa ci|boaci", "BOAM": r"boa ml|boa mali|africa ml|africa mali", "BOAN": r"boa ng|boa niger|africa ng|africa niger",
+               "BOAS": r"boa sn|boa senegal|africa sn|africa senegal", "TTLC": r"total ci|total cote|totalenergies marketing ci|totalenergies marketing cote",
+               "TTLS": r"total sn|total senegal|totalenergies marketing sn|totalenergies marketing senegal"}
+
+
+def other_company(t, name):
+    """Le nom de fichier désigne-t-il clairement une autre société cotée que t ? Renvoie ce titre (None sinon, ou "?" si
+    plusieurs sociétés sont nommées)."""
+    n_ = nrm(name).replace("_", " ").replace("-", " ")
+    own = NAME_TOKENS.get(t)
+    if own and re.search(own, n_):
+        return None
+    hits = [t2 for t2, rx in NAME_TOKENS.items() if t2 != t and re.search(rx, n_)]
+    return hits[0] if len(hits) == 1 else ("?" if hits else None)
 def _doc_rank(r, y):
     """Préférence entre documents pour un exercice : comptes de l'exercice lui-même (plutôt que la colonne N-1 du suivant),
     définitifs (certifiés, approuvés) plutôt que provisoires, puis le plus récent (un document qui « annule et remplace »)."""
@@ -1334,15 +1358,21 @@ def consolidate(cj, mirror=None):
         # notations, avis et calendriers : résumés ou chiffres arrondis, jamais des états financiers -> pas de consolidation
         if r.get("cat") and r["cat"] not in CAT_STATEMENTS:
             continue
+        t_doc = r["t"]
+        oc_ = other_company(t_doc, u.rsplit("/", 1)[-1])
+        if oc_ == "?":
+            continue  # (plusieurs sociétés nommées : document ambigu)
+        if oc_:
+            t_doc = oc_  # (document d'une autre société cotée rattaché par erreur à ce titre : rendu à la sienne)
         # comptes d'une autre société publiés sous le même titre (filiale, société absorbée) : écartés
-        if r["t"] in OTHER_ENTITY and re.search(OTHER_ENTITY[r["t"]], nrm((r.get("ti") or "") + " " + u.rsplit("/", 1)[-1].replace("_", " "))):
+        if t_doc in OTHER_ENTITY and re.search(OTHER_ENTITY[t_doc], nrm((r.get("ti") or "") + " " + u.rsplit("/", 1)[-1].replace("_", " "))):
             continue
         # présentations (diapositives) : chiffres arrondis ou mis en forme, colonnes et années mal repérables -> jamais retenues
         if re.search(r"presentation|slides?\b|webinar|roadshow|investor.?day|conference.?(?:des )?analystes", nrm((r.get("ti") or "") + " " + u)):
             continue
         for per, ys in r["y"].items():
             for y, x in ys.items():
-                recs.append({"t": r["t"], "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"),
+                recs.append({"t": t_doc, "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"),
                              "uc": x.get("uc") or [], "v": x.get("v") or {}, "vk": set(x.get("vk") or []), "c": x.get("c"), "doc": u,
                              "rank": _doc_rank(r, int(y)), "d": r.get("d"), "ocr": r.get("src") in OCR_SRC,
                              "guess": per in (r.get("guess") or []), "cf": set(x.get("cf") or []),
