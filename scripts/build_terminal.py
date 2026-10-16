@@ -535,6 +535,22 @@ def main():
                         added = True
                 if added and not src_y.get(y):  # (un exercice déjà signalé — autre référentiel, montants convertis — garde sa mention)
                     src_y[y] = "archive SikaFinance " + rec.get("src", "")
+    # société cotée dans sa forme actuelle depuis un exercice donné (fusion) : chiffres des exercices antérieurs, ceux d'entités
+    # distinctes, retirés de toutes les sources (base tierce, archives) ; les dividendes versés aux actionnaires restent
+    try:
+        from comptes import FIRST_FY
+    except Exception:  # noqa: BLE001
+        FIRST_FY = {}
+    for t, y0 in FIRST_FY.items():
+        f = fund.get(t)
+        if not isinstance(f, dict):
+            continue
+        for k, o in (f.get("series") or {}).items():
+            if isinstance(o, dict) and k != "dividende":
+                for y in [y for y in o if str(y).isdigit() and int(y) < y0]:
+                    o.pop(y)
+        for y in [y for y in (f.get("src_years") or {}) if str(y).isdigit() and int(y) < y0]:
+            f["src_years"].pop(y)
     # flux de trésorerie : ceux des états financiers publiés à la BRVM et vérifiés (flux des activités opérationnelles et
     # acquisitions d'immobilisations du même document) ; l'ancienne lecture sans contrôle (pdf_fin.json) n'est plus utilisée
     pdf_cf = {}

@@ -1607,6 +1607,10 @@ STABLE = {"chiffre_affaires", "ventes_marchandises", "ventes_produits", "valeur_
 OCR_SRC = ("fra", "eng", "fra4", "eng4")
 
 
+# société cotée dans sa forme actuelle depuis un exercice donné : comptes antérieurs d'entités distinctes, jamais montrés comme les
+# siens (NEI-CEDA : NEI et CEDA publient chacune leurs comptes jusqu'en 2010 ; la société fusionnée, capital porté de 134 à
+# 255 millions, publie ses premiers comptes pour l'exercice 2011)
+FIRST_FY = {"NEIC": 2011}
 USD_REPORTERS = {"ETIT"}  # Ecobank Transnational : états financiers en dollars américains
 # ETI publie ses états en dollars ; depuis l'exercice 2024 (et dans ses chiffres clés), chaque montant est suivi de sa contre-valeur
 # en FCFA calculée par la société (« milliers $EU | millions FCFA » pour N puis N-1). Les états entièrement à deux monnaies sont lus
@@ -1980,6 +1984,7 @@ def consolidate(cj, mirror=None, fx=None):
         if re.search(r"presentation|slides?\b|webinar|roadshow|investor.?day|conference.?(?:des )?analystes", nrm((r.get("ti") or "") + " " + u)):
             continue
         for per, ys in r["y"].items():
+            ys = {y: x for y, x in ys.items() if int(y) >= FIRST_FY.get(t_doc, 0)}
             if t_doc in USD_REPORTERS:
                 if per not in ("conso", "conso_ifrs"):
                     continue  # (comptes de la holding ou d'une filiale)
