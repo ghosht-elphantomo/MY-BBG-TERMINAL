@@ -1,13 +1,3 @@
-yh_rssindex.xml|https://finance.yahoo.com/news/rssindex
-yh_topstories.xml|https://finance.yahoo.com/rss/topstories
+gn_ecofin.xml|https://news.google.com/rss/search?q=site:agenceecofin.com&hl=fr&gl=FR&ceid=FR:fr
+gn_ecofin_fin.xml|https://news.google.com/rss/search?q=site:agenceecofin.com+finance+OR+banque+OR+bourse&hl=fr&gl=FR&ceid=FR:fr
 yh_headline.xml|https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EIXIC,%5EDJI&region=US&lang=en-US
-yh_headline2.xml|https://finance.yahoo.com/rss/headline?s=%5EGSPC
-yh_news_rss.xml|https://www.yahoo.com/news/rss/finance
-yh_fin_news.xml|https://finance.yahoo.com/news/rss
-eco_old.xml|https://www.agenceecofin.com/finance?format=feed&type=rss
-eco_rss.xml|https://www.agenceecofin.com/rss
-eco_feed.xml|https://www.agenceecofin.com/feed
-eco_fin_rss.xml|https://www.agenceecofin.com/finance/rss
-eco_idx.xml|https://www.agenceecofin.com/index.php?format=feed&type=rss
-eco_home.html|https://www.agenceecofin.com/
-eco_fin.html|https://www.agenceecofin.com/finance
