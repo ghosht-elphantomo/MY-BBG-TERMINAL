@@ -64,8 +64,8 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   fractionnements d'avant 2013). Les archives de l'ancien site (avis depuis 2002, bulletins, revues trimestrielles) complètent
   les années que la base ne couvre pas ; dans ces bulletins la virgule sépare les milliers (« 1,800 ») sauf deux décimales
   (« 321,08 ») et le point est décimal (« 1.828 » pour Ecobank Transnational) ; un « 1,828 » ambigu est tranché par l'ordre de
-  grandeur du cours de la même ligne. Dividende publié en cents de dollar (Ecobank Transnational, exercice 2021) : converti en
-  FCFA au cours du jour de l'avis, marqué « $ ». Dividende exceptionnel : compté dans le rendement total et le rendement sur
+  grandeur du cours de la même ligne. Dividende publié en cents de dollar (Ecobank Transnational, exercice 2021) : montant en
+  FCFA imprimé dans le bulletin officiel de la cote (0,90 FCFA), sinon converti au cours du jour de l'avis ; marqué « $ ». Dividende exceptionnel : compté dans le rendement total et le rendement sur
   12 mois, pas dans le dividende de référence ni le rendement indicatif.
 - Capitaux propres d'un bilan de synthèse sans ligne de total : somme des composantes publiées (capital, primes, réserves, report à
   nouveau, résultat, autres), retenue seulement si le passif la vérifie (total − dettes financières − passif circulant − trésorerie passif).

@@ -2,9 +2,9 @@
 'use strict';
 const codeAttr = code => { const c0 = String(code || '').trim(); if (FN[c0]) return c0 === ST.fn ? '' : ` data-fn="${c0}"`; const w = c0.split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
 /* dividende par action : marqué « a » quand il a été ajusté d'un fractionnement ou d'actions gratuites (montant publié en infobulle),
-   « $ » quand il a été publié en cents de dollar et converti en FCFA au cours du jour de sa publication */
+   « $ » quand il a été publié en cents de dollar (montant en FCFA du bulletin officiel, sinon converti au cours du jour de publication) */
 const adjMark = x => (x && x.adj ? `<i class="qd" title="montant publié : ${num(x.dps0, x.dps0 < 10 ? 4 : 2)} par action ancienne ; ajusté des opérations sur le capital (1 action ancienne = ${num(x.adj, Number.isInteger(+x.adj) ? 0 : 2)} actions actuelles)">a</i>` : '')
-  + (x && x.usd ? `<i class="qd" title="publié en dollars : ${num(x.usd, 2)} cent de dollar par action ; converti au cours du jour de sa publication (${num(x.fx, 2)} FCFA pour 1 dollar)">$</i>` : '')
+  + (x && x.usd ? `<i class="qd" title="publié en dollars : ${num(x.usd, 2)} cent de dollar par action ; ${x.fx ? `converti au cours du jour de sa publication (${num(x.fx, 2)} FCFA pour 1 dollar)` : 'montant en FCFA du bulletin officiel de la cote'}">$</i>` : '')
   + (x && x.cal ? '<i class="qd" title="montant du calendrier des dividendes de la BRVM (net ou brut selon la société) : l’avis officiel détaille le net">c</i>' : '');
 const pn = (title, code, body, o = {}) => `<div class="pn" ${o.id ? `id="${o.id}"` : ''} ${o.style ? `style="${o.style}"` : ''}><div class="pt">${title}${o.sel ? `<span class="sel">${o.sel}</span>` : ''}<span class="code"${codeAttr(code)}>${code || ''}</span></div>${o.tools ? `<div class="tools">${o.tools}</div>` : ''}<div class="pb ${o.np ? 'np' : ''}">${body}</div>${o.lect ? `<div class="lect">${o.lect}</div>` : ''}</div>`;
 const cvb = (id, h) => `<div class="cv" id="${id}" style="height:${h}px"></div>`;

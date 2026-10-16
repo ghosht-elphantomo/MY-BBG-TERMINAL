@@ -610,6 +610,17 @@ def main():
             av_chk["div"] += 1
       except Exception as e:  # noqa: BLE001
         log("dividendes brvm.org ignorés :", e)
+    # bulletins officiels de la cote (BRVM) : contrôle et secours des cours et des dividendes
+    BOC = {}
+    if a.boc and os.path.isdir(a.boc):
+        cols = ("prev", "o", "c", "var", "vol", "val", "ref", "ytd", "div", "div_d", "yld", "per")
+        for fn in sorted(os.listdir(a.boc)):
+            if not re.match(r"^\d{4}\.json$", fn):
+                continue
+            for k, rows_ in json.load(open(os.path.join(a.boc, fn), encoding="utf8")).items():
+                for sym, v in rows_.items():
+                    BOC.setdefault(sym, {})[int(k)] = dict(zip(cols, v))
+        log("bulletins officiels :", len(BOC), "titres,", sum(len(v) for v in BOC.values()), "lignes")
     # versements lus dans les documents officiels de la BRVM depuis l'ouverture (avis de paiement, calendriers, avis du Dépositaire
     # central ; branche dividendes) : montant et dates de l'avis (rectificatif compris) à la place de ceux de la base, versements
     # absents ajoutés. Un versement de la base est le même s'il tombe à 10 jours près, ou s'il porte sur le même exercice et le même
@@ -630,8 +641,23 @@ def main():
                 except (TypeError, ValueError):
                     return 9999
             used = set()
-            for o in OFF:  # dividende publié seulement en cents de dollar : FCFA au cours du jour de l'avis (figé), marqué « converti »
+            # dividende publié seulement en cents de dollar : montant en FCFA du bulletin officiel de la cote (dernier dividende payé,
+            # à sa date de paiement : la valeur la plus souvent imprimée dans les bulletins des 60 jours suivants) ; à défaut, cents de
+            # dollar convertis au cours du jour de l'avis (figé). Marqué « $ » dans les deux cas
+            for o in OFF:
                 if not o.get("net") and o.get("usd_c"):
+                    pd_ = o.get("pay") or o.get("det")
+                    seen_ = collections.Counter()
+                    if pd_ and BOC.get(o["t"]):
+                        p0 = di(pd_)
+                        for kb, rb in BOC[o["t"]].items():
+                            if p0 - 30 <= kb <= di((dt.date.fromisoformat(pd_[:10]) + dt.timedelta(days=60)).isoformat()) and rb.get("div") and rb.get("div_d") \
+                                    and dd_(str(rb["div_d"]), pd_) <= 10:
+                                seen_[float(rb["div"])] += 1
+                    if seen_:
+                        o["net"], o["boc_fcfa"] = seen_.most_common(1)[0][0], 1
+                        off_chk["usd_bulletin"] = off_chk.get("usd_bulletin", 0) + 1
+                        continue
                     r_ = fx_(o.get("pub") or o.get("det") or o.get("pay") or "") if fx_ else None
                     if r_:
                         o["net"], o["fx"] = round(o["usd_c"] / 100 * r_, 4), r_
@@ -668,8 +694,8 @@ def main():
                     x["source"], x["avis"] = "BRVM", 1
                     if o.get("src") in ("bulletin", "revue trimestrielle"):
                         x["weak"] = 1  # (montant lu dans un ancien bulletin ou une revue : contrôlé plus loin sur le cours du jour)
-                    if o.get("fx"):
-                        x["usd_c"], x["fx"] = o["usd_c"], o["fx"]
+                    if o.get("fx") or o.get("boc_fcfa"):
+                        x["usd_c"], x["fx"] = o["usd_c"], o.get("fx")
                     if o.get("kind") == "exceptionnel":
                         x["exc"] = 1
                     if o.get("px") and o.get("px_d"):
@@ -678,7 +704,7 @@ def main():
                     nx = {"ticker": o["t"], "dividende": o["net"], "exercice": o.get("ex"), "date_annonce": o.get("pub"),
                           "date_detachement": o.get("det"), "date_paiement": o.get("pay"), "source": "BRVM", "avis": 1,
                           **({"weak": 1} if o.get("src") in ("bulletin", "revue trimestrielle") else {}),
-                          **({"usd_c": o["usd_c"], "fx": o["fx"]} if o.get("fx") else {}), **({"exc": 1} if o.get("kind") == "exceptionnel" else {}), **({"px_raw": o["px"], "px_d": o["px_d"]} if o.get("px") and o.get("px_d") else {})}
+                          **({"usd_c": o["usd_c"], "fx": o.get("fx")} if o.get("fx") or o.get("boc_fcfa") else {}), **({"exc": 1} if o.get("kind") == "exceptionnel" else {}), **({"px_raw": o["px"], "px_d": o["px_d"]} if o.get("px") and o.get("px_d") else {})}
                     divs.append(nx)
                     byt[o["t"]].append(nx)
                     used.add(id(nx))
@@ -687,17 +713,6 @@ def main():
                 ("; montants corrigés : " + "; ".join(off_chk["ex"])) if off_chk["ex"] else "")
         except Exception as e:  # noqa: BLE001
             log("dividendes officiels illisibles :", e)
-    # bulletins officiels de la cote (BRVM) : contrôle et secours des cours et des dividendes
-    BOC = {}
-    if a.boc and os.path.isdir(a.boc):
-        cols = ("prev", "o", "c", "var", "vol", "val", "ref", "ytd", "div", "div_d", "yld", "per")
-        for fn in sorted(os.listdir(a.boc)):
-            if not re.match(r"^\d{4}\.json$", fn):
-                continue
-            for k, rows_ in json.load(open(os.path.join(a.boc, fn), encoding="utf8")).items():
-                for sym, v in rows_.items():
-                    BOC.setdefault(sym, {})[int(k)] = dict(zip(cols, v))
-        log("bulletins officiels :", len(BOC), "titres,", sum(len(v) for v in BOC.values()), "lignes")
     boc_chk = {"n": 0, "diff": 0, "added": 0, "div_added": 0, "by": {}}
     # jours de séance attestés par un bulletin officiel (et nombre de titres dont le cours a varié ce jour-là) ; valeurs des indices
     # lues dans les bulletins récents (relevé du soir, branche raw)
@@ -1376,7 +1391,7 @@ def main():
              for k, v in fund.items() if k != "_meta"}
     dmeta = [{"t": x.get("ticker"), "ex": x.get("exercice"), "dps": x.get("dividende"), "ann": x.get("date_annonce"), "det": x.get("date_detachement"),
               "pay": x.get("date_paiement"), "src": x.get("source"), **({"dps0": x["dividende_publie"], "adj": x["ajust"]} if x.get("ajust") else {}),
-              **({"cal": 1} if x.get("cal") else {}), **({"usd": x["usd_c"], "fx": x["fx"]} if x.get("fx") else {}), **({"exc": 1} if x.get("exc") else {})} for x in divs if x.get("ticker")]
+              **({"cal": 1} if x.get("cal") else {}), **({"usd": x["usd_c"], **({"fx": x["fx"]} if x.get("fx") else {"fxb": 1})} if x.get("usd_c") else {}), **({"exc": 1} if x.get("exc") else {})} for x in divs if x.get("ticker")]
     if split_log:
         log("fractionnements :", "; ".join(split_log[:40]))
     ev = json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"]

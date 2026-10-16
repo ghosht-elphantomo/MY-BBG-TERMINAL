@@ -2297,7 +2297,7 @@ NEWS = [  # id, libellé, url, catégorie
     ("allafrica-eco", "allAfrica", "https://fr.allafrica.com/tools/headlines/rdf/business/headlines.rdf", "Afrique"),
     ("ecofin", "Agence Ecofin", "https://news.google.com/rss/search?q=site:agenceecofin.com+finance+OR+banque+OR+bourse&hl=fr&gl=FR&ceid=FR:fr", "Afrique"),  # (flux du site fermé)
     ("gn-marches", "Google Actualités", "https://news.google.com/rss/search?q=%22march%C3%A9s+financiers%22+OR+%22Wall+Street%22+OR+%22CAC+40%22&hl=fr&gl=FR&ceid=FR:fr", "Marchés"),
-    ("lesechos", "Les Echos", "https://syndication.lesechos.fr/rss/rss_finance-marches.xml", "Marchés"),
+    ("lesechos", "Les Echos", "https://news.google.com/rss/search?q=site:lesechos.fr+march%C3%A9s+OR+bourse+OR+finance&hl=fr&gl=FR&ceid=FR:fr", "Marchés"),  # (flux du site refusé)
     ("investing-fr", "Investing.com", "https://fr.investing.com/rss/news.rss", "Marchés"),
     ("cnbc-markets", "CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258", "Marchés"),
     ("cnbc-top", "CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "Marchés"),
@@ -2356,6 +2356,19 @@ def parse_feed(b):
     return items
 
 
+# flux de secours, sans intervention : si l'adresse directe d'un site ne répond plus (erreur ou flux vide), ses articles sont repris
+# par la recherche Google Actualités limitée à ce site
+NEWS_FALLBACK = {"financialafrik": ("financialafrik.com", "fr"), "allafrica-eco": ("allafrica.com", "fr"), "investing-fr": ("fr.investing.com", "fr"),
+                 "cnbc-markets": ("cnbc.com", "en"), "cnbc-top": ("cnbc.com", "en"), "marketwatch": ("marketwatch.com", "en"),
+                 "yahoo": ("finance.yahoo.com", "en"), "fed": ("federalreserve.gov", "en"), "ecb": ("ecb.europa.eu", "en")}
+
+
+def _gn_site(dom, lang):
+    q = urllib.parse.quote(f"site:{dom}")
+    return (f"https://news.google.com/rss/search?q={q}&hl=fr&gl=FR&ceid=FR:fr" if lang == "fr"
+            else f"https://news.google.com/rss/search?q={q}&hl=en-US&gl=US&ceid=US:en")
+
+
 def run_news(path):
     old = []
     if os.path.exists(path):
@@ -2367,17 +2380,25 @@ def run_news(path):
 
     def one(f):
         fid, label, url, cat = f
-        try:
-            its = parse_feed(get(url, tries=2, timeout=25, headers={"Accept": "application/rss+xml, application/xml, text/xml, */*"}))
-            for x in its:
-                x["c"] = cat
-                x["f"] = fid
-                x["s"] = x["s"] or label
-            note("news")
-            return its
-        except Exception as e:  # noqa: BLE001
-            note("news", False, f"{fid}: {e}")
-            return []
+        urls = [url] + ([_gn_site(*NEWS_FALLBACK[fid])] if fid in NEWS_FALLBACK else [])
+        err = None
+        for u_ in urls:
+            try:
+                its = parse_feed(get(u_, tries=2, timeout=25, headers={"Accept": "application/rss+xml, application/xml, text/xml, */*"}))
+                if not its:
+                    raise ValueError("flux vide")
+                for x in its:
+                    x["c"] = cat
+                    x["f"] = fid
+                    x["s"] = x["s"] or label
+                note("news")
+                if u_ != url:
+                    note("news-secours", False, f"{fid}: adresse directe en échec ({err}), flux de secours utilisé")
+                return its
+            except Exception as e:  # noqa: BLE001
+                err = e
+        note("news", False, f"{fid}: {err}")
+        return []
     with ThreadPoolExecutor(6) as ex:
         fresh = [x for lst in ex.map(one, NEWS) for x in lst]
     cutoff = time.time() - 45 * 86400
