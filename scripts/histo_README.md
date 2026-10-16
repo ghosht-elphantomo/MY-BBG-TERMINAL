@@ -68,3 +68,11 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   identités pris dans le même document, jamais un mélange des deux versions (Unilever CI 2021 : résultat retraité ≈ 0 et non
   6 091 ; NSIA Banque 2017 : 10 015 pro forma). Un montant isolé égal à celui d'une autre année dans les autres sources
   (colonne décalée d'un communiqué numérisé) est retiré.
+- Documents numérisés : les égalités exactes (actif = passif, résultat du compte de résultat = résultat au bilan) doivent l'être
+  au-delà de l'arrondi — un chiffre changé au milieu d'un total n'est pas une vérification ; une référence SYSCOHADA seule devant
+  de petits nombres est un débris de lecture ; un libellé encombré de débris (« li (total ressources stables pa ») est relu
+  nettoyé ; un point lu à la place d'une espace de milliers (« 301 493.038 967 ») et une suite de montants aux groupes mal
+  découpés (« 22372337 396 32 374 022 046 ») sont remis en forme ; une date collée (« 31122004 ») vaut en-tête de colonne.
+  Le total du passif circulant illisible est la somme de ses postes (DH à DN) si le passif se vérifie alors. Dans un
+  communiqué ou un rapport numérisé, deux lectures identiques d'un chiffre ne suffisent pas : seuls les montants vérifiés par
+  une identité sont gardés. Un poste du bilan plus grand que le total du bilan est écarté.

@@ -52,6 +52,7 @@ ITEMS = [
     ("autres_passifs_circulants", (S_PAS,), r"^autres passifs? circulants?$"),
     ("reserves", (S_PAS,), r"^reserves$"),
     ("report_nouveau", (S_PAS,), r"^report a nouveau"),
+    ("resultat_bilan", (S_PAS, S_ACT, None), r"^resultat de l.exercice au bilan$"),  # (sous-libellé « (bénéfice + ou perte -) » seul sur sa ligne)
     ("capitaux_propres", (S_PAS,), r"^(?:total )?capitaux propres(?: et ressources assimilees| et assimiles)?(?: et)?$|^total des capitaux propres$|^total equity$"),
     ("cp_groupe", (S_PAS,), r"^(?:total )?capitaux propres(?:[ ,-]+part (?:du )?groupe| attribuables aux (?:actionnaires|proprietaires) de la (?:societe|maison)? ?mere| attribuables aux (?:actionnaires|proprietaires) de la societe)$"),
     ("interets_minoritaires", (S_PAS,), r"^(?:capitaux propres attribuables aux |total )?(?:participations|interets) ne donnant pas le controle$|^interets minoritaires$"),
@@ -59,6 +60,12 @@ ITEMS = [
     ("ressources_stables", (S_PAS,), r"^(?:total )?ressources stables$"),
     ("passif_circulant", (S_PAS,), r"^(?:total )?passif circulant$"),
     ("fournisseurs", (S_PAS,), r"^(?:dettes )?fournisseurs(?: d.exploitation| et comptes rattaches)?$"),
+    ("dettes_circulantes_hao", (S_PAS,), r"^dettes circulantes h\.?a\.?o\.?$"),
+    ("clients_avances", (S_PAS,), r"^clients,? avances recues$"),
+    ("dettes_fiscales_sociales", (S_PAS,), r"^dettes fiscales(?: et sociales)?$"),
+    ("dettes_sociales", (S_PAS,), r"^dettes sociales$"),
+    ("autres_dettes", (S_PAS,), r"^autres dettes$"),
+    ("provisions_risques_ct", (S_PAS,), r"^(?:provisions pour )?risques (?:provisionnes|a court terme)$"),
     ("tresorerie_passif", (S_PAS,), r"^(?:total )?tresorerie ?- ?passif$|^(?:total )?tresorerie passif$"),
     ("total_passif", (S_PAS, None), r"^total ?(?:general ?)?(?:du ?)?passif$|^total general passif$|^total bilan passif$|^total (?:des |du )?(?:capitaux propres et (?:des )?passifs?|passifs? et (?:des )?capitaux propres)$|^total liabilities and (?:shareholders. )?equity$|^passif total$|^total capitaux propres et passifs$"),
     ("actif_non_courant", (S_ACT,), r"^total (?:de l.|des )?actifs? non courants?$"),
@@ -121,12 +128,12 @@ ITEMS = [
 ]
 ITEM_RX = [(k, secs, re.compile(p)) for k, secs, p in ITEMS]
 SECS = {k: tuple(x for x in secs if x) for k, secs, _ in ITEMS}
-SECS["resultat_bilan"] = (S_PAS,)
-ITEM_KEYS = [k for k, _, _ in ITEMS] + ["resultat_bilan"]
+ITEM_KEYS = [k for k, _, _ in ITEMS] + [k for k in ("resultat_bilan",) if k not in {k_ for k_, _, _ in ITEMS}]
 
 # références SYSCOHADA (ancien et révisé) dont le sens ne change pas d'un plan à l'autre
 REF_CODES = {"AZ": "actif_immobilise", "BK": "actif_circulant", "BT": "tresorerie_actif", "BZ": "total_actif", "CA": "capital",
-             "CP": "capitaux_propres", "DP": "passif_circulant",
+             "CP": "capitaux_propres", "DP": "passif_circulant", "DH": "dettes_circulantes_hao", "DI": "clients_avances", "DJ": "fournisseurs",
+             "DK": "dettes_fiscales_sociales", "DL": "dettes_sociales", "DM": "autres_dettes", "DN": "provisions_risques_ct",
              "DT": "tresorerie_passif", "DZ": "total_passif", "XA": "marge_commerciale", "XC": "valeur_ajoutee", "XD": "ebe",
              "XE": "resultat_exploitation", "XF": "resultat_financier", "XG": "rao", "XH": "rhao", "XI": "resultat_net"}
 # références dont le sens diffère entre l'ancien plan (DF = total des dettes financières, DG = total des ressources stables,
@@ -156,6 +163,7 @@ def nrm(x):
 
 
 _COMMA_K = [False]  # document où la virgule sépare les milliers (« 435,697 » = 435 697)
+_TOLERANT = [False]  # lecture tolérante des libellés (reconnaissance de caractères) : essayée en second par read_doc
 _NOTE_DOT = [False]  # document à virgule décimale : « 5.3 » est un renvoi de note, pas un montant
 
 
@@ -311,7 +319,22 @@ def clean(txt, ocr=False):
         if not _irr(g):
             return m.group(0)
         j = "".join(g)
-        return j if len(j) <= 13 else m.group(0)
+        if len(j) <= 13:
+            return j
+        # suite de plusieurs montants dont les groupes de milliers sont mal découpés (« 22372337 396 32 374 022 046 ») : un
+        # nouveau montant commence à chaque groupe qui n'a pas trois chiffres
+        segs, cur = [], [g[0]]
+        for tok in g[1:]:
+            # un groupe de trois chiffres poursuit le montant ; deux groupes collés (« 440330 ») aussi, derrière un début régulier
+            if len(tok) == 3 or (len(tok) % 3 == 0 and len(cur[0]) <= 3 and len("".join(cur)) + len(tok) <= 13):
+                cur.append(tok)
+            else:
+                segs.append(cur)
+                cur = [tok]
+        segs.append(cur)
+        if len(segs) >= 2 and all(len("".join(sg)) <= 13 for sg in segs):
+            return "  ".join("".join(sg) for sg in segs)
+        return m.group(0)
     RUN = r"(?<![\d,.])\d+(?: \d+)+(?![\d,.])"
 
     if not ocr:
@@ -319,6 +342,9 @@ def clean(txt, ocr=False):
             txt = re.sub(RUN, _run, txt)
         return txt
     txt = re.sub(r"[|\[\]{}¦]", " ", txt)
+    # point ou virgule lu à la place d'une espace de milliers (« 301 493.038 967 ») : dans un montant à groupes de trois chiffres
+    txt = re.sub(r"(?<![\d.,])(\d{1,3}(?: \d{3})+)[.,](\d{3}(?: \d{3})*)(?![\d.,])", r"\1 \2", txt)
+    txt = re.sub(r"(?<![\d.,])(\d{1,3})[.,](\d{3}(?: \d{3})+)(?![\d.,])", r"\1 \2", txt)
     txt = re.sub(RUN, _run, txt)
     txt = re.sub(r"(?<=\d)[)](?=\s|$)", " ", txt)
     txt = re.sub(r"(?<=\d) ?[.:;](?=\s{2,}|$)", " ", txt)
@@ -348,6 +374,9 @@ def _cells(line, skip=()):
                 continue
             txt_ = re.sub(r"(?<!\S)[-−–‐‑](?!\S)", " ", part)
             txt_ = re.sub(r"^\s*(?:-?\d+(?:[.,]\d+)?\s*%\s*)+", "", txt_).strip()
+            if re.search(r"b[eé]n[eé]fice \+ ou perte", txt_, re.I):
+                out.append(("L", "resultat de l'exercice au bilan", start + st_ + len(part), start + st_))  # sous-libellé du résultat au bilan
+                continue
             if txt_.startswith("(") or re.search(r"\bsomme\b", txt_, re.I) or re.fullmatch(r"[(+\-/=: ]*(?:[A-Z]{1,2}\b[ +\-à=:]*)+\)?", txt_):
                 continue  # formule de calcul (« (XB+RA+RB) », « (somme TK à RN) »), renvoi « (1) »
             if re.fullmatch(r"[+\-/ ]+|notes?|\d+|[a-z]", txt_.strip(), re.I):
@@ -409,6 +438,10 @@ def _hdr(line):
             y -= 1  # « 1er janvier N » (bilan d'ouverture) : clôture de l'exercice précédent (sauf « du 1er janvier N au 31 décembre N »)
         if 1990 <= y <= 2039 and not any(s0 <= m.start() < e0 for e0, s0, _ in hs):
             hs = [h for h in hs if not (m.start() <= h[1] < m.end())]  # (l'année nue déjà relevée dans cette date)
+            hs.append((m.end(), m.start(), y))
+    for m in re.finditer(r"(?<![\d,.])(?:31|30)[ ./-]?(?:12|06|09|03)[ ./-]?((?:19[89]|20[0-3])\d)(?![\d,.%])", n):  # « 31122004 », « 3112.2003 » (date collée)
+        y = int(m.group(1))
+        if not any(s0 <= m.start() < e0 or s0 < m.end() <= e0 for e0, s0, _ in hs):
             hs.append((m.end(), m.start(), y))
     for m in re.finditer(r"(?<![\d,.])(19[89]|20[0-3]) (\d)(?![\d,.%])", n):  # « 202 4 » (année coupée par la couche texte)
         y = int(m.group(1) + m.group(2))
@@ -737,6 +770,8 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 s_here = CODE_SEC[code_[0]]
             labn = re.sub(r"\s+", " ", nrm(lab)).strip(" :.-*•")
             labn = re.sub(r"\b([ldnjs])' +", r"\1'", labn)
+            if re.fullmatch(r"\(?\s*\+?\s*benefice \+ ou perte -\s*\)?", labn):
+                labn = "resultat net de l'exercice"  # sous-libellé SYSCOHADA du résultat au bilan, seul sur sa ligne (scan)
             labn = re.sub(r"\s*\((?:[a-z]{1,2}|[ivx]+|\d)\)$", "", labn)  # renvoi de note « (1) », « (a) »
             labn = re.sub(r"^(?:[ivx]+|[a-h]|\d{1,2})[-.)] +", "", labn)  # numérotation « I. », « a) »
             labn = re.sub(r"\s*\(?(?:note|notes)\s*\d+[a-z]?\)?$", "", labn)
@@ -764,11 +799,22 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             cands = []
             if labn:
                 cands.append(labn)
+                if ocr and _TOLERANT[0]:  # reconnaissance de caractères : débris courts collés au libellé (« li (total ressources stables pa »)
+                    toks = labn.split(" ")
+                    core = toks[:]
+                    while len(core) > 2 and len(core[0]) <= 4 and not re.fullmatch(r"total|autres|dettes|titres|prets|actif|passif|frais|achats|stocks", core[0]):
+                        core = core[1:]
+                    if len(core) > 2 and len(core[-1]) <= 2:
+                        core = core[:-1]
+                    if core != toks:
+                        cands.append(" ".join(core).strip(" (.-"))
             for p_, _ in pend[-2:][::-1]:
                 cands.append((p_ + " " + labn).strip())
                 if not labn:
                     cands.append(p_)
             key = None
+            if code_ and re.fullmatch(r"[A-Z]{2}", code_) and ocr and not labn and all(abs(v_) < 1e4 for v_, _ in vals if v_ is not None):
+                code_ = None  # référence seule devant quelques petits nombres : débris de lecture, pas une ligne d'états
             if code_ and re.fullmatch(r"[A-Z]{2}", code_):
                 key = REF_CODES.get(code_) or (REF_CODES_REV.get(code_) if revised else None)
                 if key is None and code_ in REF_CODES_AMBIG:
@@ -987,6 +1033,26 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 it_.setdefault("capitaux_propres", {})[y_] = cp_sum
                 if g_("passif_circulant") is None:
                     it_.setdefault("passif_circulant", {})[y_] = pc_
+    # total du passif circulant illisible (scan) : somme de ses postes (DH à DN), retenue seulement si le passif se vérifie alors
+    # (ressources stables + passif circulant + trésorerie passif + écart de conversion = total) — deux jeux de chiffres indépendants
+    PC_PARTS = ("dettes_circulantes_hao", "clients_avances", "fournisseurs", "dettes_fiscales_sociales", "dettes_sociales", "autres_dettes",
+                "provisions_risques_ct")
+    for it_ in perims.values():
+        if "passif_circulant" in it_ or "fournisseurs" not in it_:
+            continue
+        for y_ in list(it_["fournisseurs"]):
+            g_ = lambda k_: (it_.get(k_) or {}).get(y_)  # noqa: E731
+            parts_ = [g_(k_) for k_ in PC_PARTS if g_(k_) is not None]
+            if len(parts_) < 3 or g_("total_passif") is None or g_("tresorerie_passif") is None:
+                continue
+            rs_ = g_("ressources_stables")
+            if rs_ is None and g_("capitaux_propres") is not None and g_("dettes_financieres") is not None:
+                rs_ = g_("capitaux_propres") + g_("dettes_financieres")
+            if rs_ is None:
+                continue
+            pc_sum = sum(parts_)
+            if abs(rs_ + pc_sum + g_("tresorerie_passif") + (g_("ecart_conversion_passif") or 0) - g_("total_passif")) <= max(2.0, abs(g_("total_passif")) * 0.001):
+                it_.setdefault("passif_circulant", {})[y_] = pc_sum
     main = max(perims, key=lambda k: len(perims[k])) if perims else "social"
     items = perims.get(main, {})
     bank = sum(1 for k in items if k.startswith("b_")) >= 3
@@ -1016,7 +1082,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     dfl_ = "conso" if conso_hint else "social"
     guess_p = sorted({(dfl_ if p_ == "_" else dfl_ + "_ifrs" if p_ == "__ifrs" else p_) for p_, k_ in guess if k_ in KEYS_G})
     return {"guess": guess_p, "items": items, "perims": perims, "main": main, "unit": unit, "norm": norm, "cap": cap, "fy": fy, "type": "banque" if bank else "entreprise",
-            "cur": cur, "per": doc_kind(txt, title), "std": std, "revised": revised}
+            "cur": cur, "per": doc_kind(txt, title), "std": std, "revised": revised, "ocr": bool(ocr)}
 
 
 def _assign(vals, heads, i, fy, brut):
@@ -1123,8 +1189,9 @@ ACT_PARTS = ("charges_immobilisees", "immo_incorp", "immo_corp", "immo_fin", "ac
 STRONG = ("actif = passif", "résultat CR = bilan", "RN = RAO + HAO - impôt", "RN = résultat avant impôt - impôt", "RN = RE + RF + HAO - impôt", "RN = RAO - impôt")
 
 
-def checks(items, year, bank=False):
-    """Identités vérifiées pour un exercice : liste de (nom, écart relatif)."""
+def checks(items, year, bank=False, strict=False):
+    """Identités vérifiées pour un exercice : liste de (nom, écart relatif). strict : égalités exactes exigées (reconnaissance de
+    caractères : un chiffre changé au milieu d'un total ne doit pas passer pour une vérification)."""
     g = lambda k: (items.get(k) or {}).get(year)  # noqa: E731
     res = []
 
@@ -1136,6 +1203,11 @@ def checks(items, year, bank=False):
     for nm, a, b in (("actif = passif", g("total_actif"), g("total_passif")), ("résultat CR = bilan", g("resultat_net"), g("resultat_bilan"))):
         r = rel(a, b)
         if r is not None:
+            # égalités exactes dans les comptes publiés : en reconnaissance de caractères, un écart au-delà de l'arrondi (deux unités,
+            # deux millionièmes), même infime, est un chiffre mal lu et non une vérification (les couches texte gardent la tolérance :
+            # des comptes provisoires publiés avec un léger déséquilibre existent)
+            if strict and 2e-6 < r <= 0.002 and abs(a - b) > 2:
+                r = 0.0021
             res.append((nm, r))
     if g("valeur_ajoutee") is not None and g("charges_personnel") is not None and g("ebe") is not None:
         res.append(("EBE = VA - personnel", rel(g("valeur_ajoutee") - abs(g("charges_personnel")), g("ebe"))))
@@ -1196,7 +1268,7 @@ def _sec_of(k):
     return "B" if (S_ACT in s_ or S_PAS in s_) else "R" if S_CR in s_ else "F" if S_FLX in s_ else None
 
 
-def partial(items, year, c):
+def partial(items, year, c, strict=False):
     """Exercice dont une identité forte se vérifie mais une autre échoue : seuls sont gardés les états entièrement confirmés (une
     identité vérifiée, aucune fausse) et les postes des identités vérifiées ; tout doit alors se vérifier de nouveau.
     (postes gardés, contrôles) ou None."""
@@ -1208,7 +1280,7 @@ def partial(items, year, c):
     ok_sec = {ID_SEC[n] for n in ok_n if n in CONFIRMS}
     bad_sec = {ID_SEC[n] for n, r in c if r is not None and r > 0.01 and ID_SEC.get(n)}
     keep = {k for k in items if k in ok_keys or (_sec_of(k) in ok_sec and _sec_of(k) not in bad_sec)}
-    c2 = checks({k: items[k] for k in keep}, year)
+    c2 = checks({k: items[k] for k in keep}, year, strict=strict)
     strong2 = [r for n, r in c2 if n in STRONG and r is not None]
     if strong2 and min(strong2) <= 0.001 and all(r <= 0.01 for _, r in c2 if r is not None):
         return keep, c2
@@ -1217,7 +1289,7 @@ def partial(items, year, c):
 
 def validate(parsed, year, items=None):
     """Exercice retenu si au moins une identité forte se vérifie à 0,1 % et qu'aucune ne s'écarte de plus de 1 %."""
-    c = checks(items if items is not None else parsed["items"], year, parsed.get("type") == "banque")
+    c = checks(items if items is not None else parsed["items"], year, parsed.get("type") == "banque", strict=bool(parsed.get("ocr")))
     strong = [r for n, r in c if n in STRONG]
     ok = bool(strong) and min(strong) <= 0.001 and all(r <= 0.01 for _, r in c)
     return ok, c
@@ -1312,13 +1384,21 @@ def read_doc(texts, meta):
     title = meta.get("ti") or ""
     best = None
     parsed = {}
+    variants = []
     for src, (txt, ocr) in texts.items():
         if not txt or len(txt.strip()) < 200:
             continue
+        variants.append((src, txt, ocr, False))
+        if ocr:
+            variants.append((src + "~", txt, ocr, True))  # (libellés nettoyés de leurs débris : seconde lecture du même texte)
+    for src, txt, ocr, tol in variants:
+        _TOLERANT[0] = tol
         try:
             P = parse(txt, fy_hint=fy_hint, title=title, ocr=ocr)
         except Exception:  # noqa: BLE001
             continue
+        finally:
+            _TOLERANT[0] = False
         parsed[src] = P
         res = {}
         for per, items in P["perims"].items():
@@ -1328,7 +1408,7 @@ def read_doc(texts, meta):
                 if ok:
                     res.setdefault(per, {})[y] = ([(n, round(r, 5)) for n, r in c], None)
                 else:
-                    pr = partial(items, y, c)  # une identité vérifiée, une autre fausse : seul ce qui reste sûr est gardé
+                    pr = partial(items, y, c, strict=bool(P.get("ocr")))  # une identité vérifiée, une autre fausse : seul ce qui reste sûr est gardé
                     if pr:
                         res.setdefault(per, {})[y] = ([(n, round(r, 5)) for n, r in pr[1]], pr[0])
         score = sum(len(v) for v in res.values()) * 100 + len(P["items"])
@@ -1337,7 +1417,8 @@ def read_doc(texts, meta):
     if not best:
         return {"st": "illisible"}
     _, src, P, res = best
-    out = {"st": "ok" if res else "non vérifié", "src": src, "fy": P["fy"], "per": P["per"], "std": P["std"], "type": P["type"],
+    base_src = src.rstrip("~")  # (« fra~ » : même texte que « fra », libellés nettoyés)
+    out = {"st": "ok" if res else "non vérifié", "src": base_src, "fy": P["fy"], "per": P["per"], "std": P["std"], "type": P["type"],
            "cur": P["cur"], "main": P["main"], "n": len(P["items"]), "y": {}, "guess": P.get("guess") or []}
     oc_ = other_company(meta["t"], (meta.get("u") or "").rsplit("/", 1)[-1]) if meta.get("t") else None
     t_eff = meta.get("t") if oc_ in (None, "?") else oc_  # (document déposé sous une autre société : voir other_company)
@@ -1348,7 +1429,7 @@ def read_doc(texts, meta):
         return out
     # OCR : un montant n'est gardé que si une autre lecture (autre langue, autre mode) donne le même chiffre,
     # ou s'il entre dans une identité comptable vérifiée
-    others = [P_ for s_, P_ in parsed.items() if s_ != src and s_ in OCR_SRC]
+    others = [P_ for s_, P_ in parsed.items() if s_.rstrip("~") != base_src and s_.rstrip("~") in OCR_SRC]
     for per, yrs in res.items():
         items = P["perims"][per]
         for y, (chk, keep) in yrs.items():
@@ -1359,7 +1440,7 @@ def read_doc(texts, meta):
                 if y not in v or (keep is not None and k not in keep):
                     continue
                 x = v[y]
-                if src in OCR_SRC and k not in ok_id:
+                if base_src in OCR_SRC and k not in ok_id:
                     ovs = [((o_["perims"].get(per) or {}).get(k) or {}).get(y) for o_ in others]
                     if not any(ov is not None and abs(ov - x) <= 0.5 for ov in ovs):
                         continue
@@ -1494,7 +1575,9 @@ def consolidate(cj, mirror=None):
                 recs.append({"t": t_doc, "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"),
                              "uc": x.get("uc") or [], "v": x.get("v") or {}, "vk": set(x.get("vk") or []), "c": x.get("c"), "doc": u,
                              "rank": _doc_rank(r, int(y)), "d": r.get("d"), "ocr": r.get("src") in OCR_SRC,
-                             "guess": per in (r.get("guess") or []), "cf": set(x.get("cf") or []),
+                             # (communiqué ou rapport numérisé : deux lectures identiques d'un chiffre ne garantissent pas sa ligne ni sa
+                             # colonne ; seuls les montants vérifiés par une identité sont gardés)
+                             "guess": per in (r.get("guess") or []), "cf": set(x.get("cf") or []) if r.get("cat") in (None, "financial_statements", "auditor_report") else set(),
                              "strong": len({c_[0] for c_ in (x.get("c") or []) if c_[0] in STRONG and c_[1] is not None and c_[1] <= 0.001})})
     known = {}
     for x in recs:
@@ -1935,6 +2018,12 @@ def consolidate(cj, mirror=None):
                                 v.pop("total_passif", None)
                             else:
                                 del v[k_]
+                    # un poste du bilan (actif ou passif) plus grand que le total du bilan : autre unité ou lecture fautive
+                    for k_ in list(v):
+                        if k_ in ("total_actif", "total_passif") or v[k_] is None:
+                            continue
+                        if set(SECS.get(k_, ())) & {S_ACT, S_PAS} and abs(v[k_]) > ta_ * 1.01:
+                            del v[k_]
                 weak = [k_ for k_ in weak if k_ in v]
                 best = cand[0]
                 res[y] = {"v": v, "n": max(nsrc.get(k, 1) for k in ("total_actif", "resultat_net") if k in nsrc) if any(k in nsrc for k in ("total_actif", "resultat_net")) else 1,
