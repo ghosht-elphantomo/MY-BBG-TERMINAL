@@ -8,7 +8,7 @@ const ST = { fn: 'MONITOR', sec: 'QQQ', gp: { range: '1A', type: 'bbg', ov: { sm
 /* Registre des fonctions : code -> [libellé, portée (sec = titre, mkt = marché), groupe, définition courte, titre Bloomberg]
    Les définitions suivent celles de l'autocomplétion Bloomberg (nom anglais de la fonction + ce qu'elle montre). */
 const FN = {
-  'MOTS CLÉ': ['Recherche par mots clés', 'mkt', 'Recherche', 'Tous les documents de la BRVM depuis 1998 (états financiers, rapports, avis de la BRVM et du DC/BR, bulletins de la cote, dividendes, notations), obligations, titres, fonctions et actualités', 'Keyword Search'],
+  'MOTS CLES': ['Recherche par mots clés', 'mkt', 'Recherche', 'Tous les documents de la BRVM depuis 1998 (états financiers, rapports, avis de la BRVM et du DC/BR, bulletins de la cote, dividendes, notations), obligations, titres, fonctions et actualités', 'Keyword Search'],
   BRIEF: ['Synthèse du jour', 'mkt', 'Marchés', 'BRVM, portefeuille, alertes, marchés mondiaux, changes, matières, taux, agenda du jour et actualités sur une page', 'Daily Briefing'],
   MONITOR: ['Moniteur de marchés', 'mkt', 'Marchés', 'Tous les titres suivis, signal SMA 200 de QQQ, séance BRVM, carte des capitalisations', 'Market Monitor'],
   BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs ; en option : flottant officiel, valorisation du marché (PER)', 'BRVM Overview'],
@@ -75,8 +75,8 @@ const FN = {
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
 /* touches de marché : BRIEF, puis les fonctions de la BRVM et de l'UEMOA, puis les autres marchés */
-const MKT_BRVM = ['BRVM', 'MOST', 'LIQ', 'DIVC', 'EVTS', 'NOT', 'SGI', 'UEMOA BONDS', 'GC', 'UEMOA/DATA'];
-const MKT_KEYS = ['BRIEF', 'MOTS CLÉ'].concat(MKT_BRVM, ['PORTF', 'SCREENER', 'ALRT', 'MAP', 'INDX', 'FG', 'NEWS ECO', 'ECWB', 'RATES', 'FX', 'COMMO', 'BMAP', 'MACRO', 'CORR', 'RRG', 'CORP RESULT', 'HELP']);
+const MKT_BRVM = ['BRVM', 'MOST', 'LIQ', 'DIVC', 'EVTS', 'NOT', 'MOTS CLES', 'SGI', 'UEMOA BONDS', 'GC', 'UEMOA/DATA'];
+const MKT_KEYS = ['BRIEF'].concat(MKT_BRVM, ['PORTF', 'SCREENER', 'ALRT', 'MAP', 'INDX', 'FG', 'NEWS ECO', 'ECWB', 'RATES', 'FX', 'COMMO', 'BMAP', 'MACRO', 'CORR', 'RRG', 'CORP RESULT', 'HELP']);
 const MENU_GROUPS = [['Description', ['DES', 'CN', 'HDS', 'STOCK BONDS', 'CACS']], ['Graphiques et cours', ['GP', 'HP', 'TECH', 'TRA', 'COMP', 'HS', 'SEAS', 'HVT', 'VAP']], ['Fondamentaux', ['FA', 'GF', 'RV', 'WACC', 'DVD', 'DDM', 'MODL']],
   ['Analystes', ['ANR', 'EE', 'SURP']], ['Composition de l’indice', ['MEMB', 'MOV']], ['Quant', ['SCOR', 'LQA', 'ANOM', 'PEER']], ['Risque', ['BETA', 'QLAB', 'BTST']]];
 const SEC_TABS = MENU_GROUPS.flatMap(g => g[1]);
@@ -182,7 +182,7 @@ function runCmd(txt) {
 }
 const KW_CMD = /^(?:mots?[\s-]*cl[eé]s?|motscl[eé]s?|recherche|kw|docs)(?:\s+([\s\S]*))?$/i;
 const kwClean = t => String(t || '').replace(/<GO>|\b(?:GO|EQUITY|INDEX|CURNCY|COMDTY)\b/gi, ' ').replace(/\s+/g, ' ').trim();
-function kwGo(q) { const k = ST.kw = ST.kw || { q: '', k: '', n: 60, sel: 0 }; if (q != null) Object.assign(k, { q, k: '', n: 60, sel: 0 }); go('MOTS CLÉ'); }
+function kwGo(q) { const k = ST.kw = ST.kw || { q: '', k: '', n: 60, sel: 0 }; if (q != null) Object.assign(k, { q, k: '', n: 60, sel: 0 }); go('MOTS CLES'); }
 function menuItems(s) { return SEC_TABS.filter(has); }
 function exactSec(t) { const u = (t || '').toUpperCase(); return Q.by[u] || Q.sum.secs.find(s => s.tk.toUpperCase().split(' ')[0] === u) || null; }
 /* Saisie façon Bloomberg : « SNTS » propose les titres ; « SNTS » + espace (ou Tab) liste les fonctions du titre avec leur définition. */
@@ -197,7 +197,7 @@ function initCmd() {
       items = [{ k: 'h', a: `${ykey(S)} · ${S.n}` }];
       for (const [g, cs] of MENU_GROUPS) { const gc = cs.filter(c => codes.includes(c)); if (!gc.length) continue; if (!part) items.push({ k: 'h', a: g });
         for (const c of gc) { const why = avail(c, S); items.push({ k: 'sfn', id: c, sec: S.id, a: c, b: `${esc(FN[c][4])} <i>— ${esc(FN[c][3])}</i>`, c: why ? 'n.d.' : FN[c][0], off: !!why, tt: why ? 'Non disponible : ' + why : FN[c][3] }); } }
-      if (part && items.length === 1) { const q = v.trim(); items.push({ k: 'kw', id: q, a: 'MOTS CLÉ', b: `Rechercher « ${esc(q)} » dans tous les documents de la BRVM`, c: 'recherche', tt: FN['MOTS CLÉ'][3] }); }
+      if (part && items.length === 1) { const q = v.trim(); items.push({ k: 'kw', id: q, a: 'MOTS CLES', b: `Rechercher « ${esc(q)} » dans tous les documents de la BRVM`, c: 'recherche', tt: FN['MOTS CLES'][3] }); }
     } else {
       const last = toks[toks.length - 1] || '', L = last.toUpperCase();
       const LL = v.trim().toUpperCase(), multi = /\s/.test(LL);
@@ -213,7 +213,7 @@ function initCmd() {
       items = secFirst ? blk('TITRES', T).concat(blk('FONCTIONS', F)) : blk('FONCTIONS', F).concat(blk('TITRES', T));
       /* recherche par mots clés : en tête pour un texte libre de plusieurs mots, sinon en dernier choix */
       const kv = v.trim(), mq = kv.match(KW_CMD), q = mq ? (mq[1] || '').trim() : kv;
-      if (q.length >= 2) { const K = [{ k: 'kw', id: q, a: 'MOTS CLÉ', b: `Rechercher « ${esc(q)} » dans tous les documents de la BRVM`, c: 'recherche', tt: FN['MOTS CLÉ'][3] }];
+      if (q.length >= 2) { const K = [{ k: 'kw', id: q, a: 'MOTS CLES', b: `Rechercher « ${esc(q)} » dans tous les documents de la BRVM`, c: 'recherche', tt: FN['MOTS CLES'][3] }];
         const first = (mq && q) || (toks.length > 1 && !F.length && !searchSecs(kwClean(kv)).length) || (!F.length && !T.length);
         items = first ? blk('RECHERCHE', K).concat(items) : items.concat(blk('RECHERCHE', K)); }
     }
@@ -412,7 +412,7 @@ const FN_TABS = {
   RATES: [['m', 'Marché monétaire US'], ['f', 'Anticipations de la Fed'], ['w', 'BONDS · taux souverains mondiaux']] };
 const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
 const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FX', 'w'], FXC: ['FX', 'm'], EQS: ['SCREENER'], SCREN: ['SCREENER'], RELS: ['STOCK BONDS'], TOP: ['NEWS'], MON: ['MONITOR'], GLCO: ['COMMO'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'], BTMM: ['RATES', 'm'],
-  PORT: ['PORTF'], WEI: ['INDX', 'i'], WEIF: ['INDX', 'f'], IMAP: ['MAP'], US: ['MAP', 'US'], ECO: ['NEWS ECO'], UEMOA: ['UEMOA/DATA'], ECST: ['UEMOA/DATA', 'ecst'], SRCH: ['UEMOA BONDS'], PER: ['BRVM', 'p'], EA: ['CORP RESULT'] };
+  PORT: ['PORTF'], WEI: ['INDX', 'i'], WEIF: ['INDX', 'f'], IMAP: ['MAP'], US: ['MAP', 'US'], ECO: ['NEWS ECO'], UEMOA: ['UEMOA/DATA'], ECST: ['UEMOA/DATA', 'ecst'], SRCH: ['UEMOA BONDS'], PER: ['BRVM', 'p'], EA: ['CORP RESULT'], 'MOTS CLÉ': ['MOTS CLES'] };
 /* raccourcis vers un onglet (ce ne sont pas d'anciens codes) */
 const FN_SHORT = { BONDS: ['RATES', 'w'] };
 function fnAlias(f) { const a = FN_ALIAS[f] || FN_SHORT[f]; if (!a) return f; if (a[1]) ST.tab[a[0]] = a[1]; return a[0]; }

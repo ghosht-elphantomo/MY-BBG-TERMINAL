@@ -2178,6 +2178,32 @@ def consolidate(cj, mirror=None, fx=None):
     def same(a_, b_):
         return a_ is not None and b_ is not None and abs(a_ - b_) <= max(0.5, abs(b_) * 0.001)
 
+    def dk(u_):  # (même document déposé deux fois, « …_2004.pdf » et « …_2004_0.pdf » : une seule source)
+        return re.sub(r"(?:_\d)?\.pdf$", "", (u_ or "").rsplit("/", 1)[-1].lower())
+
+    # lecture par reconnaissance de caractères démentie par une couche texte pour le même exercice (aucun montant clé commun,
+    # au moins deux différents) : ses années sont suspectes, elle ne confirme rien ailleurs (sinon un scan mal daté entraîne
+    # avec lui les colonnes d'un autre document : Sonatel 2003-2004)
+    def _contradicted(o):
+        if not o["ocr"]:
+            return False
+        for p_ in idx_ty.get((o["t"], o["y"]), []):
+            if p_["ocr"] or dk(p_["doc"]) == dk(o["doc"]) or p_["per"] != o["per"]:
+                continue  # (même périmètre seulement : comptes sociaux et consolidés diffèrent)
+            n_same = n_diff = 0
+            for k in KEYC:
+                a_, b_ = o["m"].get(k), p_["m"].get(k)
+                if a_ is None or b_ is None:
+                    continue
+                if same(a_, b_):
+                    n_same += 1
+                else:
+                    n_diff += 1
+            if n_diff >= 2 and n_same == 0:
+                return True
+        return False
+    contra = {id(o) for o in recs if _contradicted(o)}
+
     def support(x, y, peers=False):
         n_ = 0
         for k in KEYC:
@@ -2187,7 +2213,7 @@ def consolidate(cj, mirror=None, fx=None):
             if v is None:
                 continue
             # (pour juger un décalage d'années, une lecture par reconnaissance de caractères ne contredit pas une couche texte)
-            if any(o is not x and o["doc"] != x["doc"] and same(v, o["m"].get(k, o["m"].get("resultat_bilan") if k == "resultat_net" else None))
+            if any(o is not x and dk(o["doc"]) != dk(x["doc"]) and id(o) not in contra and same(v, o["m"].get(k, o["m"].get("resultat_bilan") if k == "resultat_net" else None))
                    and not (peers and o["ocr"] and not x["ocr"]) for o in idx_ty.get((x["t"], y), [])):
                 n_ += 1
             elif same(v, mirror_v(x["t"], y, k)) or (mirror_v(x["t"], y, k) is not None and abs(v - mirror_v(x["t"], y, k)) <= abs(mirror_v(x["t"], y, k)) * 0.005):
@@ -2235,6 +2261,25 @@ def consolidate(cj, mirror=None, fx=None):
             x["y"] -= dy
             x["shifted"] = True
             keep.append(x)
+    # autre colonne d'un document dont une colonne a été réattribuée, restée sur l'exercice de celle-ci (deux colonnes d'un même
+    # document pour un même exercice) : colonnes permutées si d'autres sources donnent ses montants pour l'exercice d'où vient
+    # l'autre, en-tête décalé d'un an pour toutes les colonnes si elles les donnent l'année suivante ; sinon exercice incertain,
+    # colonne écartée (« Etats financiers provisoires - SONATEL SN - Exercice 2004 » lu avec les années 2002-2003)
+    for (doc_, per_), dy in swapped.items():
+        mine = [o for o in keep if o["doc"] == doc_ and o["per"] == per_]
+        taken = {o["y"] for o in mine if o.get("shifted")}
+        for o in mine:
+            if o.get("shifted") or o["y"] not in taken:
+                continue
+            s_sw, s_sh = support(o, o["y"] - dy, True), support(o, o["y"] + dy, True)
+            if s_sw >= 1 and s_sh == 0:
+                o["y"] -= dy
+            elif s_sh >= 1 and s_sw == 0 and o["y"] + dy not in taken:
+                o["y"] += dy
+            else:
+                keep.remove(o)
+                continue
+            o["shifted"] = True
     recs = drop_docs(keep, bad)
     # reconnaissance de caractères vérifiée par une seule identité : un total du bilan qui change de plus de 3 fois d'une colonne à
     # l'autre du même document trahit une lecture fautive

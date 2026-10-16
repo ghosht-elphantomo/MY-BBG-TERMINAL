@@ -630,7 +630,7 @@ table.t.eqt td{line-height:24px}
 .hlt span{font-size:11px;color:var(--link);border:1px solid #26384d;padding:0 5px;cursor:pointer;white-space:nowrap}
 .hlt span:hover{background:#1b2a3c;color:#fff}
 .t.hlk td{padding-top:3px;padding-bottom:3px;white-space:normal}.t.hlk td.tk{white-space:nowrap;width:1%}
-/* MOTS CLÉ : recherche dans les documents */
+/* MOTS CLES : recherche dans les documents */
 .kw{display:flex;flex-direction:column;gap:5px;padding:6px}
 .kwbar{display:flex;align-items:center;gap:8px;background:#000;border:1px solid var(--amber);padding:0 8px}
 .kwbar input{flex:1;min-width:0;background:transparent;border:0;color:var(--yel);font:inherit;font-size:15px;padding:7px 0;outline:none}

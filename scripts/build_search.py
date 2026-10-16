@@ -1,4 +1,4 @@
-"""Index de la recherche MOTS CLÉ : tous les documents de la BRVM connus du terminal, un par adresse.
+"""Index de la recherche MOTS CLES : tous les documents de la BRVM connus du terminal, un par adresse.
 
 Sources (les plus riches d'abord pour les métadonnées) : publications des sociétés cotées (liste de la base des cours, avec
 exercice et catégorie), pages « rapports des sociétés cotées » de brvm.org, documents lus pour les états financiers et pour les
@@ -55,7 +55,18 @@ def kind_of(ti, u, k0=None):
     # (emprunt obligataire : « TPCI 5,45 % 2026-2031 », « (EOS.O30) », sukuk… quelle que soit la catégorie de la liste)
     if re.search(r"\d+(?:,\d+)? ?% ?(?:19|20)\d\d ?- ?(?:19|20)\d\d|\.o\d+\b|emprunt obligataire|obligataire|sukuk|diaspora bonds", n):
         return "obl"
-    if k0 == "rann" and re.search(r"trimestr|semestr|rapport d.activite", nrm(ti)) and not re.search(r"rapport annuel|examen limite|commissaire|attestation|\bcac\b", nrm(ti)):
+    # intitulé qui annonce les états financiers avant toute attestation ou tout rapport sur eux : « états financiers », quelle
+    # que soit la catégorie de la liste (« SONATEL SN : Etats financiers et attestation des Commissaires Aux Comptes – Exercice 2025 »)
+    tn = nrm(ti)
+    m_ef = re.search(r"\betats? financiers?|financial statements|\bcomptes (?:annuels|consolides|sociaux|semestriels)", tn)
+    m_cac = re.search(r"attestation|commissaires? aux comptes|\bcac\b|rapport (?:general|special) des", tn)
+    if re.match(r"(?:[^:]{0,70}:\s*)?(?:attestation|rapports? (?:des|du) (?:cac|commissaires?))", tn) and k0 in (None, "ef", "rann", "ra", "com", "avis", "cac"):
+        return "cac"  # (« Attestation des CAC SITAB - 1er semestre 2017 », « Rapport des CAC sur les états financiers »)
+    if m_ef and not (m_cac and m_cac.start() < m_ef.start()) and k0 in (None, "cac", "res", "rann", "com", "avis", "ra", "ef"):
+        return "ef"
+    if m_ef and m_cac and m_cac.start() < m_ef.start() and k0 in (None, "ef", "com", "avis"):
+        return "cac"  # (« Attestation de sincérité sur les états financiers »)
+    if k0 == "rann" and re.search(r"trimestr|semestr|rapport d.activite|rapport de gestion.{0,20}(?:mars|juin|septembre)", nrm(ti)) and not re.search(r"rapport annuel|examen limite|commissaire|attestation|\bcac\b", nrm(ti)):
         return "ra"  # (ancien site : « Rapport semestriel » rangé avec les rapports annuels)
     if k0 and k0 not in ("avis", "com"):
         return k0
@@ -82,9 +93,9 @@ def flags_of(ti, u, k):
         f += "D"
     if re.search(r"rectif|annule et remplace", n):
         f += "R"
-    if re.search(r"semestr|1er semestre|s1\b", n):
+    if re.search(r"semestr|1er semestre|s1\b|\bau 30 juin|30/06/(?:19|20)\d\d|rapport de gestion.{0,20}juin", n):
         f += "S"
-    if re.search(r"trimestr|\b[1-4](?:er|e|eme)? trimestre|\bt[1-4]\b|[1-4]t20", n) and k != "rev":
+    if re.search(r"trimestr|\b[1-4](?:er|e|eme)? trimestre|\bt[1-4]\b|[1-4]t20|\bau 30 septembre|\bau 31 mars|30/09/(?:19|20)\d\d|31/03/(?:19|20)\d\d|rapport de gestion.{0,20}(?:mars|septembre)", n) and k != "rev":
         f += "T"
     if re.search(r"consolid", n):
         f += "C"
@@ -93,7 +104,7 @@ def flags_of(ti, u, k):
 
 def year_of(ti, u):
     n = nrm(ti) + " " + nrm(urllib.parse.unquote(u.rsplit("/", 1)[-1], encoding="latin-1"))
-    m = (re.search(r"(?:exercice|exo|ex|annee|fy)[\s_\-:]*((?:19|20)\d\d)(?!\d)", n) or re.search(r"(?:semestre|trimestre)[\s_\-]*((?:19|20)\d\d)(?!\d)", n)
+    m = (re.search(r"\b(?:exercice|exo|ex|annee|fy)[\s_\-:]*((?:19|20)\d\d)(?!\d)", n) or re.search(r"(?:semestre|trimestre)[\s_\-]*((?:19|20)\d\d)(?!\d)", n)
          or re.search(r"(?:etats? financiers?|resultats?|rapport annuel|rapport d.activites?|comptes)[^0-9]{0,25}((?:19|20)\d\d)(?!\d)", n))
     return int(m.group(1)) if m else 0
 
@@ -144,7 +155,7 @@ def jload(p, default=None):
         return default
 
 
-def build(out, brvm_src, search_src=None, boc_dir=None, log=print):
+def build(out, brvm_src, search_src=None, boc_dir=None, log=print, comptes=None):
     t0 = time.time()
     R = {}  # adresse canonique -> ligne
 
@@ -155,7 +166,7 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print):
         cu = canon(u)
         if not (official(cu) or wb):
             return
-        ti = re.sub(r"\s+", " ", str(ti)).strip()[:180]
+        ti = re.sub(r"^[:;\-–— ]+", "", re.sub(r"\s+", " ", str(ti)).strip())[:180]  # (« : Pouvoir - Assemblée… » : nom de la société absent de la liste)
         k = kind_of(ti, cu, k0)
         f = "".join(sorted(set(flags_of(ti, cu, k) + (f0 or "") + ("A" if wb or "LinkClick" in cu or "/fr/marche/" in cu else ""))))
         y = int(y or 0) or year_of(ti, cu)
@@ -237,6 +248,34 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print):
     for sl, x in iss.items():
         alias(x.get("t"), x.get("n"))
         alias(x.get("t"), sl.replace("-", " "))
+    # exercice lu dans les comptes annuels par la lecture des états financiers (identités comptables vérifiées) : il prime sur
+    # l'intitulé (« Exercice 2013 » des anciennes listes = année de publication : comptes 2012)
+    cp = (jload(comptes, {}) or {}).get("docs") or {} if comptes else {}
+    sure = set()
+    for u, m in cp.items():
+        r = R.get(canon(u))
+        if r and m.get("st") == "ok" and m.get("per") == "annuel" and isinstance(m.get("fy"), int) and 1990 <= m["fy"] <= dt.date.today().year:
+            r[2] = m["fy"]
+            sure.add(id(r))
+    this_y = dt.date.today().year
+    n_fix = 0
+    for r in R.values():
+        if r[2] and not 1990 <= r[2] <= this_y + 1:
+            r[2] = 0
+        if r[0] in ("not", "obl") and r[2] and not re.search(r"exercice", nrm(r[4])):
+            r[2] = 0  # (notation, emprunt : « 2020-2025 » est une durée, pas un exercice)
+        dy = r[3] // 10000
+        if not (r[2] and r[3]) or r[2] < dy:
+            continue
+        annual = r[0] in ("ef", "rann", "res", "cac") and not re.search(r"[ST]", r[6])
+        if annual and id(r) in sure:
+            r[3], n_fix = 0, n_fix + 1  # (comptes de l'exercice N datés de l'année N : la date du nom du fichier est fausse)
+        elif annual and r[3] % 10000 <= 930:
+            r[2], n_fix = 0, n_fix + 1  # (comptes annuels publiés avant la fin de l'exercice annoncé : exercice incertain)
+        elif r[2] > dy and r[0] in ("ra", "ef", "rann", "res", "cac"):
+            r[3], n_fix = 0, n_fix + 1  # (rapport d'une période postérieure à sa date : date incertaine)
+    for r in R.values():  # (« dividende de l’exercice — » : exercice absent de la liste, connu par un autre document)
+        r[4] = re.sub(r" de l’exercice — ", f" de l’exercice {r[2]} " if r[2] else " ", r[4])
     rows = sorted(R.values(), key=lambda r: (-r[3], r[4]))
     # société manquante : reconnue dans l'intitulé (noms des sociétés)
     for r in rows:  # société rattachée par la liste démentie par le nom écrit dans l'intitulé (« … ONATEL-SA » rattaché à Sonatel)
@@ -252,7 +291,7 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print):
     res = {"v": 1, "ts": int(time.time()), "n": len(rows), "co": {t: sorted(n for n in v if n) for t, v in co.items() if t},
            "r": rows}
     json.dump(res, open(os.path.join(out, "search.json"), "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))
-    log(f"recherche MOTS CLÉ : {len(rows)} documents indexés ({time.time() - t0:.1f} s)")
+    log(f"recherche MOTS CLES : {len(rows)} documents indexés, {len(sure)} exercices lus dans les comptes, {n_fix} dates ou exercices incohérents écartés ({time.time() - t0:.1f} s)")
     return res
 
 
@@ -263,5 +302,6 @@ if __name__ == "__main__":
     ap.add_argument("--brvm-src", required=True)
     ap.add_argument("--search-src", default=None)
     ap.add_argument("--boc", default=None)
+    ap.add_argument("--comptes", default=None)
     a = ap.parse_args()
-    build(a.out, a.brvm_src, a.search_src, a.boc)
+    build(a.out, a.brvm_src, a.search_src, a.boc, comptes=a.comptes)

@@ -594,7 +594,7 @@ def run(d):
     cal_rows, avis, n_boc = [], [], 0
     boc_old, revue = {}, {}
     tick = {t_ for _, t_ in ALIAS if t_}
-    cat = []  # catalogue des documents lus (recherche MOTS CLÉ du terminal) : intitulé, nature, date, société, exercice
+    cat = []  # catalogue des documents lus (recherche MOTS CLES du terminal) : intitulé, nature, date, société, exercice
     for u, m in (idx.get("docs") or {}).items():
         if m.get("st") != "lu":
             continue
@@ -652,9 +652,10 @@ def run(d):
                 soc_ = (r.get("soc") or m.get("soc") or "").strip().upper()
                 if re.match(r"(LUNDI|MARDI|MERCREDI|JEUDI|VENDREDI|SAMEDI|DIMANCHE)\b|\d", soc_):
                     soc_ = ""  # (date lue à la place de la société)
-                c_.update(k="div", t=tk, y=int(r["ex"]) if str(r.get("ex") or "").isdigit() else None, d=_pubdate(u, r),
+                ex_ok = str(r.get("ex") or "").isdigit() and 1995 <= int(r["ex"]) <= dt.date.today().year  # (« exercice 1975 » : lecture fautive)
+                c_.update(k="div", t=tk, y=int(r["ex"]) if ex_ok else None, d=_pubdate(u, r),
                           f="D" if org_ == "DC/BR" else "", ti=f"Avis{num_} {org_} : {'report du ' if re.search(r'report', nrm(u.rsplit('/', 1)[-1])) else ''}paiement de dividendes{' (rectificatif)' if r.get('rect') else ''}"
-                                                              + (f" — {soc_}" if soc_ else "") + (f" — exercice {r['ex']}" if r.get("ex") else ""))
+                                                              + (f" — {soc_}" if soc_ else "") + (f" — exercice {r['ex']}" if ex_ok else ""))
     for c_ in cat:
         if not c_.get("d"):  # (ancien site : « …/avis/2002/juillet/… » : premier jour du mois)
             mp = re.search(r"/((?:19|20)\d\d)/(" + MOIS_RX + r")/", nrm(urllib.parse.unquote(c_["u"], encoding="latin-1")))

@@ -170,7 +170,7 @@ jobs:
              && python3 -c "import json,sys;d=json.load(open('/tmp/dividendes.json'));sys.exit(0 if d.get('rows') else 1)"; then
             cp /tmp/dividendes.json /tmp/raw/dividendes_off.json
           elif [ -f /tmp/raw/dividendes_off.json ]; then cp /tmp/raw/dividendes_off.json /tmp/dividendes.json; else rm -f /tmp/dividendes.json; fi
-          # listes des documents lus (branches comptes et dividendes) : index de la recherche MOTS CLÉ ; copie gardée sur la branche raw en secours
+          # listes des documents lus (branches comptes et dividendes) : index de la recherche MOTS CLES ; copie gardée sur la branche raw en secours
           mkdir -p /tmp/srch /tmp/raw/srch
           for f in "comptes:index.json:comptes_index.json" "comptes:brvm_rapports.json:brvm_rapports.json" "dividendes:catalog.json:div_catalog.json"; do
             IFS=: read -r br src dst <<< "$f"

@@ -203,7 +203,7 @@ PAGES.CACS = async (m, alive) => {
   const s = sec(ST.sec); setTitle('Corporate Action Calendar'); const brvm = s.mkt === 'BRVM';
   const [DV, EV, S] = await Promise.all([brvm ? getJSON('dividends.json').catch(() => []) : [], brvm ? getJSON('events.json').catch(() => []) : [], series(s.id).catch(() => null)]); if (!alive()) return;
   const A = [];
-  if (brvm) { for (const x of DV.filter(x => x.t === s.id && x.dps)) A.push({ d: x.det || x.pay || x.ann, k: 'Dividende', t: `Dividende net de l’exercice ${x.ex || '—'} : ${num(x.dps, 2)} FCFA${x.det ? ' · détachement ' + fds(x.det) : ''}${x.pay ? ' · paiement ' + fds(x.pay) : ''}`, fut: (x.det || x.pay || '') > new Date().toISOString().slice(0, 10) });
+  if (brvm) { for (const x of DV.filter(x => x.t === s.id && x.dps)) A.push({ d: x.det || x.pay || x.ann, k: 'Dividende', t: `Dividende net${x.ex ? ' de l’exercice ' + x.ex : ''} : ${num(x.dps, 2)} FCFA${x.det ? ' · détachement ' + fds(x.det) : ''}${x.pay ? ' · paiement ' + fds(x.pay) : ''}`, fut: (x.det || x.pay || '') > new Date().toISOString().slice(0, 10) });
     for (const e of EV.filter(e => e.t === s.id && /assembl|capital|fraction|division|split|offre|introduction|radiation|suspension|émission|augmentation/i.test((e.c || '') + ' ' + (e.ti || '')))) A.push({ d: e.d, k: e.c || 'Avis', t: e.ti, u: e.u }); }
   else if (S) { for (let i = 0; i < S.x.length; i++) if (S.div[i]) A.push({ d: S.d[i], k: 'Dividende', t: `Dividende de ${num(S.div[i], 4)} $ par action (date de détachement)` }); }
   A.sort((a, b) => (b.d || '').localeCompare(a.d || ''));

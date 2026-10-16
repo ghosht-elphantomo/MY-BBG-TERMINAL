@@ -4,7 +4,7 @@
 /* PAGES.MENU : définition remplacée plus loin (version active dans un fichier suivant) — retirée */
 
 /* ------------------------------------------------------------------ HELP : démarrage, fonctions par thème (avec leurs onglets), raccourcis, repères */
-const HELP_MKT = () => [['BRVM et UEMOA', MKT_BRVM], ['Vue d’ensemble', ['BRIEF', 'MOTS CLÉ', 'MONITOR', 'NEWS']], ['Portefeuille et sélection', ['PORTF', 'SCREENER', 'ALRT']],
+const HELP_MKT = () => [['BRVM et UEMOA', MKT_BRVM], ['Vue d’ensemble', ['BRIEF', 'MONITOR', 'NEWS']], ['Portefeuille et sélection', ['PORTF', 'SCREENER', 'ALRT']],
   ['Marchés mondiaux', ['MAP', 'INDX', 'FG', 'CORP RESULT']], ['Macro, taux et changes', ['NEWS ECO', 'ECWB', 'RATES', 'FX', 'MACRO']], ['Matières premières', ['COMMO', 'BMAP']], ['Analyse quantitative', ['CORR', 'RRG']]];
 PAGES.HELP = async m => {
   setTitle('Help');
@@ -12,7 +12,7 @@ PAGES.HELP = async m => {
   const item = (f, ex) => has(f) ? `<div class="hli" data-fn="${esc(f)}"${ex ? ` data-s="${ex}"` : ''}><b>${esc(f)}</b><div><span class="hn">${esc(FN[f][0])}</span><small>${esc(FN[f][3])}</small>${tabs(f)}</div></div>` : '';
   const grp = (title, list, ex) => { const h = list.map(f => item(f, ex)).join(''); return h ? `<div class="hlg"><h4>${esc(title)}</h4>${h}</div>` : ''; };
   const ex = ST.sec && Q.by[ST.sec] ? ST.sec : 'SNTS';
-  const start = [['SNTS', 'Le menu du titre : toutes ses fonctions, classées par thème.'], ['SNTS GP', 'Une fonction d’un titre : le ticker, un espace, le code.'], ['BRVM', 'Une fonction de marché : son code seul, ou la touche du haut.'], ['2', 'Un numéro : l’onglet ou la ligne qui porte ce numéro à l’écran.'], ['états financiers sonatel 2017', 'N’importe quels mots : recherche MOTS CLÉ dans tous les documents de la BRVM.']];
+  const start = [['SNTS', 'Le menu du titre : toutes ses fonctions, classées par thème.'], ['SNTS GP', 'Une fonction d’un titre : le ticker, un espace, le code.'], ['BRVM', 'Une fonction de marché : son code seul, ou la touche du haut.'], ['2', 'Un numéro : l’onglet ou la ligne qui porte ce numéro à l’écran.'], ['états financiers sonatel 2017', 'N’importe quels mots : recherche MOTS CLES dans tous les documents de la BRVM.']];
   const keys = [['F1', 'Cette aide'], ['F2', 'Obligations UEMOA (UEMOA BONDS)'], ['F3', 'Marché BRVM'], ['F4', 'Indices mondiaux (INDX)'], ['Échap', 'Retour au menu du titre ou à MONITOR'], ['◀ ▶', 'Écran précédent / suivant'], ['⤢', 'Plein écran'], ['+', 'Nouvel onglet de fenêtre'], ['Espace / Tab', 'Après un ticker : liste de ses fonctions']];
   const marks = [['n.d.', 'Donnée non publiée : rien n’est inventé.'], ['≈', 'Estimation, toujours signalée comme telle.'], ['GMT', 'Heures d’Abidjan.'], ['15 min', 'Actualisation des cours en séance ; base complète chaque soir.'], ['a', 'Dividende ajusté d’un fractionnement ou d’actions gratuites (montant publié en infobulle).'], ['$', 'Dividende publié en dollars : montant en FCFA du bulletin officiel de la cote, sinon converti au cours du jour de sa publication.'], ['Graphiques', 'Molette ou pincer = zoom, glisser = déplacer, double-clic = vue initiale.']];
   const old = Object.entries(FN_ALIAS).filter(([, a]) => has(a[0])).map(([o, [f, t]]) => `<tr data-fn="${esc(o)}" style="cursor:pointer"><td class="l dm">${esc(o)}</td><td class="l">→</td><td class="l tk">${esc(f)}</td><td class="l nm">${t ? 'onglet « ' + esc(tabLabel(f, t) || '') + ' »' : ''}</td></tr>`).join('');

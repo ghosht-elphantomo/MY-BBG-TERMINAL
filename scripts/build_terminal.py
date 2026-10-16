@@ -297,7 +297,7 @@ def main():
     ap.add_argument("--boc", default=None, help="dossier boc_px (branche boc) : tableaux des actions lus dans les bulletins officiels de la cote")
     ap.add_argument("--dividendes", default=None, help="dividendes.json (branche dividendes) : versements lus dans les avis et calendriers de la BRVM")
     ap.add_argument("--comptes", default=None, help="comptes.json (branche comptes) : états financiers publiés à la BRVM, lus et vérifiés")
-    ap.add_argument("--search-src", default=None, help="listes de documents des branches comptes et dividendes (index de la recherche MOTS CLÉ)")
+    ap.add_argument("--search-src", default=None, help="listes de documents des branches comptes et dividendes (index de la recherche MOTS CLES)")
     a = ap.parse_args()
     QUOTES = {}
     if a.quotes and os.path.exists(a.quotes):
@@ -1527,10 +1527,10 @@ def main():
                       ("events_recent", emeta[:80]), ("boc_check", {**boc_chk, "avis": av_chk, "d": dt.date.today().isoformat()} if BOC else {"n": 0, "avis": av_chk})):
         with open(os.path.join(out, name + ".json"), "w", encoding="utf8") as fh:
             json.dump(obj, fh, separators=(",", ":"), ensure_ascii=False)
-    # recherche MOTS CLÉ : index de tous les documents de la BRVM connus du terminal (après les avis, rapports et notations du jour)
+    # recherche MOTS CLES : index de tous les documents de la BRVM connus du terminal (après les avis, rapports et notations du jour)
     try:
         import build_search
-        build_search.build(out, src, a.search_src, a.boc, log)
+        build_search.build(out, src, a.search_src, a.boc, log, comptes=a.comptes)
     except Exception as e:  # noqa: BLE001
         log("index de recherche non refait :", e)
     tot = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(out) for f in fs)
