@@ -252,6 +252,37 @@ def parse_calendar(txt):
     return rows, irvm
 
 
+# ---------------------------------------------------------------- bulletins officiels de la cote de l'ancien site (2002-2012)
+# « SNTS  SONATEL SN  …  5,085  6-juil-05  67,015  87,000 » : dernier dividende net payé et sa date de paiement, sur la ligne du titre.
+MOIS_ABR = {"janv": 1, "jan": 1, "fevr": 2, "fev": 2, "feb": 2, "mars": 3, "mar": 3, "avr": 4, "apr": 4, "mai": 5, "may": 5, "juin": 6, "jun": 6,
+            "juil": 7, "jul": 7, "aout": 8, "aug": 8, "sept": 9, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
+BOC_DIV = re.compile(r"(\d{1,3}(?:[ ,]\d{3})*|\d+)\s+(\d{1,2})-([a-z]{3,5})\.?-(\d{2})\b")
+
+
+def parse_boc_old(txt):
+    """[(titre, montant, date de paiement)] lus sur les lignes des actions d'un bulletin de l'ancien site."""
+    out = []
+    for l in txt.split("\n"):
+        m = re.match(r"\s*([A-Z]{3,5})\s{2,}\S", l)
+        if not m or re.match(r"\s*[A-Z]{3,5}\.", l):
+            continue  # (lignes des obligations « SGBC.O1 » : coupons)
+        hits = list(BOC_DIV.finditer(nrm(l)))
+        if not hits:
+            continue
+        h = hits[-1]
+        mo = MOIS_ABR.get(h.group(3))
+        if not mo:
+            continue
+        try:
+            d = dt.date(2000 + int(h.group(4)), mo, int(h.group(2))).isoformat()
+        except ValueError:
+            continue
+        a = float(re.sub(r"[ ,]", "", h.group(1)))
+        if a > 0:
+            out.append((m.group(1), a, d))
+    return out
+
+
 # noms des sociétés dans les avis et calendriers -> titre (motifs sur le nom normalisé, du plus précis au plus général)
 ALIAS = [
     (r"\bboa\b.*(?:burkina|\bbf\b)|bank of africa.*(?:burkina|\bbf\b)", "BOABF"), (r"\bboa\b.*(?:benin|\bbn\b)|bank of africa.*(?:benin|\bbn\b)", "BOAB"),
@@ -305,7 +336,7 @@ def _days(a, b):
         return 9999
 
 
-def consolidate(cal_rows, avis):
+def consolidate(cal_rows, avis, boc_old=None):
     """Un versement par titre et date (détachement ou paiement à 5 jours près). Montant retenu : l'avis individuel le plus récent
     de la BRVM (un avis rectificatif remplace le précédent ; le calendrier n'est pas toujours mis à jour après un rectificatif),
     sinon la dernière version du calendrier de la BRVM, sinon l'avis du Dépositaire central. Montant brut seul : net déduit
@@ -327,16 +358,21 @@ def consolidate(cal_rows, avis):
                        "irvm": p_.get("irvm"), "kind": p_["kind"], "ex": r.get("ex"), "num": r.get("num"), "yr": r.get("yr"),
                        "src": "avis BRVM" if r.get("org") != "DC/BR" else "avis DC/BR", "u": r["u"], "d": _pubdate(r["u"], r), "ann": _pubdate(r["u"], r),
                        "rank": 2 if r.get("org") != "DC/BR" else 0, "rect": bool(r.get("rect"))})
+    # bulletins de l'ancien site : un versement par titre et date de paiement, le montant affiché le plus souvent (une ligne mal
+    # imprimée un jour ne l'emporte pas) ; source la plus faible, retenue seulement sans avis ni calendrier pour ce versement
+    for (t, d), x in (boc_old or {}).items():
+        amts = x["a"]
+        a, n = max(amts.items(), key=lambda kv: kv[1])
+        if n >= 2 or len(amts) == 1:
+            ev.append({"t": t, "det": None, "pay": d, "net": a, "src": "bulletin", "u": x["u"], "d": d, "rank": -1, "ex": int(d[:4]) - 1, "nb": n})
     out = []
     for t in sorted({e["t"] for e in ev}):
         es = sorted([e for e in ev if e["t"] == t], key=lambda e: (e.get("det") or e.get("pay") or ""))
         groups = []
         for e in es:
-            # (même versement : dates à 5 jours près ; un avis qui ne donne que le détachement et un autre que le paiement : 7 jours)
-            g = next((g for g in groups if any((e.get("det") and _days(e["det"], x.get("det")) <= 5) or (e.get("pay") and _days(e["pay"], x.get("pay")) <= 5)
-                                           or (e.get("det") and not e.get("pay") and x.get("pay") and not x.get("det") and _days(e["det"], x["pay"]) <= 7)
-                                           or (e.get("pay") and not e.get("det") and x.get("det") and not x.get("pay") and _days(e["pay"], x["det"]) <= 7)
-                                           for x in g)), None)
+            # (même versement : une date de détachement ou de paiement à 7 jours près d'une date de l'autre document)
+            de_ = [v for v in (e.get("det"), e.get("pay")) if v]
+            g = next((g for g in groups if any(_days(a_, b_) <= 7 for x in g for a_ in de_ for b_ in (x.get("det"), x.get("pay")) if b_)), None)
             (g.append(e) if g is not None else groups.append([e]))
         for g in groups:
             # avis rectificatif de la BRVM (le plus récent) ; sinon la publication la plus récente entre avis de la BRVM et calendrier
@@ -347,7 +383,8 @@ def consolidate(cal_rows, avis):
                 continue
             rect_ = [e for e in gn if e["rank"] == 2 and e.get("rect")]
             main_ = [e for e in gn if e["rank"] >= 1]
-            best = max(rect_ or main_ or gn, key=lambda e: (e.get("d") or "", e["rank"]))
+            dcbr_ = [e for e in gn if e["rank"] == 0]
+            best = max(rect_ or main_ or dcbr_ or gn, key=lambda e: (e.get("d") or "", e["rank"]))
             ex_ = next((e["ex"] for e in sorted(g, key=lambda e: -e["rank"]) if e.get("ex")), None)
             if ex_ is None and best.get("yr") and (best.get("det") or best.get("pay")):
                 ex_ = None  # (l'année de l'avis n'est pas l'exercice ; exercice laissé vide plutôt que deviné)
@@ -363,6 +400,8 @@ def consolidate(cal_rows, avis):
 def run(d):
     idx = json.load(open(os.path.join(d, "index.json"), encoding="utf8"))
     cal_rows, avis, n_boc = [], [], 0
+    boc_old = {}
+    tick = {t_ for _, t_ in ALIAS if t_}
     for u, m in (idx.get("docs") or {}).items():
         if m.get("st") != "lu":
             continue
@@ -370,7 +409,11 @@ def run(d):
         if not t:
             continue
         if re.search(r"bulletin officiel de la cote", nrm(t[:3000])):
-            n_boc += 1  # (bulletins anciens : lus à part)
+            n_boc += 1
+            for tk, a, dd in parse_boc_old(t):
+                if tk in tick and dd <= "2013-12-31":  # (bulletins récents : lus par ailleurs, base des cours)
+                    x = boc_old.setdefault((tk, dd), {"a": {}, "u": u})
+                    x["a"][a] = x["a"].get(a, 0) + 1
             continue
         if re.search(r"calendrier de paiement des dividendes", nrm(t[:3000])):
             rows, irvm = parse_calendar(t)
@@ -392,11 +435,11 @@ def run(d):
             tk = r.get("sym") if r.get("sym") and any(t_ == r["sym"] for _, t_ in ALIAS) else None
             tk = tk or ticker_of(r.get("soc") or "") or ticker_of(m.get("soc") or "") or ticker_of(u.rsplit("/", 1)[-1].replace("_", " "))
             avis.append({**r, "t": tk, "u": u, "ocr": ocr})
-    rows = consolidate(cal_rows, avis)
+    rows = consolidate(cal_rows, avis, boc_old)
     json.dump({"v": 2, "ts": int(dt.datetime.now().timestamp()), "rows": rows,
-               "n": {"calendriers": len({r["u"] for r in cal_rows}), "lignes_calendrier": len(cal_rows), "avis": len(avis), "bulletins": n_boc}},
+               "n": {"calendriers": len({r["u"] for r in cal_rows}), "lignes_calendrier": len(cal_rows), "avis": len(avis), "bulletins": n_boc, "versements_bulletins": len(boc_old)}},
               open(os.path.join(d, "dividendes.json"), "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))
-    print(f"[dividendes] {len(rows)} versements ({len(cal_rows)} lignes de calendrier, {len(avis)} avis, {n_boc} bulletins anciens à lire)")
+    print(f"[dividendes] {len(rows)} versements ({len(cal_rows)} lignes de calendrier, {len(avis)} avis, {n_boc} bulletins anciens, {len(boc_old)} versements lus dans les bulletins)")
 
 
 if __name__ == "__main__":
