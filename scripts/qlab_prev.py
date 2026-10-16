@@ -713,6 +713,42 @@ def assess(evs, effects):
     return out
 
 
+# ------------------------------------------------------------------------------------------------------------- jugement des publications
+def benchmark(prev, fc, Pt, S):
+    """chaque publication nouvelle (trimestre, semestre, 9 mois, exercice) est comparée à ce que prévoyait la version précédente :
+    écart, chiffre dans la fourchette ou non ; puis décision sur l'exercice : prévision relevée, abaissée ou maintenue (et de
+    combien), selon la méthode validée pour l'information désormais disponible"""
+    if not prev:
+        return None
+    d0 = prev["date"]
+    rows = []  # (les chiffres que la version précédente prévoyait encore sont ceux qu'elle ne connaissait pas)
+    for x in prev["fc"].get("periods") or []:
+        a = ((Pt.get(x["fy"], {}).get(x["per"]) or {}).get(x["m"]) or {})
+        if fin(a.get("v")) and fin(x.get("v")):  # (période prévue par la version précédente, donc inconnue d'elle)
+            rows.append({"fy": x["fy"], "per": x["per"], "m": x["m"], "f": x["v"], "lo": x.get("lo"), "hi": x.get("hi"), "a": r3(a["v"]),
+                         "e": r3((a["v"] - x["v"]) / abs(x["v"])) if x["v"] else None,
+                         "in": bool(fin(x.get("lo")) and fin(x.get("hi")) and x["lo"] <= a["v"] <= x["hi"])})
+    for row in prev["fc"].get("annual") or []:
+        for m in MET:
+            x, act = row.get(m), (S["ser"].get(m) or {}).get(row["fy"])
+            if x and fin(x.get("v")) and fin(act) and pubdate(S, row["fy"]) > d0 and row.get("h") == 1:
+                rows.append({"fy": row["fy"], "per": "A", "m": m, "f": x["v"], "lo": x.get("lo"), "hi": x.get("hi"), "a": r3(act),
+                             "e": r3((act - x["v"]) / abs(x["v"])) if x["v"] else None,
+                             "in": bool(fin(x.get("lo")) and fin(x.get("hi")) and x["lo"] <= act <= x["hi"])})
+    if not rows and prev["fc"].get("state") == fc.get("state") and prev["fc"].get("fy") == fc.get("fy"):
+        return None
+    dec = {}
+    a0 = next((r for r in prev["fc"]["annual"] if r["fy"] == fc["fy"]), None)
+    a1 = fc["annual"][0]
+    for m in MET:
+        b, n = (a0 or {}).get(m), a1.get(m)
+        if b and n and fin(b.get("v")) and fin(n.get("v")):
+            chg = (n["v"] - b["v"]) / abs(b["v"]) if b["v"] else None
+            word = "relevée" if (chg or 0) > 0.005 else "abaissée" if (chg or 0) < -0.005 else "maintenue"
+            dec[m] = {"before": b["v"], "after": n["v"], "chg": r3(chg), "word": word, "meth": n.get("meth")}
+    return {"d": fc.get("fy"), "rows": rows, "dec": dec, "fy": fc["fy"]}
+
+
 # ------------------------------------------------------------------------------------------------------------- exécution
 def restore_if_needed(Q, extra, log):
     if not extra:
@@ -862,9 +898,10 @@ def run(out, extra=None, log=print, comptes=None, today=None, now=None):
                         row["eps"] = {kk: (r3(x[kk] * 1e6 / S["shares_now"]) if fin(x.get(kk)) else None) for kk in ("v", "lo", "hi")}
         if vtype:
             prev = cur
+            bench = benchmark(prev, fc, Pt, S) if vtype == "publication" else None
             rec = {"id": f"{t}-P{today_i}-{vtype[0].upper()}", "t": t, "type": vtype, "reason": reason, "date": today_i, "d_docs": today_i,
                    "ts": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "engine": ENGINE, "inputs": dig, "prev": prev.get("hash") if prev else None,
-                   "fc": fc, "widen": widen}
+                   "fc": fc, "widen": widen, **({"bench": bench} if bench else {})}
             rec["hash"] = digest({k: v for k, v in rec.items() if k != "hash"})
             hp = os.path.join(Q, "hist", f"{t}.json")
             hist = jload(hp, {"t": t, "v": []}) or {"t": t, "v": []}
@@ -874,7 +911,10 @@ def run(out, extra=None, log=print, comptes=None, today=None, now=None):
                 comp["cur"] = rec
                 comp["vers"] = (comp.get("vers") or []) + [{"id": rec["id"], "type": vtype, "date": today_i, "reason": reason,
                                                              "fy": fc["fy"], "state": fc["state"],
-                                                             "ni": (fc["annual"][0].get("ni") or {}).get("v"), "rev": (fc["annual"][0].get("rev") or {}).get("v")}]
+                                                             "ni": (fc["annual"][0].get("ni") or {}).get("v"), "rev": (fc["annual"][0].get("rev") or {}).get("v"),
+                                                             **({"dec": {m: {"word": x["word"], "chg": x["chg"]} for m, x in bench["dec"].items()}} if bench else {})}]
+                if bench:
+                    comp["bench"] = ((comp.get("bench") or []) + [{"date": today_i, **bench}])[-12:]
                 n_new[vtype] += 1
         elif cur:
             comp["cur"]["d_docs"] = today_i

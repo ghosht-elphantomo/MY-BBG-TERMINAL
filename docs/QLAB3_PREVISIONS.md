@@ -27,6 +27,7 @@ Ce fichier conserve l'intégralité du cahier des charges de QLAB 3. Aucune fonc
 | Incertitude : fourchettes à 80 % mesurées sur les erreurs passées, scénarios défavorable / central / favorable | fait |
 | Simulation de Monte-Carlo des prévisions de résultats | à développer |
 | Révision à chaque publication, mise à jour trimestrielle obligatoire, révisions exceptionnelles, chaque soir sans intervention | fait |
+| Jugement de chaque publication trimestrielle ou semestrielle : chiffre publié comparé à la prévision de la version précédente (écart, fourchette), puis prévision de l'exercice relevée, abaissée ou maintenue selon la méthode validée pour ce type de publication ; apport mesuré de chaque type de publication | fait |
 | Historique intégral des prévisions (versions horodatées et chaînées par empreinte, jamais réécrites) | fait |
 | Comparaison automatique aux résultats publiés : écarts, biais, couverture, par société, horizon et type d'entreprise | fait (suivi des versions publiées) ; par secteur et périodes de choc : à développer |
 | Validation point-in-time à origine glissante, sans information postérieure à la date de prévision | fait |
