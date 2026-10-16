@@ -296,6 +296,58 @@ def _join_broken(m):
 
 GLYPH_DIGITS = {chr(0x3EC + d): str(d) for d in range(10)}
 GLYPH_DIGITS.update({"\x03": " ", "\u0372": "-"})
+# autre police sans table de caractères : codes de glyphes décalés de 29 (chiffres \x13 à \x1c, espace \x03, tiret \x10, virgule \x0f)
+GLYPH_DIGITS2 = {chr(0x13 + d): str(d) for d in range(10)}
+GLYPH_DIGITS2.update({"\x03": " ", "\x10": "-", "\x0f": ","})
+
+
+_SHIFT_ACC = {0x87: "à", 0x80: "Ç", 0x8d: "é", 0x8e: "è", 0x8f: "ê", 0x90: "ë", 0x93: "î", 0x94: "ï", 0x96: "ö", 0x97: "ù", 0x98: "ô", 0x9a: "û",
+              0xb6: "'"}
+_SHIFT_KW = re.compile(r"\b(?:total|actif|passif|resultat|produits|charges|ventes|achats|dettes|capital|tresorerie|immobilisations|stocks|"
+                       r"variation|exercice|impots|autres|fournisseurs|clients|reserves|dotations|services|transports|frais)\b")
+
+
+def _shift_seg(seg):
+    out = []
+    for ch in seg:
+        o = ord(ch)
+        if 3 <= o <= 0x7e and ch not in " \t\n\r\x0c":  # (les espaces de mise en page sont de vraies espaces ; l'espace codée est \x03)
+            o += 29
+            out.append(_SHIFT_ACC.get(o, chr(o)) if o > 0x7e else chr(o))
+        elif ch == "¶":
+            out.append("'")
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _coded(seg):
+    if any("\x03" <= ch <= "\x1c" and ch not in "\t\n\r\x0c" for ch in seg):
+        return True
+    letters = [ch for ch in seg if ch.isalpha()]
+    if len(letters) < 4:
+        return False
+    vow = sum(1 for ch in nrm(seg) if ch in "aeiouy") / len(letters)
+    if vow >= 0.25:
+        return False  # texte en clair (des voyelles)
+    dec = _shift_seg(seg)
+    ld = [ch for ch in dec if ch.isalpha()]
+    return bool(ld) and sum(1 for ch in nrm(dec) if ch in "aeiouy") / len(ld) >= 0.35 and \
+        (bool(_SHIFT_KW.search(nrm(dec))) or sum(1 for ch in dec if ch.islower()) >= 4)
+
+
+def decode_shift(txt):
+    """Police sans table de caractères dont les codes de glyphes valent le caractère moins 29 (« 7$ 9HQWHV GH PDUFKDQGLVHV » =
+    « TA Ventes de marchandises », chiffres \x13 à \x1c) : chaque segment de ligne (séparé par deux espaces ou plus) qui porte ces
+    codes, ou qui n'a de voyelles qu'une fois décalé, est décodé ; le texte en clair reste tel quel."""
+    out = []
+    for ln in txt.split("\n"):
+        parts = re.split(r"(\s{2,})", ln)
+        cod = [bool(p_) and not p_.isspace() and _coded(p_) for p_ in parts]
+        if any(cod):  # sur une ligne codée, les courts codes de référence (« 7$ » = TA) le sont aussi
+            cod = [c_ or (bool(p_) and not p_.isspace() and len(p_) <= 3 and not re.search(r"[a-z0-9]", p_)) for c_, p_ in zip(cod, parts)]
+        out.append("".join(_shift_seg(p_) if c_ else p_ for c_, p_ in zip(cod, parts)))
+    return "\n".join(out)
 
 
 def clean(txt, ocr=False):
@@ -304,6 +356,8 @@ def clean(txt, ocr=False):
     sans table de caractères (codes de glyphes Ϭ…ϵ pour 0…9) remis en chiffres."""
     if sum(1 for ch in txt[:200000] if "\u03ec" <= ch <= "\u03f5") >= 30:
         txt = "".join(GLYPH_DIGITS.get(ch, ch) for ch in txt)
+    if sum(1 for ch in txt[:300000] if "\x13" <= ch <= "\x1c") >= 30:
+        txt = decode_shift(txt)
     if len(re.findall(r"\d ,\d|(?<!\d)\d{1,2} \d{1,2} ?,\d", txt)) >= 8:
         txt = BROKEN.sub(_join_broken, txt)
         txt = re.sub(r"(?<=\d) ,(?=\d{1,2}(?!\d))", ",", txt)
@@ -574,7 +628,8 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     n_k2 = len(re.findall(r"(?<![\d,.])\d{1,3}(?:,\d{3}){2,}(?![\d,])", txt))
     n_k1 = len(re.findall(r"(?<!\d )(?<![\d,.])\d{1,3},\d{3}(?![\d,])", txt))  # « 54,232 » (virgule des milliers, à l'anglaise)
     n_dec = len(re.findall(r"(?<![\d,.])\d+,\d{1,2}(?![\d,])", txt))
-    _COMMA_K[0] = (n_k2 >= 5 and n_dec <= n_k2 // 10) or (n_k1 >= 15 and n_dec <= n_k1 // 10 and not re.search(r"\d \d{3},\d", txt))
+    n_sp = len(re.findall(r"\d \d{3},\d", txt))  # « 1 633,5 » (espace des milliers, virgule décimale)
+    _COMMA_K[0] = (n_k2 >= 5 and n_dec <= n_k2 // 10) or (n_k1 >= 15 and n_dec <= n_k1 // 10 and n_sp * 10 < n_k1)
     _NOTE_DOT[0] = not _COMMA_K[0] and len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) >= 20 and \
         len(re.findall(r"(?<![\d.,])\d{1,2}\.\d{1,2}(?![\d,.])", txt)) < len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) / 2
     # montants en milliards avec une décimale (« 10,0 ») : un tel premier montant n'est un renvoi de note qu'au voisinage d'une colonne « Notes »
@@ -771,6 +826,10 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 s_here = CODE_SEC[code_[0]]
             labn = re.sub(r"\s+", " ", nrm(lab)).strip(" :.-*•")
             labn = re.sub(r"\b([ldnjs])' +", r"\1'", labn)
+            # mots coupés par la couche texte (« T OTAL », « RESULT AT NET », « CAPIT AUX »)
+            labn = re.sub(r"\b(?:t otal|tot al|tota l)\b", "total", labn)
+            labn = re.sub(r"\b(?:result at|resul tat|r esultat|resu ltat)\b", "resultat", labn)
+            labn = re.sub(r"\b(?:capit aux|capi taux)\b", "capitaux", labn)
             if re.fullmatch(r"\(?\s*\+?\s*benefice \+ ou perte -\s*\)?", labn):
                 labn = "resultat net de l'exercice"  # sous-libellé SYSCOHADA du résultat au bilan, seul sur sa ligne (scan)
             labn = re.sub(r"\s*\((?:[a-z]{1,2}|[ivx]+|\d)\)$", "", labn)  # renvoi de note « (1) », « (a) »

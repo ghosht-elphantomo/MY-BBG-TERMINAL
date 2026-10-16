@@ -1149,6 +1149,10 @@ def run_comptes(out):
             return m.get("n_err", 0) < 3
         if m.get("q", 99) < 40 and not m.get("ocr") and "found" not in m and 0 < (m.get("pages") or 0) <= 120:
             return True
+        # couche texte garnie mais rien de vérifiable (police à codes de glyphes, mise en page cassée) : lecture par reconnaissance
+        # de caractères pas encore faite
+        if m.get("st0") not in (None, "ok") and not m.get("ocr") and "ocr_err" not in m and 0 < (m.get("pages") or 0) <= 120:
+            return True
         # document court dont la couche texte n'a rien donné de vérifiable et dont une partie seulement des pages a été lue par
         # reconnaissance de caractères (couche texte garnie mais illisible : police sans table de caractères) : toutes les pages
         return (m.get("st0") not in (None, "ok") and 0 < (m.get("pages") or 0) <= 20 and m.get("ocr") is not None

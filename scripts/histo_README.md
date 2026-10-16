@@ -85,3 +85,7 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   flux lus ; quand elle est fausse (signe perdu, ligne manquante), les flux du document sont écartés sans toucher au bilan ni au
   compte de résultat. Deux tableaux côte à côte sous un même en-tête à quatre colonnes (N, N-1 | N, N-1) : un libellé de
   gauche n'a que les deux premiers montants.
+- Couches texte sans table de caractères : chiffres codés (glyphes grecs ou codes de contrôle), lettres décalées de 29
+  (« 7$ 9HQWHV GH PDUFKDQGLVHV » = « TA Ventes de marchandises ») décodés segment par segment ; mots coupés (« T OTAL »,
+  « RESULT AT ») recollés ; convention des virgules (milliers à l'anglaise ou décimale) décidée à la majorité des montants. Un
+  document dont la couche texte ne donne rien de vérifiable est relu par reconnaissance de caractères.
