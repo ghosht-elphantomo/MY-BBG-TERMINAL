@@ -1020,65 +1020,89 @@ CPT_KW = re.compile(r"bilan|actif|passif|compte de r[ée]sultat|comptes? de r[é
 CPT_AMT = re.compile(r"(?<![\d.,])\d{1,3}(?:[ .,  ]\d{3})+(?![\d])")
 
 
+OCR_WORKERS = max(1, min(4, os.cpu_count() or 1))  # lectures de pages menées en parallèle (un fil par tesseract)
+
+
 def cpt_ocr(pdf_path, pages, td, psm=6, dpi=300):
     """Reconnaissance de caractères (gris) des pages données, en français puis en anglais : {"fra": texte, "eng": texte}.
     psm 6 : la page comme un seul bloc ; psm 4 : une colonne de lignes (garde mieux les lignes des tableaux numérisés).
-    Une page illisible dans le sens où elle est imprimée (tableau à l'italienne) est relue tournée d'un quart de tour."""
+    Une page illisible dans le sens où elle est imprimée (tableau à l'italienne) est relue tournée d'un quart de tour.
+    Les pages sont lues plusieurs à la fois (OCR_WORKERS), chaque lecture sur un seul fil ; l'ordre des pages est conservé."""
     import glob, subprocess
     langs = subprocess.run(["tesseract", "--list-langs"], capture_output=True, timeout=30).stdout.decode()
     have = [lang for lang in ("fra", "eng") if "\n" + lang in "\n" + langs]
+    env = {**os.environ, "OMP_THREAD_LIMIT": "1"}
 
     def ocr(img, lang):
         return subprocess.run(["tesseract", img, "-", "-l", lang, "--psm", str(psm), "-c", "preserve_interword_spaces=1"],
-                              capture_output=True, timeout=400).stdout.decode("utf8", "replace")
+                              capture_output=True, timeout=400, env=env).stdout.decode("utf8", "replace")
 
     def score(t):
         return len(CPT_AMT.findall(t)) * 3 + len(re.findall(r"(?i)\b(?:total|capital|resultat|résultat|charges|produits|actif|passif|stocks|dettes|exercice)\b", t))
+
+    def page(pg):
+        pre = os.path.join(td, f"o{pg}_")
+        try:
+            subprocess.run(["pdftoppm", "-r", str(dpi), "-gray", "-png", "-f", str(pg), "-l", str(pg), pdf_path, pre], capture_output=True, timeout=180)
+            imgs = sorted(glob.glob(pre + "*.png"))
+            if not imgs or not have:
+                return None
+            img = imgs[0]
+            first = ocr(img, have[0])
+            if score(first) < 40:  # page tournée ? essai à +90° et -90°
+                try:
+                    from PIL import Image
+                    best = (score(first), img, first)
+                    for ang in (-90, 90):
+                        p2 = f"{pre}r{ang}.png"
+                        Image.open(img).rotate(ang, expand=True).save(p2)
+                        t2 = ocr(p2, have[0])
+                        if score(t2) > best[0] * 1.5 + 10:
+                            best = (score(t2), p2, t2)
+                    img, first = best[1], best[2]
+                except Exception:  # noqa: BLE001
+                    pass
+            res = {have[0]: first}
+            for lang in have[1:]:
+                res[lang] = ocr(img, lang)
+            return res
+        finally:
+            for f in glob.glob(pre + "*.png"):
+                os.remove(f)
     out = {lang: [] for lang in have}
-    for pg in pages:
-        for f in glob.glob(os.path.join(td, "o*.png")):
-            os.remove(f)
-        subprocess.run(["pdftoppm", "-r", str(dpi), "-gray", "-png", "-f", str(pg), "-l", str(pg), pdf_path, os.path.join(td, "o")], capture_output=True, timeout=180)
-        imgs = sorted(glob.glob(os.path.join(td, "o*.png")))
-        if not imgs or not have:
-            continue
-        img = imgs[0]
-        first = ocr(img, have[0])
-        if score(first) < 40:  # page tournée ? essai à +90° et -90°
-            try:
-                from PIL import Image
-                best = (score(first), img, first)
-                for ang in (-90, 90):
-                    p2 = os.path.join(td, f"r{ang}.png")
-                    Image.open(img).rotate(ang, expand=True).save(p2)
-                    t2 = ocr(p2, have[0])
-                    if score(t2) > best[0] * 1.5 + 10:
-                        best = (score(t2), p2, t2)
-                img, first = best[1], best[2]
-            except Exception:  # noqa: BLE001
-                pass
-        out[have[0]].append(first)
-        for lang in have[1:]:
-            out[lang].append(ocr(img, lang))
+    with ThreadPoolExecutor(OCR_WORKERS) as ex:
+        for res in ex.map(page, pages):
+            if res:
+                for lang in have:
+                    out[lang].append(res[lang])
     return {k: "\f".join(v) for k, v in out.items() if v}
 
 
 def cpt_find_pages(pdf_path, n_pages, td, top=8):
     """Document scanné de plusieurs dizaines de pages : chaque page est lue vite (100 dpi) pour repérer celles des états
-    financiers (mots des états et nombre de montants) ; renvoie les numéros des meilleures pages (au plus `top`)."""
+    financiers (mots des états et nombre de montants) ; renvoie les numéros des meilleures pages (au plus `top`).
+    Les pages sont lues plusieurs à la fois (un fil par lecture)."""
     import glob, subprocess
-    sc = []
-    for pg in range(1, n_pages + 1):
-        for f in glob.glob(os.path.join(td, "f*.png")):
-            os.remove(f)
-        subprocess.run(["pdftoppm", "-r", "100", "-gray", "-png", "-f", str(pg), "-l", str(pg), pdf_path, os.path.join(td, "f")], capture_output=True, timeout=120)
-        imgs = glob.glob(os.path.join(td, "f*.png"))
-        if not imgs:
-            continue
-        t = subprocess.run(["tesseract", imgs[0], "-", "-l", "eng", "--psm", "6"], capture_output=True, timeout=120).stdout.decode("utf8", "replace")
+    env = {**os.environ, "OMP_THREAD_LIMIT": "1"}
+
+    def one(pg):
+        pre = os.path.join(td, f"f{pg}_")
+        try:
+            subprocess.run(["pdftoppm", "-r", "100", "-gray", "-png", "-f", str(pg), "-l", str(pg), pdf_path, pre], capture_output=True, timeout=120)
+            imgs = glob.glob(pre + "*.png")
+            if not imgs:
+                return None
+            t = subprocess.run(["tesseract", imgs[0], "-", "-l", "eng", "--psm", "6"], capture_output=True, timeout=120, env=env).stdout.decode("utf8", "replace")
+        except Exception:  # noqa: BLE001
+            return None
+        finally:
+            for f in glob.glob(pre + "*.png"):
+                os.remove(f)
         s_ = len(re.findall(r"(?i)\b(?:total|actif|passif|capital|r[ée]sultat|charges|produits|bilan|exercice|cr[ée]ances|dettes)\b", t)) \
             + len(re.findall(r"\d[\d .,]{5,}\d", t)) // 2
-        sc.append((s_, pg))
+        return (s_, pg)
+    with ThreadPoolExecutor(OCR_WORKERS) as ex:
+        sc = [r for r in ex.map(one, range(1, n_pages + 1)) if r]
     best = sorted(sc, reverse=True)[:top]
     return sorted(pg for s_, pg in best if s_ >= 15)
 
