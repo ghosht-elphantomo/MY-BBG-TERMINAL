@@ -399,25 +399,40 @@ def _hdr(line):
             if not re.search(r"[-/. ]$", n[:m.start(1)]) or m.start(1) == m.start():
                 continue  # « 09 » seul n'est pas une année ; « 31-déc-09 » oui
             y = 2000 + int(y) if int(y) < 50 else 1900 + int(y)
-        hs.append((m.end(), m.start(), int(y)))
+        y = int(y)
+        if re.match(r"0?1 ?[-/.] ?0?1(?![0-9])|0?1(?:er)? ?[-/. ]? ?janv", m.group(0)) and not re.match(r"\s*(?:au|to|a|-)\s", n[m.end():]):
+            y -= 1  # colonne « 01/01/N » (bilan d'ouverture) : c'est la clôture de l'exercice précédent (sauf « du 01/01/N au 31/12/N »)
+        hs.append((m.end(), m.start(), y))
     for m in re.finditer(r"(?<![a-z])(?:janv?|fevr?|mars|avr|mai|juin|juil|aout|sept?|oct|nov|dec)[a-z]*\.?(?: ?[-/] ?| {1,2})(\d{4}|\d{2})(?![\d%,])", n):
         y = int(m.group(1)) if len(m.group(1)) == 4 else 2000 + int(m.group(1))  # « Dec.-24 », « déc. 2024 »
+        if m.group(0).startswith("janv") and re.search(r"(?:^|\s)0?1(?:er)?\s*$", n[:m.start()]) and not re.match(r"\s*(?:au|to|a|-)\s", n[m.end():]):
+            y -= 1  # « 1er janvier N » (bilan d'ouverture) : clôture de l'exercice précédent (sauf « du 1er janvier N au 31 décembre N »)
         if 1990 <= y <= 2039 and not any(s0 <= m.start() < e0 for e0, s0, _ in hs):
+            hs = [h for h in hs if not (m.start() <= h[1] < m.end())]  # (l'année nue déjà relevée dans cette date)
             hs.append((m.end(), m.start(), y))
     for m in re.finditer(r"(?<![\d,.])(19[89]|20[0-3]) (\d)(?![\d,.%])", n):  # « 202 4 » (année coupée par la couche texte)
         y = int(m.group(1) + m.group(2))
         if not any(s0 <= m.start() < e0 for e0, s0, _ in hs):
             hs.append((m.end(), m.start(), y))
+    sep_y = []
     for m in re.finditer(r"(?<=[\s(])(\d)[, ](\d{3})(?=\s|$)", n):  # « 2,009 », « 2 013 » (année imprimée avec séparateur de milliers)
         y = int(m.group(1) + m.group(2))
-        if 1990 <= y <= 2039:
-            hs.append((m.end(), m.start(), y))
+        if 1990 <= y <= 2027:
+            sep_y.append((m.end(), m.start(), y))
+    # (des montants « 2 030   2 012 » ne sont pas des années : plusieurs de ces années doivent se suivre)
+    ys_ = sorted({y for _, _, y in sep_y})
+    if sep_y and len(ys_) <= 2 and (len(ys_) == 1 or ys_[1] - ys_[0] == 1):
+        hs += sep_y
     hs.sort()
     rest = n
     for e, s, _ in sorted(hs, reverse=True):
         rest = rest[:s] + " " * (e - s) + rest[e:]
     if hs and not re.search(r"\d{3,}", rest) and len(re.findall(r"\d", rest)) <= 4:
         return hs
+    if len(hs) >= 2:  # en-tête d'un tableau, avec plus loin sur la même ligne (autre page imprimée à côté) des montants ou un texte daté
+        far, near = max(e for e, _, _ in hs) + 15, min(s0 for _, s0, _ in hs) - 15
+        if all(m.start() >= far or m.end() <= near for m in re.finditer(r"\d+", rest)):
+            return hs
     hn = [(m.end(), m.start(), ("N", -1 if m.group(1) else 0)) for m in re.finditer(r"(?<![a-z0-9])(?:exercice\s+|annee\s+)?n(\s?-\s?1)?(?![a-z0-9])", n)]
     if len(hn) >= 2 and not re.search(r"\d{3,}", n):
         return hn
@@ -436,9 +451,11 @@ def head_sec(p):
         return S_CR
     if re.search(r"hors.?bilan|^engagements|affectation du resultat|projet d.affectation|repartition des benefices|^affectation$", p):
         return "hb"
-    if re.search(r"^(?:bilan[^a-z]*)?actifs?(?: du bilan)?(?: consolide)?$|^actif ?:?$|^assets$|^actif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^actif -", p):
+    if re.search(r"^(?:bilan[^a-z]*)?actifs?(?: du bilan)?(?: consolide)?$|^actif ?:?$|^assets$|^actif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^actif -|"
+                 r"^(?:postes? )?(?:rubriques?|postes?) de l.actif$", p):
         return S_ACT
-    if re.search(r"^(?:bilan[^a-z]*)?passi ?fs?(?: du bilan)?(?: consolide)?$|^passifs? (?:et )?capitaux propres$|^capitaux propres (?:et )?passifs?$|^liabilities|^passif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^passif -", p):
+    if re.search(r"^(?:bilan[^a-z]*)?passi ?fs?(?: du bilan)?(?: consolide)?$|^passifs? (?:et )?capitaux propres$|^capitaux propres (?:et )?passifs?$|^liabilities|^passif (?:[-(:] ?)?(?:en|montants?|donnees)\b|^passif -|"
+                 r"^(?:postes? )?(?:rubriques?|postes?) du passif$", p):
         return S_PAS
     if re.search(r"^bilan\b|situation financiere|balance sheet", p):
         return "bilan"
@@ -455,15 +472,79 @@ SEC_HEAD = [
 ]
 
 
+def decolumn(txt):
+    """Deux pages imprimées côte à côte (bilan et compte de résultat à gauche, TAFIRE à droite…) : la page est coupée à une
+    gouttière verticale vide que ne chevauche aucune ligne d'en-tête d'années, avec au moins un en-tête de chaque côté ;
+    les lignes de gauche puis celles de droite sont rendues l'une après l'autre. Sans telle gouttière, le texte est inchangé."""
+    pages = txt.split("\f")
+    out = []
+    for pg in pages:
+        lines = pg.splitlines()
+        dl = _decolumn_lines(lines) if len(lines) >= 8 else lines
+        out.append(pg if dl == lines else "\n".join(dl) + "\n")  # (texte inchangé quand la page n'est pas coupée)
+    return "\f".join(out)
+
+
+def _decolumn_lines(lines, depth=0):
+    # (en-têtes d'années en clair seulement — « N / N-1 » se lit aussi dans des libellés — ; une seule page imprimée à la fois)
+    heads = [(i, h) for i, h in ((i, _hdr(ln)) for i, ln in enumerate(lines)) if h and len({y for _, _, y in h if isinstance(y, int)}) >= 2]
+    if len(heads) < 2 or depth > 2 or len(lines) > 150:
+        return lines
+    W = max(len(ln) for ln in lines)
+    busy = [ln for ln in lines if ln.strip()]
+    if W < 120 or len(busy) < 8:
+        return lines
+    occ = [0] * (W + 1)
+    for ln in busy:
+        for c, ch in enumerate(ln):
+            if ch != " ":
+                occ[c] += 1
+    tol = max(1, len(busy) // 100)
+    first = min(len(ln) - len(ln.lstrip()) for ln in busy)
+    best = None
+    for c in range(first + 20, W - 20):
+        if occ[c] > tol or occ[c - 1] > tol or occ[c + 1] > tol:
+            continue
+        left = [h for _, h in heads if all(e <= c for e, _, _ in h)]
+        right = [h for _, h in heads if all(s_ >= c for _, s_, _ in h)]
+        if len(left) + len(right) < len(heads) or not left or not right:
+            continue  # un en-tête chevauche la coupure (tableaux côte à côte sous un même en-tête), ou tout est d'un côté
+        n_r = sum(1 for ln in busy if re.search(r"[a-zA-Z]{3}", ln[c:]))
+        if n_r < 4:
+            continue
+        # la coupure ne doit séparer aucun libellé de ses montants (libellé à gauche, montant à droite, blanc étroit entre eux)
+        cut_tbl = False
+        for ln in busy:
+            lft, rgt = ln[:c].rstrip(), ln[c:]
+            gap = (len(ln[:c]) - len(lft)) + (len(rgt) - len(rgt.lstrip()))
+            if lft and re.search(r"[a-zA-Z]$", lft) and re.match(r"\s*-?\s*\d", rgt) and gap < 30:
+                cut_tbl = True
+                break
+        if cut_tbl:
+            continue
+        best = c
+        break
+    if best is None:
+        return lines
+    L = [ln[:best].rstrip() for ln in lines]
+    R = [ln[best:].rstrip() for ln in lines]
+    return _decolumn_lines(L, depth + 1) + [""] + _decolumn_lines(R, depth + 1)
+
+
 def parse(txt, fy_hint=None, title="", ocr=False):
     """{postes: {poste: {exercice: montant (unité du document)}}, unité, exercice, type, norme, périmètre, période…}"""
     txt = clean(txt, ocr)
+    txt = re.sub(r"(?<![A-Za-z0-9])N ?- ?1(?![0-9])", "N-1", txt)  # « T(N) - T(N - 1) » : le « - 1 » n'est pas un montant
+    if not ocr:
+        txt = decolumn(txt)
     n_k2 = len(re.findall(r"(?<![\d,.])\d{1,3}(?:,\d{3}){2,}(?![\d,])", txt))
     n_k1 = len(re.findall(r"(?<!\d )(?<![\d,.])\d{1,3},\d{3}(?![\d,])", txt))  # « 54,232 » (virgule des milliers, à l'anglaise)
     n_dec = len(re.findall(r"(?<![\d,.])\d+,\d{1,2}(?![\d,])", txt))
     _COMMA_K[0] = (n_k2 >= 5 and n_dec <= n_k2 // 10) or (n_k1 >= 15 and n_dec <= n_k1 // 10 and not re.search(r"\d \d{3},\d", txt))
     _NOTE_DOT[0] = not _COMMA_K[0] and len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) >= 20 and \
         len(re.findall(r"(?<![\d.,])\d{1,2}\.\d{1,2}(?![\d,.])", txt)) < len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) / 2
+    # montants en milliards avec une décimale (« 10,0 ») : un tel premier montant n'est un renvoi de note qu'au voisinage d'une colonne « Notes »
+    milliards = bool(re.search(r"en milliards", nrm(txt)))
     fy = fiscal_year(txt, fy_hint)
     lines = txt.splitlines()
     # montants à quatre groupes de chiffres ou plus : rares dans un document en millions (sinon le document est en francs)
@@ -522,6 +603,11 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             elif re.search(r"(?:bilan|comptes?|etats?(?: de synthese| financiers)?|compte de resultat|tableau des flux)\s+(?:[a-z']+\s+){0,2}(?:sociaux|individuels?|social)\b|"
                            r"comptes sociaux", n_):
                 perim = "social"
+            elif re.search(r"(?:etats? financiers|bilan|comptes? de resultat|comptes|tafire)(?: [a-z'()-]+){0,4} [a-z]+ s\.?a\.?(?:\s|$)", n_) and \
+                    not re.search(r"consolid|groupe", n_):
+                perim = "social"  # « états financiers résumés Sonatel SA » : comptes de la société seule, après ceux du groupe
+            elif re.fullmatch(r"(?:[a-z'&.-]+ ){1,4}s\.?a\.?", n_.strip()) and not re.search(r"consolid|groupe", n_):
+                perim = "social"  # ligne « ONATEL SA » en tête des états de la société seule
             if re.search(r"\bifrs\b|normes? internationales?", n_) and not re.search(r"syscohada", n_):
                 std_cur = "ifrs"
             elif re.search(r"syscohada", n_) and not re.search(r"\bifrs\b", n_):
@@ -657,13 +743,15 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             labn = re.sub(r"\s+\d{1,2}(?:\.\d)?$", "", labn)  # numéro de note en fin de libellé
             # formule de calcul en fin de libellé (« CHIFFRE D'AFFAIRES (A + B + C + D) », « (somme TK à RN) »)
             labn = re.sub(r"\s*\((?=[^()]*(?:[a-z0-9] ?\+ ?[a-z0-9]|\bsomme\b|\b[a-z]{2} a [a-z]{2}\b))[^)]*\).*$", "", labn)
+            if re.search(r"\b(?:t|fdr|bfg|f\.d\.r\.|b\.f\.g\.) ?\(n\)", n_) or re.search(r"\((?:t|fdr|bfg)\)\s*:?$", nrm(lab).strip()):
+                continue  # bloc « contrôle » du TAFIRE (variation du FdR, du BFG, de la trésorerie : colonnes emplois / ressources)
             if len(vals) == 4 and vals[0][0] is None and vals[1][0] is not None and float(vals[1][0]).is_integer() \
                     and 0 < abs(vals[1][0]) < 100 and vals[2][0] is not None and vals[3][0] is not None:
                 vals = vals[2:]  # colonne des signes (« - »), colonne des notes, puis les deux exercices
             nn_ = [v for v, _ in vals if v is not None]
             if len(nn_) >= 2 and vals[0][0] is not None and float(vals[0][0]).is_integer() and 0 < abs(vals[0][0]) < 100 \
                     and ((all(abs(x) >= 10000 for x in nn_[1:]) and (len(nn_) >= 3 or i - note_at < 80 or ocr)) or (len(nn_) >= 3 and all(x == 0 for x in nn_[1:]))
-                         or (_NOTE_DOT[0] and all(not float(x).is_integer() for x in nn_[1:3]))):
+                         or (_NOTE_DOT[0] and all(not float(x).is_integer() for x in nn_[1:3]) and (not milliards or i - note_at < 120))):
                 vals = vals[1:]  # colonne des notes
             if not any(v is not None for v, _ in vals):
                 if labn:
@@ -907,9 +995,18 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             if abs(cv * u / cap - 1) < 0.005:
                 unit = u
                 break
+    elif cap and cv and norm and abs(cv / cap - 1) >= 0.005:
+        # unité annoncée en tête de tableau démentie par le capital (« montants en milliards » pour des millions) : corrigée
+        for u in (1e-3, 1e-6, 1e3):
+            if abs(cv * u / cap - 1) < 0.005:
+                unit = u
+                break
     nt = nrm(txt[:8000])
     cur = "USD" if re.search(r"(?:milliers|millions) de dollars|en (?:k|m)?usd\b|us\$|\busd ?(?:000|thousand|million)|thousands of us dollars|in thousands of usd", nt) or \
-        re.search(r"(?:milliers|millions) de dollars? ?(?:eu|us|americains)|(?:milliers|millions) (?:de )?\$ ?(?:eu|us)\b|(?:milliers|millions) d.us ?\$|en (?:k|m)?us ?\$", nrm(txt)) else "XOF"
+        re.search(r"(?:\ben|\(|exprim\w+ en|unite ?:?|montants? en|chiffres en) ?(?:milliers|millions) de dollars? ?(?:eu|us|americains)|(?:milliers|millions) (?:de )?\$ ?(?:eu|us)\b|(?:milliers|millions) d.us ?\$|en (?:k|m)?us ?\$", nrm(txt)) else "XOF"
+    # (une simple mention en dollars dans le texte — capital d'une filiale, prix d'une matière — ne fait pas un document en dollars)
+    if cur == "XOF" and re.search(r"\bunites? de compte\b|\bunits? of account\b|\bua\s+ua\b|\(en (?:k|m)?ua\)", nt):
+        cur = "UA"  # unité de compte (BOAD, BIDC) : document d'un émetteur non coté
     std = "ifrs" if main.endswith("_ifrs") else "syscohada"
     KEYS_G = ("total_actif", "total_passif", "resultat_net", "chiffre_affaires", "b_pnb", "capitaux_propres", "_total")
     dfl_ = "conso" if conso_hint else "social"
@@ -964,12 +1061,16 @@ def _assign(vals, heads, i, fy, brut):
                         if yr is not None and yr not in got:
                             got[yr] = nums[j][0]
                     if got and len(got) == k_:
-                        sc = (k_ + 0.5, -win[0] / k_, -rk)
+                        # colonnes bien alignées (écart moyen ≤ 6) : l'en-tête le plus proche au-dessus l'emporte (l'en-tête d'un
+                        # tableau précédent, aux colonnes voisines, ne doit pas dater les lignes du tableau suivant)
+                        sc = (k_ + 0.5, win[0] / k_ <= 6, -rk, -win[0] / k_)
                         if best_h is None or sc > best_h[0]:
                             best_h = (sc, got)
                         continue
             if l_h == -1:
                 continue
+            if len(hs) == 1 and len(nums) >= 2:
+                continue  # une seule année (titre daté) ne peut pas servir d'en-tête à une ligne de plusieurs montants
             got, dist, dk = {}, [], {}
             for vi_, (v, xe) in enumerate(nums):
                 bb = None
@@ -992,7 +1093,7 @@ def _assign(vals, heads, i, fy, brut):
                         dist[dk[yr][1]] = bb[0]
                         dk[yr] = (bb[0], dk[yr][1], vi_)
             if got:
-                sc = (len(got), -rk, -sum(dist) / len(dist))  # à nombre égal de colonnes, l'en-tête le plus proche au-dessus
+                sc = (len(got), True, -rk, -sum(dist) / len(dist))  # à nombre égal de colonnes, l'en-tête le plus proche au-dessus
                 if best_h is None or sc > best_h[0]:
                     best_h = (sc, got)
         out = best_h[1] if best_h else {}
@@ -1134,10 +1235,11 @@ def unit_choice(P, items, y):
     if tot and bs_v and abs(tot) < max(bs_v) * 0.9:
         tot = None  # total plus petit qu'un poste du bilan : mal lu
     # (le plus grand bilan de la cote dépasse à peine 15 000 milliards de FCFA, le plus grand chiffre d'affaires 2 000 milliards)
+    scales = (1.0, 1e3, 1e6, 1e9) + ((1e-3, 1e-6) if P.get("unit") and P["unit"] < 1 else ())  # (unité annoncée trop grande)
     if tot:
-        cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 3e8 <= abs(tot) * u <= 3e13]
+        cands = [u for u in scales if 3e8 <= abs(tot) * u <= 3e13]
     elif ca:
-        cands = [u for u in (1.0, 1e3, 1e6, 1e9) if 5e7 <= abs(ca) * u <= 5e12]
+        cands = [u for u in scales if 5e7 <= abs(ca) * u <= 5e12]
     else:
         cands = []
     if allv:  # aucun montant au-delà de 100 000 milliards de FCFA
@@ -1196,6 +1298,9 @@ STABLE = {"chiffre_affaires", "ventes_marchandises", "ventes_produits", "valeur_
 OCR_SRC = ("fra", "eng", "fra4", "eng4")
 
 
+USD_REPORTERS = {"ETIT"}  # Ecobank Transnational : états financiers en dollars américains
+
+
 def read_doc(texts, meta):
     """Lecture d'un document (texte, et OCR français / anglais le cas échéant) : exercices vérifiés, montants dans l'unité
     du document (unit = 1, 1e3 ou 1e6 FCFA ; None si l'ordre de grandeur reste à confirmer par une autre source)."""
@@ -1230,8 +1335,12 @@ def read_doc(texts, meta):
     _, src, P, res = best
     out = {"st": "ok" if res else "non vérifié", "src": src, "fy": P["fy"], "per": P["per"], "std": P["std"], "type": P["type"],
            "cur": P["cur"], "main": P["main"], "n": len(P["items"]), "y": {}, "guess": P.get("guess") or []}
+    oc_ = other_company(meta["t"], (meta.get("u") or "").rsplit("/", 1)[-1]) if meta.get("t") else None
+    t_eff = meta.get("t") if oc_ in (None, "?") else oc_  # (document déposé sous une autre société : voir other_company)
+    if t_eff in USD_REPORTERS and P["cur"] == "XOF":
+        P["cur"] = "USD"  # société qui publie en dollars : ses états ne sont pas repris, même les tableaux à deux monnaies
     if P["cur"] != "XOF":
-        out["st"] = "devise " + P["cur"]
+        out["st"], out["cur"] = "devise " + P["cur"], P["cur"]
         return out
     # OCR : un montant n'est gardé que si une autre lecture (autre langue, autre mode) donne le même chiffre,
     # ou s'il entre dans une identité comptable vérifiée
@@ -1305,16 +1414,22 @@ NAME_TOKENS = {"ABJC": r"servair", "BNBC": r"bernabe", "BICC": r"\bbici", "CABC"
                "SHEC": r"vivo", "SIBC": r"\bsib\b|\bsib ci\b", "SICC": r"sicor", "SIVC": r"air liquide", "SLBC": r"solibra", "SMBC": r"\bsmb\b",
                "SNTS": r"sonatel", "SOGC": r"\bsogb\b", "SPHC": r"\bsaph\b", "STAC": r"setao", "STBC": r"sitab", "UNLC": r"unilever",
                "UNXC": r"uniwax", "ECOC": r"ecobank ci|ecobank cote", "ETIT": r"ecobank tg|\beti\b|\beti tg\b", "CBIBF": r"coris", "LNBB": r"\blnb\b|loterie",
-               "BICB": r"\bbiic\b|\bbidc\b", "BOAB": r"boa bn|boa benin|africa bn|africa benin", "BOABF": r"boa bf|boa burkina|africa bf|africa burkina",
+               "BICB": r"\bbiic\b", "BOAB": r"boa bn|boa benin|africa bn|africa benin", "BOABF": r"boa bf|boa burkina|africa bf|africa burkina",
                "BOAC": r"boa ci|boa cote|africa ci|boaci", "BOAM": r"boa ml|boa mali|africa ml|africa mali", "BOAN": r"boa ng|boa niger|africa ng|africa niger",
                "BOAS": r"boa sn|boa senegal|africa sn|africa senegal", "TTLC": r"total ci|total cote|totalenergies marketing ci|totalenergies marketing cote",
                "TTLS": r"total sn|total senegal|totalenergies marketing sn|totalenergies marketing senegal"}
 
 
+# émetteurs non cotés (obligations) dont des documents sont déposés sous la page d'une société cotée : jamais repris
+NON_LISTED = r"\bbidc\b|\bebid\b|\bboad\b|\bbceao\b|\bbhci\b|\bcrrh\b|\bfagace\b|\bshelter afrique\b"
+
+
 def other_company(t, name):
     """Le nom de fichier désigne-t-il clairement une autre société cotée que t ? Renvoie ce titre (None sinon, ou "?" si
-    plusieurs sociétés sont nommées)."""
+    plusieurs sociétés sont nommées ou si le document est celui d'un émetteur non coté)."""
     n_ = nrm(name).replace("_", " ").replace("-", " ")
+    if re.search(NON_LISTED, n_):
+        return "?"
     own = NAME_TOKENS.get(t)
     if own and re.search(own, n_):
         return None
@@ -1840,7 +1955,7 @@ def run_dir(d):
                 texts[src] = (gzip.open(p_, "rt", encoding="utf8").read(), ocr)
         if not texts:
             continue
-        r = read_doc(texts, m)
+        r = read_doc(texts, {**m, "u": u})
         r.update({"t": m.get("t"), "d": m.get("d"), "ti": m.get("ti"), "cat": m.get("cat")})
         docs[u] = r
     out = {"v": READER_V, "docs": docs}

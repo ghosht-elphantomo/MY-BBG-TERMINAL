@@ -53,3 +53,12 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
 - Flux de trésorerie (flux opérationnels, acquisitions d'immobilisations, flux disponible) : uniquement ceux lus dans les états
   financiers publiés et contrôlés par les identités du document. Le fichier de départ `seed/fcf_brvm.json` (lecture sans contrôle,
   31 exercices faux sur 32 recoupés : unités, lignes confondues avec le chiffre d'affaires) a été retiré ; aucun flux n'est estimé.
+- Lecture des mises en page particulières : deux pages imprimées côte à côte (bilan et compte de résultat à gauche, TAFIRE à
+  droite) sont séparées à leur gouttière avant lecture ; une colonne « 01/01/N » ou « 1er janvier N » (bilan d'ouverture) est
+  l'exercice N-1 ; une unité annoncée démentie par le capital social (« montants en milliards » pour des millions) est corrigée ;
+  dans un document qui réunit comptes du groupe et comptes de la société (« Sonatel SA », « ONATEL SA »), chaque bloc garde
+  son périmètre ; les lignes de contrôle du TAFIRE (variation du FdR, du BFG, de la trésorerie : colonnes emplois / ressources)
+  ne sont pas des montants annuels.
+- Documents d'émetteurs non cotés déposés sous la page d'une société cotée (BIDC, BOAD…) et états en unités de compte ou en
+  dollars (Ecobank Transnational publie en dollars : ses états ne sont pas repris, les chiffres affichés pour ETIT viennent du
+  miroir) : jamais retenus.
