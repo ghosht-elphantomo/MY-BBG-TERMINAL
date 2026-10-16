@@ -596,8 +596,8 @@ def main():
                     return 9999
             used = set()
             for o in sorted(OFF, key=lambda o: (o["t"], o.get("det") or o.get("pay") or "")):
-                if o["t"] not in listed or not o.get("net") or o["net"] <= 0 or not (o.get("det") or o.get("pay")):
-                    continue
+                if o["t"] not in listed or not o.get("net") or o["net"] <= 0 or not (o.get("det") or o.get("pay") or o.get("ex")):
+                    continue  # (un versement sans date mais d'exercice connu — revues trimestrielles 1999-2001 — est gardé, hors rendement total)
                 cands = [x for x in byt[o["t"]] if id(x) not in used and x.get("dividende") and (
                     (o.get("det") and dd_(x.get("date_detachement"), o["det"]) <= 10) or (o.get("pay") and dd_(x.get("date_paiement"), o["pay"]) <= 10)
                     or (o.get("ex") and x.get("exercice") == o["ex"] and abs(x["dividende"] / o["net"] - 1) <= .005))]

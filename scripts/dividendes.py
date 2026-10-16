@@ -283,6 +283,72 @@ def parse_boc_old(txt):
     return out
 
 
+# ---------------------------------------------------------------- revues trimestrielles de la BRVM (1999-2002)
+# tableaux « Paiement de dividendes sur action — Exercice 1999 » (titre, symbole, dividende net, date de mise en paiement) et
+# « DPA 1999 | date de paiement | cours | rendement » : premiers exercices de la BRVM, qu'aucun avis conservé ne couvre.
+REV_DATE = re.compile(r"(\d{1,2})(?:er)?[ -]([a-z]{3,9})\.?[ -]((?:19|20)?\d\d)$")
+
+
+def _rev_amt(c):
+    c = c.strip()
+    if re.fullmatch(r"\d{1,3}(?:[ ,]\d{3})+|\d+", c):
+        return float(re.sub(r"[ ,]", "", c))
+    if re.fullmatch(r"\d+,\d{1,2}", c):
+        return float(c.replace(",", "."))
+    return None
+
+
+def parse_revue(txt, tick):
+    """[(titre, exercice, montant net, date de paiement ou None)] des tableaux de dividendes d'une revue trimestrielle."""
+    L = txt.split("\n")
+    out, ex, on, n_on, dpa = [], None, False, 0, 0
+    for l in L:
+        nl = nrm(l)
+        if re.search(r"paiement de dividendes? (?:sur|par) action", nl) and "...." not in nl and "…" not in l:
+            on, n_on, ex = True, 0, None
+        elif re.search(r"\bdpa\b", nl) and "...." not in nl:
+            on, n_on, ex, dpa = True, 0, None, 4
+        if not on:
+            continue
+        n_on += 1
+        if n_on > 70 or re.search(r"nouvelle composition|repertoires|liste des (?:obligations|droits)|societes inscrites|criteres de selection", nl):
+            on = False
+            continue
+        m = re.search(r"\bexercice\s+((?:19|20)\d\d)\b|\bex\s+((?:19|20)\d\d)\b", nl)
+        if m:
+            ex = int(m.group(1) or m.group(2))
+        elif dpa:
+            dpa -= 1
+            m = re.fullmatch(r"\s*((?:19|20)\d\d)\s*", nl) or re.search(r"\s((?:19|20)\d\d)\s{3,}", " " + nl)
+            if m and ex is None:
+                ex = int(m.group(1))
+        cells = re.split(r"\s{2,}", l.strip())
+        si = next((i for i, c in enumerate(cells) if c.strip() in tick and i > 0), None)
+        if si is None or ex is None:
+            continue
+        a = None
+        for j in range(si + 1, len(cells)):
+            a = _rev_amt(cells[j])
+            if a is not None or re.fullmatch(r"nd|n\.d\.|\*|-", cells[j].strip().lower()):
+                break
+        if not a:
+            continue  # (0, ND ou « * » : pas de dividende ou montant non communiqué)
+        d = None
+        for c in cells[j + 1:j + 2]:
+            m = REV_DATE.search(nrm(c).strip())
+            mo = m and (FR_MOIS.get(m.group(2)) or MOIS_ABR.get(m.group(2)))
+            if m and mo:
+                y = int(m.group(3)) if len(m.group(3)) == 4 else 2000 + int(m.group(3))
+                try:
+                    d = dt.date(y, mo, int(m.group(1))).isoformat()
+                except ValueError:
+                    d = None
+        if d and not (ex < int(d[:4]) <= ex + 2):
+            d = None  # (date incohérente avec l'exercice)
+        out.append((cells[si].strip(), ex, a, d))
+    return out
+
+
 # noms des sociétés dans les avis et calendriers -> titre (motifs sur le nom normalisé, du plus précis au plus général)
 ALIAS = [
     (r"\bboa\b.*(?:burkina|\bbf\b)|bank of africa.*(?:burkina|\bbf\b)", "BOABF"), (r"\bboa\b.*(?:benin|\bbn\b)|bank of africa.*(?:benin|\bbn\b)", "BOAB"),
@@ -336,7 +402,7 @@ def _days(a, b):
         return 9999
 
 
-def consolidate(cal_rows, avis, boc_old=None):
+def consolidate(cal_rows, avis, boc_old=None, revue=None):
     """Un versement par titre et date (détachement ou paiement à 5 jours près). Montant retenu : l'avis individuel le plus récent
     de la BRVM (un avis rectificatif remplace le précédent ; le calendrier n'est pas toujours mis à jour après un rectificatif),
     sinon la dernière version du calendrier de la BRVM, sinon l'avis du Dépositaire central. Montant brut seul : net déduit
@@ -365,6 +431,17 @@ def consolidate(cal_rows, avis, boc_old=None):
         a, n = max(amts.items(), key=lambda kv: kv[1])
         if n >= 2 or len(amts) == 1:
             ev.append({"t": t, "det": None, "pay": d, "net": a, "src": "bulletin", "u": x["u"], "d": d, "rank": -1, "ex": int(d[:4]) - 1, "nb": n})
+    # revues trimestrielles : le même tableau repris d'une revue à l'autre ; un montant daté est un versement (rang entre bulletin
+    # et Dépositaire central) ; un montant sans date n'est gardé que si toutes les revues donnent le même et qu'aucun autre document
+    # ne couvre cet exercice
+    undated = []
+    for (t, ex), vals in (revue or {}).items():
+        dated = {(a, d) for a, d, _ in vals if d}
+        for a, d in sorted(dated):
+            u_ = next(x for a2, d2, x in vals if a2 == a and d2 == d)
+            ev.append({"t": t, "det": None, "pay": d, "net": a, "src": "revue trimestrielle", "u": u_, "d": d, "rank": -0.5, "ex": ex})
+        if not dated and len({a for a, _, _ in vals}) == 1:
+            undated.append({"t": t, "ex": ex, "net": vals[0][0], "u": vals[0][2]})
     out = []
     for t in sorted({e["t"] for e in ev}):
         es = sorted([e for e in ev if e["t"] == t], key=lambda e: (e.get("det") or e.get("pay") or ""))
@@ -394,13 +471,18 @@ def consolidate(cal_rows, avis, boc_old=None):
                         "pay": best.get("pay") or next((e["pay"] for e in g if e.get("pay")), None),
                         "kind": best.get("kind") or "annuel", "src": best["src"], "u": best["u"], "num": best.get("num"), "yr": best.get("yr"),
                         "pub": next((e["ann"] for e in sorted(g, key=lambda e: e.get("ann") or "9") if e.get("ann") and e["rank"] >= 1), None) or best.get("ann"), "chk": [list(c) for c in chk if c[1] is not None and abs(c[1] - best["net"]) > 1e-6]})
+    have = {(o["t"], o.get("ex")) for o in out}
+    for x in undated:
+        if (x["t"], x["ex"]) not in have:
+            out.append({"t": x["t"], "ex": x["ex"], "net": x["net"], "brut": None, "irvm": None, "det": None, "pay": None, "kind": "annuel",
+                        "src": "revue trimestrielle", "u": x["u"], "num": None, "yr": None, "pub": None, "chk": []})
     return out
 
 
 def run(d):
     idx = json.load(open(os.path.join(d, "index.json"), encoding="utf8"))
     cal_rows, avis, n_boc = [], [], 0
-    boc_old = {}
+    boc_old, revue = {}, {}
     tick = {t_ for _, t_ in ALIAS if t_}
     for u, m in (idx.get("docs") or {}).items():
         if m.get("st") != "lu":
@@ -414,6 +496,10 @@ def run(d):
                 if tk in tick and dd <= "2013-12-31":  # (bulletins récents : lus par ailleurs, base des cours)
                     x = boc_old.setdefault((tk, dd), {"a": {}, "u": u})
                     x["a"][a] = x["a"].get(a, 0) + 1
+            continue
+        if re.search(r"revue trimestrielle", nrm(t[:1500])):
+            for tk, ex_, a, dd in parse_revue(t, tick):
+                revue.setdefault((tk, ex_), []).append((a, dd, u))
             continue
         if re.search(r"calendrier de paiement des dividendes", nrm(t[:3000])):
             rows, irvm = parse_calendar(t)
@@ -435,9 +521,9 @@ def run(d):
             tk = r.get("sym") if r.get("sym") and any(t_ == r["sym"] for _, t_ in ALIAS) else None
             tk = tk or ticker_of(r.get("soc") or "") or ticker_of(m.get("soc") or "") or ticker_of(u.rsplit("/", 1)[-1].replace("_", " "))
             avis.append({**r, "t": tk, "u": u, "ocr": ocr})
-    rows = consolidate(cal_rows, avis, boc_old)
+    rows = consolidate(cal_rows, avis, boc_old, revue)
     json.dump({"v": 2, "ts": int(dt.datetime.now().timestamp()), "rows": rows,
-               "n": {"calendriers": len({r["u"] for r in cal_rows}), "lignes_calendrier": len(cal_rows), "avis": len(avis), "bulletins": n_boc, "versements_bulletins": len(boc_old)}},
+               "n": {"calendriers": len({r["u"] for r in cal_rows}), "lignes_calendrier": len(cal_rows), "avis": len(avis), "bulletins": n_boc, "versements_bulletins": len(boc_old), "revues": len(revue)}},
               open(os.path.join(d, "dividendes.json"), "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))
     print(f"[dividendes] {len(rows)} versements ({len(cal_rows)} lignes de calendrier, {len(avis)} avis, {n_boc} bulletins anciens, {len(boc_old)} versements lus dans les bulletins)")
 
