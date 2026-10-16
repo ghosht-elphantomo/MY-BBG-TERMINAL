@@ -749,6 +749,10 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                     and 0 < abs(vals[1][0]) < 100 and vals[2][0] is not None and vals[3][0] is not None:
                 vals = vals[2:]  # colonne des signes (« - »), colonne des notes, puis les deux exercices
             nn_ = [v for v, _ in vals if v is not None]
+            if len(nn_) >= 3 and vals[0][0] is not None and not float(vals[0][0]).is_integer() and 0 < abs(vals[0][0]) < 100 \
+                    and all(abs(x) >= 1000 * abs(vals[0][0]) for x in nn_[1:]):
+                vals = vals[1:]  # ratio ou renvoi (« 4.71 ») devant les montants
+                nn_ = nn_[1:]
             if len(nn_) >= 2 and vals[0][0] is not None and float(vals[0][0]).is_integer() and 0 < abs(vals[0][0]) < 100 \
                     and ((all(abs(x) >= 10000 for x in nn_[1:]) and (len(nn_) >= 3 or i - note_at < 80 or ocr)) or (len(nn_) >= 3 and all(x == 0 for x in nn_[1:]))
                          or (_NOTE_DOT[0] and all(not float(x).is_integer() for x in nn_[1:3]) and (not milliards or i - note_at < 120))):
@@ -1675,7 +1679,21 @@ def consolidate(cj, mirror=None):
             continue
         if x["guess"] and s0 == 0:
             continue  # sens des colonnes non confirmé
-        keep.append(x)
+        # poste isolé pris dans la colonne voisine : sa valeur est celle d'une autre année dans une autre source, qui donne pour
+        # cette année-ci une valeur différente (communiqué de résultats lu par reconnaissance de caractères, colonnes décalées)
+        for k in list(x["m"]):
+            v = x["m"][k]
+            if v is None or k in x["vk"]:
+                continue
+            for y2 in (x["y"] - 1, x["y"] + 1):
+                o2 = [o["m"].get(k) for o in idx_ty.get((x["t"], y2), []) if o["doc"] != x["doc"]] + [mirror_v(x["t"], y2, k)]
+                o0 = [o["m"].get(k) for o in idx_ty.get((x["t"], x["y"]), []) if o["doc"] != x["doc"]] + [mirror_v(x["t"], x["y"], k)]
+                if abs(v) > 100 and any(same(v, w) for w in o2) and any(w is not None and not same(v, w) for w in o0) \
+                        and not any(same(v, w) for w in o0):
+                    del x["m"][k]
+                    break
+        if x["m"]:
+            keep.append(x)
     recs = drop_docs(keep, bad)
     # reconnaissance de caractères vérifiée par une seule identité : un total du bilan qui change de plus de 3 fois d'une colonne à
     # l'autre du même document trahit une lecture fautive
@@ -1753,7 +1771,7 @@ def consolidate(cj, mirror=None):
                     v_ = x["m"][k]
                     n_ = len({o["doc"] for o in cand if o["m"].get(k) is not None and abs(o["m"][k] - v_) <= max(0.5, abs(v_) * 0.001)})
                     mv_ = mirror_v(t, y, k)
-                    return n_ + (1 if mv_ and abs(v_ - mv_) <= abs(mv_) * 0.005 + 0.5 else 0)
+                    return n_ + (1 if mv_ is not None and abs(v_ - mv_) <= abs(mv_) * 0.005 + 0.5 else 0)
                 better = []
                 for x in cand:
                     if x is prim or x["ocr"] or x["rank"][1] < prim["rank"][1]:
@@ -1770,7 +1788,7 @@ def consolidate(cj, mirror=None):
                         better.append(x)
                 if better:
                     prim = max(better, key=lambda x: (x["rank"][1], len(x["vk"]), x["rank"][2]))
-                v, nsrc = {}, {}
+                v, nsrc, over = {}, {}, {}  # (over : postes repris d'un autre document que le principal, chiffre corrigé après coup)
                 for k in sorted({k for x in cand for k in x["m"]}):
                     vals = {}
                     for x in cand:
@@ -1790,7 +1808,7 @@ def consolidate(cj, mirror=None):
                     for z, o in vals.items():
                         # la base de référence départage des comptes de même rang, mais ne fait préférer ni des comptes
                         # provisoires à des comptes définitifs, ni la colonne N-1 de l'exercice suivant aux comptes de l'exercice
-                        o["mr"] = 1 if mv and abs(z - mv) <= abs(mv) * 0.005 + 0.5 else 0
+                        o["mr"] = 1 if mv is not None and abs(z - mv) <= abs(mv) * 0.005 + 0.5 else 0  # (un résultat nul de la base compte)
                         o["m"] = o["mr"] if o["rank"][:2] >= fin_ else 0
                     best_v = max(vals, key=lambda z: (vals[z]["ver"], vals[z]["txt"], vals[z]["n"] + vals[z]["m"], vals[z]["rank"]))
                     if k in prim["m"] and k in prim["vk"]:
@@ -1801,6 +1819,8 @@ def consolidate(cj, mirror=None):
                         sp_ = vals[zp]["n"] + vals[zp]["mr"]
                         alt_ = [z for z, o in vals.items() if z != zp and o["ver"] and o["fin"] >= prim["rank"][1] and o["n"] + o["mr"] > sp_]
                         best_v = max(alt_, key=lambda z: (vals[z]["n"] + vals[z]["mr"], vals[z]["txt"], vals[z]["rank"])) if alt_ else zp
+                        if alt_:
+                            over[k] = vals[best_v]["docs"]
                     v[k] = best_v
                     nsrc[k] = vals[best_v]["n"]
                 # les deux membres d'une identité (total de l'actif et du passif, résultat du compte de résultat et du bilan) viennent
@@ -1810,6 +1830,14 @@ def consolidate(cj, mirror=None):
                         continue
                     both = [x for x in cand if x["m"].get(a_k) is not None and x["m"].get(b_k) is not None
                             and abs(x["m"][a_k] - x["m"][b_k]) <= max(0.5, abs(x["m"][a_k]) * 0.001)]
+                    od = over.get(a_k) or over.get(b_k)
+                    if od:  # chiffre corrigé après coup : l'autre membre de l'identité vient du même document corrigé, ou disparaît
+                        xo = [x for x in both if x["doc"] in od]
+                        if xo:
+                            v[a_k], v[b_k] = xo[0]["m"][a_k], xo[0]["m"][b_k]
+                        else:
+                            del v[b_k if a_k in over else a_k]
+                        continue
                     if a_k in prim["m"] and b_k not in prim["m"]:
                         del v[b_k]  # (le document principal n'a que le premier membre)
                     elif both:
@@ -1822,9 +1850,23 @@ def consolidate(cj, mirror=None):
                 def bad_ids(v_):
                     it_ = {k_: {0: val_} for k_, val_ in v_.items()}
                     return [n_ for n_, r_ in checks(it_, 0) if r_ is not None and r_ > 0.002 and n_ in IDENT_KEYS]
+                if over:
+                    # chiffre corrigé après coup (colonne N-1 des comptes suivants reprise par la base) : les autres membres de ses
+                    # identités viennent du même document corrigé, sinon ils sont retirés (pas de mélange de deux versions des comptes)
+                    od_all = set().union(*over.values())
+                    for n_, keys_ in IDENT_KEYS.items():
+                        if not any(k_ in over for k_ in keys_):
+                            continue
+                        xo = [x for x in cand if x["doc"] in od_all and all(x["m"].get(k_) is not None for k_ in keys_ if k_ in v)]
+                        for k_ in keys_:
+                            if k_ in v and k_ not in over:
+                                if xo:
+                                    v[k_] = xo[0]["m"][k_]
+                                else:
+                                    del v[k_]
                 if bad_ids(v):
                     for k_ in prim["m"]:
-                        if k_ in v:
+                        if k_ in v and k_ not in over:
                             v[k_] = prim["m"][k_]
                     for n_ in bad_ids(v):
                         for k_ in IDENT_KEYS[n_]:

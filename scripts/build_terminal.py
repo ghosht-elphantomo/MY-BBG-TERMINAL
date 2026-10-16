@@ -339,10 +339,27 @@ def main():
     # états financiers publiés à la BRVM (branche comptes), lus et vérifiés par les identités comptables : prioritaires sur la base
     # tierce pour les exercices qu'ils couvrent, quand leur périmètre est le même (comptes sociaux ou consolidés)
     cpt_chk = {"t": 0, "y": 0, "set": 0, "fix": 0, "fill": 0, "detail_only": [], "ex": []}
+    # exercices plus anciens : pages SikaFinance archivées (web.archive.org) — chiffres publiés (CA, résultat net, BNPA, dividende)
+    sh_path = os.path.join(a.extra, "sika_hist.json") if a.extra else None
+    hist = {}
+    if sh_path and os.path.exists(sh_path):
+        sh_ = json.load(open(sh_path, encoding="utf8"))
+        for src_ in (sh_.get("old") or {}, sh_.get("t") or {}):  # (lecture précédente conservée tant que la nouvelle n'est pas faite)
+            for t, yrs in src_.items():
+                hist.setdefault(t, {}).update(yrs)
     if a.comptes and os.path.exists(a.comptes):
         try:
             import comptes as CPT
-            mir = {t: (v.get("series") or {}) for t, v in fund.items() if t != "_meta" and isinstance(v, dict)}
+            mir = {t: {k_: dict(s_) for k_, s_ in (v.get("series") or {}).items() if isinstance(s_, dict)}
+                   for t, v in fund.items() if t != "_meta" and isinstance(v, dict)}  # (copie : la base elle-même n'est pas modifiée ici)
+            # la base de recoupement des comptes lus comprend aussi les archives SikaFinance (chiffre d'affaires, résultat net)
+            # pour les exercices que la base tierce ne couvre pas : un montant isolé qu'elles contredisent n'est pas retenu
+            for t, yrs in hist.items():
+                ser_ = mir.setdefault(t, {})
+                for y, rec in yrs.items():
+                    for k, sk in (("ca", "ca"), ("rn", "resultat_net")):
+                        if rec.get(k) is not None and (ser_.get(sk) or {}).get(str(y)) is None:
+                            ser_.setdefault(sk, {})[str(y)] = rec[k]
             CONS = CPT.consolidate(json.load(open(a.comptes, encoding="utf8")), mir)
             bank_t = {x.get("symbole") or x.get("ticker"): bool(x.get("banque")) for x in acts}
             MAPC = (("resultat_net", "resultat_net"), ("total_bilan", "total_actif"), ("capitaux_propres", "capitaux_propres"),
@@ -416,14 +433,8 @@ def main():
         except Exception as e:  # noqa: BLE001
             import traceback
             log("comptes publiés BRVM illisibles :", e, traceback.format_exc()[-400:])
-    # exercices plus anciens : pages SikaFinance archivées (web.archive.org), ajoutés seulement là où la source actuelle n'a rien
-    sh_path = os.path.join(a.extra, "sika_hist.json") if a.extra else None
-    if sh_path and os.path.exists(sh_path):
-        sh_ = json.load(open(sh_path, encoding="utf8"))
-        hist = {}
-        for src_ in (sh_.get("old") or {}, sh_.get("t") or {}):  # (lecture précédente conservée tant que la nouvelle n'est pas faite)
-            for t, yrs in src_.items():
-                hist.setdefault(t, {}).update(yrs)
+    # exercices plus anciens : archives SikaFinance, ajoutées seulement là où la source actuelle n'a rien
+    if hist:
         kmap = {"ca": "ca", "rn": "resultat_net", "bnpa": "bnpa", "div": "dividende"}  # (chiffres publiés seulement, pas de ratio)
         for t, yrs in hist.items():
             f = fund.get(t)

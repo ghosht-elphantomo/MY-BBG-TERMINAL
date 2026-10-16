@@ -62,3 +62,9 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
 - Documents d'émetteurs non cotés déposés sous la page d'une société cotée (BIDC, BOAD…) et états en unités de compte ou en
   dollars (Ecobank Transnational publie en dollars : ses états ne sont pas repris, les chiffres affichés pour ETIT viennent du
   miroir) : jamais retenus.
+- Chiffre corrigé après coup : quand la colonne « exercice précédent » des comptes suivants (ou un rapport annuel publié plus
+  tard) donne, vérifié par ses identités, un montant différent de celui des comptes de l'exercice, et que la base de recoupement
+  (base tierce, archives SikaFinance) le reprend, c'est ce montant corrigé qui est retenu — avec les autres membres de ses
+  identités pris dans le même document, jamais un mélange des deux versions (Unilever CI 2021 : résultat retraité ≈ 0 et non
+  6 091 ; NSIA Banque 2017 : 10 015 pro forma). Un montant isolé égal à celui d'une autre année dans les autres sources
+  (colonne décalée d'un communiqué numérisé) est retiré.
