@@ -1,3 +1,4 @@
-gn_ecofin.xml|https://news.google.com/rss/search?q=site:agenceecofin.com&hl=fr&gl=FR&ceid=FR:fr
-gn_ecofin_fin.xml|https://news.google.com/rss/search?q=site:agenceecofin.com+finance+OR+banque+OR+bourse&hl=fr&gl=FR&ceid=FR:fr
-yh_headline.xml|https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EIXIC,%5EDJI&region=US&lang=en-US
+boc_20261015.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20261015.pdf
+boc_20261014.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20261014.pdf
+boc_20250602.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20250602.pdf
+boc_20231002.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20231002.pdf
