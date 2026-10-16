@@ -49,7 +49,8 @@ function accountsTable(F, nY = 10, opts = {}) {
   const srcOf = y => { const i = ix(y); return i >= 0 && Y.src ? Y.src[i] : null; };
   /* en-tête sur deux lignes comme FA : « FY 2024 » puis la date de clôture de l'exercice (quand la source la donne) */
   const endOf = y => { const i = ix(y); return i >= 0 && F.mkt === 'US' && Y.y[i] > 99999 ? fd(Y.y[i]) : ''; };
-  const head = `<tr><th class="l">${U.lab}</th>${cols.map(y => { const sr = srcOf(y); return `<th title="${sr ? 'Exercice complété à partir des comptes publiés de la société' : ''}">FY ${y}${sr ? '<sup class="am">a</sup>' : ''}</th>`; }).join('')}${opts.cagr ? '<th class="tc" title="taux de croissance annuel moyen sur 3 ans">TCAM<br>3 ans</th><th class="tc" title="taux de croissance annuel moyen sur 5 ans">TCAM<br>5 ans</th><th class="tc" title="taux de croissance annuel moyen sur 10 ans">TCAM<br>10 ans</th>' : ''}</tr>`
+  const srMark = sr => !sr ? ['', ''] : /^référentiel/.test(sr) ? ['r', 'Comptes publiés dans l’autre ' + sr] : ['a', 'Exercice complété à partir des comptes publiés de la société'];
+  const head = `<tr><th class="l">${U.lab}</th>${cols.map(y => { const [m, ti] = srMark(srcOf(y)); return `<th title="${esc(ti)}">FY ${y}${m ? `<sup class="am">${m}</sup>` : ''}</th>`; }).join('')}${opts.cagr ? '<th class="tc" title="taux de croissance annuel moyen sur 3 ans">TCAM<br>3 ans</th><th class="tc" title="taux de croissance annuel moyen sur 5 ans">TCAM<br>5 ans</th><th class="tc" title="taux de croissance annuel moyen sur 10 ans">TCAM<br>10 ans</th>' : ''}</tr>`
     + (F.mkt === 'US' ? `<tr class="h2"><th class="l">12 mois clos le</th>${cols.map(y => `<th>${endOf(y)}</th>`).join('')}${opts.cagr ? '<th></th><th></th><th></th>' : ''}</tr>` : '');
   const body = rows.filter(([k]) => Y[k] && (!opts.only || opts.only.has(k))).map(([k, l, t, hl]) => {
     const vals = cols.map(y => { const i = ix(y); if (i < 0) return null; return t === 'g' ? gr(Y[k], i) : Y[k][i]; });
@@ -63,7 +64,7 @@ function accountsTable(F, nY = 10, opts = {}) {
 }
 function faSrcNote(F) {
   return F.mkt === 'US' ? `Comptes publiés (${F.annual_only ? 'rapports annuels' : 'rapports annuels et trimestriels'}), devise ${F.ccy || 'USD'}. FCF = flux d’exploitation − acquisitions d’immobilisations corporelles. Dette financière hors obligations locatives.`
-    : `Montants tirés des états financiers publiés par la société quand leurs totaux se vérifient (détail poste par poste et ratios dans les onglets) ; <sup class="am">a</sup> = exercice reconstitué à partir des chiffres clés (CA, résultat net, BNPA, dividende). FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
+    : `Montants tirés des états financiers publiés par la société quand leurs totaux se vérifient (détail poste par poste et ratios dans les onglets) ; <sup class="am">a</sup> = exercice reconstitué à partir des chiffres clés (CA, résultat net, BNPA, dividende) ; <sup class="am">r</sup> = comptes publiés dans l’autre norme (SYSCOHADA avant le passage aux IFRS, ou l’inverse). FCF = flux d’exploitation − acquisitions d’immobilisations.${F.bank ? ' Banque : pas de FCF ni de valeur d’entreprise (le passif est l’outil de production).' : ''}`;
 }
 
 /* Comptes publiés détaillés (BRVM) : postes des états financiers et ratios, sur tous les exercices lus.

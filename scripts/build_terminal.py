@@ -425,6 +425,29 @@ def main():
                     if changed:  # ratios de la base tierce calculés sur les montants corrigés : retirés (recalculés plus loin)
                         for dk in DERIVED:
                             (ser.get(dk) or {}).pop(ys, None)
+                # exercices plus anciens publiés dans l'autre norme (comptes SYSCOHADA d'avant le passage aux IFRS, même périmètre) :
+                # ajoutés seulement là où rien n'existe, et signalés comme tels (sup « r » dans le FA)
+                alt_g = cc.get("alt") if src_g is cc else cc
+                if alt_g and alt_g.get("y") and alt_g.get("per") == src_g.get("per") and alt_g.get("std") != src_g.get("std"):
+                    src_y = f.setdefault("src_years", {})
+                    for y, r in alt_g["y"].items():
+                        ys = str(y)
+                        if ys in {str(y_) for y_ in src_g["y"]}:
+                            continue
+                        v = r["v"]
+                        if v.get("resultat_net") is None and v.get("resultat_bilan") is not None:
+                            v = dict(v, resultat_net=v["resultat_bilan"])
+                        added = False
+                        for sk, ck in [("ca", "b_pnb" if bank else "chiffre_affaires")] + list(MAPC):
+                            if v.get(ck) is None:
+                                continue
+                            o = ser.setdefault(sk, {})
+                            if o.get(ys) is None:  # (comme pour le référentiel principal : un montant d'un seul document ne remplace rien, il complète)
+                                o[ys] = round(v[ck], 1)
+                                added = True
+                                cpt_chk["fill"] += 1
+                        if added and not src_y.get(ys):
+                            src_y[ys] = "référentiel " + ("IFRS" if alt_g.get("std") == "ifrs" else "SYSCOHADA") + " (la société publie aujourd'hui en " + ("IFRS" if src_g.get("std") == "ifrs" else "SYSCOHADA") + ")"
             log("comptes publiés BRVM :", {k: v for k, v in cpt_chk.items() if k not in ("ex", "detail_only", "alt_used")},
                 ("; périmètre différent de la base, détail seulement : " + ", ".join(cpt_chk["detail_only"])) if cpt_chk["detail_only"] else "",
                 ("; chiffres clés pris dans l'autre référentiel publié : " + ", ".join(cpt_chk["alt_used"])) if cpt_chk.get("alt_used") else "")
