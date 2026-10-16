@@ -67,7 +67,7 @@ PAGES.DVD = async (m, alive) => {
   const cnt = [cy - 1, cy - 2, cy - 3].map(y => yrs[y] || 0).filter(Boolean), fq = cnt.length ? Math.round(cnt.reduce((a, b) => a + b, 0) / cnt.length) : 0;
   const fqL = { 1: 'Annuelle', 2: 'Semestrielle', 3: 'Irrégulière', 4: 'Trimestrielle', 12: 'Mensuelle' }[fq] || (fq ? fq + ' par an' : '—');
   const past = H.filter(h => (h.det || h.pay || '') <= today), y1 = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
-  const ttm = past.filter(h => (h.det || h.pay) > y1).reduce((a, h) => a + h.amt, 0), ind = past.length && fq ? past[0].amt * fq : null;
+  const y2 = new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10), ttm = past.filter(h => (h.det || h.pay) > y1).reduce((a, h) => a + h.amt, 0), ind = past.length && fq && (past[0].det || past[0].pay || '') >= y2 ? past[0].amt * fq : null;  /* (aucun versement depuis deux ans : pas de rendement indicatif) */
   const byY = {}; past.forEach(h => { const y = h.ex || +(h.det || h.pay).slice(0, 4); byY[y] = (byY[y] || 0) + h.amt; }); const ys = Object.keys(byY).map(Number).sort((a, b) => a - b).filter(y => isBRVM(s) || y < cy);
   const g5 = ys.length > 5 && byY[ys[ys.length - 6]] > 0 ? Math.pow(byY[ys[ys.length - 1]] / byY[ys[ys.length - 6]], 1 / 5) - 1 : null;
   const next = H.filter(h => (h.det || '') > today).slice(-1)[0];

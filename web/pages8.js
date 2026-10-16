@@ -34,11 +34,12 @@ PAGES.DES = async (m, alive) => {
     const tr12 = tr && n > 252 ? tr[n - 1] / tr[n - 253] - 1 : s.r1y;
     const myDv = DV.filter(x => x.t === s.id && x.dps).sort((a, b) => (b.ex || 0) - (a.ex || 0) || (b.pay || '').localeCompare(a.pay || ''));
     let dps = null, dpsG5 = null, lastDv = null, divLab = brvm ? 'Rendement net' : 'Rendement brut indicatif';
-    if (brvm && eq) { lastDv = myDv[0]; dps = lastDv ? lastDv.dps : null; const byEx = {}; for (const x of myDv) byEx[x.ex] = (byEx[x.ex] || 0) + x.dps; const ys = Object.keys(byEx).map(Number).sort(); const yL = ys[ys.length - 1]; if (yL && byEx[yL - 5] > 0) dpsG5 = Math.pow(byEx[yL] / byEx[yL - 5], 1 / 5) - 1; }
+    if (brvm && eq) { lastDv = myDv[0]; const ldD = lastDv ? (lastDv.pay || lastDv.det || (lastDv.ex ? (lastDv.ex + 1) + '-12-31' : '')) : '';
+      dps = lastDv && ldD >= new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10) ? lastDv.dps : null;  /* (plus de versement depuis deux ans : pas de rendement) */ const byEx = {}; for (const x of myDv) byEx[x.ex] = (byEx[x.ex] || 0) + x.dps; const ys = Object.keys(byEx).map(Number).sort(); const yL = ys[ys.length - 1]; if (yL && byEx[yL - 5] > 0) dpsG5 = Math.pow(byEx[yL] / byEx[yL - 5], 1 / 5) - 1; }
     else if (E && E.sum) { dps = nqNum2(E.sum.AnnualizedDividend); }
     else if (P.divA) dps = nqNum2(P.divA);
     if (!brvm && F && F.Y && F.Y.div && F.Y.sh) { const dpsY = F.Y.div.map((v, i) => v != null && F.Y.sh[i] ? Math.abs(v) / F.Y.sh[i] : null); const L2 = dpsY.length - 1; if (dpsY[L2] > 0 && dpsY[L2 - 5] > 0) dpsG5 = Math.pow(dpsY[L2] / dpsY[L2 - 5], 1 / 5) - 1; }
-    const yld = dps && last ? dps / last : s.yld;
+    const yld = dps && last ? dps / last : brvm && eq ? null : s.yld;
     // estimations (US : consensus Nasdaq/Zacks ; BRVM : aucun consensus public)
     let est = null; if (E && E.yr && E.yr.length) { const fy = E.yr[0], fy2 = E.yr[1]; const ttm = F && F.H && F.H.eps ? F.H.eps[F.H.eps.length - 1] : null; /* H = séries glissantes 12 mois par trimestre */
       const edm = String(E.ed || '').match(/(\d{1,2}\/\d{1,2}\/\d{4})/); const g = fy2 && fy.consensusEPSForecast > 0 ? fy2.consensusEPSForecast / fy.consensusEPSForecast - 1 : null; const epe = fy.consensusEPSForecast > 0 ? last / fy.consensusEPSForecast : null;

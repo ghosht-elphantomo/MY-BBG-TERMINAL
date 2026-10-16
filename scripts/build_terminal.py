@@ -898,13 +898,16 @@ def main():
         cty = "BF" if t.endswith("BF") else CTY.get(t[-1], "CI")
         ld = last_div.get(t, (None, {}))[1]
         last = rows[-1][4]
+        # rendement : seulement si le dernier dividende a moins de deux ans (une société qui ne verse plus n'a pas de rendement)
+        ld_d = str(ld.get("date_paiement") or ld.get("date_detachement") or (f'{int(ld["exercice"]) + 1}-12-31' if ld.get("exercice") else ""))[:10]
+        ld_recent = bool(ld_d) and di(ld_d) >= today_i - 20000
         meta = {"id": t, "tk": f"{t} BC", "n": act.get("nom_officiel") or act.get("nom"), "short": act.get("nom"), "cls": "Equity", "typ": "Equity",
                 "mkt": "BRVM", "grp": act.get("secteur"), "ccy": "XOF", "bench": "BRVMC", "cty": cty, "bank": bool(act.get("banque")),
                 "shares": shares, "float": flt_off if flt_off is not None else f.get("flottant"), "mcap": rnd(shares * last, 0) if shares else None, "pso": pso_,
                 "bnpa": rnd(bnpa_, 2) if bnpa_ else bnpa_, "dps": ld.get("dividende") or dfund_, "dps_ex": ld.get("exercice"), "dps_pay": ld.get("date_paiement"),
                 "dps_adj": ld.get("ajust"), "split": [[e_, k_] for e_, k_ in sorted(SPL.get(t, []))] or None,
                 "per": rnd(last / bnpa_, 2) if bnpa_ and bnpa_ > 0 else None,
-                "yld": rnd((ld.get("dividende") or 0) / last, 5) if ld.get("dividende") else None,
+                "yld": rnd((ld.get("dividende") or 0) / last, 5) if ld.get("dividende") and ld_recent else None,
                 "susp": (status.get(t) or {}).get("statut") == "suspendue", **({"vde": 1} if val_est else {})}
         add(meta, [r[0] for r in rows], [r[4] for r in rows], [r[1] for r in rows], [r[2] for r in rows], [r[3] for r in rows],
             [r[5] for r in rows], [r[6] for r in rows], nd=2)
