@@ -1409,11 +1409,27 @@ def main():
     dmeta = [{"t": x.get("ticker"), "ex": x.get("exercice"), "dps": x.get("dividende"), "ann": x.get("date_annonce"), "det": x.get("date_detachement"),
               "pay": x.get("date_paiement"), "src": x.get("source"), **({"dps0": x["dividende_publie"], "adj": x["ajust"]} if x.get("ajust") else {}),
               **({"cal": 1} if x.get("cal") else {}), **({"usd": x["usd_c"], **({"fx": x["fx"]} if x.get("fx") else {"fxb": 1})} if x.get("usd_c") else {}), **({"exc": 1} if x.get("exc") else {})} for x in divs if x.get("ticker")]
+    # dates incohérentes entre elles : une annonce postérieure au détachement ou au paiement (date de mise en ligne d'un ancien avis)
+    # et un paiement antérieur au détachement (date mal lue) sont retirés plutôt qu'affichés faux
+    for x in dmeta:
+        if x.get("ann") and ((x.get("det") and x["ann"] > x["det"]) or (x.get("pay") and x["ann"] > x["pay"])):
+            x["ann"] = None
+        if x.get("det") and x.get("pay") and x["pay"] < x["det"]:
+            x["pay"] = None
     if split_log:
         log("fractionnements :", "; ".join(split_log[:40]))
     ev = json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"]
     emeta = [{"d": x.get("published_at") or x.get("event_at"), "e": x.get("event_at"), "t": x.get("ticker"), "c": "Modification du dividende" if x.get("category") == "dividend_amount_change" else x.get("category_label"),
               "ti": x.get("title"), "u": x.get("document_url")} for x in ev if (x.get("published_at") or x.get("event_at"))]
+    # même événement présent deux fois dans la base (même société, même date, même nature, même intitulé) : une seule ligne ; si les
+    # deux lignes ne donnent pas la même date d'événement, la plus tardive est gardée (une assemblée se tient après sa convocation :
+    # la date antérieure est celle du document, pas celle de la réunion)
+    by_ev = {}
+    for x in emeta:
+        k_ = (x["t"], x["d"], x["c"], x["ti"])
+        if k_ not in by_ev or (x.get("e") or "") > (by_ev[k_].get("e") or ""):
+            by_ev[k_] = x
+    emeta = list(by_ev.values())
     try:
         avd = {}
         for r in AV:
@@ -1462,7 +1478,10 @@ def main():
             av_chk["ag"] += 1
     if AV:
         log("avis brvm.org ajoutés :", av_chk)
-    emeta.sort(key=lambda x: x["d"] or "", reverse=True)
+    emeta.sort(key=lambda x: (x["d"] or "", x.get("u") or ""), reverse=True)
+    # même événement repris deux fois (avis publié une seconde fois sous un autre fichier, ou déjà présent dans la base) : gardé une fois
+    seen_ev = set()
+    emeta = [x for x in emeta if not ((x["t"], x["d"], x["c"], _nm(x["ti"])) in seen_ev or seen_ev.add((x["t"], x["d"], x["c"], _nm(x["ti"]))))]
 
     # Calculs dérivés (macro, sentiment, liquidité, comptes, consensus, valorisation BRVM, UEMOA) ----
     # flux de trésorerie : uniquement ceux lus et vérifiés dans les états financiers publiés (pdf_cf). L'ancien fichier de départ

@@ -1237,6 +1237,22 @@ def brvm_company(sid, s, fd_, fcf, dps_hist, b, tax):
         Y["ocf"].append(cfo)
         Y["capex"].append(cap if cfo is not None else None)
         Y["fcf"].append(f_)
+    # contrôles de vraisemblance des séries publiées (une donnée douteuse est retirée, jamais remplacée par un chiffre inventé) :
+    # un zéro de la base est une donnée manquante ; un BPA de signe contraire au résultat net a perdu son signe à la lecture
+    # (parenthèses) ; un montant environ mille fois plus petit que les exercices voisins a perdu un groupe de chiffres
+    for k in ("rev", "ni", "eps", "ebit", "ebitda", "eq", "assets", "deposits", "loans", "opex"):
+        Y[k] = [None if v == 0 else v for v in Y[k]]
+    Y["eps"] = [(-e if (e is not None and n is not None and e * n < 0) else e) for e, n in zip(Y["eps"], Y["ni"])]
+    for k in ("rev", "ni", "eq"):
+        vals = Y[k]
+        for i, v in enumerate(vals):
+            if v is None:
+                continue
+            nb = [abs(vals[j]) for j in (i - 2, i - 1, i + 1, i + 2) if 0 <= j < len(vals) and vals[j] and abs(yrs[j] - yrs[i]) <= 2]
+            if len(nb) >= 2:
+                m_ = sorted(nb)[len(nb) // 2]
+                if abs(v) < m_ / 300 and 0.4 <= abs(v) * 1000 / m_ <= 2.5:
+                    vals[i] = None
     Y["dps"] = [dps_hist.get(y) or gv("dividende", y) for y in yrs]
     Y["src"] = [(fd_ or {}).get("src_years", {}).get(str(y)) for y in yrs]
     Y["payout"] = [div0(Y["dps"][i], Y["eps"][i]) if Y["eps"][i] and Y["eps"][i] > 0 else None for i in range(len(yrs))]

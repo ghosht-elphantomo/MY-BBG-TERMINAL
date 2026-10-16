@@ -2922,7 +2922,7 @@ def run_obl(out, site_data=None):
             if len(c) < 7 or not re.match(r"^[A-Z0-9]+\.O\d+$", c[0]):
                 continue
             code = c[0]
-            r = rows.get(code) or {"code": code, "n": c[1], "em": c[2], "mat": c[3] or None, "px": _frnum(c[4]) if c[4] else None, "cc": _frnum(c[5]) if c[5] else None}
+            r = rows.get(code) or {"code": code, "n": c[1], "em": c[2], "mat": c[3] or None, "px": (_frnum(c[4]) or None) if c[4] else None, "cc": _frnum(c[5]) if c[5] else None}
             m = re.match(r"(\d{2}/\d{2}/\d{4})\s*/\s*([\d ,]+)", c[6] or "")
             if m:
                 r["lp_d"], r["lp_v"] = m.group(1), _frnum(m.group(2))
@@ -2971,6 +2971,13 @@ def run_cal(out, site_data=None):
         rows.append(r)
     if len(rows) < 30:
         raise RuntimeError(f"calendrier trop court ({len(rows)} lignes)")
+    # même publication listée deux fois (même heure, même pays, même intitulé) : la ligne la plus complète est gardée
+    best = {}
+    for r in rows:
+        k = (r["d"], r["c"], r["t"])
+        if k not in best or len(r) > len(best[k]):
+            best[k] = r
+    rows = list(best.values())
     rows.sort(key=lambda r: (r["d"], -r["i"], r["c"], r["t"]))
     res = {"ts": int(time.time()), "from": a.strftime("%Y-%m-%d"), "to": b.strftime("%Y-%m-%d"), "src": "TradingView (calendrier économique)", "rows": rows}
     save(os.path.join(site_data or out, "calendar.json"), res)
@@ -3383,12 +3390,32 @@ def _avis_market_cat(ti):
             else "Valeur théorique publiée" if "valeur theorique" in t else "Transaction annulée par la BRVM" if "annulation de transaction" in t else "Avis de la BRVM")
 
 
+def _avis_ti_fix(ti, u):
+    """Avis de marché dont le titre affiché sur brvm.org n'a aucun mot en commun avec le nom du fichier publié (le site reprend parfois
+    le titre de l'avis voisin, ex. « Calendrier de paiement de dividendes » sur l'avis « Transactions sur dossier ») : titre tiré du fichier."""
+    slug = re.sub(r"\.pdf$", "", (u or "").rsplit("/", 1)[-1].lower())
+    slug = re.sub(r"_\d+$", "", re.sub(r"^\d{8}[_\-]*", "", slug))
+    slug = re.sub(r"avis_n(?:deg)?_?\d+_?brvm(?:dg)?", " ", slug)
+    stop = {"avis", "brvm", "brvmdg", "exercice", "societe", "pour", "dans", "avec"}
+    sw = set(re.findall(r"[a-z]{4,}", slug.replace("_", " "))) - stop
+    tw = set(re.findall(r"[a-z]{4,}", _nrm(ti or ""))) - stop
+    if len(sw) >= 2 and not (sw & tw):
+        w = re.sub(r"\s+", " ", re.sub(r"[_\-]+", " ", slug)).strip()
+        return "Avis : " + w[:1].upper() + w[1:]
+    return ti
+
+
 def run_avis(site_data):
     if not site_data:
         return
     path = os.path.join(site_data, "avis_brvm.json")
     st = json.load(open(path, encoding="utf8")) if os.path.exists(path) else {"items": {}}
     items = st.setdefault("items", {})
+    for u_, r_ in items.items():  # titres déjà enregistrés : même contrôle que pour les nouveaux avis
+        if r_.get("k") == "marche" and r_.get("ti"):
+            t_ = _avis_ti_fix(r_["ti"], u_)
+            if t_ != r_["ti"]:
+                r_["ti"], r_["c"] = t_, _avis_market_cat(t_)
     deep = not items or os.environ.get("FQT_MODE") == "eod"  # premier passage ou soir : 3 pages par rubrique, sinon la première
 
     def pub(u):
@@ -3422,6 +3449,7 @@ def run_avis(site_data):
             elif key == "marche":
                 ti, d, u = g("title")["t"], g("field-date-avis")["d"], (g("field-fichier-avis")["u"] or [None])[0]
                 if ti and u:
+                    ti = _avis_ti_fix(ti, u)
                     soc = ti.split(" : ")[0].strip() if " : " in ti and not re.match(r"(?i)^(avis|brvm|rappel|communiqu)", ti) else None
                     recs.append({"k": key, "soc": soc, "c": _avis_market_cat(ti), "u": u, "d": d or pub(u), "e": d or pub(u), "ti": ti})
             elif key == "capital":  # rubrique sans exemple vérifié : lecture générique (émetteur, dates, liens)

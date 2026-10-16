@@ -137,6 +137,15 @@ def canon(u):
     return u
 
 
+def dkey(cu):
+    """clé de doublon : un ancien lien de téléchargement (LinkClick) désigne le même fichier quels que soient l'onglet, le module, la
+    langue ou l'encodage du paramètre fileticket"""
+    m = re.search(r"LinkClick\.aspx\?(?:.*&)?fileticket=([^&]+)", cu, re.I)
+    if m:
+        return "linkclick:" + urllib.parse.unquote(m.group(1))
+    return cu
+
+
 def short(u, wb=None):
     if wb:
         return f"W{wb}:" + u
@@ -170,13 +179,15 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print, comptes=None)
         cu = canon(u)
         if not (official(cu) or wb):
             return
+        if not d:
+            d = date_of(url_date(cu))  # (date de mise en ligne inscrite dans le nom du fichier : « AAAAMMJJ_-_… »)
         ti = re.sub(r"^[:;\-–— ]+", "", re.sub(r"\s+", " ", str(ti)).strip())[:180]  # (« : Pouvoir - Assemblée… » : nom de la société absent de la liste)
         k = kind_of(ti, cu, k0)
         f = "".join(sorted(set(flags_of(ti, cu, k) + (f0 or "") + ("A" if wb or "LinkClick" in cu or "/fr/marche/" in cu else ""))))
         y = int(y or 0) or year_of(ti, cu)
-        r = R.get(cu)
+        r = R.get(dkey(cu))
         if r is None:
-            R[cu] = [k, t or "", y, d or 0, ti, short(cu if not wb else u0.replace(":80/", "/"), wb), f]
+            R[dkey(cu)] = [k, t or "", y, d or 0, ti, short(cu if not wb else u0.replace(":80/", "/"), wb), f]
             return
         # (même document vu par plusieurs sources : chaque champ manquant est complété, l'intitulé le plus parlant gardé)
         if not r[1] and t:
@@ -260,7 +271,7 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print, comptes=None)
     cp = (jload(comptes, {}) or {}).get("docs") or {} if comptes else {}
     sure = set()
     for u, m in cp.items():
-        r = R.get(canon(u))
+        r = R.get(dkey(canon(u)))
         if not (r and m.get("st") == "ok" and m.get("per") == "annuel" and isinstance(m.get("fy"), int) and 1990 <= m["fy"] <= dt.date.today().year):
             continue
         # (l'exercice lu ne l'emporte sur l'intitulé que si celui-ci est muet, ou s'il porte l'année de publication : « Exercice 2013 »
@@ -340,12 +351,19 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print, comptes=None)
             r[1] = who.pop()
             n_att += 1
     # même document déposé deux fois (même intitulé, même date, même société) : une seule ligne
-    seen_, rows2 = set(), []
+    seen_, seen_f, rows2 = set(), {}, []
     for r in sorted(rows, key=lambda r: (bool(re.search(r"_\d\.pdf$", r[5])), "A" in r[6])):
-        key_ = (r[0], r[1], r[3], re.sub(r"[^a-z0-9]+", " ", nrm(r[4])).strip())
-        if key_ in seen_ and r[3]:
+        tk_ = re.sub(r"[^a-z0-9]+", " ", nrm(r[4])).strip()
+        key_ = (r[0], r[1], r[3], tk_)
+        # même fichier déposé une seconde fois avec un suffixe « _0 », « _1 »… (même adresse une fois le suffixe retiré, même intitulé,
+        # même date ou date inconnue pour l'un des deux)
+        key2_ = (r[0], r[1], tk_, re.sub(r"_\d(?=\.pdf$)", "", r[5].lower())) if r[5].lower().endswith(".pdf") else None
+        ds_ = seen_f.get(key2_) if key2_ else None
+        if (key_ in seen_ and r[3]) or (ds_ is not None and (not r[3] or 0 in ds_ or r[3] in ds_)):
             continue
         seen_.add(key_)
+        if key2_:
+            seen_f.setdefault(key2_, set()).add(r[3])
         rows2.append(r)
     n_dup = len(rows) - len(rows2)
     rows = sorted(rows2, key=lambda r: (-r[3], r[4]))
