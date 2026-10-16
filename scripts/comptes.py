@@ -147,7 +147,7 @@ REF_CODES_REV = {"XB": "chiffre_affaires", "CJ": "resultat_bilan", "RK": "charge
                  "ZH": "tresorerie_fin", "FF": "capex_incorp", "FG": "capex_corp"}
 CODE_SEC = {"A": S_ACT, "B": S_ACT, "C": S_PAS, "D": S_PAS, "T": S_CR, "R": S_CR, "X": S_CR, "F": S_FLX, "Z": S_FLX}
 
-NUM = re.compile(r"\(?[-−–‐‑]?\s?\d{1,3}(?:(?:[    ]|,|\.)\d{3})+(?:,\d{1,3})?\)?|\d{1,2}\.\d{1,2}(?![\d.,])|\(?[-−–‐‑]?\d+(?:,\d{1,3})?\)?")
+NUM = re.compile(r"\(?[-−–‐‑]?\s?\d{1,3}(?:(?:[    ]|,|\.)\d{3})+(?:,\d{1,3})?\)?(?!\d)|\d{1,2}\.\d{1,2}(?![\d.,])|\(?[-−–‐‑]?\d+(?:,\d{1,3})?\)?")
 MOIS = {"janvier": 1, "janv": 1, "jan": 1, "fevrier": 2, "fevr": 2, "fev": 2, "mars": 3, "avril": 4, "avr": 4, "mai": 5, "juin": 6,
         "juillet": 7, "juil": 7, "aout": 8, "septembre": 9, "sept": 9, "sep": 9, "octobre": 10, "oct": 10, "novembre": 11, "nov": 11,
         "decembre": 12, "dec": 12}
@@ -164,6 +164,7 @@ def nrm(x):
 
 _COMMA_K = [False]  # document où la virgule sépare les milliers (« 435,697 » = 435 697)
 _TOLERANT = [False]  # lecture tolérante des libellés (reconnaissance de caractères) : essayée en second par read_doc
+_COMMA_FORCE = [False]  # lecture « virgule des milliers » forcée (seconde lecture d'un document ambigu, voir read_doc)
 _NOTE_DOT = [False]  # document à virgule décimale : « 5.3 » est un renvoi de note, pas un montant
 
 
@@ -219,7 +220,10 @@ def fiscal_year(txt, hint=None):
     t = nrm(txt[:15000])
     rxs = (r"(?:au|clos le|arrete au|exercice clos le|cloture au|clos au)\s+31[ -/.]+(?:decembre|12)[ -/.]+(20\d\d|19\d\d)",
            r"exercice\s+(20\d\d)", r"(?:bilan|comptes? de resultats?|etats financiers)[^\n]{0,40}?\b(20\d\d)\b")
-    ys = [int(y) for y in re.findall(rxs[0], t)]
+    import datetime
+    y_max = datetime.date.today().year + 1
+    # (année de clôture impossible — dans le futur, ou à plus de trois ans de l'exercice annoncé : chiffre mal lu, « 2076 » pour 2016)
+    ys = [int(y) for y in re.findall(rxs[0], t) if int(y) <= y_max and not (hint and abs(int(y) - hint) > 3)]
     if ys:
         return hint if hint and hint in ys else max(set(ys), key=ys.count)
     hy = {}  # en-têtes de colonnes « N | N-1 » (deux années qui se suivent sur la même ligne) : vote pour N
@@ -238,7 +242,7 @@ def fiscal_year(txt, hint=None):
     return hint
 
 
-UNIT_LINE = re.compile(r"(?:\(|\ben\b|montants?|donnees|chiffres|valeurs|unite ?:?)\s*(?:en\s+|de\s+)?(milliards?|millions?|milliers?|mds?|mxof|kxof|mfcfa|kfcfa|"
+UNIT_LINE = re.compile(r"(?:\(|\ben\b|(?<![a-z])[a-z]en(?=\s+milli)|montants?|donnees|chiffres|valeurs|unite ?:?)\s*(?:en\s+|de\s+)?(milliards?|millions?|milliers?|mds?|mxof|kxof|mfcfa|kfcfa|"
                        r"francs? cfa|fcfa|f\.? ?cfa|xof)\b")
 
 
@@ -368,11 +372,23 @@ def clean(txt, ocr=False):
     def _irr(g):
         return not (len(g[0]) <= 3 and all(len(x) == 3 for x in g[1:]))
 
+    def _run_reg(m):
+        # suite régulière de groupes de trois chiffres trop longue pour un seul montant (« 137 319 985 209 131 081 463 214 ») :
+        # coupée en deux montants quand une seule coupure respecte les 13 chiffres au plus (ici 4 + 4 groupes)
+        g = m.group(0).split(" ")
+        if not _irr(g) and len("".join(g)) > 13:
+            cuts = [c for c in range(1, len(g)) if len("".join(g[:c])) <= 13 and len("".join(g[c:])) <= 13]
+            if len(cuts) == 1:
+                return "".join(g[:cuts[0]]) + "  " + "".join(g[cuts[0]:])
+        return m.group(0)
+
     def _run(m):
         g = m.group(0).split(" ")
         if not _irr(g):
-            return m.group(0)
+            return _run_reg(m)
         j = "".join(g)
+        if len(g) == 2 and len(g[0]) == len(g[1]) >= 4 and len(g[1]) % 3:
+            return "  ".join(g)  # deux montants de même ordre écrits sans espace des milliers (« 95725 99149 »), séparés par une seule espace
         if len(j) <= 13:
             return j
         # suite de plusieurs montants dont les groupes de milliers sont mal découpés (« 22372337 396 32 374 022 046 ») : un
@@ -388,24 +404,61 @@ def clean(txt, ocr=False):
         segs.append(cur)
         if len(segs) >= 2 and all(len("".join(sg)) <= 13 for sg in segs):
             return "  ".join("".join(sg) for sg in segs)
+        # un montant de plus de 13 chiffres n'existe pas : parmi les découpages possibles (mêmes règles, 13 chiffres au plus par
+        # montant ; un groupe de 3k+1 chiffres peut cacher un chiffre parasite en tête ou en queue : « 2341 » = « 234 » + « 1 »),
+        # le moins morcelé, puis le plus équilibré (« 353554454 297 251 401 » = 353 554 454 | 297 251 401)
+        if any(len("".join(sg)) > 13 for sg in segs) and len(g) <= 24:
+            best = []
+
+            def _cont(cur, tok):
+                return (len(tok) == 3 or (len(tok) % 3 == 0 and len(cur[0]) <= 3)) and len("".join(cur)) + len(tok) <= 13
+
+            def _walk(i, cur, acc):
+                if len(acc) > 6 or len(best) > 400:
+                    return
+                if i == len(g):
+                    best.append(acc + [cur])
+                    return
+                tok = g[i]
+                if _cont(cur, tok):
+                    _walk(i + 1, cur + [tok], acc)
+                if len(tok) <= 13:
+                    _walk(i + 1, [tok], acc + [cur])
+                if len(tok) >= 4 and len(tok) % 3 == 1:
+                    if _cont(cur, tok[:-1]):
+                        _walk(i + 1, [tok[-1]], acc + [cur + [tok[:-1]]])
+                    _walk(i + 1, [tok[0], tok[1:]], acc + [cur])
+            _walk(1, [g[0]], [])
+            if best:
+                sg = min(best, key=lambda ss: (len(ss), max(len("".join(x)) for x in ss) - min(len("".join(x)) for x in ss)))
+                if len(sg) >= 2 and all(len("".join(x)) <= 13 for x in sg):
+                    return "  ".join("".join(x) for x in sg)
         return m.group(0)
     RUN = r"(?<![\d,.])\d+(?: \d+)+(?![\d,.])"
 
     if not ocr:
         if sum(1 for m in re.finditer(RUN, txt) if _irr(m.group(0).split(" ")) and len(m.group(0).split(" ")[-1]) < 3) >= 5:
             txt = re.sub(RUN, _run, txt)
+        else:
+            txt = re.sub(RUN, _run_reg, txt)
         return txt
     txt = re.sub(r"[|\[\]{}¦]", " ", txt)
+    txt = re.sub(r"(?<![\w~])~ ?(?=\d)", "-", txt)  # (« ~4 302 883 480 » : signe moins lu comme un tilde)
     # point ou virgule lu à la place d'une espace de milliers (« 301 493.038 967 ») : dans un montant à groupes de trois chiffres
     txt = re.sub(r"(?<![\d.,])(\d{1,3}(?: \d{3})+)[.,](\d{3}(?: \d{3})*)(?![\d.,])", r"\1 \2", txt)
     txt = re.sub(r"(?<![\d.,])(\d{1,3})[.,](\d{3}(?: \d{3})+)(?![\d.,])", r"\1 \2", txt)
     txt = re.sub(RUN, _run, txt)
+    # parenthèse fermante parasite derrière un montant (barre de tableau lue « ) ») : effacée, sauf celle d'un montant négatif
+    # écrit entre parenthèses (« (16 512) »), qui est d'abord mise à l'abri
+    txt = re.sub(r"\((\s?-?\d[\d  \u202f.,]*\d|\d)\)", "\u2045\\1\u2046", txt)
     txt = re.sub(r"(?<=\d)[)](?=\s|$)", " ", txt)
+    txt = txt.replace("\u2045", "(").replace("\u2046", ")")
     txt = re.sub(r"(?<=\d) ?[.:;](?=\s{2,}|$)", " ", txt)
     return txt
 
 
 # ---------------------------------------------------------------- découpage d'une ligne
+MAX_AMOUNT = 1e13  # aucun montant d'une société cotée n'atteint 10 000 milliards de FCFA (hors ETI, qui publie en dollars)
 LINE_CODE = re.compile(r"^(\s*)([A-Z]{2}|[A-Z](?=[0-9A-Z]{0,1}[0-9])[0-9A-Z]{2})(?=\s+\S|\s*$)")
 NOT_CODE = {"LE", "LA", "DE", "DU", "ET", "EN", "AU", "OU", "IL", "UN", "NB", "PM", "AG", "CA"}
 
@@ -413,7 +466,7 @@ NOT_CODE = {"LE", "LA", "DE", "DU", "ET", "EN", "AU", "OU", "IL", "UN", "NB", "P
 def _cells(line, skip=()):
     """Découpe une ligne en libellés et montants avec leur position (fin de colonne) ; « - » isolé = case vide.
     Un libellé séparé d'un autre par un grand blanc (deux tableaux côte à côte) forme sa propre cellule.
-    Renvoie [(type, valeur, fin, début)] avec type L (libellé), N (montant), D (case vide), C (référence)."""
+    Renvoie [(type, valeur, fin, début)] avec type L (libellé), N (montant), D (case vide), X (montant illisible), C (référence)."""
     out, pos = [], 0
     m = LINE_CODE.match(line)
     if m and (m.group(2) not in NOT_CODE or re.match(r"\s*CA\s+(?:capital|\d)", line, re.I)):
@@ -461,12 +514,15 @@ def _cells(line, skip=()):
             continue  # renvoi de note (« Note 23 »)
         sign = 1
         g2 = gap.rstrip()
-        if g2.endswith(("-", "−", "–", "‐", "‑")) and (len(g2) < 2 or g2[-2] == " ") and not tok.startswith("("):
+        if g2.endswith(("-", "−", "–", "‐", "‑")) and (len(g2) < 2 or g2[-2] == " ") and not tok.lstrip().startswith(("(", "-", "−", "–", "‐", "‑")):
+            # (colonne des signes « - » devant un montant non signé ; un montant imprimé avec son propre signe le garde)
             sign = -1
             gap = g2[:-1]
         labels(gap, pos, mm.start())
         v = num_val(tok)
-        if v is not None:
+        if v is not None and abs(v) >= MAX_AMOUNT:
+            out.append(("X", None, mm.end(), mm.start()))  # 14 chiffres et plus : montants collés par la lecture (jamais un montant en FCFA) : case illisible
+        elif v is not None:
             out.append(("N", sign * v, mm.end(), mm.start()))
         pos = mm.end()
     labels(line[pos:], pos, len(line))
@@ -533,7 +589,7 @@ def head_sec(p):
     if len(p) > 90 or re.search(r"\d{3}", re.sub(r"(?:19|20)\d\d|\d[ ,.]\d{3}", "", p)):
         return None
     p = re.sub(r"\s+", " ", re.sub(r"[^a-z' /-]|(?<![a-z])[-/](?![a-z])", " ", re.sub(r"(?:19|20)\d\d|\d[ ,.]\d{3}", " ", p))).strip()
-    if re.search(r"tableau (?:[a-z]+ )?des flux|flux de tresorerie$|tableau financier|tafire|tableau (?:des )?emplois|^ressources$|^emplois$|tableau de financement", p):
+    if re.search(r"tableau (?:[a-z]+ )?des? flux|flux de tresorerie(?: \(tft\))?$|tableau financier|tafire|tableau (?:des )?emplois|^ressources$|^emplois$|tableau de financement", p):
         return S_FLX
     if re.search(r"compte de resultat|comptes? de resultats|compte d.exploitation|compte des resultats|etat du resultat|income statement|pertes et profits|^produits$|^charges$|^produits ?/ ?charges$|^charges ?/ ?produits$|^debit$|^credit$", p):
         return S_CR
@@ -551,7 +607,7 @@ def head_sec(p):
 
 
 SEC_HEAD = [
-    (S_FLX, re.compile(r"tableau des flux|flux de tresorerie$|tableau financier|tafire|tableau emplois|tableau des emplois")),
+    (S_FLX, re.compile(r"tableau des? flux|flux de tresorerie(?: \(tft\))?$|tableau financier|tafire|tableau emplois|tableau des emplois")),
     (S_CR, re.compile(r"compte de resultat|comptes? de resultats|compte d.exploitation|compte des resultats|etat du resultat|income statement|compte de pertes et profits")),
     (S_ACT, re.compile(r"^(?:bilan[^a-z]*)?actif(?: du bilan)?(?: consolide)?$|^actif ?:?$|^assets$")),
     (S_PAS, re.compile(r"^(?:bilan[^a-z]*)?passif(?: du bilan)?(?: consolide)?$|^passif ?:?$|^passif et capitaux propres$|^capitaux propres et passifs$|^liabilities")),
@@ -629,7 +685,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     n_k1 = len(re.findall(r"(?<!\d )(?<![\d,.])\d{1,3},\d{3}(?![\d,])", txt))  # « 54,232 » (virgule des milliers, à l'anglaise)
     n_dec = len(re.findall(r"(?<![\d,.])\d+,\d{1,2}(?![\d,])", txt))
     n_sp = len(re.findall(r"\d \d{3},\d", txt))  # « 1 633,5 » (espace des milliers, virgule décimale)
-    _COMMA_K[0] = (n_k2 >= 5 and n_dec <= n_k2 // 10) or (n_k1 >= 15 and n_dec <= n_k1 // 10 and n_sp * 10 < n_k1)
+    _COMMA_K[0] = (n_k2 >= 5 and n_dec <= n_k2 // 10) or (n_k1 >= 15 and n_dec <= n_k1 // 10 and n_sp * 10 < n_k1) or _COMMA_FORCE[0]
     _NOTE_DOT[0] = not _COMMA_K[0] and len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) >= 20 and \
         len(re.findall(r"(?<![\d.,])\d{1,2}\.\d{1,2}(?![\d,.])", txt)) < len(re.findall(r"(?<![\d.,])\d{1,3},\d{1,2}(?![\d,.])", txt)) / 2
     # montants en milliards avec une décimale (« 10,0 ») : un tel premier montant n'est un renvoi de note qu'au voisinage d'une colonne « Notes »
@@ -656,21 +712,26 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     pend = []
     single_hint = []
     unit_side, units_seen, unit_at = [None, None], [], -99
+    unit_tag = [None, None]  # ligne de l'annonce d'unité en vigueur de chaque côté (identifie le tableau)
+    sw_pas = [False]  # passage au passif décidé sur un libellé (sans titre « PASSIF ») : révocable
+    hb_aff = [False]  # section « hb » ouverte par un projet d'affectation du résultat (et non par le hors bilan)
     note_at = -999  # dernière ligne d'en-tête avec une colonne « Note(s) »
     for i, ln in enumerate(lines):
         if "\f" in ln:
             ln = ln.replace("\f", "")
         h = _hdr(ln)
         n_ = nrm(ln).strip()
-        if re.search(r"(?:^|\s{2})(?:notes?|ref\.? notes?)(?:\s{2}|$)", n_) and not re.search(r"\d{3}", n_):
-            note_at = i
-        for pos_u, f_u in line_units(nrm(ln)):  # unité de chaque tableau (de chaque côté quand deux tableaux se font face)
+        if re.search(r"(?:^|\s{2})(?:notes?|ref\.? notes?)(?:\s{2}|$)", n_) and not re.search(r"\d{3}", re.sub(r"\b(?:19|20)\d\d\b", "", n_)):
+            note_at = i  # (en-tête « Note  2024  2023 » : les années ne sont pas des montants)
+        lu_ = line_units(nrm(ln))
+        for pos_u, f_u in lu_:  # unité de chaque tableau (de chaque côté quand deux tableaux se font face)
             if split and pos_u >= split[0] - 5:
-                unit_side[1] = f_u
+                unit_side[1], unit_tag[1] = f_u, i
             else:
-                unit_side[0] = f_u
-                if not split:
-                    unit_side[1] = f_u
+                unit_side[0], unit_tag[0] = f_u, i
+                # (seule annonce de la ligne, rien à droite : en tête d'une nouvelle page, elle vaut pour les deux tableaux)
+                if not split or (len(lu_) == 1 and not ln[split[0]:].strip()):
+                    unit_side[1], unit_tag[1] = f_u, i
             units_seen.append(f_u)
             unit_at = i
         if h:
@@ -684,7 +745,17 @@ def parse(txt, fy_hint=None, title="", ocr=False):
         nb_ = nrm(ln)
         for e_, s0_, _ in (h or []):
             nb_ = nb_[:s0_] + " " * (e_ - s0_) + nb_[e_:]
-        if not re.search(r"\d{3}", re.sub(r"(?:19|20)\d\d", "", nb_)):
+        nl_t = nrm(ln)  # (texte où chercher les titres d'états)
+        title_ok = not re.search(r"\d{3}", re.sub(r"(?:19|20)\d\d", "", nb_))
+        if not title_ok and split:
+            # tableaux côte à côte : le titre d'un nouvel état d'un côté (« TABLEAU DE FLUX DE TRESORERIE ») face aux montants de
+            # l'autre côté ; seul le côté sans montants est lu comme titre
+            L_, R_ = nb_[:split[0]], nb_[split[0]:]
+            if not re.search(r"\d{3}", re.sub(r"(?:19|20)\d\d", "", L_)) and re.search(r"[a-z]{4}", L_):
+                nl_t, title_ok = nl_t[:split[0]] + " " * len(nl_t[split[0]:]), True
+            elif not re.search(r"\d{3}", re.sub(r"(?:19|20)\d\d", "", R_)) and re.search(r"[a-z]{4}", R_):
+                nl_t, title_ok = " " * len(nl_t[:split[0]]) + nl_t[split[0]:], True
+        if title_ok:
             # titres d'états et sous-titres (actif / passif côte à côte, consolidé / social)
             if re.search(r"(?:bilan|comptes?|etats?(?: de synthese| financiers)?|compte de resultat|tableau des flux(?: de tresorerie)?|resultats?|situation financiere|"
                          r"etat du resultat global|flux de tresorerie)\s+(?:[a-z']+\s+){0,3}consolid", n_) and not re.search(r"sociaux|individuel", n_):
@@ -703,10 +774,12 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 std_cur = "syscohada"
             if re.search(r"\bbruts?\b.*amort|amortissements?.*\bnet|\bbruts?\b.*\bnets?\b", n_):
                 brut_tbl = True
-            nl = nrm(ln)
+            nl = nl_t
             found_s, found_all = [], []
             for mm in re.finditer(r"\S+(?:\s{1,2}\S+)*", nl):
                 s_ = head_sec(mm.group(0).strip(" :-"))
+                if s_ == "hb":
+                    hb_aff[0] = bool(re.search(r"affectation|repartition", mm.group(0)))  # (projet d'affectation du résultat, ou hors bilan)
                 if s_:
                     found_all.append((mm.start(), s_))
                 if s_ and (not found_s or found_s[-1][1] != s_):
@@ -770,6 +843,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             cells = cells2
         code = cells[0][1] if cells and cells[0][0] == "C" else None
         segs = []  # [(code, libellé, [(valeur, fin)], début)]
+        illegible = {c_[2] for c_ in cells if c_[0] == "X"}  # fins des cases illisibles (chiffres collés) : leur libellé n'attend pas de montants
         k = 0
         while k < len(cells):
             c = cells[k]
@@ -780,11 +854,11 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 lab = c[1]
                 st_ = c[3]
                 j = k + 1
-                if j + 1 < len(cells) and cells[j][0] == "L" and cells[j + 1][0] in ("N", "D") and \
+                if j + 1 < len(cells) and cells[j][0] == "L" and cells[j + 1][0] in ("N", "D", "X") and \
                         len(re.sub(r"[^A-Za-z]", "", cells[j][1])) <= 3:
                     j += 1  # référence ou bruit de lecture entre le libellé et ses montants (« CHIFFRE D'AFFAIRES  XB  … »)
                 vals = []
-                while j < len(cells) and cells[j][0] in ("N", "D"):
+                while j < len(cells) and cells[j][0] in ("N", "D", "X"):
                     vals.append((cells[j][1], cells[j][2]))
                     j += 1
                 segs.append((code if not segs else None, lab, vals, st_))
@@ -793,7 +867,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             # montants sans libellé sur la ligne (libellé sur la ligne précédente ou référence seule)
             j = k
             vals = []
-            while j < len(cells) and cells[j][0] in ("N", "D"):
+            while j < len(cells) and cells[j][0] in ("N", "D", "X"):
                 vals.append((cells[j][1], cells[j][2]))
                 j += 1
             segs.append((code if not segs else None, "", vals, c[3]))
@@ -826,6 +900,31 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 s_here = CODE_SEC[code_[0]]
             labn = re.sub(r"\s+", " ", nrm(lab)).strip(" :.-*•")
             labn = re.sub(r"\b([ldnjs])' +", r"\1'", labn)
+            # passif qui enchaîne sous le total de l'actif sans titre « PASSIF » (« Capital social » juste après « TOTAL ACTIF ») :
+            # un libellé propre au passif fait passer ce côté de la page au passif
+            if s_here == S_ACT and si == 0 and re.match(r"capital(?: social| souscrit)?$|capitaux propres|ressources stables$|passif circulant$|dettes financieres", labn) \
+                    and any(v_ is not None for v_, _ in vals) \
+                    and (not split or (side_ == 0 and max(e_ for _, e_ in vals) < split[0] + 2) or (side_ == 1 and min(e_ for _, e_ in vals) >= split[0] - 2)):
+                s_here = S_PAS
+                sw_pas[0] = True
+                if split and side_ == 1:
+                    split[2] = S_PAS
+                elif split:
+                    split[1] = S_PAS
+                else:
+                    sec = S_PAS
+            elif s_here == S_PAS and sw_pas[0] and si == 0 and any(v_ is not None for v_, _ in vals) and \
+                    re.match(r"immobilisations|stocks|creances|tresorerie ?-? ?actif|actif circulant|actif immobilise|charges immobilisees", labn):
+                # (le passage au passif était à tort : un libellé du passif lu à gauche de ses montants, dans un bilan à deux colonnes
+                # mal découpé ; les postes de l'actif qui suivent ramènent à l'actif)
+                s_here = S_ACT
+                sw_pas[0] = False
+                if split and side_ == 1:
+                    split[2] = S_ACT
+                elif split:
+                    split[1] = S_ACT
+                else:
+                    sec = S_ACT
             # mots coupés par la couche texte (« T OTAL », « RESULT AT NET », « CAPIT AUX »)
             labn = re.sub(r"\b(?:t otal|tot al|tota l)\b", "total", labn)
             labn = re.sub(r"\b(?:result at|resul tat|r esultat|resu ltat)\b", "resultat", labn)
@@ -848,12 +947,19 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                     and all(abs(x) >= 1000 * abs(vals[0][0]) for x in nn_[1:]):
                 vals = vals[1:]  # ratio ou renvoi (« 4.71 ») devant les montants
                 nn_ = nn_[1:]
+            # (nombre de colonnes de l'en-tête le plus proche : une ligne qui compte un montant de plus a une colonne de notes)
+            ncol_h = len(heads[-1][1]) if heads and 0 <= i - heads[-1][0] < 160 else None
             if len(nn_) >= 2 and vals[0][0] is not None and float(vals[0][0]).is_integer() and 0 < abs(vals[0][0]) < 100 \
                     and ((all(abs(x) >= 10000 for x in nn_[1:]) and (len(nn_) >= 3 or i - note_at < 80 or ocr)) or (len(nn_) >= 3 and all(x == 0 for x in nn_[1:]))
-                         or (_NOTE_DOT[0] and all(not float(x).is_integer() for x in nn_[1:3]) and (not milliards or i - note_at < 120))):
+                         or (_NOTE_DOT[0] and all(not float(x).is_integer() for x in nn_[1:3]) and (not milliards or i - note_at < 120)
+                             and (ncol_h is None or len(nn_) > ncol_h))):
                 vals = vals[1:]  # colonne des notes
+            elif len(nn_) == 3 and len(vals) == 3 and vals[0][0] is not None and float(vals[0][0]).is_integer() and 0 < abs(vals[0][0]) < 100 \
+                    and i - note_at < 120 and heads and 0 <= i - heads[-1][0] < 160 and len(heads[-1][1]) == 2 \
+                    and abs(nn_[0] - nn_[1] - nn_[2]) > 0.5 and abs(nn_[1] - nn_[0] - nn_[2]) > 0.5:  # (N, N-1, variation : pas de note)
+                vals = vals[1:]  # colonne des notes devant deux exercices (comptes en millions : « 21  (402)  (391) »)
             if not any(v is not None for v, _ in vals):
-                if labn:
+                if labn and not any(e_ in illegible for _, e_ in vals):
                     new_pend.append((labn, s_here))
                 continue
             cands = []
@@ -862,12 +968,13 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 if ocr and _TOLERANT[0]:  # reconnaissance de caractères : débris courts collés au libellé (« li (total ressources stables pa »)
                     toks = labn.split(" ")
                     core = toks[:]
-                    while len(core) > 2 and len(core[0]) <= 4 and not re.fullmatch(r"total|autres|dettes|titres|prets|actif|passif|frais|achats|stocks", core[0]):
+                    while len(core) > 2 and (len(core[0]) <= 4 or not re.search(r"[a-z]", core[0])) and \
+                            not re.fullmatch(r"total|autres|dettes|titres|prets|actif|passif|frais|achats|stocks|caisse|effets", core[0]):
                         core = core[1:]
-                    if len(core) > 2 and len(core[-1]) <= 2:
+                    while len(core) > 2 and (len(core[-1]) <= 2 or not re.search(r"[a-z]", core[-1])):
                         core = core[:-1]
                     if core != toks:
-                        cands.append(" ".join(core).strip(" (.-"))
+                        cands.append(" ".join(core).strip(" (.-:="))
             for p_, _ in pend[-2:][::-1]:
                 cands.append((p_ + " " + labn).strip())
                 if not labn:
@@ -896,7 +1003,9 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             if key is None:
                 for lab_ in cands:
                     for kk, secs, rx in ITEM_RX:
-                        if rx.search(lab_) and (s_here in secs or s_here is None or None in secs or (s_here == "hb" and None in secs)):
+                        if rx.search(lab_) and (s_here in secs or s_here is None or None in secs) and \
+                                not (s_here == "hb" and hb_aff[0] and kk in ("resultat_net", "resultat_bilan")):
+                            # (le résultat repris dans le projet d'affectation : sa colonne n'est pas datée, il n'est pas retenu)
                             key = kk
                             break
                     if key:
@@ -935,7 +1044,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 single_hint.append(1)
             elif len(vals) >= 2:
                 single_hint.append(2)
-            occ.append((key, s_here, (perim or "_") + ("_ifrs" if std_cur == "ifrs" else ""), i, yrs, how, vals, unit_side[side_]))
+            occ.append((key, s_here, (perim or "_") + ("_ifrs" if std_cur == "ifrs" else ""), i, yrs, how, vals, unit_side[side_], unit_tag[side_]))
             if os.environ.get("CPT_DEBUG"):
                 print("   occ", i, key, s_here, perim, how, yrs, [v for v, _ in vals], repr(labn[:40]), code_)
         pend = new_pend[-2:] if new_pend else ([] if segs else pend)
@@ -963,7 +1072,7 @@ def parse(txt, fy_hint=None, title="", ocr=False):
     if norm:
         u_doc = unit_of(txt)
         tots, f_stmt = {}, {}
-        for key, s_here, per, i, yrs, how, vals, u_occ in occ:
+        for key, s_here, per, i, yrs, how, vals, u_occ, _tag in occ:
             if u_occ is None and key in ("total_actif", "total_passif", "_total", "total_actif~", "total_passif~"):
                 for v, _ in vals:
                     if v:
@@ -973,17 +1082,45 @@ def parse(txt, fy_hint=None, title="", ocr=False):
         for per, f_ in f_stmt.items():
             if per not in tots:
                 f_unk[per] = f_
+        # unité annoncée trop grande pour les montants imprimés (« (en millions FCFA) » pré-imprimé sur un bilan bancaire en francs :
+        # 455 293 722 326 millions n'existe pas) : l'unité qui rend le total du bilan plausible la remplace, pour tout le périmètre
+        # l'unité retenue vaut pour tout le périmètre quand aucun total n'est plausible dans l'unité annoncée (modèle bancaire
+        # pré-imprimé), sinon pour le seul tableau fautif (rapport annuel mêlant tableaux en millions et états en francs)
+        tot_u = {}  # (périmètre, unité annoncée) -> {tableau: unité retenue ou None si plausible}
+        for key, s_here, per, i, yrs, how, vals, u_occ, tag in occ:
+            if u_occ and key in ("total_actif", "total_passif") and s_here in (S_ACT, S_PAS):
+                vs = [abs(v) for v, _ in vals if v]
+                if not vs:
+                    continue
+                fix = None
+                if all(v * u_occ > 6e13 for v in vs):  # (tous les totaux de la ligne, pas seulement un montant mal découpé)
+                    pl = [f for f in (1.0, 1e3, 1e6) if f < u_occ and all(3e8 <= v * f <= 6e13 for v in vs)]
+                    fix = pl[-1] if pl else "?"
+                tot_u.setdefault((per, u_occ), {}).setdefault(tag, fix)
+        over, over_per = {}, {}
+        for (per, u_), tags in tot_u.items():
+            fixes = [f for f in tags.values() if f not in (None, "?")]
+            if fixes and all(f not in (None,) for f in tags.values()):
+                over_per[(per, u_)] = fixes[0]
+            else:
+                for tag, f in tags.items():
+                    if f not in (None, "?"):
+                        over[(per, tag)] = (u_, f)
         for per, T in tots.items():
             pl = [f for f in (1.0, 1e3, 1e6, 1e9) if 3e8 <= T * f <= 6e13]
             if f_stmt.get(per) in pl:
                 f_unk[per] = f_stmt[per]
                 continue
             f_unk[per] = (units_seen[0] if units_seen[0] in pl else u_doc if u_doc in pl else pl[0] if len(pl) == 1 else None)
-    for key, s_here, per, i, yrs, how, vals, u_occ in occ:
+    for key, s_here, per, i, yrs, how, vals, u_occ, tag in occ:
         if norm:
             f_u = u_occ or f_unk.get(per) or (units_seen[0] if per not in f_unk else None)
             if f_u is None:
                 continue  # unité introuvable pour ce tableau : montant non retenu
+            if (per, tag) in over and f_u == over[(per, tag)][0]:
+                f_u = over[(per, tag)][1]
+            elif (per, f_u) in over_per:
+                f_u = over_per[(per, f_u)]
         else:
             f_u = 1.0
         if how in ("order", "single"):
@@ -995,8 +1132,9 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             if how == "single":
                 yrs = {fy: nums[0]}
             else:
-                pair = (nums[0], nums[1])
+                pair = (vals[0][0], vals[1][0]) if len(vals) == 2 else (nums[0], nums[1])
                 yrs = {fy: pair[1], fy - 1: pair[0]} if asc else {fy: pair[0], fy - 1: pair[1]}
+                yrs = {y: v for y, v in yrs.items() if v is not None}
                 if basis == "defaut":
                     guess.add((per, key))  # sens des colonnes supposé (ni en-tête d'années, ni colonne de variation)
         yrs = {y: v * f_u for y, v in yrs.items() if isinstance(y, int)}
@@ -1252,6 +1390,8 @@ def _assign(vals, heads, i, fy, brut):
             return {"asc": 1}, "var"
     if len(nums) == 2 or (len(nums) >= 2 and len(vals) >= 2):
         return {}, "order"
+    if len(nums) == 1 and len(vals) == 2:
+        return {}, "order"  # deux colonnes dont une case vide (« - », montant illisible) : le montant garde sa colonne
     if len(nums) == 1 and len(vals) == 1:
         return {}, "single"
     return {}, None
@@ -1260,6 +1400,18 @@ def _assign(vals, heads, i, fy, brut):
 # ---------------------------------------------------------------- contrôle : identités comptables
 ACT_PARTS = ("charges_immobilisees", "immo_incorp", "immo_corp", "immo_fin", "actif_circulant_hao", "stocks", "creances", "tresorerie_actif")
 STRONG = ("actif = passif", "résultat CR = bilan", "RN = RAO + HAO - impôt", "RN = résultat avant impôt - impôt", "RN = RE + RF + HAO - impôt", "RN = RAO - impôt")
+
+
+def _gran(*xs):
+    """Granularité des montants (1, 10, … 1e6) : des comptes publiés en milliers ou en millions de francs, ramenés en francs,
+    s'équilibrent à une ou deux unités de leur arrondi près."""
+    g = 1e6
+    for x in xs:
+        if x is None:
+            continue
+        while g > 1 and abs(round(x / g) * g - x) > 1e-6:
+            g /= 10
+    return g
 
 
 def checks(items, year, bank=False, strict=False):
@@ -1272,15 +1424,16 @@ def checks(items, year, bank=False, strict=False):
         if a is None or b is None:
             return None
         den = max(abs(a), abs(b), 1.0)
-        return abs(a - b) / den
+        r = abs(a - b) / den
+        # égalités exactes dans les comptes publiés : en reconnaissance de caractères, un écart au-delà de l'arrondi (deux unités),
+        # même infime (« 2 112 605 834 » face à « 2 112 605 831 »), est un chiffre mal lu et non une vérification (les couches
+        # texte gardent la tolérance : des comptes provisoires publiés avec un léger déséquilibre existent)
+        if strict and r <= 0.002 and abs(a - b) > 2 * _gran(a, b):
+            r = 0.0021
+        return r
     for nm, a, b in (("actif = passif", g("total_actif"), g("total_passif")), ("résultat CR = bilan", g("resultat_net"), g("resultat_bilan"))):
         r = rel(a, b)
         if r is not None:
-            # égalités exactes dans les comptes publiés : en reconnaissance de caractères, un écart au-delà de l'arrondi (deux unités,
-            # deux millionièmes), même infime, est un chiffre mal lu et non une vérification (les couches texte gardent la tolérance :
-            # des comptes provisoires publiés avec un léger déséquilibre existent)
-            if strict and 2e-6 < r <= 0.002 and abs(a - b) > 2:
-                r = 0.0021
             res.append((nm, r))
     if g("valeur_ajoutee") is not None and g("charges_personnel") is not None and g("ebe") is not None:
         res.append(("EBE = VA - personnel", rel(g("valeur_ajoutee") - abs(g("charges_personnel")), g("ebe"))))
@@ -1385,8 +1538,9 @@ def unit_choice(P, items, y):
     allv = [abs(v[y]) for k, v in items.items() if y in v]
     bs_v = [abs(v[y]) for k, v in items.items() if y in v and k not in ("total_actif", "total_passif")
             and set(SECS.get(k, ())) & {S_ACT, S_PAS}]
-    if tot and bs_v and abs(tot) < max(bs_v) * 0.9:
-        tot = None  # total plus petit qu'un poste du bilan : mal lu
+    ta_, tp_ = (items.get("total_actif") or {}).get(y), (items.get("total_passif") or {}).get(y)
+    if tot and bs_v and abs(tot) < max(bs_v) * 0.9 and not (ta_ and tp_ and abs(ta_ - tp_) <= 0.5):
+        tot = None  # total plus petit qu'un poste du bilan : mal lu (sauf total égal à l'actif et au passif : c'est le poste qui est faux)
     # (le plus grand bilan de la cote dépasse à peine 15 000 milliards de FCFA, le plus grand chiffre d'affaires 2 000 milliards)
     scales = (1.0, 1e3, 1e6, 1e9) + ((1e-3, 1e-6) if P.get("unit") and P["unit"] < 1 else ())  # (unité annoncée trop grande)
     if tot:
@@ -1461,6 +1615,8 @@ def read_doc(texts, meta):
     title = meta.get("ti") or ""
     best = None
     parsed = {}
+    allres = {}  # exercices vérifiés par lecture (src → {périmètre: {année: (contrôles, postes gardés)}})
+    scores = {}
     variants = []
     for src, (txt, ocr) in texts.items():
         if not txt or len(txt.strip()) < 200:
@@ -1468,14 +1624,20 @@ def read_doc(texts, meta):
         variants.append((src, txt, ocr, False))
         if ocr:
             variants.append((src + "~", txt, ocr, True))  # (libellés nettoyés de leurs débris : seconde lecture du même texte)
+        # virgule ambiguë (« 63,615 » : 63 615 millions ou 63,615 milliards ?) : seconde lecture où la virgule sépare les milliers,
+        # la lecture retenue étant celle dont les exercices se vérifient le mieux (dans l'unité annoncée)
+        if len(re.findall(r"(?<![\d,.])\d{1,3},\d{3}(?![\d,])", txt)) >= 5:
+            variants.append((src + "!", txt, ocr, "comma"))
     for src, txt, ocr, tol in variants:
-        _TOLERANT[0] = tol
+        _TOLERANT[0] = tol is True
+        _COMMA_FORCE[0] = tol == "comma"
         try:
             P = parse(txt, fy_hint=fy_hint, title=title, ocr=ocr)
         except Exception:  # noqa: BLE001
             continue
         finally:
             _TOLERANT[0] = False
+            _COMMA_FORCE[0] = False
         parsed[src] = P
         res = {}
         for per, items in P["perims"].items():
@@ -1488,13 +1650,67 @@ def read_doc(texts, meta):
                     pr = partial(items, y, c, strict=bool(P.get("ocr")))  # une identité vérifiée, une autre fausse : seul ce qui reste sûr est gardé
                     if pr:
                         res.setdefault(per, {})[y] = ([(n, round(r, 5)) for n, r in pr[1]], pr[0])
-        score = sum(len(v) for v in res.values()) * 100 + len(P["items"])
+        # lecture retenue : la plus riche en exercices vérifiés, puis en identités fortes, en postes vérifiés et en postes gardés
+        score = len(P["items"]) * 0.01
+        for per, yrs_ in res.items():
+            items = P["perims"][per]
+            for y, (c, keep) in yrs_.items():
+                vk_ = {k for n, r in c if r is not None and r <= 0.001 for k in IDENT_KEYS.get(n, ())}
+                have = [k for k, v in items.items() if y in v and (keep is None or k in keep)]
+                score += 100 + 5 * sum(1 for n, r in c if n in STRONG and r is not None and r <= 0.001) + 3 * len([k for k in have if k in vk_]) + len(have)
+                # (à qualité égale, la lecture dont les montants sont plausibles dans l'unité annoncée par le document l'emporte :
+                # « 63,615 » lu 63 615 millions plutôt que 63,615 milliards dans un document « en millions »)
+                if P.get("unit"):
+                    u_, cands_ = unit_choice(P, items, y)
+                    if u_ == P["unit"]:
+                        score += 20
+                    elif cands_ and P["unit"] not in cands_:
+                        score -= 20
+        allres[src], scores[src] = res, score
         if best is None or score > best[0]:
             best = (score, src, P, res)
     if not best:
         return {"st": "illisible"}
     _, src, P, res = best
-    base_src = src.rstrip("~")  # (« fra~ » : même texte que « fra », libellés nettoyés)
+
+    def _rec(Pc, srcc, resc, per, y):
+        """Montants retenus d'un exercice vérifié d'une lecture : pour l'OCR, un montant n'est gardé que si une autre lecture
+        (autre langue, autre mode) donne le même chiffre, ou s'il entre dans une identité comptable vérifiée."""
+        chk, keep = resc[per][y]
+        items = Pc["perims"][per]
+        basec = srcc.rstrip("~!")
+        others = [P_ for s_, P_ in parsed.items() if s_.rstrip("~!") != basec and s_.rstrip("~!") in OCR_SRC]
+        ok_id = {k for n, r in chk if r <= 0.001 for k in IDENT_KEYS.get(n, ())}
+        rec = {}
+        cf = []  # montants lus à l'identique par deux reconnaissances de caractères (hors identités)
+        for k, v in items.items():
+            if y not in v or (keep is not None and k not in keep):
+                continue
+            x = v[y]
+            if basec in OCR_SRC:
+                ovs = [((o_["perims"].get(per) or {}).get(k) or {}).get(y) for o_ in others]
+                same = any(ov is not None and abs(ov - x) <= 0.5 for ov in ovs)
+                if k in ok_id:
+                    # montant vérifié par une identité, mais lu autrement (à moins d'un centième près : un chiffre confondu, 3 pour 9)
+                    # par une autre reconnaissance sans qu'aucune ne le confirme : le même chiffre mal lu deux fois (compte de
+                    # résultat et bilan) vérifie une identité à tort ; le montant est contesté et n'est pas repris
+                    if not same and any(ov is not None and 0.5 < abs(ov - x) <= 0.01 * max(abs(x), 1.0) for ov in ovs):
+                        continue
+                elif not same:
+                    continue
+                else:
+                    cf.append(k)
+                    # chiffres tronqués par la lecture (les deux lectures butent sur la même image) : un poste habituellement stable
+                    # vingt fois plus petit que l'autre exercice du même document n'est pas gardé
+                    oy = [v_ for y_, v_ in v.items() if y_ != y and v_]
+                    if k in STABLE and x and oy and abs(oy[0]) >= 1e6 and abs(x / oy[0]) < 0.05:
+                        continue
+            rec[k] = abs(x) if k in CHARGES else x
+        if any(n == "variation = somme des flux" and r > 0.01 for n, r in chk):
+            rec = {k: v for k, v in rec.items() if _sec_of(k) != "F"}  # tableau des flux incohérent : ses montants ne sont pas repris
+        unit, cands = unit_choice(Pc, items if keep is None else {k: v for k, v in items.items() if k in keep}, y)
+        return rec, chk, keep, ok_id, cf, unit, cands
+    base_src = src.rstrip("~!")  # (« fra~ » : même texte que « fra », libellés nettoyés)
     out = {"st": "ok" if res else "non vérifié", "src": base_src, "fy": P["fy"], "per": P["per"], "std": P["std"], "type": P["type"],
            "cur": P["cur"], "main": P["main"], "n": len(P["items"]), "y": {}, "guess": P.get("guess") or []}
     oc_ = other_company(meta["t"], (meta.get("u") or "").rsplit("/", 1)[-1]) if meta.get("t") else None
@@ -1504,38 +1720,79 @@ def read_doc(texts, meta):
     if P["cur"] != "XOF":
         out["st"], out["cur"] = "devise " + P["cur"], P["cur"]
         return out
-    # OCR : un montant n'est gardé que si une autre lecture (autre langue, autre mode) donne le même chiffre,
-    # ou s'il entre dans une identité comptable vérifiée
-    others = [P_ for s_, P_ in parsed.items() if s_.rstrip("~") != base_src and s_.rstrip("~") in OCR_SRC]
+    def _emit(per, y, rec, chk, keep, ok_id, cf, unit, cands, mg=(), alt=None):
+        d = {"v": rec, "c": chk, "u": unit, "uc": cands, "vk": sorted(k for k in ok_id if k in rec)}
+        if cf:
+            d["cf"] = sorted(k for k in cf if k in rec)
+        if keep is not None:
+            d["part"] = 1  # états partiellement retenus (une identité fausse a écarté un état)
+        if mg:
+            d["mg"] = sorted(mg)  # postes complétés par une autre lecture du même document (identité vérifiée dans celle-ci)
+        if alt:
+            d["alt"] = alt  # exercice pris dans une autre lecture du même document (vérifié dans celle-ci seulement)
+        out["y"].setdefault(per, {})[str(y)] = d
+
     for per, yrs in res.items():
-        items = P["perims"][per]
-        for y, (chk, keep) in yrs.items():
-            ok_id = {k for n, r in chk if r <= 0.001 for k in IDENT_KEYS.get(n, ())}
-            rec = {}
-            cf = []  # montants lus à l'identique par deux reconnaissances de caractères (hors identités)
-            for k, v in items.items():
-                if y not in v or (keep is not None and k not in keep):
+        for y in yrs:
+            rec, chk, keep, ok_id, cf, unit, cands = _rec(P, src, res, per, y)
+            # complément : postes vérifiés par une identité comptable dans une autre lecture du même document (même norme,
+            # même unité), lecture cohérente avec celle retenue (au moins un montant commun identique) ; rien n'est remplacé
+            mg = []
+            for s_, res_ in allres.items():
+                if s_ == src or per not in res_ or y not in res_[per]:
                     continue
-                x = v[y]
-                if base_src in OCR_SRC and k not in ok_id:
-                    ovs = [((o_["perims"].get(per) or {}).get(k) or {}).get(y) for o_ in others]
+                P_ = parsed[s_]
+                if P_["std"] != P["std"] or P_["fy"] != P["fy"]:
+                    continue
+                chk_, keep_ = res_[per][y]
+                items_ = P_["perims"][per]
+                unit_, _ = unit_choice(P_, items_ if keep_ is None else {k: v for k, v in items_.items() if k in keep_}, y)
+                if unit_ != unit:
+                    continue
+                vals_ = {k: v[y] for k, v in items_.items() if y in v and (keep_ is None or k in keep_)}
+                common = [k for k in rec if k in vals_]
+                if not common or not any(abs(abs(vals_[k]) - abs(rec[k])) <= 0.5 for k in common):
+                    continue
+                if any(n == "variation = somme des flux" and r > 0.01 for n, r in chk_):
+                    vals_ = {k: v for k, v in vals_.items() if _sec_of(k) != "F"}
+                for k in sorted(k for n, r in chk_ if r <= 0.001 for k in IDENT_KEYS.get(n, ())):
+                    if k in rec or k not in vals_:
+                        continue
+                    rec[k] = abs(vals_[k]) if k in CHARGES else vals_[k]
+                    ok_id.add(k)
+                    mg.append(k)
+                # et montants de cette lecture lus à l'identique par une autre reconnaissance de caractères (règle « cf »)
+                base_ = s_.rstrip("~!")
+                others_ = [P__ for s__, P__ in parsed.items() if s__.rstrip("~!") != base_ and s__.rstrip("~!") in OCR_SRC]
+                for k in sorted(vals_):
+                    if k in rec:
+                        continue
+                    x = vals_[k]
+                    ovs = [((o_["perims"].get(per) or {}).get(k) or {}).get(y) for o_ in others_]
                     if not any(ov is not None and abs(ov - x) <= 0.5 for ov in ovs):
                         continue
-                    cf.append(k)
-                    # chiffres tronqués par la lecture (les deux lectures butent sur la même image) : un poste habituellement stable
-                    # vingt fois plus petit que l'autre exercice du même document n'est pas gardé
-                    oy = [v_ for y_, v_ in v.items() if y_ != y and v_]
+                    oy = [v_ for y_, v_ in items_[k].items() if y_ != y and v_]
                     if k in STABLE and x and oy and abs(oy[0]) >= 1e6 and abs(x / oy[0]) < 0.05:
                         continue
-                rec[k] = abs(x) if k in CHARGES else x
-            if any(n == "variation = somme des flux" and r > 0.01 for n, r in chk):
-                rec = {k: v for k, v in rec.items() if _sec_of(k) != "F"}  # tableau des flux incohérent : ses montants ne sont pas repris
-            unit, cands = unit_choice(P, items if keep is None else {k: v for k, v in items.items() if k in keep}, y)
-            out["y"].setdefault(per, {})[str(y)] = {"v": rec, "c": chk, "u": unit, "uc": cands, "vk": sorted(k for k in ok_id if k in rec)}
-            if cf:
-                out["y"][per][str(y)]["cf"] = sorted(k for k in cf if k in rec)
-            if keep is not None:
-                out["y"][per][str(y)]["part"] = 1  # états partiellement retenus (une identité fausse a écarté un état)
+                    rec[k] = abs(x) if k in CHARGES else x
+                    cf.append(k)
+                    mg.append(k)
+            _emit(per, y, rec, chk, keep, ok_id, cf, unit, cands, mg)
+    # exercices vérifiés dans une autre lecture seulement (même norme, même exercice de référence, année N ou N-1) :
+    # repris avec les mêmes règles de prudence, depuis la lecture la mieux notée qui les vérifie
+    for s_ in sorted(allres, key=lambda s: -scores[s]):
+        if s_ == src:
+            continue
+        P_ = parsed[s_]
+        if P_["std"] != P["std"] or P_["fy"] != P["fy"] or not isinstance(P["fy"], int):
+            continue
+        for per, yrs in allres[s_].items():
+            for y in yrs:
+                if str(y) in out["y"].get(per, {}) or y not in (P["fy"], P["fy"] - 1):
+                    continue
+                rec, chk, keep, ok_id, cf, unit, cands = _rec(P_, s_, allres[s_], per, y)
+                if rec:
+                    _emit(per, y, rec, chk, keep, ok_id, cf, unit, cands, alt=s_.rstrip("~!"))
     return out
 
 
@@ -1616,6 +1873,10 @@ def _doc_rank(r, y):
     return (own, final, r.get("d") or "")
 
 
+CA_LIKE = {"chiffre_affaires", "ventes_marchandises", "ventes_produits", "travaux_services", "produits_accessoires", "marge_commerciale",
+           "valeur_ajoutee", "achats_marchandises", "achats_matieres", "b_interets_produits", "b_interets_charges", "b_pnb"}
+
+
 def consolidate(cj, mirror=None):
     """comptes.json (documents lus) -> {titre: {"y": {exercice: {"v": {poste: millions de FCFA}, "n", "d", "own"}}, "per", "std",
     "agree" (part des montants communs égaux à ceux de la base de référence), "ncmp" (nombre de montants comparés)}}.
@@ -1652,8 +1913,14 @@ def consolidate(cj, mirror=None):
             continue
         for per, ys in r["y"].items():
             for y, x in ys.items():
+                v_, vk_ = dict(x.get("v") or {}), set(x.get("vk") or [])
+                if v_.get("resultat_net") is None and v_.get("resultat_bilan") is not None:
+                    # (bilan seul : le résultat de l'exercice inscrit au passif est le résultat net publié, même montant)
+                    v_["resultat_net"] = v_["resultat_bilan"]
+                    if "resultat_bilan" in vk_:
+                        vk_.add("resultat_net")
                 recs.append({"t": t_doc, "y": int(y), "per": per, "std": "ifrs" if per.endswith("_ifrs") else "syscohada", "u": x.get("u"),
-                             "uc": x.get("uc") or [], "v": x.get("v") or {}, "vk": set(x.get("vk") or []), "c": x.get("c"), "doc": u,
+                             "uc": x.get("uc") or [], "v": v_, "vk": vk_, "c": x.get("c"), "doc": u,
                              "rank": _doc_rank(r, int(y)), "d": r.get("d"), "ocr": r.get("src") in OCR_SRC, "fy": r.get("fy"),
                              # (communiqué ou rapport numérisé : deux lectures identiques d'un chiffre ne garantissent pas sa ligne ni sa
                              # colonne ; seuls les montants vérifiés par une identité sont gardés)
@@ -1669,7 +1936,10 @@ def consolidate(cj, mirror=None):
     for x in recs:
         if x["u"]:
             continue
-        for cand in x["uc"]:
+        # (sans total ni chiffre d'affaires, aucune unité candidate : les unités usuelles sont essayées, retenues seulement si un
+        # chiffre clé coïncide avec une autre source à cette échelle)
+        no_key = not any(x["v"].get(k) for k in ("total_actif", "total_passif", "chiffre_affaires", "b_pnb"))
+        for cand in x["uc"] or ([1.0, 1e3, 1e6] if no_key else []):
             hit = 0
             for k, mk in MS.items():
                 v = x["v"].get(k)
@@ -1750,8 +2020,9 @@ def consolidate(cj, mirror=None):
     # erreurs d'unité : un poste qui vaut exactement 1 000 fois (ou un millième) la valeur d'une autre source est écarté
     pool = {}
     for x in recs:
+        tot_ = x["m"].get("total_actif") or x["m"].get("total_passif")
         for k, v in x["m"].items():
-            if v:
+            if v and not (tot_ and abs(v) > abs(tot_) * 20):  # (un montant qui dépasse vingt fois le bilan de son document ne juge personne)
                 pool.setdefault((x["t"], x["y"], k), []).append(v)
 
     def scaled(v, o):
@@ -1792,22 +2063,30 @@ def consolidate(cj, mirror=None):
                 med = lv[len(lv) // 2]
                 bad |= {(x["doc"], x["per"]) for x in xs_ok if x["m"].get(k_) and abs(math.log10(abs(x["m"][k_])) - med) > 2.5}
     recs = drop_docs(recs, bad)
-    pool = {}  # (sources encore crues seulement)
+    pool = {}  # (sources encore crues seulement : montant et total du bilan de son document)
     for x in recs:
+        tot_ = x["m"].get("total_actif") or x["m"].get("total_passif")
         for k, v in x["m"].items():
             if v:
-                pool.setdefault((x["t"], x["y"], k), []).append(v)
+                pool.setdefault((x["t"], x["y"], k), []).append((v, tot_))
+
+    def outsized(k_, v_, tot_):
+        # un montant hors de proportion avec le bilan de son propre document (cinq fois le total ; vingt fois pour les ventes)
+        # porte seul l'erreur d'unité : il ne discrédite pas la source qui le donne mille fois plus petit
+        return bool(tot_) and abs(v_) > abs(tot_) * (20 if k_ in CA_LIKE else 5)
     for x in recs:
         n_del = 0
+        tot_x = x["m"].get("total_actif") or x["m"].get("total_passif")
         for k in list(x["m"]):
             v = x["m"][k]
             if not v or k in x["vk"]:
                 continue
-            others = [o for o in pool.get((x["t"], x["y"], k), []) if o != v]
+            others = [(o, ot) for o, ot in pool.get((x["t"], x["y"], k), []) if o != v]
             mv = mirror_v(x["t"], x["y"], k)
             if mv:
-                others.append(mv)
-            if any(abs(abs(v / o) - f) <= f * 0.005 for o in others if o for f in (1e3, 1e-3, 1e6, 1e-6)):
+                others.append((mv, None))
+            hit = [o for o, ot in others if o and scaled(v, o) and not (outsized(k, o, ot) and not outsized(k, v, tot_x))]
+            if hit:
                 del x["m"][k]
                 n_del += 1
         if n_del >= 2:
@@ -1827,11 +2106,13 @@ def consolidate(cj, mirror=None):
         n_ = 0
         for k in KEYC:
             v = x["m"].get(k)
+            if v is None and k == "resultat_net":
+                v = x["m"].get("resultat_bilan")  # (résultat lu au bilan seulement : même montant publié)
             if v is None:
                 continue
             # (pour juger un décalage d'années, une lecture par reconnaissance de caractères ne contredit pas une couche texte)
-            if any(o is not x and o["doc"] != x["doc"] and same(v, o["m"].get(k)) and not (peers and o["ocr"] and not x["ocr"])
-                   for o in idx_ty.get((x["t"], y), [])):
+            if any(o is not x and o["doc"] != x["doc"] and same(v, o["m"].get(k, o["m"].get("resultat_bilan") if k == "resultat_net" else None))
+                   and not (peers and o["ocr"] and not x["ocr"]) for o in idx_ty.get((x["t"], y), [])):
                 n_ += 1
             elif same(v, mirror_v(x["t"], y, k)) or (mirror_v(x["t"], y, k) is not None and abs(v - mirror_v(x["t"], y, k)) <= abs(mirror_v(x["t"], y, k)) * 0.005):
                 n_ += 1
@@ -2074,6 +2355,8 @@ def consolidate(cj, mirror=None):
                     if v[tot_] == 0 and abs(s_) > 1.0:
                         del v[tot_]  # (un total nul face à des composantes non nulles : tiret lu comme un zéro)
                         continue
+                    if set.intersection(*(src_of(k_) for k_ in ks_)):
+                        continue  # (tous les membres viennent d'un même document : c'est son découpage, gardé tel quel)
                     if not all(prim["doc"] in src_of(k_) for k_ in ks_):
                         for k_ in ks_:
                             if prim["doc"] not in src_of(k_):

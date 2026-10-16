@@ -89,3 +89,31 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   (« 7$ 9HQWHV GH PDUFKDQGLVHV » = « TA Ventes de marchandises ») décodés segment par segment ; mots coupés (« T OTAL »,
   « RESULT AT ») recollés ; convention des virgules (milliers à l'anglaise ou décimale) décidée à la majorité des montants. Un
   document dont la couche texte ne donne rien de vérifiable est relu par reconnaissance de caractères.
+- Plusieurs lectures d'un même document (texte, reconnaissance de caractères française / anglaise, deux modes) : la lecture
+  retenue est la mieux vérifiée (exercices, identités fortes, postes vérifiés), et, à qualité égale, celle dont les montants
+  sont plausibles dans l'unité annoncée. Les postes qu'une autre lecture vérifie par une identité, ou que deux reconnaissances
+  lisent à l'identique, la complètent (même norme, même unité, au moins un montant commun identique) ; rien n'est remplacé.
+  Un exercice vérifié dans une seule lecture est repris d'elle. Un montant vérifié par une identité mais lu autrement par une
+  autre reconnaissance (un chiffre confondu, à moins d'un centième près) est contesté et n'est pas repris.
+- Égalités exactes pour les documents numérisés, sur toutes les identités : un écart au-delà de l'arrondi des montants publiés
+  (une unité en francs, ou l'unité des comptes publiés en milliers ou millions) n'est pas une vérification (Setao 2014 :
+  résultat 2 112 605 831 et non …834 ; Uniwax 2024 : −2 188 937 902).
+- Aucun montant en FCFA n'atteint 14 chiffres : une suite plus longue est découpée selon les groupes de milliers (chiffre
+  parasite en tête ou en queue d'un groupe : « 2341 » = 234 | 1), sinon la case est illisible et le libellé n'attend pas ses
+  montants plus bas. Deux montants de même longueur collés par une seule espace (« 95725 99149 ») restent deux montants.
+- Signes : un montant entre parenthèses garde son signe négatif même quand la reconnaissance a perdu une parenthèse ailleurs
+  (« (4 248 984 403) ») ; la colonne des signes (« - ») ne s'applique qu'aux montants imprimés sans signe (pas de double
+  négation : impôt « - -1 037 ») ; un tilde devant un nombre est un signe moins mal lu.
+- Unités : une annonce (« en millions FCFA ») pré-imprimée sur un bilan bancaire en francs est corrigée quand aucun total n'est
+  plausible dans l'unité annoncée ; une annonce isolée à gauche d'une nouvelle page vaut pour les deux tableaux ; une lettre
+  parasite devant « en millions » (« fen millions ») n'empêche pas la lecture ; une virgule ambiguë (« 63,615 » : milliers
+  ou décimale) est lue des deux façons et la lecture la mieux vérifiée dans l'unité annoncée l'emporte (SOGB 2008-2009).
+- Structure des états : un passif qui enchaîne sous le total de l'actif sans titre (« Capital social ») est reconnu, et cette
+  décision est révoquée si des postes de l'actif suivent ; le titre « TABLEAU DE FLUX DE TRESORERIE (TFT) » face aux montants
+  de l'autre tableau ouvre bien le tableau des flux ; le résultat du projet d'affectation n'est pas un résultat d'exercice ;
+  une colonne de notes devant deux exercices (« 21 (402) (391) ») n'est retirée que si la ligne ne forme pas N, N-1 et leur
+  variation ; une année de clôture impossible (« 2076 ») est ignorée.
+- Consolidation : le résultat inscrit au passif vaut résultat net quand le document n'a pas de compte de résultat ; un montant
+  hors de proportion avec le bilan de son propre document (cinq fois le total) porte seul l'erreur d'unité et ne discrédite
+  pas la source qui le donne mille fois plus petit ; un découpage de postes entièrement tiré d'un même document est gardé tel
+  quel ; sans total ni chiffre d'affaires, l'unité n'est retenue que si un chiffre clé coïncide avec une autre source.
