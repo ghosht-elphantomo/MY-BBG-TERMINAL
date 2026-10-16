@@ -853,6 +853,17 @@ def parse(txt, fy_hint=None, title="", ocr=False):
                 key = "resultat_bilan"
             if key == "b_resultat_bilan":
                 key = "resultat_bilan"
+            if len(vals) == 4 and not ocr and st_ is not None and st_ < 60 and all(v_ is not None for v_, _ in vals):
+                # deux tableaux côte à côte sous un même en-tête à quatre colonnes (N, N-1 | N, N-1) : un libellé de gauche n'a que les
+                # deux premiers montants, les deux autres sont ceux du tableau de droite
+                for l_h, hs_h in reversed(heads):
+                    if not (0 <= i - l_h < 160):
+                        continue
+                    hs_h = sorted(hs_h)
+                    ys_h = [y_ for _, _, y_ in hs_h if isinstance(y_, int)]
+                    if len(ys_h) == 4 and ys_h[:2] == ys_h[2:] and all(abs(hs_h[j][0] - vals[j][1]) <= 25 for j in range(4)):
+                        vals = vals[:2]
+                        break
             yrs, how = _assign(vals, [] if ocr else heads, i, fy, brut_tbl and s_here == S_ACT)
             if how == "order" and not split and len(vals) > 4:
                 continue  # tableau à plusieurs colonnes (par secteur, variation des capitaux propres…) : colonnes inconnues
@@ -1251,6 +1262,9 @@ def checks(items, year, bank=False, strict=False):
         r_ = rel(s_, g("chiffre_affaires"))
         if r_ is not None and r_ <= 0.001:  # retenue seulement si elle se vérifie (le chiffre d'affaires publié n'inclut pas toujours tout)
             res.append(("CA = somme des ventes", r_))
+    # tableau des flux : variation de trésorerie = flux opérationnels + flux d'investissement + flux de financement
+    if all(g(k) is not None for k in ("flux_operationnels", "flux_investissement", "flux_financement", "variation_tresorerie")):
+        res.append(("variation = somme des flux", rel(g("flux_operationnels") + g("flux_investissement") + g("flux_financement"), g("variation_tresorerie"))))
     return res
 
 
@@ -1259,7 +1273,7 @@ def checks(items, year, bank=False, strict=False):
 ID_SEC = {"actif = passif": "B", "actif = somme des postes": "B", "actif = somme des masses": "B", "passif = somme des masses": "B",
           "passif = ressources stables + dettes": "B", "capitaux propres ≤ total": "B", "RN = RAO + HAO - impôt": "R",
           "RN = RE + RF + HAO - impôt": "R", "RN = résultat avant impôt - impôt": "R", "RN = RAO - impôt": "R", "RAO = RE + RF": "R",
-          "EBE = VA - personnel": "R", "CA = somme des ventes": "R", "RBE ≤ PNB": "R"}
+          "EBE = VA - personnel": "R", "CA = somme des ventes": "R", "RBE ≤ PNB": "R", "variation = somme des flux": "F"}
 CONFIRMS = {n for n in ID_SEC if n not in ("capitaux propres ≤ total", "RBE ≤ PNB")}
 
 
@@ -1291,7 +1305,8 @@ def validate(parsed, year, items=None):
     """Exercice retenu si au moins une identité forte se vérifie à 0,1 % et qu'aucune ne s'écarte de plus de 1 %."""
     c = checks(items if items is not None else parsed["items"], year, parsed.get("type") == "banque", strict=bool(parsed.get("ocr")))
     strong = [r for n, r in c if n in STRONG]
-    ok = bool(strong) and min(strong) <= 0.001 and all(r <= 0.01 for _, r in c)
+    # (le tableau des flux est jugé à part : son identité fausse ne discrédite pas le bilan ni le compte de résultat, elle écarte les flux)
+    ok = bool(strong) and min(strong) <= 0.001 and all(r <= 0.01 for n, r in c if n != "variation = somme des flux")
     return ok, c
 
 
@@ -1451,6 +1466,8 @@ def read_doc(texts, meta):
                     if k in STABLE and x and oy and abs(oy[0]) >= 1e6 and abs(x / oy[0]) < 0.05:
                         continue
                 rec[k] = abs(x) if k in CHARGES else x
+            if any(n == "variation = somme des flux" and r > 0.01 for n, r in chk):
+                rec = {k: v for k, v in rec.items() if _sec_of(k) != "F"}  # tableau des flux incohérent : ses montants ne sont pas repris
             unit, cands = unit_choice(P, items if keep is None else {k: v for k, v in items.items() if k in keep}, y)
             out["y"].setdefault(per, {})[str(y)] = {"v": rec, "c": chk, "u": unit, "uc": cands, "vk": sorted(k for k in ok_id if k in rec)}
             if cf:
@@ -1470,7 +1487,8 @@ IDENT_KEYS = {"actif = passif": ("total_actif", "total_passif"), "résultat CR =
               "passif = somme des masses": ("total_passif", "capitaux_propres", "dettes_financieres", "passif_circulant", "tresorerie_passif"),
               "passif = ressources stables + dettes": ("total_passif", "ressources_stables", "passif_circulant", "tresorerie_passif"),
               "EBE = VA - personnel": ("valeur_ajoutee", "charges_personnel", "ebe"), "RAO = RE + RF": ("rao", "resultat_exploitation", "resultat_financier"),
-              "CA = somme des ventes": ("chiffre_affaires", "ventes_marchandises", "ventes_produits", "travaux_services", "produits_accessoires")}
+              "CA = somme des ventes": ("chiffre_affaires", "ventes_marchandises", "ventes_produits", "travaux_services", "produits_accessoires"),
+              "variation = somme des flux": ("flux_operationnels", "flux_investissement", "flux_financement", "variation_tresorerie")}
 
 
 # sommes de postes vérifiées entre documents à la consolidation (parties, total)

@@ -81,3 +81,7 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   (BOA Niger 2018-2020). L'ordre de grandeur d'une société se mesure sur les documents encore crus (deux rapports en milliers
   ne font plus passer les bons documents pour des erreurs) ; une lecture numérisée vérifiée par une seule identité, dix fois
   plus petite que l'exercice voisin, est écartée (chiffre de tête perdu : Ecobank CI 2016).
+- Tableau des flux : l'identité « variation de trésorerie = flux opérationnels + investissement + financement » vérifie les
+  flux lus ; quand elle est fausse (signe perdu, ligne manquante), les flux du document sont écartés sans toucher au bilan ni au
+  compte de résultat. Deux tableaux côte à côte sous un même en-tête à quatre colonnes (N, N-1 | N, N-1) : un libellé de
+  gauche n'a que les deux premiers montants.
