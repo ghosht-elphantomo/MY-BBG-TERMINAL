@@ -1549,6 +1549,13 @@ def main():
         build_search.build(out, src, a.search_src, a.boc, log, comptes=a.comptes)
     except Exception as e:  # noqa: BLE001
         log("index de recherche non refait :", e)
+    # QLAB : moteur de valorisation (passage du soir seulement) ; une erreur laisse en place la dernière estimation valide
+    if not a.live:
+        try:
+            import qlab
+            qlab.run(out, a.extra, log)
+        except Exception as e:  # noqa: BLE001
+            log("QLAB : valorisation non refaite (dernière estimation valide conservée) :", e)
     tot = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(out) for f in fs)
     log(f"{len(secs)} securities, {sum(len(b['d']) for b in files.values())} rows, {tot / 1e6:.1f} MB -> {out}")
 
