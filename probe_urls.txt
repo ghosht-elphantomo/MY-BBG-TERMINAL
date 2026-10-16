@@ -1,5 +1,7 @@
-boc_20140115.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20140115.pdf
-boc_20170802.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20170802.pdf
-boc_20191231.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20191231.pdf
-boc2_20140115.pdf|https://www.brvm.org/sites/default/files/boc_20140115_2.pdf
-wb_avis2002.pdf|https://web.archive.org/web/20031120101029id_/http://www.brvm.org:80/fr/marche/avis/2002/juillet/AVIS%20N%B080%20-%202002%20%20DIVIDENDES%20PEYRISSAC%20-%20EX%202001.pdf
+b3_20140115.pdf|https://www.brvm.org/sites/default/files/boc_20140115.pdf
+bf_20150616.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20150616.pdf
+bf_20161114.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20161114.pdf
+b3_20161114.pdf|https://www.brvm.org/sites/default/files/boc_20161114.pdf
+b2_20161114.pdf|https://www.brvm.org/sites/default/files/boc_20161114_2.pdf
+bf_20140602.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20140602.pdf
+bf_20131210.pdf|https://bfin.brvm.org/boc/BOC_JOUR/BOC_20131210.pdf
