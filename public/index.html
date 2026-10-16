@@ -1330,8 +1330,10 @@ function scatterL(host, o) {
 /* ================= FQT — pages: MONITOR, BRVM, GP, DES, HELP ================= */
 'use strict';
 const codeAttr = code => { const c0 = String(code || '').trim(); if (FN[c0]) return c0 === ST.fn ? '' : ` data-fn="${c0}"`; const w = c0.split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
-/* dividende par action : marqué « a » quand il a été ajusté d'un fractionnement (montant publié en infobulle) */
-const adjMark = x => (x && x.adj ? `<i class="qd" title="montant publié : ${num(x.dps0, 2)} par action ancienne ; ajusté du fractionnement (1 → ${num(x.adj, 0)})">a</i>` : '')
+/* dividende par action : marqué « a » quand il a été ajusté d'un fractionnement ou d'actions gratuites (montant publié en infobulle),
+   « $ » quand il a été publié en cents de dollar et converti en FCFA au cours du jour de sa publication */
+const adjMark = x => (x && x.adj ? `<i class="qd" title="montant publié : ${num(x.dps0, x.dps0 < 10 ? 4 : 2)} par action ancienne ; ajusté des opérations sur le capital (1 action ancienne = ${num(x.adj, Number.isInteger(+x.adj) ? 0 : 2)} actions actuelles)">a</i>` : '')
+  + (x && x.usd ? `<i class="qd" title="publié en dollars : ${num(x.usd, 2)} cent de dollar par action ; converti au cours du jour de sa publication (${num(x.fx, 2)} FCFA pour 1 dollar)">$</i>` : '')
   + (x && x.cal ? '<i class="qd" title="montant du calendrier des dividendes de la BRVM (net ou brut selon la société) : l’avis officiel détaille le net">c</i>' : '');
 const pn = (title, code, body, o = {}) => `<div class="pn" ${o.id ? `id="${o.id}"` : ''} ${o.style ? `style="${o.style}"` : ''}><div class="pt">${title}${o.sel ? `<span class="sel">${o.sel}</span>` : ''}<span class="code"${codeAttr(code)}>${code || ''}</span></div>${o.tools ? `<div class="tools">${o.tools}</div>` : ''}<div class="pb ${o.np ? 'np' : ''}">${body}</div>${o.lect ? `<div class="lect">${o.lect}</div>` : ''}</div>`;
 const cvb = (id, h) => `<div class="cv" id="${id}" style="height:${h}px"></div>`;
@@ -2034,7 +2036,7 @@ PAGES.HELP = async m => {
   const ex = ST.sec && Q.by[ST.sec] ? ST.sec : 'SNTS';
   const start = [['SNTS', 'Le menu du titre : toutes ses fonctions, classées par thème.'], ['SNTS GP', 'Une fonction d’un titre : le ticker, un espace, le code.'], ['BRVM', 'Une fonction de marché : son code seul, ou la touche du haut.'], ['2', 'Un numéro : l’onglet ou la ligne qui porte ce numéro à l’écran.']];
   const keys = [['F1', 'Cette aide'], ['F2', 'Obligations UEMOA (UEMOA BONDS)'], ['F3', 'Marché BRVM'], ['F4', 'Indices mondiaux (INDX)'], ['Échap', 'Retour au menu du titre ou à MONITOR'], ['◀ ▶', 'Écran précédent / suivant'], ['⤢', 'Plein écran'], ['+', 'Nouvel onglet de fenêtre'], ['Espace / Tab', 'Après un ticker : liste de ses fonctions']];
-  const marks = [['n.d.', 'Donnée non publiée : rien n’est inventé.'], ['≈', 'Estimation, toujours signalée comme telle.'], ['GMT', 'Heures d’Abidjan.'], ['15 min', 'Actualisation des cours en séance ; base complète chaque soir.'], ['a', 'Dividende ajusté d’un fractionnement (montant publié en infobulle).'], ['Graphiques', 'Molette ou pincer = zoom, glisser = déplacer, double-clic = vue initiale.']];
+  const marks = [['n.d.', 'Donnée non publiée : rien n’est inventé.'], ['≈', 'Estimation, toujours signalée comme telle.'], ['GMT', 'Heures d’Abidjan.'], ['15 min', 'Actualisation des cours en séance ; base complète chaque soir.'], ['a', 'Dividende ajusté d’un fractionnement ou d’actions gratuites (montant publié en infobulle).'], ['$', 'Montant publié en dollars, converti en FCFA au cours du jour de sa publication.'], ['Graphiques', 'Molette ou pincer = zoom, glisser = déplacer, double-clic = vue initiale.']];
   const old = Object.entries(FN_ALIAS).filter(([, a]) => has(a[0])).map(([o, [f, t]]) => `<tr data-fn="${esc(o)}" style="cursor:pointer"><td class="l dm">${esc(o)}</td><td class="l">→</td><td class="l tk">${esc(f)}</td><td class="l nm">${t ? 'onglet « ' + esc(tabLabel(f, t) || '') + ' »' : ''}</td></tr>`).join('');
   const kv = L => `<table class="t hlk"><tbody>${L.map(([a, b]) => `<tr><td class="l tk">${esc(a)}</td><td class="l">${esc(b)}</td></tr>`).join('')}</tbody></table>`;
   m.innerHTML = `${pn('Démarrer · tout se tape dans la ligne de commande, puis Entrée', 'HELP', `<div class="hls">${start.map(([c, l]) => `<div><b>${esc(c)}<i>&lt;GO&gt;</i></b><span>${esc(l)}</span></div>`).join('')}</div>`)}
@@ -2285,7 +2287,7 @@ PAGES.FA = async (m, alive) => {
   mk('fa4', [{ h: 1, fmt: fmtPctAxis, refs: [{ v: 0, color: CL.dim2, dash: [] }] }], [{ y: D.roe, color: CL.amber, label: 'ROE', fmt: v => P1(v) }, { y: D.roic, color: CL.cyan, label: 'ROIC', fmt: v => P1(v) }]);
   mk('fa5', [{ h: 1, fmt: v => num(v, 0), refs: [{ v: 0, color: CL.dim2, dash: [] }] }], [{ type: 'bar', y: sc(D.nd), color: CL.red || CL.dn, label: 'Dette nette (négatif = trésorerie nette)', fmt: fm }]);
   if (F.mkt === 'US') mk('fa6', [{ h: 1, fmt: v => num(v / 1e6, 0) + ' M' }], [{ y: D.sh, color: CL.white, label: 'Actions diluées', fmt: v => num(v / 1e6, 1) + ' M' }]);
-  else mk('fa6', [{ h: 1, fmt: v => num(v, 0) }], [{ type: 'bar', y: Y.eps, color: rgba(CL.cyan, .6), label: 'BNPA', fmt: v => num(v, 0) }, { type: 'bar', y: Y.dps, color: CL.amber, label: 'Dividende', fmt: v => num(v, 0) }]);
+  else mk('fa6', [{ h: 1, fmt: v => num(v, 0) }], [{ type: 'bar', y: Y.eps, color: rgba(CL.cyan, .6), label: 'BNPA', fmt: v => num(v, Math.abs(v) < 10 ? 2 : 0) }, { type: 'bar', y: Y.dps, color: CL.amber, label: 'Dividende', fmt: v => num(v, Math.abs(v) < 10 ? 2 : 0) }]);
 };
 
 /* ------------------------------------------------------------------ RV */
@@ -2378,7 +2380,11 @@ PAGES.DVD = async (m, alive) => {
   if (isBRVM(s)) {
     const my = DV.filter(x => x.t === s.id && x.dps).sort((a, b) => (a.ex || 0) - (b.ex || 0));
     const pxAt = ds => { if (!ds) return null; const d = s2i(ds.slice(0, 10)); let k = S.x.findIndex(x => x >= d); if (k < 0) k = S.x.length - 1; return S.c[k]; };
-    rows = my.map(x => ({ y: x.ex, dps: x.dps, det: x.det, pay: x.pay, px: pxAt(x.det || x.pay) }));
+    /* un exercice = la somme de ses versements ordinaires (acompte et solde, dividende complémentaire) ; le dividende exceptionnel
+       est indiqué à part, hors variation, rendement et taux de distribution */
+    const by = {}; for (const x of my) { if (!x.ex) continue; const r = by[x.ex] = by[x.ex] || { y: x.ex, dps: 0, exc: 0, det: null, pay: null };
+      if (x.exc) r.exc += x.dps; else { r.dps += x.dps; r.det = x.det || r.det; r.pay = x.pay || r.pay; } }
+    rows = Object.values(by).sort((a, b) => a.y - b.y).map(r => ({ ...r, dps: r.dps || null, px: pxAt(r.det || r.pay) }));
   } else {
     const by = {}; for (let i = 0; i < S.x.length; i++) if (S.div[i]) { const y = Math.floor(S.x[i] / 10000); by[y] = (by[y] || 0) + S.div[i]; }
     if (!Object.keys(by).length && F && F.Y && F.Y.div) F.Y.y.forEach((d, i) => { const dv = F.Y.div[i], sh = F.Y.sh[i]; if (dv && sh) by[Math.floor(d / 10000)] = dv / sh; });
@@ -2386,21 +2392,22 @@ PAGES.DVD = async (m, alive) => {
     rows.forEach(r => { const k = S.x.findIndex(x => Math.floor(x / 10000) === r.y + (r.partial ? 0 : 1)); r.px = k >= 0 ? S.c[k] : S.c[S.c.length - 1]; });
   }
   const Y = F ? F.Y : null, yI = y => Y ? Y.y.findIndex(d => (F.mkt === 'US' ? Math.floor(d / 10000) : d) === y) : -1;
-  rows.forEach((r, i) => { const p = rows[i - 1]; r.g = p && p.dps && !r.partial ? r.dps / p.dps - 1 : null; r.yld = r.px ? r.dps / r.px : null; const k = yI(r.y);
-    if (k >= 0) { const eps = Y.eps ? Y.eps[k] : null; r.payout = eps && eps > 0 ? r.dps / eps : null; const fcf = Y.fcf ? Y.fcf[k] : null; const sh = F.mkt === 'US' ? (Y.sh || [])[k] : s.shares; r.fpay = fcf && fcf > 0 && sh ? r.dps * sh / (fcf * (F.mkt === 'US' ? 1 : 1e6)) : null; } });
+  rows.forEach((r, i) => { const p = rows[i - 1]; r.g = p && p.dps && r.dps && !r.partial ? r.dps / p.dps - 1 : null; r.yld = r.px && r.dps ? r.dps / r.px : null; const k = yI(r.y);
+    if (k >= 0 && r.dps) { const eps = Y.eps ? Y.eps[k] : null; r.payout = eps && eps > 0 ? r.dps / eps : null; const fcf = Y.fcf ? Y.fcf[k] : null; const sh = F.mkt === 'US' ? (Y.sh || [])[k] : s.shares; r.fpay = fcf && fcf > 0 && sh ? r.dps * sh / (fcf * (F.mkt === 'US' ? 1 : 1e6)) : null; } });
   const flags = []; rows.forEach((r, i) => { const p = rows[i - 1]; if (p && r.g != null && r.g < -.05) flags.push(['dn', `${r.y} : dividende réduit de ${num(-r.g * 100, 0)} %`]); if (p && r.y - p.y > 1) flags.push(['dn', `${p.y + 1}${r.y - p.y > 2 ? '–' + (r.y - 1) : ''} : aucun dividende (suspension)`]);
     if (r.payout != null && r.payout > 1) flags.push(['am', `${r.y} : distribution supérieure au bénéfice (${num(r.payout * 100, 0)} %)`]); if (r.fpay != null && r.fpay > 1) flags.push(['am', `${r.y} : dividende non couvert par le FCF (${num(r.fpay * 100, 0)} % du FCF)`]); });
-  const last = rows.filter(r => !r.partial).slice(-1)[0], g5 = rows.length > 5 ? cagrA(rows.filter(r => !r.partial).map(r => r.dps), 5) : null;
-  const streak = (() => { let k = 0; const rr = rows.filter(r => !r.partial); for (let i = rr.length - 1; i > 0; i--) { if (rr[i].dps >= rr[i - 1].dps * .995 && rr[i].y - rr[i - 1].y === 1) k++; else break; } return k; })();
+  const rr0 = rows.filter(r => !r.partial && r.dps), last = rr0.slice(-1)[0];
+  const g5 = rr0.length ? cagrA(Array.from({ length: last.y - rr0[0].y + 1 }, (_, i) => (rr0.find(r => r.y === rr0[0].y + i) || {}).dps ?? null), 5) : null;  /* (années consécutives : une année sans dividende n'est pas sautée) */
+  const streak = (() => { let k = 0; const rr = rows.filter(r => !r.partial && r.dps); for (let i = rr.length - 1; i > 0; i--) { if (rr[i].dps >= rr[i - 1].dps * .995 && rr[i].y - rr[i - 1].y === 1) k++; else break; } return k; })();
   const cur = s.yld != null ? s.yld : !isBRVM(s) && last && S.c.length ? last.dps / S.c[S.c.length - 1] : null;  /* (BRVM : pas de rendement sans versement depuis deux ans) */
   m.innerHTML = `<div class="grid side">${pn(`${s.tk} · dividendes par ${isBRVM(s) ? 'exercice' : 'année civile'}`, 'DVD', `<div class="tw" style="max-height:52vh"><table class="t"><thead><tr><th class="l">${isBRVM(s) ? 'Exercice' : 'Année'}</th><th>Dividende / action</th><th>Variation</th>${isBRVM(s) ? '<th class="l">Détachement</th><th class="l">Paiement</th>' : ''}<th>Cours de réf.</th><th>Rendement</th><th>Distribution (BPA)</th><th>Dividendes / FCF</th></tr></thead><tbody>
-      ${rows.slice().reverse().map(r => `<tr><td class="l am">${r.y}${r.partial ? ' (en cours)' : ''}</td><td class="wh">${num(r.dps, isBRVM(s) ? 0 : 2)}</td><td>${sgn(r.g, 1)}</td>${isBRVM(s) ? `<td class="l">${fds(r.det)}</td><td class="l">${fds(r.pay)}</td>` : ''}<td>${r.px ? px(s, r.px) : '—'}</td><td>${r.yld != null ? P1(r.yld, 2) : '—'}</td><td class="${r.payout > 1 ? 'dn' : ''}">${r.payout != null ? P1(r.payout, 0) : '—'}</td><td class="${r.fpay > 1 ? 'dn' : ''}">${r.fpay != null ? P1(r.fpay, 0) : NDc(isBRVM(s) ? 'FCF non lu pour cet exercice' : 'FCF négatif ou absent')}</td></tr>`).join('') || '<tr><td class="l dm" colspan="9">Aucun dividende recensé.</td></tr>'}</tbody></table></div>`,
+      ${rows.slice().reverse().map(r => `<tr><td class="l am">${r.y}${r.partial ? ' (en cours)' : ''}</td><td class="wh">${num(r.dps, isBRVM(s) && r.dps >= 10 ? 0 : 2)}${r.exc ? ` <span class="am" title="dividende exceptionnel net versé en plus, hors variation, rendement et distribution">+ ${num(r.exc, r.exc >= 10 ? 0 : 2)} exc.</span>` : ''}</td><td>${sgn(r.g, 1)}</td>${isBRVM(s) ? `<td class="l">${fds(r.det)}</td><td class="l">${fds(r.pay)}</td>` : ''}<td>${r.px ? px(s, r.px) : '—'}</td><td>${r.yld != null ? P1(r.yld, 2) : '—'}</td><td class="${r.payout > 1 ? 'dn' : ''}">${r.payout != null ? P1(r.payout, 0) : '—'}</td><td class="${r.fpay > 1 ? 'dn' : ''}">${r.fpay != null ? P1(r.fpay, 0) : NDc(isBRVM(s) ? 'FCF non lu pour cet exercice' : 'FCF négatif ou absent')}</td></tr>`).join('') || '<tr><td class="l dm" colspan="9">Aucun dividende recensé.</td></tr>'}</tbody></table></div>`,
       { np: true, lect: isBRVM(s) ? 'Rendement = dividende net ÷ cours au détachement. Distribution = dividende ÷ BNPA de l’exercice ; Dividendes / FCF = dividende × nombre de titres ÷ free cash-flow.' : 'Dividendes versés ou, à défaut, dividendes payés des comptes ÷ actions diluées. Rendement = dividendes de l’année ÷ cours de début d’année suivante.' })}
-    ${pn('Synthèse', 'DVD', `<div class="kv2">${[['Rendement actuel', P1(cur, 2)], ['Dernier dividende', last ? num(last.dps, isBRVM(s) ? 0 : 2) + ' (' + last.y + ')' : '—'], ['Croissance annuelle 5 ans', P1(g5, 1)], ['Hausses ou maintiens consécutifs', streak + ' an' + (streak > 1 ? 's' : '')],
+    ${pn('Synthèse', 'DVD', `<div class="kv2">${[['Rendement actuel', P1(cur, 2)], ['Dernier dividende', last ? num(last.dps, isBRVM(s) && last.dps >= 10 ? 0 : 2) + ' (' + last.y + ')' : '—'], ['Croissance annuelle 5 ans', P1(g5, 1)], ['Hausses ou maintiens consécutifs', streak + ' an' + (streak > 1 ? 's' : '')],
       ['Distribution (dernier BPA)', P1(last && last.payout, 0)], ['Couverture par le FCF', last && last.fpay ? num(1 / last.fpay, 2) + ' x' : '—']].map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div>
       <h4 class="sub">Points d’attention</h4>${flags.length ? flags.slice(-10).reverse().map(([c, t]) => `<div class="flag ${c}">${t}</div>`).join('') : '<div class="dm">Aucune baisse, suspension ni dividende non couvert détecté.</div>'}`)}</div>
     <div class="grid c2">${pn('Dividende par action', 'DVD', cvb('dv1', 220))}${pn('Rendement et taux de distribution', 'DVD', cvb('dv2', 220))}</div>`;
-  const rr = rows.filter(r => !r.partial);
+  const rr = rows.filter(r => !r.partial && r.dps);
   if (rr.length) { barChart($('dv1'), { labels: rr.map(r => String(r.y)), values: rr.map(r => r.dps), fmt: v => num(v, isBRVM(s) ? 0 : 2), pos: CL.amber, labelsOnBars: true, extra: i => rr[i].g != null ? 'variation ' + num(rr[i].g * 100, 1) + ' %' : '' });
     new TSChart($('dv2'), { panes: [{ h: 1, fmt: fmtPctAxis }], xfmt: d => yLab(d), xfull: d => yLab(d), minBars: 2 }).set({ x: rr.map(r => r.y * 10000 + 1231), series: [{ type: 'bar', y: rr.map(r => r.payout), color: rgba(CL.cyan, .5), label: 'Distribution', fmt: v => P1(v, 0) }, { y: rr.map(r => r.yld), color: CL.amber, label: 'Rendement', fmt: v => P1(v, 2) }] }, [0, rr.length - 1]); }
 };
@@ -2409,7 +2416,7 @@ PAGES.DVD = async (m, alive) => {
 PAGES.DDM = async (m, alive) => {
   const s = sec(ST.sec); const [S, F, E, DV] = await Promise.all([series(s.id), faJSON(s.id).catch(() => null), ecoLite().catch(() => null), getJSON('dividends.json')]); if (!alive()) return;
   const us = !isBRVM(s), price = s.last; let d0 = null, hist = [];
-  if (!us) { hist = DV.filter(x => x.t === s.id && x.dps).sort((a, b) => (a.ex || 0) - (b.ex || 0)).map(x => x.dps); d0 = s.dps || hist[hist.length - 1]; }
+  if (!us) { const byE = {}; DV.filter(x => x.t === s.id && x.dps && x.ex && !x.exc).forEach(x => { byE[x.ex] = (byE[x.ex] || 0) + x.dps; }); const yE = Object.keys(byE).map(Number).sort((a, b) => a - b); hist = yE.length ? Array.from({ length: yE[yE.length - 1] - yE[0] + 1 }, (_, i) => byE[yE[0] + i] ?? null) : [];  /* (dividendes ordinaires, un total par exercice) */ d0 = s.dps || hist[hist.length - 1]; }
   else { const by = {}; for (let i = 0; i < S.x.length; i++) if (S.div[i]) { const y = Math.floor(S.x[i] / 10000); by[y] = (by[y] || 0) + S.div[i]; } const ys = Object.keys(by).sort(); const cy = String(new Date().getFullYear()); hist = ys.filter(y => y !== cy).map(y => by[y]); d0 = hist[hist.length - 1];
     if (!d0 && F && F.Y && F.Y.div) { const i = F.Y.div.length - 1; d0 = F.Y.div[i] && F.Y.sh[i] ? F.Y.div[i] / F.Y.sh[i] : null; } }
   if (!d0) { m.innerHTML = pn(s.tk + ' · valeur par les dividendes', 'DDM', '<div class="empty">Ce titre ne verse pas de dividende recensé : le modèle ne s’applique pas.</div>'); return; }
@@ -2680,7 +2687,7 @@ PAGES.ALRT = async (m, alive) => {
     const yr = (e.yr || [])[0]; if (yr) { const up = +(yr.up || yr.upRevisions || 0), dn = +(yr.down || yr.downRevisions || 0); if (dn > up && dn >= 2) add(id, 'Révisions', 2, `${dn} révisions à la baisse contre ${up} à la hausse (exercice ${yr.fiscalEnd || ''})`); }
     const ed = parseNqDate(e.ed); if (ed) { const d = new Date(Math.floor(ed / 10000), Math.floor(ed / 100) % 100 - 1, ed % 100); const dd = (d - new Date()) / 864e5; if (dd >= -1 && dd <= 14) add(id, 'Résultats à venir', 1, `publication prévue le ${d.toLocaleDateString('fr-FR')}`); } }
   for (const s of Q.sum.secs) { if (s.f !== 'D' || !s.sma200 || !(s.cls === 'Equity' || s.cls === 'Index')) continue; const g = s.last / s.sma200 - 1; if (Math.abs(g) < c.near) add(s.id, 'Moyenne 200 jours', 1, `cours à ${num(g * 100, 1)} % de sa MM200 (${px(s, s.sma200)}) : franchissement possible`); }
-  const byT = {}; DV.filter(x => x.t && x.dps && x.ex).forEach(x => { (byT[x.t] = byT[x.t] || {})[x.ex] = x.dps; }); for (const [t, o] of Object.entries(byT)) { const ys = Object.keys(o).map(Number).sort(); const L = ys[ys.length - 1], P = ys[ys.length - 2]; if (L && P && o[L] < o[P] * .95) add(t, 'Dividende', 2, `dividende ${L} réduit de ${num((1 - o[L] / o[P]) * 100, 0)} % (${num(o[P], 0)} → ${num(o[L], 0)})`); }
+  const byT = {}; DV.filter(x => x.t && x.dps && x.ex && !x.exc).forEach(x => { const o = byT[x.t] = byT[x.t] || {}; o[x.ex] = (o[x.ex] || 0) + x.dps; });  /* (ordinaires, total de l'exercice) */ for (const [t, o] of Object.entries(byT)) { const ys = Object.keys(o).map(Number).sort(); const L = ys[ys.length - 1], P = ys[ys.length - 2]; if (L && P && o[L] < o[P] * .95) add(t, 'Dividende', 2, `dividende ${L} réduit de ${num((1 - o[L] / o[P]) * 100, 0)} % (${num(o[P], 0)} → ${num(o[L], 0)})`); }
   const types = [...new Set(A.map(a => a.typ))].sort(); let L = A.filter(a => (st.mkt === 'ALL' || Q.by[a.id].mkt === st.mkt) && (st.typ === 'ALL' || a.typ === st.typ)).sort((a, b) => b.sev - a.sev || a.typ.localeCompare(b.typ));
   const sevL = ['info', 'surveiller', 'alerte', 'risque'], sevC = ['up', 'fl', 'am', 'dn'];
   m.innerHTML = `<div class="tools" style="border:1px solid var(--line2)"><span class="tlab">Marché</span>${[['ALL', 'Tous'], ['US', 'États-Unis'], ['BRVM', 'BRVM']].map(([k, l]) => `<button class="tb ${st.mkt === k ? 'on' : ''}" data-m="${k}">${l}</button>`).join('')}
@@ -2951,8 +2958,8 @@ PAGES.DES = async (m, alive) => {
     const tr12 = tr && n > 252 ? tr[n - 1] / tr[n - 253] - 1 : s.r1y;
     const myDv = DV.filter(x => x.t === s.id && x.dps).sort((a, b) => (b.ex || 0) - (a.ex || 0) || (b.pay || '').localeCompare(a.pay || ''));
     let dps = null, dpsG5 = null, lastDv = null, divLab = brvm ? 'Rendement net' : 'Rendement brut indicatif';
-    if (brvm && eq) { lastDv = myDv[0]; const ldD = lastDv ? (lastDv.pay || lastDv.det || (lastDv.ex ? (lastDv.ex + 1) + '-12-31' : '')) : '';
-      dps = lastDv && ldD >= new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10) ? lastDv.dps : null;  /* (plus de versement depuis deux ans : pas de rendement) */ const byEx = {}; for (const x of myDv) byEx[x.ex] = (byEx[x.ex] || 0) + x.dps; const ys = Object.keys(byEx).map(Number).sort(); const yL = ys[ys.length - 1]; if (yL && byEx[yL - 5] > 0) dpsG5 = Math.pow(byEx[yL] / byEx[yL - 5], 1 / 5) - 1; }
+    if (brvm && eq) { lastDv = myDv.find(x => !x.exc) || null;  /* (dividende exceptionnel : hors dividende de référence) */ const ldD = lastDv ? (lastDv.pay || lastDv.det || (lastDv.ex ? (lastDv.ex + 1) + '-12-31' : '')) : '';
+      dps = lastDv && ldD >= new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10) ? myDv.filter(x => !x.exc && x.ex === lastDv.ex).reduce((a, x) => a + x.dps, 0) : null;  /* (versements ordinaires de l'exercice réunis) */  /* (plus de versement depuis deux ans : pas de rendement) */ const byEx = {}; for (const x of myDv.filter(x => !x.exc)) byEx[x.ex] = (byEx[x.ex] || 0) + x.dps; const ys = Object.keys(byEx).map(Number).sort(); const yL = ys[ys.length - 1]; if (yL && byEx[yL - 5] > 0) dpsG5 = Math.pow(byEx[yL] / byEx[yL - 5], 1 / 5) - 1; }
     else if (E && E.sum) { dps = nqNum2(E.sum.AnnualizedDividend); }
     else if (P.divA) dps = nqNum2(P.divA);
     if (!brvm && F && F.Y && F.Y.div && F.Y.sh) { const dpsY = F.Y.div.map((v, i) => v != null && F.Y.sh[i] ? Math.abs(v) / F.Y.sh[i] : null); const L2 = dpsY.length - 1; if (dpsY[L2] > 0 && dpsY[L2 - 5] > 0) dpsG5 = Math.pow(dpsY[L2] / dpsY[L2 - 5], 1 / 5) - 1; }
@@ -2976,7 +2983,7 @@ PAGES.DES = async (m, alive) => {
               est.tp ? ['Objectif de cours moyen', `${num(est.tp.priceTarget, 2)} (${num(est.tp.lowPriceTarget, 0)}–${num(est.tp.highPriceTarget, 0)})`] : null, est.tp ? ['Achat / Conserver / Vente', `${est.tp.buy} / ${est.tp.hold} / ${est.tp.sell}`] : null])
               : dkv([['PER (dernier exercice)', xMul(s.per || (F && F.pe))], ['BPA dernier exercice', s.bnpa ? num(s.bnpa, 0) + ' ' + ccy : null], ['PER estimé', null, 'aucun consensus d’analystes publié pour la BRVM'], ['BPA estimé', null, 'aucun consensus d’analystes publié pour la BRVM']]) + `<div class="src">${brvm ? 'BRVM : aucun consensus d’analystes public — rien n’est estimé ici.' : 'Pas de consensus publié pour ce titre.'}</div>`) : ''}
           ${eq || etf ? dsec(eq ? 3 : 2, 'Dividende', 'DVD', s.id) + dkv([[divLab, yld ? num(yld * 100, 2) + '%' : null, brvm ? 'dernier dividende net ÷ cours' : 'dividende annualisé ÷ cours'], ['Croissance sur 5 ans (TCAM)', pctS(dpsG5, 2), 'taux de croissance annuel moyen du dividende par action'],
-              brvm && lastDv ? [`Dernier : ${lastDv.ex} (paiement ${fds(lastDv.pay)})`, num(lastDv.dps, 2) + ' ' + ccy] : dps ? ['Dividende annualisé', num(dps, 2) + ' ' + ccy] : null, !brvm && (E && E.sum && E.sum.ExDividendDate || P.exdiv) ? ['Date de détachement', esc(enDate((E && E.sum && E.sum.ExDividendDate) || P.exdiv))] : null]) : ''}
+              brvm && lastDv ? [`Dernier : ${lastDv.ex} (paiement ${fds(lastDv.pay)})`, num(myDv.filter(x => !x.exc && x.ex === lastDv.ex).reduce((a, x) => a + x.dps, 0), 2) + ' ' + ccy] : dps ? ['Dividende annualisé', num(dps, 2) + ' ' + ccy] : null, !brvm && (E && E.sum && E.sum.ExDividendDate || P.exdiv) ? ['Date de détachement', esc(enDate((E && E.sum && E.sum.ExDividendDate) || P.exdiv))] : null]) : ''}
           ${dsec(eq ? 4 : etf ? 3 : 2, 'Rendement et risque', 'BETA', s.id)}${dkv([['Rendement total 12 mois', pctS(tr12), 'dividendes réinvestis'], [`Bêta vs ${esc(s.bench || '—')}`, nOr(s.beta, 2), 'hebdomadaire, 2 ans'], ['Écart au plus haut historique', pctS(s.dd, 1)], ['Première donnée', fd(s.first)]])}</div>
         <div>${eq ? dsec(5, 'Société', '') + dkv([P.url ? ['Site', `<a href="${esc(P.url)}" target="_blank" rel="noopener">${esc(P.url.replace(/^https?:\/\/(www\.)?/, ''))}</a>`] : null, ['Adresse', P.addr ? esc(P.addr) : null], ['Téléphone', P.tel || P.phone ? esc(P.tel || P.phone) : null], brvm ? ['Pays', esc(Q.sum.cty[s.cty] || s.cty)] : ['Exercice clos le', P.fye ? P.fye.slice(2) + '/' + P.fye.slice(0, 2) : null],
               ['Place de cotation', brvm ? 'BRVM (Abidjan)' : esc(P.exch || 'États-Unis')]]) : ''}
@@ -4294,17 +4301,18 @@ PAGES.DVD = async (m, alive) => {
   const [S, DV, PR] = await Promise.all([series(s.id), isBRVM(s) ? getJSON('dividends.json') : null, isBRVM(s) ? null : getJSON('profiles.json').catch(() => ({}))]); if (!alive()) return;
   const today = new Date().toISOString().slice(0, 10), last = S.c[S.c.length - 1];
   let H = [];
-  if (isBRVM(s)) H = DV.filter(x => x.t === s.id && x.dps).map(x => ({ ann: x.ann, det: x.det, pay: x.pay, amt: x.dps, ex: x.ex, ccy: 'XOF', adj: x.adj, dps0: x.dps0 }));
+  if (isBRVM(s)) H = DV.filter(x => x.t === s.id && x.dps).map(x => ({ ann: x.ann, det: x.det, pay: x.pay, amt: x.dps, ex: x.ex, ccy: 'XOF', adj: x.adj, dps0: x.dps0, usd: x.usd, fx: x.fx, cal: x.cal, exc: x.exc }));
   else for (let i = 0; i < S.x.length; i++) if (S.div[i]) H.push({ det: i2s(S.x[i]), amt: S.div[i], ccy: s.ccy || 'USD' });
   H.sort((a, b) => (b.det || b.pay || b.ann || '').localeCompare(a.det || a.pay || a.ann || ''));
   /* fréquence : nombre de versements par an (calculée sur les 3 dernières années complètes) */
-  const yrs = {}; H.forEach(h => { const y = (h.det || h.pay || '').slice(0, 4); if (y) yrs[y] = (yrs[y] || 0) + 1; }); const cy = +today.slice(0, 4);
+  /* (dividende exceptionnel : hors fréquence, dernier dividende, rendement indicatif et croissance ; compté dans le rendement 12 mois) */
+  const yrs = {}; H.filter(h => !h.exc).forEach(h => { const y = (h.det || h.pay || '').slice(0, 4); if (y) yrs[y] = (yrs[y] || 0) + 1; }); const cy = +today.slice(0, 4);
   const cnt = [cy - 1, cy - 2, cy - 3].map(y => yrs[y] || 0).filter(Boolean), fq = cnt.length ? Math.round(cnt.reduce((a, b) => a + b, 0) / cnt.length) : 0;
   const fqL = { 1: 'Annuelle', 2: 'Semestrielle', 3: 'Irrégulière', 4: 'Trimestrielle', 12: 'Mensuelle' }[fq] || (fq ? fq + ' par an' : '—');
   const past = H.filter(h => (h.det || h.pay || '') <= today), y1 = new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10);
-  const y2 = new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10), ttm = past.filter(h => (h.det || h.pay) > y1).reduce((a, h) => a + h.amt, 0), ind = past.length && fq && (past[0].det || past[0].pay || '') >= y2 ? past[0].amt * fq : null;  /* (aucun versement depuis deux ans : pas de rendement indicatif) */
-  const byY = {}; past.forEach(h => { const y = h.ex || +(h.det || h.pay).slice(0, 4); byY[y] = (byY[y] || 0) + h.amt; }); const ys = Object.keys(byY).map(Number).sort((a, b) => a - b).filter(y => isBRVM(s) || y < cy);
-  const g5 = ys.length > 5 && byY[ys[ys.length - 6]] > 0 ? Math.pow(byY[ys[ys.length - 1]] / byY[ys[ys.length - 6]], 1 / 5) - 1 : null;
+  const y2 = new Date(Date.now() - 730 * 864e5).toISOString().slice(0, 10), ttm = past.filter(h => (h.det || h.pay) > y1).reduce((a, h) => a + h.amt, 0), pastR = past.filter(h => !h.exc), ind = !pastR.length || (pastR[0].det || pastR[0].pay || '') < y2 ? null : isBRVM(s) && pastR[0].ex ? pastR.filter(h => h.ex === pastR[0].ex).reduce((a, h) => a + h.amt, 0) : fq ? pastR[0].amt * fq : null;  /* (BRVM : dividende annuel = versements ordinaires du dernier exercice) */  /* (aucun versement depuis deux ans : pas de rendement indicatif) */
+  const byY = {}; pastR.forEach(h => { const y = h.ex || +(h.det || h.pay).slice(0, 4); byY[y] = (byY[y] || 0) + h.amt; }); const ys = Object.keys(byY).map(Number).sort((a, b) => a - b).filter(y => isBRVM(s) || y < cy);
+  const yL5 = ys[ys.length - 1], g5 = yL5 && byY[yL5 - 5] > 0 && byY[yL5] > 0 ? Math.pow(byY[yL5] / byY[yL5 - 5], 1 / 5) - 1 : null;  /* (sur cinq années : exercice sans dividende cinq ans plus tôt = non calculé) */
   const next = H.filter(h => (h.det || '') > today).slice(-1)[0];
   const net = isBRVM(s) ? 'net' : 'brut';
   /* actions US sans historique de versements dans la source : dernier versement connu (Nasdaq) */
@@ -4314,11 +4322,11 @@ PAGES.DVD = async (m, alive) => {
       ${pn('Historique des versements', 'DVD', `<table class="t"><thead><tr><th class="l">Annonce</th><th class="l">Détachement</th><th class="l">Enregistrement</th><th class="l">Paiement</th><th>Montant</th><th class="l">Fréquence</th><th class="l">Type</th></tr></thead><tbody><tr><td class="l dm">—</td><td class="l am">${ex ? fd(ex) : '—'}</td><td class="l dm">—</td><td class="l">${pay ? fd(pay) : '—'}</td><td class="dm">n.d.</td><td class="l dm">—</td><td class="l">Dernier versement connu</td></tr></tbody></table>`,
         { np: true, lect: 'Relevé du ' + fds(NQ.d) + ' : seuls le dernier versement et le dividende annualisé sont connus, pas le montant unitaire ni l’historique détaillé. Dividendes par année tirés des comptes publiés : onglet 2.' })}</div>`; return; }
   const kv = [[`Rendement indicatif (${net})`, ind && last ? P1(ind / last, 2) : '—'], [`Rendement 12 mois (${net})`, ttm && last ? P1(ttm / last, 2) : '—'], ['Croissance annuelle 5 ans', P1(g5, 1)], ['Fréquence', fqL],
-    ['Dernier dividende', past[0] ? `${num(past[0].amt, isBRVM(s) ? 0 : 4)} ${past[0].ccy}` : '—'], ['Prochain détachement annoncé', next ? fds(next.det) + ' · ' + num(next.amt, isBRVM(s) ? 0 : 4) + ' ' + next.ccy : '—']];
+    ['Dernier dividende', pastR[0] ? `${num(pastR[0].amt, isBRVM(s) ? (Number.isInteger(pastR[0].amt) ? 0 : 2) : 4)} ${pastR[0].ccy}` : '—'], ['Prochain détachement annoncé', next ? fds(next.det) + ' · ' + num(next.amt, isBRVM(s) ? (Number.isInteger(next.amt) ? 0 : 2) : 4) + ' ' + next.ccy : '—']];
   m.innerHTML = `<div class="grid">${pn(`${esc(ykey(s))} · dividendes`, 'DVD', `<div class="dvk">${kv.map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div>`, { np: false })}
     ${pn(`Historique des versements (${H.length})`, 'DVD', H.length ? `<div class="tw" style="max-height:calc(100vh - 330px - var(--nwh, 90px))"><table class="t"><thead><tr><th class="l">Annonce</th><th class="l">Détachement</th><th class="l">Enregistrement</th><th class="l">Paiement</th><th>Montant</th><th class="l">Fréquence</th><th class="l">Type</th>${isBRVM(s) ? '<th>Exercice</th>' : ''}</tr></thead><tbody>
-      ${H.map(h => `<tr${(h.det || '') > today ? ' class="hl"' : ''}><td class="l">${fds(h.ann)}</td><td class="l am">${fds(h.det)}</td><td class="l dm">—</td><td class="l">${fds(h.pay)}</td><td class="wh">${num(h.amt, isBRVM(s) ? 2 : 4)} ${h.ccy}${adjMark(h)}</td><td class="l">${fqL}</td><td class="l">${isBRVM(s) ? 'Dividende net' : 'Dividende'}</td>${isBRVM(s) ? `<td>${h.ex || '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Aucun dividende recensé pour ce titre.</div>',
-      { np: true, lect: `${isBRVM(s) ? 'Montants nets par action tels qu’annoncés par la société ; a = ramené sur la base des actions actuelles après un fractionnement (montant publié en infobulle).' : 'Montants par action à la date de détachement ; dates d’annonce et de paiement non publiées pour ce titre.'} En surbrillance : versement à venir. Date d’enregistrement non publiée. Rendement indicatif = dernier dividende × fréquence ÷ cours ; rendement 12 mois = dividendes détachés sur 12 mois ÷ cours. Analyse détaillée : onglet 2.` })}</div>`;
+      ${H.map(h => `<tr${(h.det || '') > today ? ' class="hl"' : ''}><td class="l">${fds(h.ann)}</td><td class="l am">${fds(h.det)}</td><td class="l dm">—</td><td class="l">${fds(h.pay)}</td><td class="wh">${num(h.amt, isBRVM(s) ? 2 : 4)} ${h.ccy}${adjMark(h)}</td><td class="l">${fqL}</td><td class="l">${isBRVM(s) ? (h.exc ? 'Dividende exceptionnel net' : 'Dividende net') : 'Dividende'}</td>${isBRVM(s) ? `<td>${h.ex || '—'}</td>` : ''}</tr>`).join('')}</tbody></table></div>` : '<div class="empty">Aucun dividende recensé pour ce titre.</div>',
+      { np: true, lect: `${isBRVM(s) ? 'Montants nets par action tels qu’annoncés par la société ; a = ramené sur la base des actions actuelles après un fractionnement ou des actions gratuites (montant publié en infobulle) ; $ = publié en cents de dollar, converti en FCFA au cours du jour de sa publication.' : 'Montants par action à la date de détachement ; dates d’annonce et de paiement non publiées pour ce titre.'} En surbrillance : versement à venir. Date d’enregistrement non publiée. Rendement indicatif = ${isBRVM(s) ? 'dividende ordinaire du dernier exercice' : 'dernier dividende × fréquence'} ÷ cours ; rendement 12 mois = dividendes détachés sur 12 mois (exceptionnels compris) ÷ cours. Analyse détaillée : onglet 2.` })}</div>`;
 };
 
 /* ------------------------------------------------------------------ BETA : régression (nuage, droite, statistiques) comme l'écran du terminal ; onglet 2 = analyse */
@@ -5456,7 +5464,8 @@ function applyQuotes() {
 }
 function applyQuoteToSeries(s) {
   const q = Q.quotes && Q.quotes.q && Q.quotes.q[s.id]; if (!q || !q.last || !q.d) return; const day = s2i(q.d), n = s.x.length;
-  if (day > s.x[n - 1]) { s.x.push(day); s.d.push(q.d); s.c.push(q.last); s.o.push(q.o || q.last); s.h.push(Math.max(q.h || q.last, q.last)); s.l.push(Math.min(q.l || q.last, q.last)); s.v.push(q.vol || 0); s.div.push(0); if (s.val) s.val.push(q.val || 0); s.prov = true; }
+  /* (série sans ouverture / plus haut / plus bas : o, h et l sont le tableau des clôtures lui-même, complété une seule fois) */
+  if (day > s.x[n - 1]) { s.x.push(day); s.d.push(q.d); s.c.push(q.last); if (s.o !== s.c) s.o.push(q.o || q.last); if (s.h !== s.c) s.h.push(Math.max(q.h || q.last, q.last)); if (s.l !== s.c) s.l.push(Math.min(q.l || q.last, q.last)); s.v.push(q.vol || 0); s.div.push(0); if (s.val) s.val.push(q.val || 0); s.prov = true; }
   else if (day === s.x[n - 1]) { s.c[n - 1] = q.last; s.h[n - 1] = Math.max(s.h[n - 1], q.last); s.l[n - 1] = Math.min(s.l[n - 1], q.last); if (q.vol != null) s.v[n - 1] = q.vol; }
 }
 
@@ -5754,7 +5763,7 @@ function toast(msg, ms = 6000) { const t = $('toast'); t.textContent = msg; t.hi
 /* ---------- flux en direct (base de l'artifact écrite par la tâche de synchro) + relecture (hébergement statique) ---------- */
 /* ---------- mise à jour silencieuse du terminal : quand une nouvelle version est en ligne, la page se recharge d'elle-même
    au premier moment calme (onglet en arrière-plan, retour sur l'onglet, ou une minute sans action), en gardant l'écran et ses onglets ---------- */
-const APP_V = 'ba2cd602e47a';
+const APP_V = '48eff71828e3';
 let APP_NEW = false, APP_ACT = Date.now();
 function appReload() { try { sessionStorage.setItem('fqt_tabs', JSON.stringify(ST.tab)); } catch (e) { } location.reload(); }
 function appMaybe(now) { if (!APP_NEW) return; const a = document.activeElement, typing = a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value; if (document.hidden || now || (!typing && Date.now() - APP_ACT > 60000)) appReload(); }

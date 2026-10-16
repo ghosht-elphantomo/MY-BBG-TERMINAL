@@ -9,8 +9,8 @@ Fichiers CSV en UTF-8, séparateur virgule, décimales avec un point
 | Fichier | Contenu | Clé |
 |---|---|---|
 | `cours/AAAA.csv` | Cours des actions tels que publiés dans le bulletin officiel de la cote : précédent, ouverture, clôture, variation %, volume, valeur échangée (FCFA), cours de référence, variation annuelle %, dernier dividende, sa date, rendement %, PER, cours moyen (bulletins 2013-2017) | date, titre |
-| `indices.csv` | Clôture des indices BRVM (séances terminées) | date, indice |
-| `dividendes.csv` | Dividendes nets par action, d'après les avis (`avis`) et les bulletins de la cote (`bulletin`) ; montant publié, montant ramené au nombre d'actions actuel et facteur d'ajustement ; dates d'annonce, de détachement et de paiement | titre, exercice, origine |
+| `indices.csv` | Clôture des indices BRVM (séances terminées), contrôlée sur les bulletins officiels : valeur du bulletin quand il la publie ; jour férié recopiant la veille et valeur figée sur la veille un jour où le marché a bougé retirés | date, indice |
+| `dividendes.csv` | Dividendes nets par action, d'après les avis (`avis`) et les bulletins de la cote (`bulletin`) ; montant publié, montant ramené au nombre d'actions actuel et facteur d'ajustement ; dates d'annonce, de détachement et de paiement. Un exercice payé en plusieurs fois (acompte et solde, dividende complémentaire) : versements additionnés, dates du dernier ; dividende exceptionnel sur sa propre ligne (`type` = exceptionnel) | titre, exercice, origine, type |
 | `fractionnements.csv` | Fractionnements et regroupements (ratio) | titre, date |
 | `evenements.csv` | Avis et publications : assemblées, états financiers, opérations sur titres (`operation_sur_titre` = 1), document PDF | date, titre, catégorie, intitulé, document |
 | `resultats.csv` | Comptes annuels : chiffre d'affaires, résultat net, capitaux propres, total bilan, trésorerie, EBIT, EBITDA, dette nette, dépôts et crédits clientèle, coût du risque (millions de FCFA) ; BNPA et dividende (FCFA par action) | titre, exercice |
@@ -58,8 +58,15 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   BRVM (un avis rectificatif remplace le précédent), sinon la dernière version du « calendrier de paiement des dividendes » (un
   calendrier publié après un avis reprend une rectification), sinon l'avis du Dépositaire central. Un montant brut n'est converti
   en net qu'avec le taux d'IRVM écrit dans le document. Les montants restent ceux publiés (par action de l'époque) ; ils sont
-  ramenés sur la base des actions actuelles seulement pour les fractionnements connus. Les archives de l'ancien site (avis depuis
-  2002) complètent les années que la base ne couvre pas.
+  ramenés sur la base des actions actuelles pour les fractionnements et attributions d'actions gratuites connus (avis) ou lus sur
+  les paliers du rapport « cours du bulletin ÷ cours ajusté » ; pour les années antérieures aux bulletins conservés, le cours
+  imprimé à côté du dividende dans le premier bulletin après le paiement donne la base d'actions du montant (Sonatel, Onatel :
+  fractionnements d'avant 2013). Les archives de l'ancien site (avis depuis 2002, bulletins, revues trimestrielles) complètent
+  les années que la base ne couvre pas ; dans ces bulletins la virgule sépare les milliers (« 1,800 ») sauf deux décimales
+  (« 321,08 ») et le point est décimal (« 1.828 » pour Ecobank Transnational) ; un « 1,828 » ambigu est tranché par l'ordre de
+  grandeur du cours de la même ligne. Dividende publié en cents de dollar (Ecobank Transnational, exercice 2021) : converti en
+  FCFA au cours du jour de l'avis, marqué « $ ». Dividende exceptionnel : compté dans le rendement total et le rendement sur
+  12 mois, pas dans le dividende de référence ni le rendement indicatif.
 - Capitaux propres d'un bilan de synthèse sans ligne de total : somme des composantes publiées (capital, primes, réserves, report à
   nouveau, résultat, autres), retenue seulement si le passif la vérifie (total − dettes financières − passif circulant − trésorerie passif).
 - Flux de trésorerie (flux opérationnels, acquisitions d'immobilisations, flux disponible) : uniquement ceux lus dans les états

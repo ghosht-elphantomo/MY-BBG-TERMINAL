@@ -145,7 +145,7 @@ PAGES.FA = async (m, alive) => {
   mk('fa4', [{ h: 1, fmt: fmtPctAxis, refs: [{ v: 0, color: CL.dim2, dash: [] }] }], [{ y: D.roe, color: CL.amber, label: 'ROE', fmt: v => P1(v) }, { y: D.roic, color: CL.cyan, label: 'ROIC', fmt: v => P1(v) }]);
   mk('fa5', [{ h: 1, fmt: v => num(v, 0), refs: [{ v: 0, color: CL.dim2, dash: [] }] }], [{ type: 'bar', y: sc(D.nd), color: CL.red || CL.dn, label: 'Dette nette (négatif = trésorerie nette)', fmt: fm }]);
   if (F.mkt === 'US') mk('fa6', [{ h: 1, fmt: v => num(v / 1e6, 0) + ' M' }], [{ y: D.sh, color: CL.white, label: 'Actions diluées', fmt: v => num(v / 1e6, 1) + ' M' }]);
-  else mk('fa6', [{ h: 1, fmt: v => num(v, 0) }], [{ type: 'bar', y: Y.eps, color: rgba(CL.cyan, .6), label: 'BNPA', fmt: v => num(v, 0) }, { type: 'bar', y: Y.dps, color: CL.amber, label: 'Dividende', fmt: v => num(v, 0) }]);
+  else mk('fa6', [{ h: 1, fmt: v => num(v, 0) }], [{ type: 'bar', y: Y.eps, color: rgba(CL.cyan, .6), label: 'BNPA', fmt: v => num(v, Math.abs(v) < 10 ? 2 : 0) }, { type: 'bar', y: Y.dps, color: CL.amber, label: 'Dividende', fmt: v => num(v, Math.abs(v) < 10 ? 2 : 0) }]);
 };
 
 /* ------------------------------------------------------------------ RV */
@@ -238,7 +238,11 @@ PAGES.DVD = async (m, alive) => {
   if (isBRVM(s)) {
     const my = DV.filter(x => x.t === s.id && x.dps).sort((a, b) => (a.ex || 0) - (b.ex || 0));
     const pxAt = ds => { if (!ds) return null; const d = s2i(ds.slice(0, 10)); let k = S.x.findIndex(x => x >= d); if (k < 0) k = S.x.length - 1; return S.c[k]; };
-    rows = my.map(x => ({ y: x.ex, dps: x.dps, det: x.det, pay: x.pay, px: pxAt(x.det || x.pay) }));
+    /* un exercice = la somme de ses versements ordinaires (acompte et solde, dividende complémentaire) ; le dividende exceptionnel
+       est indiqué à part, hors variation, rendement et taux de distribution */
+    const by = {}; for (const x of my) { if (!x.ex) continue; const r = by[x.ex] = by[x.ex] || { y: x.ex, dps: 0, exc: 0, det: null, pay: null };
+      if (x.exc) r.exc += x.dps; else { r.dps += x.dps; r.det = x.det || r.det; r.pay = x.pay || r.pay; } }
+    rows = Object.values(by).sort((a, b) => a.y - b.y).map(r => ({ ...r, dps: r.dps || null, px: pxAt(r.det || r.pay) }));
   } else {
     const by = {}; for (let i = 0; i < S.x.length; i++) if (S.div[i]) { const y = Math.floor(S.x[i] / 10000); by[y] = (by[y] || 0) + S.div[i]; }
     if (!Object.keys(by).length && F && F.Y && F.Y.div) F.Y.y.forEach((d, i) => { const dv = F.Y.div[i], sh = F.Y.sh[i]; if (dv && sh) by[Math.floor(d / 10000)] = dv / sh; });
@@ -246,21 +250,22 @@ PAGES.DVD = async (m, alive) => {
     rows.forEach(r => { const k = S.x.findIndex(x => Math.floor(x / 10000) === r.y + (r.partial ? 0 : 1)); r.px = k >= 0 ? S.c[k] : S.c[S.c.length - 1]; });
   }
   const Y = F ? F.Y : null, yI = y => Y ? Y.y.findIndex(d => (F.mkt === 'US' ? Math.floor(d / 10000) : d) === y) : -1;
-  rows.forEach((r, i) => { const p = rows[i - 1]; r.g = p && p.dps && !r.partial ? r.dps / p.dps - 1 : null; r.yld = r.px ? r.dps / r.px : null; const k = yI(r.y);
-    if (k >= 0) { const eps = Y.eps ? Y.eps[k] : null; r.payout = eps && eps > 0 ? r.dps / eps : null; const fcf = Y.fcf ? Y.fcf[k] : null; const sh = F.mkt === 'US' ? (Y.sh || [])[k] : s.shares; r.fpay = fcf && fcf > 0 && sh ? r.dps * sh / (fcf * (F.mkt === 'US' ? 1 : 1e6)) : null; } });
+  rows.forEach((r, i) => { const p = rows[i - 1]; r.g = p && p.dps && r.dps && !r.partial ? r.dps / p.dps - 1 : null; r.yld = r.px && r.dps ? r.dps / r.px : null; const k = yI(r.y);
+    if (k >= 0 && r.dps) { const eps = Y.eps ? Y.eps[k] : null; r.payout = eps && eps > 0 ? r.dps / eps : null; const fcf = Y.fcf ? Y.fcf[k] : null; const sh = F.mkt === 'US' ? (Y.sh || [])[k] : s.shares; r.fpay = fcf && fcf > 0 && sh ? r.dps * sh / (fcf * (F.mkt === 'US' ? 1 : 1e6)) : null; } });
   const flags = []; rows.forEach((r, i) => { const p = rows[i - 1]; if (p && r.g != null && r.g < -.05) flags.push(['dn', `${r.y} : dividende réduit de ${num(-r.g * 100, 0)} %`]); if (p && r.y - p.y > 1) flags.push(['dn', `${p.y + 1}${r.y - p.y > 2 ? '–' + (r.y - 1) : ''} : aucun dividende (suspension)`]);
     if (r.payout != null && r.payout > 1) flags.push(['am', `${r.y} : distribution supérieure au bénéfice (${num(r.payout * 100, 0)} %)`]); if (r.fpay != null && r.fpay > 1) flags.push(['am', `${r.y} : dividende non couvert par le FCF (${num(r.fpay * 100, 0)} % du FCF)`]); });
-  const last = rows.filter(r => !r.partial).slice(-1)[0], g5 = rows.length > 5 ? cagrA(rows.filter(r => !r.partial).map(r => r.dps), 5) : null;
-  const streak = (() => { let k = 0; const rr = rows.filter(r => !r.partial); for (let i = rr.length - 1; i > 0; i--) { if (rr[i].dps >= rr[i - 1].dps * .995 && rr[i].y - rr[i - 1].y === 1) k++; else break; } return k; })();
+  const rr0 = rows.filter(r => !r.partial && r.dps), last = rr0.slice(-1)[0];
+  const g5 = rr0.length ? cagrA(Array.from({ length: last.y - rr0[0].y + 1 }, (_, i) => (rr0.find(r => r.y === rr0[0].y + i) || {}).dps ?? null), 5) : null;  /* (années consécutives : une année sans dividende n'est pas sautée) */
+  const streak = (() => { let k = 0; const rr = rows.filter(r => !r.partial && r.dps); for (let i = rr.length - 1; i > 0; i--) { if (rr[i].dps >= rr[i - 1].dps * .995 && rr[i].y - rr[i - 1].y === 1) k++; else break; } return k; })();
   const cur = s.yld != null ? s.yld : !isBRVM(s) && last && S.c.length ? last.dps / S.c[S.c.length - 1] : null;  /* (BRVM : pas de rendement sans versement depuis deux ans) */
   m.innerHTML = `<div class="grid side">${pn(`${s.tk} · dividendes par ${isBRVM(s) ? 'exercice' : 'année civile'}`, 'DVD', `<div class="tw" style="max-height:52vh"><table class="t"><thead><tr><th class="l">${isBRVM(s) ? 'Exercice' : 'Année'}</th><th>Dividende / action</th><th>Variation</th>${isBRVM(s) ? '<th class="l">Détachement</th><th class="l">Paiement</th>' : ''}<th>Cours de réf.</th><th>Rendement</th><th>Distribution (BPA)</th><th>Dividendes / FCF</th></tr></thead><tbody>
-      ${rows.slice().reverse().map(r => `<tr><td class="l am">${r.y}${r.partial ? ' (en cours)' : ''}</td><td class="wh">${num(r.dps, isBRVM(s) ? 0 : 2)}</td><td>${sgn(r.g, 1)}</td>${isBRVM(s) ? `<td class="l">${fds(r.det)}</td><td class="l">${fds(r.pay)}</td>` : ''}<td>${r.px ? px(s, r.px) : '—'}</td><td>${r.yld != null ? P1(r.yld, 2) : '—'}</td><td class="${r.payout > 1 ? 'dn' : ''}">${r.payout != null ? P1(r.payout, 0) : '—'}</td><td class="${r.fpay > 1 ? 'dn' : ''}">${r.fpay != null ? P1(r.fpay, 0) : NDc(isBRVM(s) ? 'FCF non lu pour cet exercice' : 'FCF négatif ou absent')}</td></tr>`).join('') || '<tr><td class="l dm" colspan="9">Aucun dividende recensé.</td></tr>'}</tbody></table></div>`,
+      ${rows.slice().reverse().map(r => `<tr><td class="l am">${r.y}${r.partial ? ' (en cours)' : ''}</td><td class="wh">${num(r.dps, isBRVM(s) && r.dps >= 10 ? 0 : 2)}${r.exc ? ` <span class="am" title="dividende exceptionnel net versé en plus, hors variation, rendement et distribution">+ ${num(r.exc, r.exc >= 10 ? 0 : 2)} exc.</span>` : ''}</td><td>${sgn(r.g, 1)}</td>${isBRVM(s) ? `<td class="l">${fds(r.det)}</td><td class="l">${fds(r.pay)}</td>` : ''}<td>${r.px ? px(s, r.px) : '—'}</td><td>${r.yld != null ? P1(r.yld, 2) : '—'}</td><td class="${r.payout > 1 ? 'dn' : ''}">${r.payout != null ? P1(r.payout, 0) : '—'}</td><td class="${r.fpay > 1 ? 'dn' : ''}">${r.fpay != null ? P1(r.fpay, 0) : NDc(isBRVM(s) ? 'FCF non lu pour cet exercice' : 'FCF négatif ou absent')}</td></tr>`).join('') || '<tr><td class="l dm" colspan="9">Aucun dividende recensé.</td></tr>'}</tbody></table></div>`,
       { np: true, lect: isBRVM(s) ? 'Rendement = dividende net ÷ cours au détachement. Distribution = dividende ÷ BNPA de l’exercice ; Dividendes / FCF = dividende × nombre de titres ÷ free cash-flow.' : 'Dividendes versés ou, à défaut, dividendes payés des comptes ÷ actions diluées. Rendement = dividendes de l’année ÷ cours de début d’année suivante.' })}
-    ${pn('Synthèse', 'DVD', `<div class="kv2">${[['Rendement actuel', P1(cur, 2)], ['Dernier dividende', last ? num(last.dps, isBRVM(s) ? 0 : 2) + ' (' + last.y + ')' : '—'], ['Croissance annuelle 5 ans', P1(g5, 1)], ['Hausses ou maintiens consécutifs', streak + ' an' + (streak > 1 ? 's' : '')],
+    ${pn('Synthèse', 'DVD', `<div class="kv2">${[['Rendement actuel', P1(cur, 2)], ['Dernier dividende', last ? num(last.dps, isBRVM(s) && last.dps >= 10 ? 0 : 2) + ' (' + last.y + ')' : '—'], ['Croissance annuelle 5 ans', P1(g5, 1)], ['Hausses ou maintiens consécutifs', streak + ' an' + (streak > 1 ? 's' : '')],
       ['Distribution (dernier BPA)', P1(last && last.payout, 0)], ['Couverture par le FCF', last && last.fpay ? num(1 / last.fpay, 2) + ' x' : '—']].map(([a, b]) => `<span>${a}</span><b>${b}</b>`).join('')}</div>
       <h4 class="sub">Points d’attention</h4>${flags.length ? flags.slice(-10).reverse().map(([c, t]) => `<div class="flag ${c}">${t}</div>`).join('') : '<div class="dm">Aucune baisse, suspension ni dividende non couvert détecté.</div>'}`)}</div>
     <div class="grid c2">${pn('Dividende par action', 'DVD', cvb('dv1', 220))}${pn('Rendement et taux de distribution', 'DVD', cvb('dv2', 220))}</div>`;
-  const rr = rows.filter(r => !r.partial);
+  const rr = rows.filter(r => !r.partial && r.dps);
   if (rr.length) { barChart($('dv1'), { labels: rr.map(r => String(r.y)), values: rr.map(r => r.dps), fmt: v => num(v, isBRVM(s) ? 0 : 2), pos: CL.amber, labelsOnBars: true, extra: i => rr[i].g != null ? 'variation ' + num(rr[i].g * 100, 1) + ' %' : '' });
     new TSChart($('dv2'), { panes: [{ h: 1, fmt: fmtPctAxis }], xfmt: d => yLab(d), xfull: d => yLab(d), minBars: 2 }).set({ x: rr.map(r => r.y * 10000 + 1231), series: [{ type: 'bar', y: rr.map(r => r.payout), color: rgba(CL.cyan, .5), label: 'Distribution', fmt: v => P1(v, 0) }, { y: rr.map(r => r.yld), color: CL.amber, label: 'Rendement', fmt: v => P1(v, 2) }] }, [0, rr.length - 1]); }
 };
@@ -269,7 +274,7 @@ PAGES.DVD = async (m, alive) => {
 PAGES.DDM = async (m, alive) => {
   const s = sec(ST.sec); const [S, F, E, DV] = await Promise.all([series(s.id), faJSON(s.id).catch(() => null), ecoLite().catch(() => null), getJSON('dividends.json')]); if (!alive()) return;
   const us = !isBRVM(s), price = s.last; let d0 = null, hist = [];
-  if (!us) { hist = DV.filter(x => x.t === s.id && x.dps).sort((a, b) => (a.ex || 0) - (b.ex || 0)).map(x => x.dps); d0 = s.dps || hist[hist.length - 1]; }
+  if (!us) { const byE = {}; DV.filter(x => x.t === s.id && x.dps && x.ex && !x.exc).forEach(x => { byE[x.ex] = (byE[x.ex] || 0) + x.dps; }); const yE = Object.keys(byE).map(Number).sort((a, b) => a - b); hist = yE.length ? Array.from({ length: yE[yE.length - 1] - yE[0] + 1 }, (_, i) => byE[yE[0] + i] ?? null) : [];  /* (dividendes ordinaires, un total par exercice) */ d0 = s.dps || hist[hist.length - 1]; }
   else { const by = {}; for (let i = 0; i < S.x.length; i++) if (S.div[i]) { const y = Math.floor(S.x[i] / 10000); by[y] = (by[y] || 0) + S.div[i]; } const ys = Object.keys(by).sort(); const cy = String(new Date().getFullYear()); hist = ys.filter(y => y !== cy).map(y => by[y]); d0 = hist[hist.length - 1];
     if (!d0 && F && F.Y && F.Y.div) { const i = F.Y.div.length - 1; d0 = F.Y.div[i] && F.Y.sh[i] ? F.Y.div[i] / F.Y.sh[i] : null; } }
   if (!d0) { m.innerHTML = pn(s.tk + ' · valeur par les dividendes', 'DDM', '<div class="empty">Ce titre ne verse pas de dividende recensé : le modèle ne s’applique pas.</div>'); return; }

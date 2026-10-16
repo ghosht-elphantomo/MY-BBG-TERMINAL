@@ -149,7 +149,8 @@ function applyQuotes() {
 }
 function applyQuoteToSeries(s) {
   const q = Q.quotes && Q.quotes.q && Q.quotes.q[s.id]; if (!q || !q.last || !q.d) return; const day = s2i(q.d), n = s.x.length;
-  if (day > s.x[n - 1]) { s.x.push(day); s.d.push(q.d); s.c.push(q.last); s.o.push(q.o || q.last); s.h.push(Math.max(q.h || q.last, q.last)); s.l.push(Math.min(q.l || q.last, q.last)); s.v.push(q.vol || 0); s.div.push(0); if (s.val) s.val.push(q.val || 0); s.prov = true; }
+  /* (série sans ouverture / plus haut / plus bas : o, h et l sont le tableau des clôtures lui-même, complété une seule fois) */
+  if (day > s.x[n - 1]) { s.x.push(day); s.d.push(q.d); s.c.push(q.last); if (s.o !== s.c) s.o.push(q.o || q.last); if (s.h !== s.c) s.h.push(Math.max(q.h || q.last, q.last)); if (s.l !== s.c) s.l.push(Math.min(q.l || q.last, q.last)); s.v.push(q.vol || 0); s.div.push(0); if (s.val) s.val.push(q.val || 0); s.prov = true; }
   else if (day === s.x[n - 1]) { s.c[n - 1] = q.last; s.h[n - 1] = Math.max(s.h[n - 1], q.last); s.l[n - 1] = Math.min(s.l[n - 1], q.last); if (q.vol != null) s.v[n - 1] = q.vol; }
 }
 

@@ -256,11 +256,51 @@ def parse_calendar(txt):
 # « SNTS  SONATEL SN  …  5,085  6-juil-05  67,015  87,000 » : dernier dividende net payé et sa date de paiement, sur la ligne du titre.
 MOIS_ABR = {"janv": 1, "jan": 1, "fevr": 2, "fev": 2, "feb": 2, "mars": 3, "mar": 3, "avr": 4, "apr": 4, "mai": 5, "may": 5, "juin": 6, "jun": 6,
             "juil": 7, "jul": 7, "aout": 8, "aug": 8, "sept": 9, "sep": 9, "oct": 10, "nov": 11, "dec": 12}
-BOC_DIV = re.compile(r"(\d{1,3}(?:[ ,]\d{3})*|\d+)\s+(\d{1,2})-([a-z]{3,5})\.?-(\d{2})\b")
+BOC_DIV = re.compile(r"(?<![\d.,])(\d{1,3}(?:[ ,]\d{3})*(?:[.,]\d+)?|\d+(?:[.,]\d+)?)\s+(\d{1,2})-([a-z]{3,5})\.?-(\d{2})\b")
+
+
+def _boc_old_amt(tok, px):
+    """Montant d'une colonne « dernier dividende » : virgule de milliers (« 1,800 ») ou décimale (« 321,08 », « 1,57 »),
+    point décimal (« 1.828 », « 299.7 ») ; un « 1,828 » ambigu est tranché par l'ordre de grandeur du cours lu sur la même ligne
+    (dividende net entre 0,05 % et 60 % du cours). None si aucune lecture n'est plausible."""
+    t = tok.replace(" ", "")
+    cands = []
+    if re.fullmatch(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?", t):
+        cands.append(float(t.replace(",", "")))  # (milliers séparés par des virgules, décimales éventuelles après le point)
+        if re.fullmatch(r"\d{1,3},\d{3}", t):
+            cands.append(float(t.replace(",", ".")))  # (ou virgule décimale à trois chiffres)
+    elif re.fullmatch(r"\d+,\d+", t):
+        cands.append(float(t.replace(",", ".")))
+    elif re.fullmatch(r"\d+(?:\.\d+)?", t):
+        cands.append(float(t))
+    if not px:
+        return cands[0] if cands else None  # (sans cours sur la ligne : virgule de milliers, l'usage de ces bulletins)
+    ok = [c for c in cands if 0.0005 <= c / px <= 0.6]
+    return ok[0] if ok else None
+
+
+BOC_EN_MOIS = {m: i for i, m in enumerate(("january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+                                            "november", "december"), 1)}
+
+
+def _boc_date(txt):
+    """Date de la séance d'un bulletin (« mardi 8 mai 2012 », « Tuesday, May 8, 2012 »), ou None."""
+    n = nrm(txt[:4000])
+    m = re.search(r"(\d{1,2})(?:er)? (" + MOIS_RX + r") ((?:19|20)\d\d)", n)
+    try:
+        if m:
+            return dt.date(int(m.group(3)), FR_MOIS[m.group(2)], int(m.group(1))).isoformat()
+        m = re.search(r"(" + "|".join(BOC_EN_MOIS) + r") (\d{1,2}), ((?:19|20)\d\d)", n)
+        if m:
+            return dt.date(int(m.group(3)), BOC_EN_MOIS[m.group(1)], int(m.group(2))).isoformat()
+    except (ValueError, KeyError):
+        return None
+    return None
 
 
 def parse_boc_old(txt):
-    """[(titre, montant, date de paiement)] lus sur les lignes des actions d'un bulletin de l'ancien site."""
+    """[(titre, montant, date de paiement, ordre de grandeur du cours ce jour-là)] lus sur les lignes des actions d'un bulletin de
+    l'ancien site (le cours, sur la même base d'actions que le montant, permet de ramener le dividende sur la base actuelle)."""
     out = []
     for l in txt.split("\n"):
         m = re.match(r"\s*([A-Z]{3,5})\s{2,}\S", l)
@@ -277,9 +317,16 @@ def parse_boc_old(txt):
             d = dt.date(2000 + int(h.group(4)), mo, int(h.group(2))).isoformat()
         except ValueError:
             continue
-        a = float(re.sub(r"[ ,]", "", h.group(1)))
-        if a > 0:
-            out.append((m.group(1), a, d))
+        # ordre de grandeur du cours : médiane des nombres entiers de la ligne (cours précédent, ouverture, clôture, plus haut,
+        # plus bas, cours de référence…), hors dividende et date ; contrôle de vraisemblance du montant
+        nl = nrm(l)
+        rest = nl[:h.start()] + " " + nl[h.end():]
+        nums = sorted(float(re.sub(r"[ ,]", "", x)) for x in re.findall(r"(?<![\d.,])(\d{1,3}(?:[ ,]\d{3})+|\d+)(?![\d.,%])", rest))
+        nums = [x for x in nums if x >= 10]
+        px_ = nums[len(nums) // 2] if len(nums) >= 3 else None
+        a = _boc_old_amt(h.group(1), px_)
+        if a and a > 0:
+            out.append((m.group(1), a, d, px_))
     return out
 
 
@@ -414,23 +461,26 @@ def consolidate(cal_rows, avis, boc_old=None, revue=None):
             net = round(r["amt"] * (1 - r["irvm"] / 100), 4)
         ev.append({"t": r["t"], "det": r["det"], "pay": r["pay"], "net": net, "brut": r["amt"] if r["gross"] else None, "ex": r.get("ex"),
                    "irvm": r.get("irvm") if r["gross"] else None, "num": r["num"], "yr": r["yr"], "src": "calendrier", "u": r["u"], "d": r["cd"], "ann": r.get("pub"),
-                   "rank": 1})
+                   "rank": 1, **({"usd_c": r["amt"]} if r["usd_cents"] and not r["gross"] else {})})
     for r in avis:
-        nets = [p_ for p_ in r["parts"] if p_.get("net")]
+        # (montant net publié en cents de dollar, sans contre-valeur FCFA : gardé tel quel, converti au cours du jour de l'avis par le terminal)
+        nets = [p_ for p_ in r["parts"] if p_.get("net") or p_.get("usd_cents")]
         if not r.get("t") or not nets or not (r.get("det") or r.get("pay") or r.get("rec")):
             continue
         for p_ in nets:
-            ev.append({"t": r["t"], "det": r.get("det"), "pay": r.get("pay") or r.get("rec"), "net": p_["net"], "brut": p_.get("brut"),
+            ev.append({"t": r["t"], "det": r.get("det"), "pay": r.get("pay") or r.get("rec"), "net": p_.get("net"), "brut": p_.get("brut"),
                        "irvm": p_.get("irvm"), "kind": p_["kind"], "ex": r.get("ex"), "num": r.get("num"), "yr": r.get("yr"),
                        "src": "avis BRVM" if r.get("org") != "DC/BR" else "avis DC/BR", "u": r["u"], "d": _pubdate(r["u"], r), "ann": _pubdate(r["u"], r),
-                       "rank": 2 if r.get("org") != "DC/BR" else 0, "rect": bool(r.get("rect"))})
+                       "rank": 2 if r.get("org") != "DC/BR" else 0, "rect": bool(r.get("rect")), **({"usd_c": p_["usd_cents"]} if p_.get("usd_cents") else {})})
     # bulletins de l'ancien site : un versement par titre et date de paiement, le montant affiché le plus souvent (une ligne mal
     # imprimée un jour ne l'emporte pas) ; source la plus faible, retenue seulement sans avis ni calendrier pour ce versement
     for (t, d), x in (boc_old or {}).items():
         amts = x["a"]
         a, n = max(amts.items(), key=lambda kv: kv[1])
         if n >= 2 or len(amts) == 1:
-            ev.append({"t": t, "det": None, "pay": d, "net": a, "src": "bulletin", "u": x["u"], "d": d, "rank": -1, "ex": int(d[:4]) - 1, "nb": n})
+            pxs = sorted(p_ for p_ in (x.get("px") or []) if p_[2] == a)
+            ev.append({"t": t, "det": None, "pay": d, "net": a, "src": "bulletin", "u": x["u"], "d": d, "rank": -1, "ex": int(d[:4]) - 1, "nb": n,
+                       **({"px": pxs[0][1], "px_d": pxs[0][0]} if pxs else {})})  # (premier bulletin après le paiement)
     # revues trimestrielles : le même tableau repris d'une revue à l'autre ; un montant daté est un versement (rang entre bulletin
     # et Dépositaire central) ; un montant sans date n'est gardé que si toutes les revues donnent le même et qu'aucun autre document
     # ne couvre cet exercice
@@ -457,6 +507,18 @@ def consolidate(cal_rows, avis, boc_old=None, revue=None):
             # payés le même jour : l'avis le plus récent décrit le versement de ce jour.
             gn = [e for e in g if e.get("net") is not None]
             if not gn:
+                # montant publié seulement en cents de dollar (Ecobank Transnational) : le plus récent des documents de la BRVM ;
+                # un montant en FCFA publié pour le même versement l'emporte toujours (branche ci-dessus)
+                gu = [e for e in g if e.get("usd_c")]
+                if gu:
+                    bu = max(gu, key=lambda e: (e["rank"] >= 1, e.get("d") or "", e["rank"]))
+                    out.append({"t": t, "ex": next((e["ex"] for e in sorted(gu, key=lambda e: -e["rank"]) if e.get("ex")), None), "net": None,
+                                "usd_c": bu["usd_c"], "brut": None, "irvm": None,
+                                "det": bu.get("det") or next((e["det"] for e in g if e.get("det")), None),
+                                "pay": bu.get("pay") or next((e["pay"] for e in g if e.get("pay")), None),
+                                "kind": bu.get("kind") or "annuel", "src": bu["src"], "u": bu["u"], "num": bu.get("num"), "yr": bu.get("yr"),
+                                "pub": next((e["ann"] for e in sorted(gu, key=lambda e: e.get("ann") or "9") if e.get("ann") and e["rank"] >= 1), None) or bu.get("ann"),
+                                "chk": [["usd_c", e["usd_c"], e.get("d") or ""] for e in gu if abs(e["usd_c"] - bu["usd_c"]) > 1e-9]})
                 continue
             rect_ = [e for e in gn if e["rank"] == 2 and e.get("rect")]
             main_ = [e for e in gn if e["rank"] >= 1]
@@ -465,12 +527,21 @@ def consolidate(cal_rows, avis, boc_old=None, revue=None):
             ex_ = next((e["ex"] for e in sorted(g, key=lambda e: -e["rank"]) if e.get("ex")), None)
             if ex_ is None and best.get("yr") and (best.get("det") or best.get("pay")):
                 ex_ = None  # (l'année de l'avis n'est pas l'exercice ; exercice laissé vide plutôt que deviné)
+            # dividende ordinaire et dividende exceptionnel versés le même jour (un seul avis, deux montants) : deux versements
+            sib = [e for e in gn if e is not best and e.get("u") and e["u"] == best.get("u") and e.get("kind") and e.get("kind") != best.get("kind")]
+            for e in sib:
+                out.append({"t": t, "ex": e.get("ex") or best.get("ex"), "net": e["net"], "brut": e.get("brut"), "irvm": e.get("irvm"),
+                            "det": best.get("det"), "pay": best.get("pay"), "kind": e["kind"], "src": e["src"], "u": e["u"], "num": e.get("num"),
+                            "yr": e.get("yr"), "pub": e.get("ann"), "chk": []})
+            g = [e for e in g if not any(e is x for x in sib)]
             chk = sorted({(e["src"], e.get("net"), e.get("d") or "") for e in g}, key=lambda x: x[2])
             out.append({"t": t, "ex": ex_, "net": best["net"], "brut": best.get("brut"), "irvm": best.get("irvm"),
                         "det": best.get("det") or next((e["det"] for e in g if e.get("det")), None),
                         "pay": best.get("pay") or next((e["pay"] for e in g if e.get("pay")), None),
                         "kind": best.get("kind") or "annuel", "src": best["src"], "u": best["u"], "num": best.get("num"), "yr": best.get("yr"),
-                        "pub": next((e["ann"] for e in sorted(g, key=lambda e: e.get("ann") or "9") if e.get("ann") and e["rank"] >= 1), None) or best.get("ann"), "chk": [list(c) for c in chk if c[1] is not None and abs(c[1] - best["net"]) > 1e-6]})
+                        "pub": next((e["ann"] for e in sorted(g, key=lambda e: e.get("ann") or "9") if e.get("ann") and e["rank"] >= 1), None) or best.get("ann"), "chk": [list(c) for c in chk if c[1] is not None and abs(c[1] - best["net"]) > 1e-6],
+                        # (cours lu dans un bulletin à côté du même montant : même base d'actions que le dividende publié)
+                        **next(({"px": e["px"], "px_d": e["px_d"]} for e in [best] + g if e.get("px") and e.get("net") and abs(e["net"] / best["net"] - 1) < .005), {})})
     have = {(o["t"], o.get("ex")) for o in out}
     for x in undated:
         if (x["t"], x["ex"]) not in have:
@@ -492,10 +563,13 @@ def run(d):
             continue
         if re.search(r"bulletin officiel de la cote", nrm(t[:3000])):
             n_boc += 1
-            for tk, a, dd in parse_boc_old(t):
+            bd_ = _boc_date(t)
+            for tk, a, dd, px_ in parse_boc_old(t):
                 if tk in tick and dd <= "2013-12-31":  # (bulletins récents : lus par ailleurs, base des cours)
-                    x = boc_old.setdefault((tk, dd), {"a": {}, "u": u})
+                    x = boc_old.setdefault((tk, dd), {"a": {}, "u": u, "px": []})
                     x["a"][a] = x["a"].get(a, 0) + 1
+                    if px_ and bd_ and dd <= bd_ <= (dt.date.fromisoformat(dd) + dt.timedelta(days=120)).isoformat():
+                        x["px"].append((bd_, px_, a))  # (cours du jour du bulletin, dans les quatre mois suivant le paiement)
             continue
         if re.search(r"revue trimestrielle", nrm(t[:1500])):
             for tk, ex_, a, dd in parse_revue(t, tick):

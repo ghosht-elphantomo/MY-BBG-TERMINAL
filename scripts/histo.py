@@ -227,18 +227,32 @@ def main():
             di = iso(d)
             if di <= cutoff and fl(c):
                 ti.upsert({"date": di, "indice": s["id"], "valeur": round(float(c), 2)})
+    # séances d'indices reconnues fausses par le terminal (jour férié recopiant la veille, valeur figée un jour où le marché a bougé,
+    # contrôlées sur les bulletins officiels) : retirées aussi de l'archive
+    bad_idx = {(iso(d), code) for code, ds in ((load(os.path.join(a.data, "boc_check.json"), {}) or {}).get("idx_drop") or {}).items() for d in ds}
+    if bad_idx:
+        ti.drop(lambda r: (r["date"], r["indice"]) in bad_idx)
     tables.append(ti)
 
     # ---------- 3. dividendes (avis officiels et bulletins de la cote) ----------
-    tdv = Table(out, "dividendes.csv", ["titre", "exercice", "origine", "dividende_net", "dividende_ajuste", "facteur_ajustement", "annonce", "detachement", "paiement"],
-                ["titre", "exercice", "origine"])
+    # (un exercice payé en plusieurs fois — acompte et solde, dividende complémentaire — : versements additionnés, dates du dernier ;
+    # dividende exceptionnel sur sa propre ligne, type « exceptionnel »)
+    tdv = Table(out, "dividendes.csv", ["titre", "exercice", "origine", "type", "dividende_net", "dividende_ajuste", "facteur_ajustement", "annonce",
+                                        "detachement", "paiement"], ["titre", "exercice", "origine", "type"], req=["titre", "exercice", "origine"])
+    agg = {}
     for x in load(os.path.join(a.data, "dividends.json"), []) or []:
-        if x.get("t") not in brvm_eq:
+        if x.get("t") not in brvm_eq or not x.get("dps"):
             continue
         org = "bulletin" if x.get("src") == "BOC" else "avis"
-        tdv.upsert({"titre": x["t"], "exercice": x.get("ex"), "origine": org, "dividende_net": x.get("dps0") or x.get("dps"),
-                    "dividende_ajuste": x.get("dps"), "facteur_ajustement": x.get("adj") or 1, "annonce": iso(x.get("ann")),
-                    "detachement": iso(x.get("det")), "paiement": iso(x.get("pay"))})
+        k = (x["t"], x.get("ex"), org, "exceptionnel" if x.get("exc") else "")
+        g = agg.setdefault(k, {"net": 0.0, "adj": 0.0, "f": x.get("adj") or 1, "ann": None, "det": None, "pay": None})
+        g["net"] += x.get("dps0") or x.get("dps")
+        g["adj"] += x.get("dps")
+        if (iso(x.get("pay")) or "") >= (g["pay"] or ""):
+            g.update(ann=iso(x.get("ann")) or g["ann"], det=iso(x.get("det")) or g["det"], pay=iso(x.get("pay")) or g["pay"])
+    for (t_, ex_, org, ty_), g in agg.items():
+        tdv.upsert({"titre": t_, "exercice": ex_, "origine": org, "type": ty_, "dividende_net": round(g["net"], 6), "dividende_ajuste": round(g["adj"], 6),
+                    "facteur_ajustement": g["f"], "annonce": g["ann"], "detachement": g["det"], "paiement": g["pay"]})
     tables.append(tdv)
 
     # ---------- 4. fractionnements / regroupements ----------
@@ -408,8 +422,8 @@ def main():
             flag("dividendes.csv", r["titre"], r["exercice"], "dates_incoherentes", f"détachement {de} après paiement {pa}")
         if a_ and de and a_ > de:
             flag("dividendes.csv", r["titre"], r["exercice"], "dates_incoherentes", f"annonce {a_} après détachement {de}")
-        byk.setdefault((r["titre"], r["exercice"]), {})[r["origine"]] = r
-    for (tk, ex), v in byk.items():
+        byk.setdefault((r["titre"], r["exercice"], r.get("type") or ""), {})[r["origine"]] = r
+    for (tk, ex, _), v in byk.items():
         if "avis" in v and "bulletin" in v:
             x1, x2 = fl(v["avis"]["dividende_ajuste"]), fl(v["bulletin"]["dividende_ajuste"])
             if x1 and x2 and abs(x1 / x2 - 1) > 0.01:

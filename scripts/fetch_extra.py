@@ -1633,7 +1633,47 @@ def boc_parse(txt):
     for k, lo, hi in (("per", 2, 80), ("rdt", 0.1, 30), ("rent", 0.1, 40), ("prime", -20, 30)):
         if k in out and not (lo <= out[k] <= hi):
             out.pop(k)
+    idx = boc_indices(txt)
+    if idx:
+        out["idx"] = idx
     return out
+
+
+# indices publiés dans le bulletin : en-tête (« BRVM COMPOSITE 537,67  BRVM 30 260,32  BRVM PRESTIGE 200,13 ») et tableaux
+# des indices par compartiment et sectoriels (« BRVM - TELECOMMUNICATIONS  3  150,72  0,77 % … ») ; codes de la base des cours
+BOC_IDX_HEAD = (("BRVMC", r"BRVM\s+COMPOSITE(?!\s+TOTAL)"), ("BRVM30", r"BRVM\s+30\b"), ("BRVMPR", r"BRVM\s+PRESTIGE"), ("BRVM10", r"BRVM\s+10\b"))
+BOC_IDX_ROW = (("BRVMPR", r"BRVM\s*-\s*PRESTIGE"), ("BRVMPA", r"BRVM\s*-\s*PRINCIPAL"), ("BRVM-TEL", r"BRVM\s*-\s*T[ÉE]L[ÉE]COMMUNICATIONS"),
+               ("BRVM-CD", r"BRVM\s*-\s*CONSOMMATION\s+DISCR[ÉE]TIONNAIRE"), ("BRVM-SF", r"BRVM\s*-\s*SERVICES\s+FINANCIERS"),
+               ("BRVM-CB", r"BRVM\s*-\s*CONSOMMATION\s+DE\s+BASE"), ("BRVM-IN", r"BRVM\s*-\s*INDUSTRIELS"), ("BRVM-EN", r"BRVM\s*-\s*[ÉE]NERGIE"),
+               ("BRVM-SP", r"BRVM\s*-\s*SERVICES\s+PUBLICS"))
+
+
+def boc_indices(txt):
+    """{code: [valeur, variation du jour en %]} ; une valeur n'est gardée que si elle est lue sans ambiguïté."""
+    out = {}
+    lines = txt.splitlines()
+    head = lines[:25]
+    for code, pat in BOC_IDX_HEAD:
+        for i, ln in enumerate(head):
+            m = re.search(pat + r"\s{2,}(\d{1,3}(?: \d{3})?[,.]\d{2})(?!\d)", ln, re.I)
+            if m:
+                out[code] = [frnum(m.group(1)), None]
+                break
+    # (indices sectoriels de 2025 : reconnus à la ligne des télécommunications ; les anciens indices sectoriels, autre base, sont ignorés)
+    new_sect = any(re.match(r"^\s*" + BOC_IDX_ROW[2][1], ln, re.I) for ln in lines)
+    for code, pat in BOC_IDX_ROW:
+        if code.startswith("BRVM-") and not new_sect:
+            continue
+        for ln in lines:
+            m = re.match(r"^\s*" + pat + r"\s*(?:\(\*+\))?\s{2,}(\d{1,3})\s{2,}(\d{1,3}(?: \d{3})?[,.]\d{2})\s{2,}(-?\d+[,.]\d+)\s*%", ln, re.I)
+            if m:
+                v, var = frnum(m.group(2)), frnum(m.group(3))
+                if code in out and abs(out[code][0] - v) > 1e-9:
+                    out.pop(code)  # (en-tête et tableau différents : rien n'est retenu pour cet indice)
+                    break
+                out[code] = [v, var]
+                break
+    return {k: v for k, v in out.items() if v[0] and 1 <= v[0] <= 100000}
 
 
 BOC_TOK = re.compile(r"SP|\d{1,2}-[a-zéûA-Z]+\.?-\d{2}|-?\d+(?: \d{3})*,\d+ ?%|-?\d+(?: \d{3})*(?:,\d+)?|,\d+")
@@ -1801,14 +1841,16 @@ def run_boc(out):
             except Exception:  # noqa: BLE001
                 continue
         return k, None, None
-    # derniers jours ouvrés
+    # derniers jours ouvrés ; puis, 12 au plus par passage, les bulletins des 120 derniers jours lus avant la lecture des indices
     latest_txt = None
-    for back in range(0, 8):
-        d = TODAY - dt.timedelta(days=back)
-        if d.weekday() >= 5 or d.strftime("%Y%m%d") in db["d"]:
+    old_idx = [d for d in (TODAY - dt.timedelta(days=b) for b in range(8, 121))
+               if d.weekday() < 5 and "idx" not in (db["d"].get(d.strftime("%Y%m%d")) or {"idx": 1})][:12]
+    for d in [TODAY - dt.timedelta(days=back) for back in range(0, 8)] + old_idx:
+        if d.weekday() >= 5 or "idx" in (db["d"].get(d.strftime("%Y%m%d")) or {}):
             continue
         k, rec, txt = try_day(d)
         if rec:
+            rec.setdefault("idx", {})  # (indices illisibles dans ce bulletin : pas relu à chaque passage)
             db["d"][k] = rec
             latest_txt = latest_txt or txt
             note("boc")
@@ -2253,14 +2295,14 @@ NEWS = [  # id, libellé, url, catégorie
     ("gn-uemoa", "Google Actualités", "https://news.google.com/rss/search?q=BCEAO+OR+UEMOA+OR+%22UMOA-Titres%22&hl=fr&gl=FR&ceid=FR:fr", "UEMOA"),
     ("financialafrik", "Financial Afrik", "https://www.financialafrik.com/feed/", "Afrique"),
     ("allafrica-eco", "allAfrica", "https://fr.allafrica.com/tools/headlines/rdf/business/headlines.rdf", "Afrique"),
-    ("ecofin", "Agence Ecofin", "https://www.agenceecofin.com/finance?format=feed&type=rss", "Afrique"),
+    ("ecofin", "Agence Ecofin", "https://news.google.com/rss/search?q=site:agenceecofin.com+finance+OR+banque+OR+bourse&hl=fr&gl=FR&ceid=FR:fr", "Afrique"),  # (flux du site fermé)
     ("gn-marches", "Google Actualités", "https://news.google.com/rss/search?q=%22march%C3%A9s+financiers%22+OR+%22Wall+Street%22+OR+%22CAC+40%22&hl=fr&gl=FR&ceid=FR:fr", "Marchés"),
     ("lesechos", "Les Echos", "https://syndication.lesechos.fr/rss/rss_finance-marches.xml", "Marchés"),
     ("investing-fr", "Investing.com", "https://fr.investing.com/rss/news.rss", "Marchés"),
     ("cnbc-markets", "CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258", "Marchés"),
     ("cnbc-top", "CNBC", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=100003114", "Marchés"),
     ("marketwatch", "MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories", "Marchés"),
-    ("yahoo", "Yahoo Finance", "https://finance.yahoo.com/news/rssindex", "Marchés"),
+    ("yahoo", "Yahoo Finance", "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5EGSPC,%5EIXIC,%5EDJI&region=US&lang=en-US", "Marchés"),
     ("gn-tech", "Google Actualités", "https://news.google.com/rss/search?q=Nasdaq+OR+Nvidia+OR+semiconductors+stocks&hl=en-US&gl=US&ceid=US:en", "Tech US"),
     ("fed", "Réserve fédérale", "https://www.federalreserve.gov/feeds/press_all.xml", "Banques centrales"),
     ("ecb", "BCE", "https://www.ecb.europa.eu/rss/press.html", "Banques centrales"),

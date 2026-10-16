@@ -139,32 +139,67 @@ def stats_block(d, c, freq="D", h=None, l=None, v=None, val=None, ann=None):
     def back(k):
         return c[-1 - k] if n > k else None
 
+    # séries quotidiennes : périodes calendaires (1 semaine, 1 mois = même jour du mois précédent, 3 et 6 mois, 1 et 3 ans), comme le
+    # terminal Bloomberg ; cours de référence = dernière clôture à cette date ou avant (moins de 10 jours d'écart, sinon pas de
+    # rendement). Un titre suspendu ou récemment coté n'a ainsi jamais une « performance 1 an » calculée sur une autre durée.
+    dd_ = [dt.date(x // 10000, x // 100 % 100, x % 100) for x in d] if freq == "D" else None
+
+    def back_d(months=0, days=0):
+        e = dd_[-1]
+        if months:
+            y_, m_ = divmod(e.month - 1 - months, 12)
+            y_, m_ = e.year + y_, m_ + 1
+            import calendar
+            t = dt.date(y_, m_, min(e.day, calendar.monthrange(y_, m_)[1]))
+        else:
+            t = e - dt.timedelta(days=days)
+        import bisect
+        i = bisect.bisect_right(dd_, t) - 1
+        return c[i] if i >= 0 and (t - dd_[i]).days <= 10 and c[i] else None
+
     def ret(k):
-        b = back(k)
+        if freq == "D":
+            b = back_d(*k) if isinstance(k, tuple) else None
+        else:
+            b = back(k)
         return (last / b - 1) if b else None
-    wk, mo, q, yr, y3 = ((7, 30, 91, 365, 1095) if ann == 365 else (5, 21, 63, 252, 756)) if freq == "D" else (None, 1, 3, 12, 36)
-    h6 = (182 if ann == 365 else 126) if freq == "D" else 6
+    wk, mo, q, yr, y3 = ((0, 7), (1,), (3,), (12,), (36,)) if freq == "D" else (None, 1, 3, 12, 36)
+    h6 = (6,) if freq == "D" else 6
     ly = d[-1] // 10000 - 1
     base = None
     for i in range(n - 1, -1, -1):
         if d[i] // 10000 <= ly:
             base = c[i]
             break
-    lr = [math.log(c[i] / c[i - 1]) for i in range(max(1, n - per_year), n) if c[i - 1] > 0]
+    # fenêtre d'un an : calendaire pour les séries quotidiennes (volatilité, plus haut et plus bas sur 52 semaines)
+    i0 = max(0, n - per_year)
+    if freq == "D":
+        import bisect
+        e_ = dd_[-1]
+        try:
+            t1 = e_.replace(year=e_.year - 1)
+        except ValueError:
+            t1 = e_ - dt.timedelta(days=365)
+        i0 = bisect.bisect_right(dd_, t1)
+    lr = [math.log(c[i] / c[i - 1]) for i in range(max(1, i0), n) if c[i - 1] > 0 and c[i] > 0]
     mu = sum(lr) / len(lr) if lr else 0
     sd = math.sqrt(sum((x - mu) ** 2 for x in lr) / max(1, len(lr) - 1)) if len(lr) > 2 else 0
-    win = c[-per_year:]
-    hi = max((h or c)[-per_year:])
-    lo = min((l or c)[-per_year:])
+    hs_ = [x for x in (h or c)[i0:] if x]
+    ls_ = [x for x in (l or c)[i0:] if x]
+    hi = max(hs_) if hs_ else last
+    lo = min(ls_) if ls_ else last
     sma = lambda k: sum(c[-k:]) / k if n >= k else None  # noqa: E731
-    gains = losses = 0.0
+    # RSI 14 de Wilder (moyennes lissées, comme le terminal Bloomberg) sur les 300 dernières séances
     rsi = None
     if n > 15:
-        for i in range(n - 14, n):
-            ch = c[i] - c[i - 1]
-            gains += max(ch, 0)
-            losses += max(-ch, 0)
-        rsi = 100 if losses == 0 else 100 - 100 / (1 + gains / losses)
+        cc_ = c[-301:]
+        ch_ = [cc_[i] - cc_[i - 1] for i in range(1, len(cc_))]
+        ag = sum(max(x, 0) for x in ch_[:14]) / 14
+        al = sum(max(-x, 0) for x in ch_[:14]) / 14
+        for x in ch_[14:]:
+            ag = (ag * 13 + max(x, 0)) / 14
+            al = (al * 13 + max(-x, 0)) / 14
+        rsi = 100 if al == 0 else 100 - 100 / (1 + ag / al)
     peak = max(c)
     return {"last": rnd(last, 4), "prev": rnd(prev, 4), "pct": rnd(last / prev - 1 if prev else 0, 6), "dt": d[-1], "first": d[0], "nobs": n,
             "r1w": rnd(ret(wk), 5) if wk else None, "r1m": rnd(ret(mo), 5), "r3m": rnd(ret(q), 5), "r6m": rnd(ret(h6), 5), "r1y": rnd(ret(yr), 5), "r3y": rnd(ret(y3), 5),
@@ -348,6 +383,22 @@ def main():
         for src_ in (sh_.get("old") or {}, sh_.get("t") or {}):  # (lecture précédente conservée tant que la nouvelle n'est pas faite)
             for t, yrs in src_.items():
                 hist.setdefault(t, {}).update(yrs)
+    # cours USD/FCFA du jour (parité fixe 655,957 FCFA pour 1 euro × cours euro/dollar publié par la Réserve fédérale) : états et
+    # dividendes d'une société qui publie en dollars (Ecobank Transnational), convertis au cours du jour de leur publication
+    fx_ = None
+    try:
+        import bisect
+        eur_ = series_from_csv(fetch(DS.format("exchange-rates/main/data/daily.csv"), a.cache).decode("utf8"), "Date", "Exchange rate",
+                               lambda r: r.get("Country") == "Euro")
+        fd_ = [x[0] for x in eur_ if x[1]]
+        fv_ = [x[1] * XOF_PER_EUR for x in eur_ if x[1]]
+
+        def fx_(d):
+            k_ = int(str(d).replace("-", "")[:8])
+            i_ = bisect.bisect_right(fd_, k_) - 1
+            return round(fv_[i_], 3) if i_ >= 0 and k_ - fd_[i_] <= 10000 else None  # (dernier cours connu, moins d'un an)
+    except Exception as e:  # noqa: BLE001
+        log("cours USD/FCFA indisponible (états et dividendes en dollars non convertis) :", e)
     if a.comptes and os.path.exists(a.comptes):
         try:
             import comptes as CPT
@@ -361,22 +412,6 @@ def main():
                     for k, sk in (("ca", "ca"), ("rn", "resultat_net")):
                         if rec.get(k) is not None and (ser_.get(sk) or {}).get(str(y)) is None:
                             ser_.setdefault(sk, {})[str(y)] = rec[k]
-            # cours USD/FCFA du jour (parité fixe 655,957 FCFA pour 1 euro × cours euro/dollar publié par la Réserve fédérale) :
-            # états d'une société qui publie en dollars, convertis au cours du jour de leur publication
-            fx_ = None
-            try:
-                import bisect
-                eur_ = series_from_csv(fetch(DS.format("exchange-rates/main/data/daily.csv"), a.cache).decode("utf8"), "Date", "Exchange rate",
-                                       lambda r: r.get("Country") == "Euro")
-                fd_ = [x[0] for x in eur_ if x[1]]
-                fv_ = [x[1] * XOF_PER_EUR for x in eur_ if x[1]]
-
-                def fx_(d):
-                    k_ = int(str(d).replace("-", "")[:8])
-                    i_ = bisect.bisect_right(fd_, k_) - 1
-                    return round(fv_[i_], 3) if i_ >= 0 and k_ - fd_[i_] <= 10000 else None  # (dernier cours connu, moins d'un an)
-            except Exception as e:  # noqa: BLE001
-                log("cours USD/FCFA indisponible (états en dollars non convertis) :", e)
             CONS = CPT.consolidate(json.load(open(a.comptes, encoding="utf8")), mir, fx_)
             bank_t = {x.get("symbole") or x.get("ticker"): bool(x.get("banque")) for x in acts}
             MAPC = (("resultat_net", "resultat_net"), ("total_bilan", "total_actif"), ("capitaux_propres", "capitaux_propres"),
@@ -595,14 +630,25 @@ def main():
                 except (TypeError, ValueError):
                     return 9999
             used = set()
-            for o in sorted(OFF, key=lambda o: (o["t"], o.get("det") or o.get("pay") or "")):
+            for o in OFF:  # dividende publié seulement en cents de dollar : FCFA au cours du jour de l'avis (figé), marqué « converti »
+                if not o.get("net") and o.get("usd_c"):
+                    r_ = fx_(o.get("pub") or o.get("det") or o.get("pay") or "") if fx_ else None
+                    if r_:
+                        o["net"], o["fx"] = round(o["usd_c"] / 100 * r_, 4), r_
+                        off_chk["usd"] = off_chk.get("usd", 0) + 1
+                    else:  # (cours indisponible : le montant de la base, en cents de dollar lu comme des FCFA, n'est pas affiché)
+                        for x in byt[o["t"]]:
+                            if (o.get("det") and dd_(x.get("date_detachement"), o["det"]) <= 10) or (o.get("pay") and dd_(x.get("date_paiement"), o["pay"]) <= 10):
+                                x["dividende"] = None
+                        off_chk["usd_sans_cours"] = off_chk.get("usd_sans_cours", 0) + 1
+            for o in sorted(OFF, key=lambda o: (o["t"], o.get("det") or o.get("pay") or "", o.get("kind") == "exceptionnel")):
                 if o["t"] not in listed or not o.get("net") or o["net"] <= 0 or not (o.get("det") or o.get("pay") or o.get("ex")):
                     continue  # (un versement sans date mais d'exercice connu — revues trimestrielles 1999-2001 — est gardé, hors rendement total)
                 cands = [x for x in byt[o["t"]] if id(x) not in used and x.get("dividende") and (
                     (o.get("det") and dd_(x.get("date_detachement"), o["det"]) <= 10) or (o.get("pay") and dd_(x.get("date_paiement"), o["pay"]) <= 10)
                     or (o.get("ex") and x.get("exercice") == o["ex"] and abs(x["dividende"] / o["net"] - 1) <= .005))]
                 if cands:
-                    x = cands[0]
+                    x = min(cands, key=lambda c_: abs(c_["dividende"] / o["net"] - 1))  # (deux versements le même jour : chacun le sien)
                     used.add(id(x))
                     if abs(x["dividende"] / o["net"] - 1) > .0005:
                         if len(off_chk["ex"]) < 30:
@@ -620,9 +666,16 @@ def main():
                     if o.get("ex") and not x.get("exercice"):
                         x["exercice"] = o["ex"]
                     x["source"], x["avis"] = "BRVM", 1
+                    if o.get("fx"):
+                        x["usd_c"], x["fx"] = o["usd_c"], o["fx"]
+                    if o.get("kind") == "exceptionnel":
+                        x["exc"] = 1
+                    if o.get("px") and o.get("px_d"):
+                        x["px_raw"], x["px_d"] = o["px"], o["px_d"]
                 else:
                     nx = {"ticker": o["t"], "dividende": o["net"], "exercice": o.get("ex"), "date_annonce": o.get("pub"),
-                          "date_detachement": o.get("det"), "date_paiement": o.get("pay"), "source": "BRVM", "avis": 1}
+                          "date_detachement": o.get("det"), "date_paiement": o.get("pay"), "source": "BRVM", "avis": 1,
+                          **({"usd_c": o["usd_c"], "fx": o["fx"]} if o.get("fx") else {}), **({"exc": 1} if o.get("kind") == "exceptionnel" else {}), **({"px_raw": o["px"], "px_d": o["px_d"]} if o.get("px") and o.get("px_d") else {})}
                     divs.append(nx)
                     byt[o["t"]].append(nx)
                     used.add(id(nx))
@@ -643,6 +696,37 @@ def main():
                     BOC.setdefault(sym, {})[int(k)] = dict(zip(cols, v))
         log("bulletins officiels :", len(BOC), "titres,", sum(len(v) for v in BOC.values()), "lignes")
     boc_chk = {"n": 0, "diff": 0, "added": 0, "div_added": 0, "by": {}}
+    # jours de séance attestés par un bulletin officiel (et nombre de titres dont le cours a varié ce jour-là) ; valeurs des indices
+    # lues dans les bulletins récents (relevé du soir, branche raw)
+    BOC_DAYS = collections.Counter()
+    for sym_, by_ in BOC.items():
+        for k_, r_ in by_.items():
+            BOC_DAYS[k_] += 1 if r_.get("var") not in (None, 0, 0.0) else 0
+    BOC_IDX = {}
+    try:
+        for k_, r_ in ((json.load(open(os.path.join(a.extra, "boc.json"), encoding="utf8")) if a.extra and os.path.exists(os.path.join(a.extra, "boc.json")) else {}).get("d") or {}).items():
+            for code_, v_ in (r_.get("idx") or {}).items():
+                if v_ and v_[0]:
+                    BOC_IDX.setdefault(code_, {})[int(k_)] = float(v_[0])
+    except Exception as e:  # noqa: BLE001
+        log("indices des bulletins illisibles :", e)
+
+    # titres dont le cours de la base a varié, jour par jour (un jour de séance en compte toujours plusieurs)
+    BASE_MOVED = collections.Counter()
+    for act_ in acts:
+        try:
+            rr_ = load_brvm_csv(os.path.join(src, act_["csv"] + ".csv"))
+        except Exception:  # noqa: BLE001
+            continue
+        for j_ in range(1, len(rr_)):
+            if rr_[j_][4] != rr_[j_ - 1][4]:
+                BASE_MOVED[rr_[j_][0]] += 1
+
+    def no_session(d_):  # jour sans séance : aucun bulletin officiel et aucun titre dont le cours a varié dans la base (férié)
+        return d_ not in BOC_DAYS and not BASE_MOVED.get(d_)
+
+    def is_weekend(d_):
+        return dt.date(d_ // 10000, d_ // 100 % 100, d_ % 100).weekday() >= 5
     if BOC:  # dividendes payés lus dans les bulletins, ajoutés seulement quand la base n'a aucun versement à ±120 jours
         # (la date du bulletin peut suivre de plusieurs semaines celle de l'avis : un même dividende ne doit pas compter deux fois ;
         # un dividende payé en plusieurs fractions espacées de plus de 4 mois reste compté une fois par fraction)
@@ -698,6 +782,7 @@ def main():
       except Exception as e:  # noqa: BLE001
         log("fractionnement brvm.org ignoré :", r.get("u"), e)
     split_log, force_write, PX_DATE = [], set(), {}
+    SPL_DONE = set()  # opérations déduites des paliers du bulletin officiel (cours déjà ajustés par la base)
 
     def split_factor(t, date_int, upto):
         """Produit des fractionnements effectifs après `date_int` (et au plus tard à `upto`)."""
@@ -730,8 +815,8 @@ def main():
     last_div = {}
     for x in divs:
         t = x.get("ticker")
-        if not t or not x.get("dividende"):
-            continue
+        if not t or not x.get("dividende") or x.get("exc"):
+            continue  # (dividende exceptionnel : hors dividende de référence et rendement indicatif, compté dans le rendement total)
         k = (x.get("exercice") or 0, x.get("date_paiement") or "")
         if t not in last_div or k > last_div[t][0]:
             last_div[t] = (k, x)
@@ -742,6 +827,13 @@ def main():
             log("missing csv", t)
             continue
         rows = load_brvm_csv(p)
+        # séances fantômes de la base : week-end, ou jour sans bulletin officiel (férié) où la ligne recopie la veille (même cours,
+        # même volume) — retirées, la BRVM n'a pas coté ce jour-là
+        n0_ = len(rows)
+        rows = [r for j_, r in enumerate(rows) if not (is_weekend(r[0]) or (j_ and no_session(r[0]) and r[4] == rows[j_ - 1][4] and r[5] == rows[j_ - 1][5]))]
+        if len(rows) < n0_:
+            boc_chk["phantom"] = boc_chk.get("phantom", 0) + n0_ - len(rows)
+            boc_chk.setdefault("phantom_by", {})[t] = n0_ - len(rows)
         if BOC.get(t) and rows:  # contrôle des clôtures, puis séances manquantes après la fin de la base complétées par les bulletins
             B_ = BOC[t]
             ck = [(r[4], B_[r[0]]["c"]) for r in rows if r[0] in B_ and B_[r[0]].get("c")]
@@ -790,7 +882,7 @@ def main():
 
         def jump_at(e0, k0):  # le cours saute-t-il du rapport k0 à la date e0 ?
             j0 = next((j for j, r in enumerate(rows) if r[0] >= e0), None)
-            return bool(j0 and rows[j0 - 1][4] and rows[j0][4] and abs(math.log((rows[j0 - 1][4] / rows[j0][4]) / k0)) < math.log(1.4))
+            return bool(j0 and rows[j0 - 1][4] and rows[j0][4] and abs(math.log((rows[j0 - 1][4] / rows[j0][4]) / k0)) < min(math.log(1.4), abs(math.log(k0)) / 3))
         for i_ in range(1, len(rows) - 1):
             a_, b_ = rows[i_ - 1][4], rows[i_][4]
             if not a_ or not b_ or 0.6 < a_ / b_ < 1.65:
@@ -811,14 +903,53 @@ def main():
             else:
                 SPL[t].append((e_, k_))
                 split_log.append(f"{t} {e_} x{k_:g} : opération détectée sur les cours (sans avis dans la base)")
+        # opérations sur le capital (fractionnements, actions gratuites) que la base de cours a déjà ajustées sans qu'aucun avis lu ne les
+        # décrive : le rapport « clôture du bulletin officiel ÷ cours de la série » change alors de palier. Chaque palier durable (plus de
+        # 5 %, confirmé sur 10 séances) est une opération : les dividendes antérieurs sont ramenés sur la même base que les cours.
+        if BOC.get(t) and rows:
+            B_ = BOC[t]
+            qs = [(r[0], B_[r[0]]["c"] / r[4]) for r in rows if r[4] and (B_.get(r[0]) or {}).get("c")]
+            med = []
+            for j in range(len(qs)):
+                w_ = sorted(x for _, x in qs[max(0, j - 4):j + 5])
+                med.append((qs[j][0], w_[len(w_) // 2]))
+            j = 0
+            while j < len(med) - 10:
+                a0, a1 = med[j][1], med[j + 1][1]
+                if a0 > 0 and a1 > 0 and abs(a1 / a0 - 1) > .05 and all(abs(med[j + m][1] / a1 - 1) < .02 for m in range(1, 11)) \
+                        and all(abs(med[max(0, j - m)][1] / a0 - 1) < .02 for m in range(0, 6)):
+                    k_ = a0 / a1
+                    from fractions import Fraction
+                    fr_ = Fraction(k_).limit_denominator(10)
+                    if abs(float(fr_) / k_ - 1) < .005:
+                        k_ = float(fr_)
+                    e_ = med[j + 1][0]
+                    # (même opération qu'un avis déjà lu, effective quelques semaines après sa date : pas comptée deux fois ; rapport lu
+                    # dans l'avis démenti par le palier des cours — base et bulletin ajustés d'un autre rapport — : celui du palier, seulement
+                    # si le palier tombe à moins de 60 jours de l'avis ; plus loin, avec un autre rapport, c'est une autre opération)
+                    near_ = [(i_, e0, k0) for i_, (e0, k0) in enumerate(SPL.get(t, [])) if abs((i2d(e0) - i2d(e_)).days) < 60]
+                    if k_ > 1 and near_ and all(abs(k0 / k_ - 1) >= .05 for _, _, k0 in near_) and len(near_) == 1:
+                        i_, e0, k0 = near_[0]
+                        SPL[t][i_] = (e0, round(k_, 6))
+                        split_log.append(f"{t} {e0} x{k0:g} -> x{k_:g} : rapport corrigé d'après le palier des cours du bulletin officiel")
+                    elif k_ > 1 and not any(abs((i2d(e0) - i2d(e_)).days) < 30 or (abs((i2d(e0) - i2d(e_)).days) < 150 and abs(k0 / k_ - 1) < .05)
+                                            for e0, k0 in SPL.get(t, [])):
+                        SPL[t].append((e_, round(k_, 6)))
+                        SPL_DONE.add((t, e_))
+                        split_log.append(f"{t} {e_} x{k_:g} : opération sur le capital déduite du bulletin officiel (cours déjà ajustés)")
+                    j += 10
+                    continue
+                j += 1
         if t in SPL:
             adj_divs(t)
         for e_, k_ in sorted(SPL.get(t, [])):
             if e_ > rows[-1][0]:
                 continue  # pas encore effectif
+            if (t, e_) in SPL_DONE:
+                continue  # (opération lue sur les paliers du bulletin : cours de la base déjà ajustés, données par action aussi)
             ep_ = PX_DATE.get((t, e_), e_)
             i_ = next((j for j, r in enumerate(rows) if r[0] >= ep_), None)
-            if i_ and rows[i_ - 1][4] and rows[i_][4] and abs(math.log((rows[i_ - 1][4] / rows[i_][4]) / k_)) < math.log(1.4):
+            if i_ and rows[i_ - 1][4] and rows[i_][4] and abs(math.log((rows[i_ - 1][4] / rows[i_][4]) / k_)) < min(math.log(1.4), abs(math.log(k_)) / 3):  # (petit rapport : saut net exigé)
                 rows = [(r[0], r[1] / k_, r[2] / k_, r[3] / k_, r[4] / k_, int(round(r[5] * k_)), r[6]) if j < i_ else r for j, r in enumerate(rows)]
                 split_log.append(f"{t} {e_} x{k_:g} : cours antérieurs ajustés")
                 force_write.add(t)
@@ -845,6 +976,84 @@ def main():
                 shares = shares * k_
                 f["nb_titres"] = shares
                 split_log.append(f"{t} {e_} x{k_:g} : nombre de titres ajusté")
+        # dividendes lus dans un bulletin à côté du cours du jour (premier bulletin après le paiement) : le rapport « cours du bulletin
+        # ÷ cours de la série le même jour » donne la base d'actions du montant publié (opérations sur le capital antérieures aux
+        # bulletins conservés comprises) ; un ajustement qui s'en écarte de plus de 30 % est remplacé par ce rapport (rapport simple)
+        import bisect
+        dts_ = [r[0] for r in rows]
+        miss_k = {}
+        for x in divs:
+            if x.get("ticker") != t or not x.get("px_raw") or not x.get("px_d") or not x.get("dividende"):
+                continue
+            ds_ = str(x.get("date_paiement") or x.get("date_detachement") or "")[:10]
+            if not ds_:
+                continue
+            d0 = di(ds_)
+            dp_ = di(x["px_d"])
+            j_ = bisect.bisect_right(dts_, dp_) - 1
+            if j_ < 0 or dp_ - dts_[j_] > 15 or not rows[j_][4]:
+                continue  # (pas de séance de la série dans la quinzaine du bulletin : pas de contrôle)
+            f_obs = x["px_raw"] / rows[j_][4]
+            f_now = x.get("ajust") or 1.0
+            if f_obs > 0 and abs(math.log(f_obs / f_now)) > math.log(1.3):
+                # (rapport attendu : opérations connues après le paiement, multipliées éventuellement par une opération plus ancienne
+                # que les bulletins conservés, de rapport simple)
+                aft_ = [k0 for e0, k0 in sorted(SPL.get(t, [])) if d0 < e0 <= today_i]
+                prods_ = {1.0} | {math.prod(aft_[i0:]) for i0 in range(len(aft_))}
+                cands_ = {p0 * r0 for p0 in prods_ for r0 in (1, 2, 2.5, 3, 4, 5, 10, 20, 25, 50, 100)}
+                k_ = min(cands_, key=lambda c_: abs(math.log(f_obs / c_)))
+                if abs(math.log(f_obs / k_)) > math.log(1.12) or abs(math.log(k_ / f_now)) < 1e-9:
+                    continue
+                if k_ > 0:
+                    pub_ = x.get("dividende_publie", x["dividende"])
+                    x["dividende_publie"], x["dividende"], x["ajust"] = pub_, round(pub_ / k_, 4), round(k_, 6)
+                    if abs(k_ - 1) < 1e-9:
+                        x.pop("ajust", None)
+                    boc_chk.setdefault("div_base", []).append(f"{t} {x.get('exercice')} ÷{k_:g} (avant ÷{f_now:g} ; cours {x['px_raw']:g} / {rows[j_][4]:g} le {dts_[j_]})")
+                    miss_k.setdefault(t, []).append((dp_, k_ / f_now))
+        # même opération manquante pour les dividendes voisins sans cours lu : un montant antérieur à la dernière observation, dont le
+        # rendement au cours du jour serait invraisemblable (plus de 35 %) et redevient normal une fois ramené par ce rapport
+        if len({round(k0, 6) for _, k0 in miss_k.get(t, [])}) == 1:
+            last_obs, km_ = max(miss_k[t])
+            for x in divs:
+                if x.get("ticker") != t or x.get("px_raw") or not x.get("dividende"):
+                    continue
+                ds_ = str(x.get("date_paiement") or x.get("date_detachement") or "")[:10]
+                if not ds_:
+                    continue
+                d0 = di(ds_)
+                j_ = bisect.bisect_right(dts_, d0) - 1
+                if j_ < 0 or not rows[j_][4] or d0 > last_obs + 20000:
+                    continue
+                y_ = x["dividende"] / rows[j_][4]
+                if y_ > .35 and .002 <= y_ / km_ <= .35:
+                    pub_ = x.get("dividende_publie", x["dividende"])
+                    f_ = (x.get("ajust") or 1.0) * km_
+                    x["dividende_publie"], x["dividende"], x["ajust"] = pub_, round(pub_ / f_, 4), round(f_, 6)
+                    boc_chk.setdefault("div_base", []).append(f"{t} {x.get('exercice')} ÷{f_:g} (même opération ; rendement {y_:.0%} sinon)")
+        # BNPA et dividende par exercice de la fiche : chaque exercice ramené sur la base des actions actuelles. La base de chaque
+        # valeur se lit sur le nombre d'actions implicite (résultat net ÷ BNPA) : celui d'aujourd'hui (déjà ajusté), ou celui
+        # d'avant une ou plusieurs opérations récentes (montant publié à l'époque, à diviser par le rapport de ces opérations)
+        ops_ = sorted((e_, k_) for e_, k_ in SPL.get(t, []) if e_ <= rows[-1][0])
+        sh_now = float((sess_rows.get(t) or {}).get("sh") or shares or 0)
+        ser_ = f.get("series") or {}
+        if ops_ and sh_now and ser_.get("bnpa"):
+            for y_, v_ in list(ser_["bnpa"].items()):
+                rn_ = (ser_.get("resultat_net") or {}).get(y_)
+                if not v_ or not rn_ or (v_ > 0) != (rn_ > 0):
+                    continue
+                n_y = rn_ * 1e6 / v_
+                aft = [k_ for e_, k_ in ops_ if e_ > di(f"{int(y_) + 1}-03-31")]
+                cands = {1.0}
+                for i_ in range(len(aft)):
+                    p_ = math.prod(aft[i_:])
+                    cands |= {p_, 1 / p_}
+                best = min(cands, key=lambda c_: abs(math.log(n_y * c_ / sh_now)))
+                if abs(best - 1) > 1e-6 and abs(math.log(n_y * best / sh_now)) < math.log(1.1) and abs(math.log(n_y / sh_now)) > math.log(1.25):
+                    ser_["bnpa"][y_] = v_ / best
+                    if (ser_.get("dividende") or {}).get(y_):
+                        ser_["dividende"][y_] = ser_["dividende"][y_] / best
+                    boc_chk.setdefault("bnpa_base", []).append(f"{t} {y_} ÷{best:g}")
         # cours de clôture officiels (bulletin de la cote) prioritaires : la série reste ajustée des opérations sur titres
         # (facteur local = rapport médian série / bulletin sur les séances voisines) ; une clôture qui s'en écarte de plus de 0,5 %
         # est remplacée par la clôture officielle, si le bulletin est cohérent (cours précédent × variation = clôture)
@@ -854,7 +1063,10 @@ def main():
             for n_q, (j, q) in enumerate(qs):
                 win = sorted(x for _, x in qs[max(0, n_q - 10):n_q + 11])
                 m_ = win[len(win) // 2]
-                if abs(q / m_ - 1) <= .005 or sum(1 for x in win if abs(x / m_ - 1) <= .005) < .7 * len(win):
+                # (série non ajustée à cette date — facteur exactement 1 — : toute différence avec la clôture officielle est corrigée ;
+                # série ajustée d'une opération sur titres : écart de plus de 0,5 % au facteur local)
+                tol_ = 1e-6 if abs(m_ - 1) < 1e-9 else .005
+                if abs(q / m_ - 1) <= tol_ or sum(1 for x in win if abs(x / m_ - 1) <= .005) < .7 * len(win):
                     continue
                 b_ = B_[rows[j][0]]
                 if b_.get("prev") and b_.get("var") is not None and abs(b_["prev"] * (1 + b_["var"] / 100) / b_["c"] - 1) > .006:
@@ -901,13 +1113,16 @@ def main():
         # rendement : seulement si le dernier dividende a moins de deux ans (une société qui ne verse plus n'a pas de rendement)
         ld_d = str(ld.get("date_paiement") or ld.get("date_detachement") or (f'{int(ld["exercice"]) + 1}-12-31' if ld.get("exercice") else ""))[:10]
         ld_recent = bool(ld_d) and di(ld_d) >= today_i - 20000
+        # dividende de l'exercice : ses versements ordinaires réunis (acompte et solde, dividende complémentaire)
+        ld_tot = (sum(x["dividende"] for x in divs if x.get("ticker") == t and x.get("dividende") and not x.get("exc") and x.get("exercice") == ld.get("exercice"))
+                  if ld.get("exercice") and ld.get("dividende") else ld.get("dividende"))
         meta = {"id": t, "tk": f"{t} BC", "n": act.get("nom_officiel") or act.get("nom"), "short": act.get("nom"), "cls": "Equity", "typ": "Equity",
                 "mkt": "BRVM", "grp": act.get("secteur"), "ccy": "XOF", "bench": "BRVMC", "cty": cty, "bank": bool(act.get("banque")),
                 "shares": shares, "float": flt_off if flt_off is not None else f.get("flottant"), "mcap": rnd(shares * last, 0) if shares else None, "pso": pso_,
-                "bnpa": rnd(bnpa_, 2) if bnpa_ else bnpa_, "dps": ld.get("dividende") or dfund_, "dps_ex": ld.get("exercice"), "dps_pay": ld.get("date_paiement"),
+                "bnpa": rnd(bnpa_, 2) if bnpa_ else bnpa_, "dps": rnd(ld_tot, 4) if ld_tot else dfund_, "dps_ex": ld.get("exercice"), "dps_pay": ld.get("date_paiement"),
                 "dps_adj": ld.get("ajust"), "split": [[e_, k_] for e_, k_ in sorted(SPL.get(t, []))] or None,
                 "per": rnd(last / bnpa_, 2) if bnpa_ and bnpa_ > 0 else None,
-                "yld": rnd((ld.get("dividende") or 0) / last, 5) if ld.get("dividende") and ld_recent else None,
+                "yld": rnd(ld_tot / last, 5) if ld_tot and ld_recent else None,
                 "susp": (status.get(t) or {}).get("statut") == "suspendue", **({"vde": 1} if val_est else {})}
         add(meta, [r[0] for r in rows], [r[4] for r in rows], [r[1] for r in rows], [r[2] for r in rows], [r[3] for r in rows],
             [r[5] for r in rows], [r[6] for r in rows], nd=2)
@@ -915,12 +1130,53 @@ def main():
     imap = {"BRVM-C": "BRVMC", "BRVM-30": "BRVM30", "BRVM-PRES": "BRVMPR", "BRVM-PRIN": "BRVMPA", "TL": "BRVM-TEL", "CD": "BRVM-CD",
             "SF": "BRVM-SF", "CB": "BRVM-CB", "IN": "BRVM-IN", "EN": "BRVM-EN", "SP": "BRVM-SP"}
     sess_idx = {imap[x["k"]]: x for x in (session or {}).get("idx", []) + (session or {}).get("sect", []) if x.get("k") in imap}
+    # jours où le BRVM Composite de la base est figé sur la veille alors que le marché a bougé : relevé de la base périmé ce jour-là,
+    # pour tous ses indices (un indice sectoriel de quelques titres peut, lui, être réellement inchangé un autre jour)
+    IDX_STALE = set()
+    try:
+        rc_ = load_brvm_csv(os.path.join(src, "indices", "Indice_BRVMC.csv"))
+        IDX_STALE = {r[0] for j_, r in enumerate(rc_) if j_ and r[4] == rc_[j_ - 1][4] and BOC_DAYS.get(r[0], 0) >= 10}
+    except Exception as e:  # noqa: BLE001
+        log("contrôle des indices impossible :", e)
     for e in rep["entries"]:
         p = os.path.join(src, "indices", e["fichier"])
         if not os.path.exists(p):
             continue
         rows = load_brvm_csv(p)
         code = e["code"]
+        # valeurs de la base contrôlées par les bulletins officiels : séance fantôme (week-end, jour férié recopiant la veille)
+        # retirée ; valeur figée sur la veille un jour où le marché a bougé (relevé de la base fait avant la publication) remplacée par
+        # la valeur du bulletin si elle est lue, sinon retirée (un jour manquant plutôt qu'une valeur fausse) ; valeur différente de
+        # celle du bulletin corrigée ; séances du bulletin absentes de la base ajoutées
+        OB_ = BOC_IDX.get(code) or {}
+        broad_ = code in ("BRVMC", "BRVM30", "BRVMPR", "BRVMPA", "BRVM10")  # (au moins 12 sociétés : figé un jour où 10 titres ont bougé = relevé périmé)
+        out_, n_drop, n_fix, drop_d = [], 0, 0, []
+        for j_, r in enumerate(rows):
+            d_ = r[0]
+            same_ = j_ and r[4] == rows[j_ - 1][4]
+            if d_ in OB_:
+                if abs(OB_[d_] - r[4]) > .0051:
+                    r = (d_, OB_[d_], OB_[d_], OB_[d_], OB_[d_]) + tuple(r[5:])
+                    n_fix += 1
+            elif is_weekend(d_) or (same_ and no_session(d_)):
+                n_drop += 1
+                drop_d.append(d_)
+                continue
+            elif same_ and BOC_DAYS.get(d_, 0) >= 10 and (broad_ or d_ in IDX_STALE):
+                n_drop += 1
+                drop_d.append(d_)
+                continue
+            out_.append(r)
+        last_b = out_[-1][0] if out_ else 0
+        for d_ in sorted(OB_):
+            if d_ > last_b and (not sess_d or d_ < sess_d):
+                out_.append((d_, OB_[d_], OB_[d_], OB_[d_], OB_[d_], 0, 0))
+                n_fix += 1
+        if n_drop or n_fix:
+            boc_chk.setdefault("idx", {})[code] = {"retirees": n_drop, "officielles": n_fix}
+        if drop_d:
+            boc_chk.setdefault("idx_drop", {})[code] = drop_d  # (séances retirées : la base historique les retire aussi)
+        rows = out_
         if code in sess_idx and sess_d and rows and sess_d >= rows[-1][0]:
             v = sess_idx[code]["v"]
             rows = [r for r in rows if r[0] != sess_d] + [(sess_d, v, v, v, v, 0, rows[-1][6])]
@@ -1097,7 +1353,7 @@ def main():
              for k, v in fund.items() if k != "_meta"}
     dmeta = [{"t": x.get("ticker"), "ex": x.get("exercice"), "dps": x.get("dividende"), "ann": x.get("date_annonce"), "det": x.get("date_detachement"),
               "pay": x.get("date_paiement"), "src": x.get("source"), **({"dps0": x["dividende_publie"], "adj": x["ajust"]} if x.get("ajust") else {}),
-              **({"cal": 1} if x.get("cal") else {})} for x in divs if x.get("ticker")]
+              **({"cal": 1} if x.get("cal") else {}), **({"usd": x["usd_c"], "fx": x["fx"]} if x.get("fx") else {}), **({"exc": 1} if x.get("exc") else {})} for x in divs if x.get("ticker")]
     if split_log:
         log("fractionnements :", "; ".join(split_log[:40]))
     ev = json.load(open(os.path.join(src, "events.json"), encoding="utf8"))["events"]
