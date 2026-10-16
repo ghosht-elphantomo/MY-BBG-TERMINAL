@@ -148,8 +148,27 @@ def next_cycle(d):
 
 
 # ------------------------------------------------------------------------------------------------------------- contrôles
-def validate(A):
-    """contrôle d'une analyse avant publication : erreurs bloquantes (la version précédente est alors conservée)"""
+def per_share_ok(S):
+    """unités et nombre d'actions confirmés par les comptes publiés : le bénéfice par action publié est égal au résultat net divisé par
+    le nombre d'actions (à 15 % près) pour au moins l'un des huit derniers exercices où les deux sont connus. Renvoie l'exercice vérifié."""
+    ni, eps = dict(S["ser"].get("ni") or {}), dict(S["ser"].get("eps") or {})
+    sh = S.get("shares_now")
+    if not (C.fin(sh) and sh > 0):
+        return None
+    yrs = sorted((y for y in ni if y in eps and C.fin(ni[y]) and C.fin(eps[y]) and ni[y] and eps[y]), reverse=True)
+    last = max(ni) if ni else 0
+    for y in yrs:
+        if y < last - 7:
+            break
+        if abs(eps[y] * sh / (ni[y] * 1e6) - 1) <= 0.15:
+            return y
+    return None
+
+
+def validate(A, S=None):
+    """contrôle d'une analyse avant publication : erreurs bloquantes (la version précédente est alors conservée).
+    Valeur centrale très éloignée du cours (hors de 0,05 à 20 fois) : publiée seulement si un contrôle automatique écarte une erreur de
+    données (bénéfice par action publié cohérent avec le résultat et le nombre d'actions, cours jugé fiable) ; l'écart est alors signalé."""
     if not A.get("ok"):
         return [A.get("why") or "analyse impossible"]
     e = []
@@ -161,7 +180,16 @@ def validate(A):
         if not (s["p10"] <= s["v"] <= s["p90"]):
             e.append("fourchette incohérente")
         if C.fin(A.get("price")) and A["price"] > 0 and not (0.05 <= s["v"] / A["price"] <= 20):
-            e.append("valeur centrale hors de 0,05 à 20 fois le cours : contrôle manuel nécessaire")
+            y_ok = per_share_ok(S) if S else None
+            if y_ok and (A.get("pr") or {}).get("lvl") == "fiable":
+                r_ = s["v"] / A["price"]
+                A["far"] = {"r": C.rnd(r_, 4), "fy": y_ok,
+                            "txt": f"valeur centrale {C.fr(format(1 / r_ if r_ < 1 else r_, ',.0f'))} fois {'inférieure' if r_ < 1 else 'supérieure'} au cours : "
+                                   f"nombre d'actions et unités vérifiés automatiquement (bénéfice par action publié de l'exercice {y_ok} = résultat net ÷ actions) "
+                                   "et cours fiable ; l'écart tient au niveau du cours par rapport aux comptes publiés, non à une erreur de données"}
+            else:
+                e.append("valeur centrale hors de 0,05 à 20 fois le cours, sans que le contrôle automatique des données (bénéfice par action publié, "
+                         "nombre d'actions, fiabilité du cours) puisse écarter une erreur ; nouvel essai automatique à chaque passage du soir")
     w = sum(m.get("w") or 0 for m in A["models"] if m.get("ok"))
     if abs(w - 1) > 0.01:
         e.append("somme des poids des modèles différente de 1")
@@ -382,6 +410,12 @@ def backup(Q, extra, log):
 
 
 # ------------------------------------------------------------------------------------------------------------- exécution
+def log_fail(comp, x):
+    """journal des publications refusées : un même motif n'est noté qu'une fois par jour ; les 60 dernières lignes sont gardées"""
+    L = [f for f in (comp.get("fail") or []) if not (f.get("d") == x["d"] and f.get("type") == x.get("type") and f.get("err") == x["err"])]
+    comp["fail"] = (L + [x])[-60:]
+
+
 def company_status(I, t, rec, cyc_start, today):
     """état de la prévision en vigueur : à jour, cycle non réalisé, comptes attendus manquants"""
     a = rec["a"]
@@ -393,6 +427,8 @@ def company_status(I, t, rec, cyc_start, today):
     exp_fy = today.year - 1 if today.month >= 6 else today.year - 2
     if (a.get("fy") or 0) < exp_fy:
         st["warn"].append(f"comptes annuels de l'exercice {exp_fy} non disponibles : l'estimation repose sur l'exercice {a.get('fy')}")
+    if a.get("far"):
+        st["warn"].append(a["far"]["txt"])
     return st
 
 
@@ -526,16 +562,16 @@ def _run(out, extra, Q, st, sp, today, now, t0, budget, note, do_backtest):
                         comp["inputs_seen"] = dig  # une révision examinée n'est réexaminée que si les données changent encore
             if vtype:
                 A = C.analyze(t, I, M, peers)
-                err = validate(A)
+                err = validate(A, I["S"].get(t))
                 if err:
                     n_fail += 1
                     note(f"{t} : {TYPE_N[vtype].lower()} non publiée ({'; '.join(err)}) — dernière estimation valide conservée")
-                    comp.setdefault("fail", []).append({"d": C.dint(today), "type": vtype, "err": err})
+                    log_fail(comp, {"d": C.dint(today), "type": vtype, "err": err})
                     vtype = None
         except Exception as e:  # noqa: BLE001
             n_fail += 1
             note(f"{t} : erreur de calcul ({type(e).__name__}: {e}) — dernière estimation valide conservée")
-            comp.setdefault("fail", []).append({"d": C.dint(today), "err": [f"{type(e).__name__}: {e}"]})
+            log_fail(comp, {"d": C.dint(today), "err": [f"{type(e).__name__}: {e}"]})
             vtype = None
         if vtype:
             chg = explain_change(t, I, M, peers, cur["a"], A) if cur else None

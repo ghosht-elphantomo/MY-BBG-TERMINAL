@@ -94,6 +94,9 @@ def _d(m, i=1):
         return None
 
 
+NOT_AVIS = re.compile(r"^boc[_\-]|bulletin|manuel|regles|reglement|instruction|jbc|rapport|etats?[_ %20\-]*fin")
+
+
 def parse_avis(txt):
     """Avis de la BRVM (ou du Dépositaire central) sur un paiement de dividendes.
     Renvoie [] si l'avis ne porte pas sur un dividende, sinon une liste d'un élément :
@@ -647,7 +650,9 @@ def run(d):
             tk = r.get("sym") if r.get("sym") and any(t_ == r["sym"] for _, t_ in ALIAS) else None
             tk = tk or ticker_of(r.get("soc") or "") or ticker_of(m.get("soc") or "") or ticker_of(u.rsplit("/", 1)[-1].replace("_", " "))
             avis.append({**r, "t": tk, "u": u, "ocr": ocr})
-            if "k" not in c_:
+            # (un bulletin de la cote, un manuel, un règlement ou une instruction cite des paiements de dividendes sans être un avis :
+            # son intitulé est tiré plus loin de la liste, du nom du fichier ou de l'en-tête du document)
+            if "k" not in c_ and not NOT_AVIS.search(fn_):
                 org_ = "DC/BR" if r.get("org") == "DC/BR" else "BRVM"
                 num_ = f" n° {r['num']}" + (f"-{r['yr']}" if r.get("yr") else "") if r.get("num") else ""
                 soc_ = (r.get("soc") or m.get("soc") or "").strip().upper()

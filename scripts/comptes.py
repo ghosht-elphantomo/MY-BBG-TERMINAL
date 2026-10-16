@@ -2292,9 +2292,9 @@ def consolidate(cj, mirror=None, fx=None):
     for x in recs:
         if x["ocr"] and x["strong"] < 2 and x["m"].get("total_actif"):
             by_d.setdefault((x["doc"], x["per"]), []).append(x["m"]["total_actif"])
-    for dk, tas in by_d.items():
+    for dk_, tas in by_d.items():  # (dk_ : ne pas masquer la fonction dk définie plus haut)
         if len(tas) >= 2 and min(tas) > 0 and max(tas) / min(tas) > 3:
-            bad.add(dk)
+            bad.add(dk_)
     recs = drop_docs(recs, bad)
     # cohérence dans le temps : un total du bilan ou un chiffre d'affaires non confirmé par une autre source, plus de 4 fois plus grand
     # (ou plus petit) que ceux des exercices voisins donnés par les autres sources, discrédite le document
