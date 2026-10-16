@@ -30,6 +30,67 @@ LIMITS = [
 ]
 
 
+MODELS = ("ri", "ddm", "dcf", "mult_own", "mult_peer")
+MIN_YEARS = 6
+WRULES = {"aucune": (0, 1.0, 1.0), "modérée": (2, 0.6, 1.4), "renforcée": (4, 0.3, 2.5), "forte": (6, 0.2, 4.0)}
+WRULE_N = {"aucune": "aucune pondération par la performance", "modérée": "facteur 1 + 2 × corrélation, entre 0,6 et 1,4",
+           "renforcée": "facteur 1 + 4 × corrélation, entre 0,3 et 2,5", "forte": "facteur 1 + 6 × corrélation, entre 0,2 et 4"}
+
+
+def _ic_year(obs, get, h, y):
+    xs, ys = [], []
+    for o in obs:
+        if o["y"] != y:
+            continue
+        v = get(o)
+        if C.fin(v) and v > 0 and C.fin(o.get(f"ex{h}")):
+            xs.append(math.log(v / o["p"]))
+            ys.append(o[f"ex{h}"])
+    return C.spearman(xs, ys) if len(xs) >= 8 else None
+
+
+def weighting_study(obs, years):
+    """comparaison hors échantillon (pas à pas) des règles de pondération par la performance mesurée"""
+    cache = {}
+
+    def model_ic(m, y_cut):
+        key = (m, y_cut)
+        if key not in cache:
+            vals = []
+            for h, lag in ((1, 1), (3, 3)):
+                ics = [x for x in (_ic_year(obs, lambda o, m=m: o["mods"].get(m), h, y) for y in years if y <= y_cut - lag) if x is not None]
+                if len(ics) >= MIN_YEARS:
+                    vals.append(sum(ics) / len(ics))
+            cache[key] = sum(vals) / len(vals) if vals else None
+        return cache[key]
+    table = []
+    for name, (k_, lo_, hi_) in WRULES.items():
+        for y in years:
+            f = {m: C.clamp(1 + k_ * model_ic(m, y), lo_, hi_) for m in MODELS if model_ic(m, y) is not None}
+            for o in obs:
+                if o["y"] == y:
+                    pts = [(v, o["w0"][m] * f.get(m, 1.0)) for m, v in o["mods"].items() if C.fin(v) and v > 0]
+                    o["_s"] = C.wquant(pts, 0.5) if pts else None
+        row = {"rule": name, "n": WRULE_N[name]}
+        for h in (1, 3):
+            ics = [x for x in (_ic_year(obs, lambda o: o.get("_s"), h, y) for y in years) if x is not None]
+            row[f"ic{h}"] = round(sum(ics) / len(ics), 3) if ics else None
+            row[f"pos{h}"] = round(sum(1 for x in ics if x > 0) / len(ics), 3) if ics else None
+            row[f"n{h}"] = len(ics)
+        row["score"] = round(((row["ic1"] or 0) + (row["ic3"] or 0)) / 2, 4)
+        table.append(row)
+    for o in obs:
+        o.pop("_s", None)
+    best = "aucune"
+    for row in table:  # du plus prudent au plus fort : une règle plus forte doit gagner au moins 0,01
+        if row["score"] >= next(r["score"] for r in table if r["rule"] == best) + 0.01:
+            best = row["rule"]
+    return {"chosen": best, "table": table, "min_years": MIN_YEARS,
+            "why": "règle retenue après comparaison hors échantillon : pour chaque année, facteurs calculés avec les seules années dont "
+                   "le résultat était connu, puis synthèse évaluée sur la suite ; une règle plus forte n'est retenue que si elle améliore "
+                   "la corrélation moyenne d'au moins 0,01"}
+
+
 def tr_window(S, d0, d1, today):
     """rendement total entre deux dates (cours + dividendes ordinaires et exceptionnels versés dans la fenêtre), base de la date d0"""
     V0 = C.asof_view(S, d0, today, full=False)
@@ -52,7 +113,7 @@ def add_years(d, n):
     return d + n * 10000
 
 
-def run(I, M, note=print, deadline=None, y0=2012):
+def run(I, M, note=print, deadline=None, y0=2012, keep=False):
     t0 = time.time()
     today = I["today_i"]
     arch_of = {t: S["arch"] for t, S in I["S"].items()}
@@ -81,7 +142,7 @@ def run(I, M, note=print, deadline=None, y0=2012):
                 continue
             if A["fy"] is None or A["fy"] < y - 2:
                 continue
-            o = {"t": t, "y": y, "d": d_eval, "fy": A["fy"], "p": A["price"], "v": A["central"], "mods": {m: A["mods"][m]["v"] for m in A["mods"]},
+            o = {"t": t, "y": y, "d": d_eval, "fy": A["fy"], "p": A["price"], "v": A["central"], "mods": {m: A["mods"][m]["v"] for m in A["mods"]}, "w0": {m: A["mods"][m]["w"] for m in A["mods"]},
                  "arch": arch_of[t], "sf": A.get("split_f") or 1.0}
             for h in (1, 3):
                 d1 = add_years(d_eval, h)
@@ -190,15 +251,22 @@ def run(I, M, note=print, deadline=None, y0=2012):
     res["head"] = {"n": len(obs), "years": res["years"], "ic1": v1.get("ic"), "ic3": v3.get("ic"), "spread1": v1.get("spread"), "spread3": v3.get("spread"),
                    "hit1": v1.get("hit"), "fc_ratio": (res.get("fc") or {}).get("ratio"), "cover80": (res.get("fc") or {}).get("cover80"),
                    "half_life": (res.get("gap") or {}).get("half_life"), "scale80": (res.get("fc") or {}).get("scale80")}
-    # facteur de performance hors échantillon par modèle (pour la pondération des versions suivantes) : 1 + 2 × moyenne des
-    # corrélations de rang à 1 et 3 ans, borné entre 0,6 et 1,4, seulement avec au moins 6 années mesurées
+    # pondération selon la performance mesurée : plusieurs règles candidates (facteur 1 + k × corrélation de rang moyenne à 1 et
+    # 3 ans, borné), comparées « pas à pas » : pour chaque année, les facteurs ne sont calculés qu'avec les années dont le résultat
+    # était connu à cette date, puis la synthèse ainsi pondérée est évaluée sur l'année suivante. La règle retenue est celle qui
+    # classe le mieux hors échantillon ; une règle plus forte n'est préférée que si elle gagne au moins 0,01 de corrélation.
+    res["wrule"] = weighting_study(obs, years)
+    k_, lo_, hi_ = WRULES[res["wrule"]["chosen"]]
     perf = {}
-    for m in ("ri", "ddm", "dcf", "mult_own", "mult_peer"):
+    for m in MODELS:
         ics = [(res["val"][h].get(m) or {}) for h in ("h1", "h3")]
-        ok = [b["ic"] for b in ics if b and b.get("n_years", 0) >= 6]
+        ok = [b["ic"] for b in ics if b and b.get("n_years", 0) >= MIN_YEARS]
         if ok:
-            perf[m] = {"f": round(C.clamp(1 + 2 * sum(ok) / len(ok), 0.6, 1.4), 3), "ic": round(sum(ok) / len(ok), 3)}
+            ic = sum(ok) / len(ok)
+            perf[m] = {"f": round(C.clamp(1 + k_ * ic, lo_, hi_), 3), "ic": round(ic, 3)}
     res["perf"] = perf
-    res["obs"] = [{k: (C.rnd(v, 4) if isinstance(v, float) else v) for k, v in o.items() if k not in ("mods", "fm")} for o in obs]
+    res["obs"] = [{k: (C.rnd(v, 4) if isinstance(v, float) else v) for k, v in o.items() if k not in ("mods", "fm", "w0")} for o in obs]
+    if keep:
+        res["_raw"] = obs
     note(f"validation historique : {len(obs)} évaluations point-in-time ({years[0] if years else '-'}–{years[-1] if years else '-'}) en {time.time() - t0:.0f} s")
     return res

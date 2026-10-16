@@ -100,7 +100,8 @@ function qvHead(C, IX) {
     <span><span class="l">Dernier cours</span>${qvF(K.price)} <span class="dm">(${qvD(K.pdate)})</span></span>
     <span><span class="l">Écart valeur / cours</span>${qvS(K.up, 0)}</span>
     <span><span class="l">Confiance</span>${A.syn.conf}/100 <span class="dm">(${esc(A.syn.conf_lbl)})</span></span>
-    <span><span class="l">${esc(C.cur.type_n)}</span>${qvD(A.date)}</span><span><span class="l">Prochaine réévaluation complète</span>${nx}</span></div>
+    <span><span class="l">${esc(C.cur.type_n)}</span>${qvD(A.date)}</span><span><span class="l">Prochaine réévaluation complète</span>${nx}</span>
+    ${K.er && K.er.rows.base ? `<span><span class="l">Rendement annuel implicite au cours actuel (scénario central)</span>${K.er.rows.base.map(e => `${e.h} an${e.h > 1 ? 's' : ''} ${qvS(e.tr)}`).join(' · ')}</span>` : ''}</div>
     ${warn.map(w => `<div class="qv-warn">${esc(w)}</div>`).join('')}
     ${A.syn.conf < 35 ? '<div class="qv-info">Confiance très faible : les modèles divergent fortement ou les données sont fragiles. La valeur indique un ordre de grandeur, pas une estimation précise ; voir le détail du score dans la synthèse.</div>' : ''}
     ${(K.k && Math.abs(K.k - 1) > 1e-6) ? `<div class="qv-info">Valeurs par action ajustées du fractionnement intervenu depuis l’évaluation (×${num(1 / K.k, 2)}).</div>` : ''}`;
@@ -132,7 +133,7 @@ function qvSyn(C, A, IX) {
   const tbl = `<div class="tw"><table class="t qv-mt"><thead><tr><th class="l">Modèle</th><th>Valeur centrale</th><th>Fourchette 10-90 %</th><th>Poids</th><th class="l">Composantes du poids (produit, puis normalisation)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   const conf = `<div class="kv2">${A.syn.conf_parts.map(p => `<span>${esc(p[0])}</span><b class="dn">${p[1]}</b>`).join('')}<span>Score de confiance</span><b>${A.syn.conf}/100 · ${esc(A.syn.conf_lbl)}</b></div>`;
   const liq = A.liq || {}, alt = A.alt;
-  const right = `${pn('Profil de la société', 'QLAB', `<div class="lectb"><p><b>${esc(A.name)}</b> — ${esc(P.act)}.</p><p>Modèle économique retenu : <b>${esc(P.arch_n)}</b> ; ${esc(P.fw_txt)}.</p>
+  const right = `${qvER(K)}${pn('Profil de la société', 'QLAB', `<div class="lectb"><p><b>${esc(A.name)}</b> — ${esc(P.act)}.</p><p>Modèle économique retenu : <b>${esc(P.arch_n)}</b> ; ${esc(P.fw_txt)}.</p>
       ${P.notes.length ? `<p>${P.notes.map(esc).join(' · ')}</p>` : ''}<p><b>Moteurs</b> : ${P.drivers.map(esc).join(' ; ')}.</p></div>`)}
     ${A.rev.txt.length ? pn('Ce que le cours actuel suppose (DCF inversé)', 'QLAB', `<div class="lectb">${A.rev.txt.map(t => `<p>${esc(t)}</p>`).join('')}</div>`) : ''}
     ${alt ? pn('Au rendement exigé actuel du marché', 'QLAB', `<div class="kv2"><span>Rendement exigé implicite du marché aujourd’hui</span><b>${qvP(alt.ke_mkt)}</b><span>Coût des fonds propres correspondant pour ce titre</span><b>${qvP(alt.ke)}</b><span>Valeur centrale correspondante</span><b>${qvF(alt.v * k)}</b></div>`, { lect: 'Lecture alternative, hors synthèse : si l’on retenait le rendement que le marché exige aujourd’hui plutôt que sa médiane historique.' }) : ''}
@@ -141,6 +142,17 @@ function qvSyn(C, A, IX) {
       <span>Valeur centrale avec cette prime</span><b>${liq.v_adj ? qvF(liq.v_adj * k) : '—'}</b></div>`, { lect: 'Un cours stable n’est pas forcément un risque faible : le titre peut simplement être peu échangé. La prime d’illiquidité n’entre pas dans la valeur centrale ; elle indique ce qu’exigerait un investisseur qui veut être rémunéré pour la difficulté à vendre.' })}`;
   return `<div class="grid c2"><div>${pn('Synthèse des modèles', 'QLAB', qvRange(A, K) + tbl, { lect: `<b>Méthode</b> : chaque modèle applicable produit une distribution de valeurs ; le poids de chaque modèle est le produit de sa pertinence pour ce type d’entreprise, de la qualité des données, de sa robustesse (étroitesse de sa distribution), de la qualité hors échantillon de la prévision dont il dépend, de sa performance mesurée par la validation historique, de sa cohérence avec les résultats publiés et d’une pénalité de redondance. La valeur centrale est la <strong>médiane du mélange pondéré</strong> des distributions (jamais une moyenne simple) ; un désaccord entre modèles élargit donc la fourchette. ${A.syn.div_txt.length ? '<br><b>Écarts entre modèles</b> : ' + A.syn.div_txt.map(esc).join(' ; ') : ''}${(A.mexp || []).length ? '<br><b>Multiples</b> : ' + A.mexp.map(esc).join(' ') : ''}` })}
     ${pn('Niveau de confiance', 'QLAB', conf, { lect: 'Le score part de 100 et retire des points pour chaque source d’incertitude mesurée : données non vérifiées, historique court, désaccord entre modèles, largeur de la fourchette, ruptures comptables, pertes, activité cyclique, résultats variables, absence de validation hors échantillon, écart important avec le cours.' })}</div><div>${right}</div></div>`;
+}
+
+/* rendement implicite au cours actuel (calculé chaque soir avec le dernier cours ; conditionnel, ni prévision de cours ni promesse) */
+function qvER(K) {
+  const E = K && K.er; if (!E || !E.rows.base) return '';
+  const cols = [['bear', 'Défavorable'], ['base', 'Central'], ['bull', 'Favorable']].filter(c => E.rows[c[0]]);
+  const r = (c, h) => (E.rows[c] || []).find(x => x.h === h) || {};
+  const tbl = `<div class="tw"><table class="t"><thead><tr><th class="l">Horizon</th>${cols.map(c => `<th>${c[1]}</th>`).join('')}<th>Fourchette (central)</th><th>dont cours</th><th>dont dividendes</th></tr></thead><tbody>
+    ${[1, 3, 5, 10].map(h => `<tr><td class="l am">${h} an${h > 1 ? 's' : ''}</td>${cols.map(c => `<td>${c[0] === 'base' ? '<b>' + qvS(r(c[0], h).tr) + '</b>' : qvS(r(c[0], h).tr)}</td>`).join('')}
+      <td>${r('base', h).lo != null ? qvS(r('base', h).lo, 0) + ' à ' + qvS(r('base', h).hi, 0) : '—'}</td><td>${qvS(r('base', h).px)}</td><td>${qvP(r('base', h).dy)}</td></tr>`).join('')}</tbody></table></div>`;
+  return pn('Rendement implicite au cours actuel', 'QLAB', tbl, { lect: `Rendement total annuel implicite (cours + dividendes reçus, non réinvestis, avant frais et impôts) pour un titre acquis au dernier cours (${qvF(K.price)} FCFA). Le cours est supposé se rapprocher progressivement de la valeur estimée au rythme mesuré sur la BRVM : <strong>${num(E.b * 100, 0)} %</strong> de l’écart subsiste chaque année (demi-vie ${num(E.hl, 1)} an${E.hl >= 2 ? 's' : ''}${E.n ? ', ' + E.n + ' observations' : ''}). Calcul conditionnel aux hypothèses de valorisation : ce n’est ni une prévision du cours, ni une promesse de rendement, ni une recommandation d’achat ou de vente ; le marché peut rester durablement éloigné de la valeur estimée.` });
 }
 
 /* 12) Scénarios */
@@ -171,7 +183,8 @@ function qvScen(C, A) {
     ${line('Rendement annuel moyen du dividende', r => qvP(r.dy))}
     <tr class="sec"><td class="l" colspan="4">Rendements annualisés (convention A : le cours rejoint la valeur ; B : l’écart actuel persiste)</td></tr>
     ${line('Rendement du cours (A)', r => qvS(r.ret_px_a))}${line('Rendement du cours (B)', r => qvS(r.ret_px_b))}
-    ${line('Rendement total, dividendes inclus (A)', r => `<b>${qvS(r.tr_a)}</b>`)}${line('Rendement total, dividendes inclus (B)', r => qvS(r.tr_b))}
+    ${line('Rendement total, dividendes inclus (A)', r => qvS(r.tr_a))}${line('Rendement total, dividendes inclus (B)', r => qvS(r.tr_b))}
+    ${C.mkt && C.mkt.er ? line('Rendement total implicite au cours actuel, convergence mesurée sur la BRVM', (r, S, c) => `<b>${qvS(((C.mkt.er.rows[c] || []).find(x => x.h === h) || {}).tr)}</b>`) : ''}
   </tbody></table></div>`;
   const HY = { ke: 'Coût des fonds propres', glt: 'Croissance de long terme', pay0: 'Taux de distribution de départ', phi: 'Persistance de la rentabilité', roe0: 'Rentabilité des fonds propres de départ', roe_lt: 'Rentabilité à 10 ans',
     g_mid: 'Croissance du chiffre d’affaires (années 2 à 10)', m0: 'Marge nette de départ', m_lt: 'Marge nette normative', om0: 'Marge d’exploitation de départ', roic0: 'Rentabilité des capitaux investis' };
@@ -301,7 +314,7 @@ async function qvVers(C, A, s, alive) {
         ${row('Cours à la date', qvF(ra.a.price * ka), qvF(rb.a.price))}
         ${['dcf', 'ddm', 'ri', 'mult_own', 'mult_peer'].map(id => row(esc(((rb.a.models.find(z => z.id === id) || {}).n) || id), mv(ra, id, ka), mv(rb, id, 1))).join('')}
         ${['ke', 'glt', 'roe0', 'm0', 'g_mid', 'pay0', 'beta'].map(key => row(esc((rb.a.hyp.find(x => x.k === key) || ra.a.hyp.find(x => x.k === key) || { n: key }).n), hv(ra, key), hv(rb, key))).join('')}
-        </tbody></table></div>${chg && rb.prev === ra.hash ? `<div class="lectb" style="padding:4px 2px"><p><b>Explication de la variation</b> : ${qvS(chg.dv)} au total${chg.d_data != null ? `, dont ${qvS(chg.d_data)} dû aux informations nouvelles (comptes, dividendes, données) et ${qvS(chg.d_mkt)} aux paramètres de marché` : ''}.</p>${chg.lines.length ? `<p>${chg.lines.map(esc).join('<br>')}</p>` : ''}</div>` : ''}
+        </tbody></table></div>${chg && rb.prev === ra.hash ? `<div class="lectb" style="padding:4px 2px"><p><b>Explication de la variation</b> : ${qvS(chg.dv)} au total${chg.d_data != null ? `, dont ${qvS(chg.d_data)} dû ${chg.method ? 'au changement de méthode' : 'aux informations nouvelles (comptes, dividendes, données)'} et ${qvS(chg.d_mkt)} aux paramètres de marché` : ''}.</p>${chg.lines.length ? `<p>${chg.lines.map(esc).join('<br>')}</p>` : ''}</div>` : ''}
         <div class="dm" style="font-size:11px">Empreinte de la version ${esc(b)} : ${esc((rb.hash || '').slice(0, 16))}… (chaînée à la précédente : ${rb.prev && ra && rb.prev === ra.hash ? 'oui' : rb.prev ? 'version précédente différente' : 'première version'})</div>`;
     }
   }
@@ -334,6 +347,7 @@ function qvBack(B, s) {
     + '<div class="dm" style="font-size:11px">Cours et valeurs exprimés sur la base du nombre d’actions actuel (fractionnements pris en compte).</div>'
     : '<div class="dm" style="padding:6px">Aucune évaluation historique pour ce titre (historique de cours ou de comptes insuffisant).</div>';
   return `<div class="grid c2"><div>${pn('Pouvoir de classement de l’écart valeur / cours', 'QLAB', tbl, { lect: 'Pour chaque année, corrélation de rang entre l’écart valeur estimée / cours et le rendement total ultérieur (dividendes compris) relatif à la moyenne des titres évalués la même année. 0 = aucun pouvoir, 1 = classement parfait. L’écart tiers haut / bas compare le rendement relatif moyen du tiers des titres les plus « sous-évalués » et du tiers les plus « surévalués ». Le facteur de poids (borné entre 0,6 et 1,4) est utilisé dans la synthèse des versions suivantes.' })}
+    ${B.wrule ? pn('Pondération des modèles selon leur performance', 'QLAB', `<div class="tw"><table class="t"><thead><tr><th class="l">Règle</th><th>Corrélation 1 an</th><th>Années positives</th><th>Corrélation 3 ans</th><th>Années positives</th><th></th></tr></thead><tbody>${B.wrule.table.map(r => `<tr${r.rule === B.wrule.chosen ? ' class="cur"' : ''}><td class="l">${esc(r.n)}</td><td>${num(r.ic1, 3)}</td><td>${num(r.pos1 * 100, 0)} %</td><td>${num(r.ic3, 3)}</td><td>${num(r.pos3 * 100, 0)} %</td><td class="l">${r.rule === B.wrule.chosen ? '<b class="qv-ok">retenue</b>' : ''}</td></tr>`).join('')}</tbody></table></div>`, { lect: esc(B.wrule.why) + '. Les facteurs de la règle retenue figurent dans la colonne « Facteur de poids » ci-dessus.' }) : ''}
     ${pn('Valeurs passées pour ce titre (point-in-time)', 'QLAB', my)}</div><div>${pn('Prévisions, calibration et convergence', 'QLAB', kv, { lect: 'Erreurs de prévision du résultat (comparées aux résultats effectivement publiés) et vitesse à laquelle l’écart entre cours et valeur estimée se réduit : deux choses différentes. Une erreur de valorisation n’est pas une erreur de prévision du cours.' })}
     ${pn('Limites de la validation', 'QLAB', `<div class="lectb">${(B.lim || []).map(l => `<p>${esc(l)}</p>`).join('')}</div>`)}</div></div>`;
 }
@@ -353,11 +367,11 @@ function qvBackDraw(m, B, s) {
 
 /* 19) Toutes les sociétés */
 function qvAll(IX, s) {
-  const cols = [['t', 'Titre', 'l'], ['n', 'Société', 'l'], ['arch', 'Modèle économique', 'l'], ['price', 'Cours'], ['v', 'Valeur'], ['p10', '10 %'], ['p90', '90 %'], ['up', 'Écart'], ['conf', 'Confiance'], ['fy', 'Exercice'], ['vdate', 'Évaluation']];
+  const cols = [['t', 'Titre', 'l'], ['n', 'Société', 'l'], ['arch', 'Modèle économique', 'l'], ['price', 'Cours'], ['v', 'Valeur'], ['p10', '10 %'], ['p90', '90 %'], ['up', 'Écart'], ['er3', 'Rend. implicite 3 ans / an'], ['conf', 'Confiance'], ['fy', 'Exercice'], ['vdate', 'Évaluation']];
   const R = IX.rows.slice().sort((a, b) => { const x = a[QV.sort], y = b[QV.sort]; const c = typeof x === 'string' ? String(x).localeCompare(String(y)) : (x == null) - (y == null) || (x - y); return QV.desc ? -c : c; });
   const tbl = `<div class="tw"><table class="t"><thead><tr>${cols.map(c => `<th class="${c[2] || ''}${QV.sort === c[0] ? ' on' : ''}" data-qs="${c[0]}">${c[1]}${QV.sort === c[0] ? (QV.desc ? ' ▼' : ' ▲') : ''}</th>`).join('')}</tr></thead><tbody>
     ${R.map(r => `<tr data-qt="${esc(r.t)}"${r.t === s.id ? ' class="cur"' : ''} style="cursor:pointer"><td class="l tk">${esc(r.t)}</td><td class="l nm">${esc(r.n)}</td><td class="l dm">${esc(r.arch)}</td><td>${qvF(r.price)}${r.pr && r.pr !== 'fiable' ? ' <span class="am" title="cours à interpréter avec prudence">!</span>' : ''}</td>
-      <td><b${r.conf < 35 ? ' class="dm"' : ''}>${qvF(r.v)}</b></td><td>${qvF(r.p10)}</td><td>${qvF(r.p90)}</td><td>${qvS(r.up, 0)}</td><td>${r.conf} <span class="dm">${esc(r.conf_lbl)}</span></td><td>${r.fy}</td><td>${qvD(r.vdate)}${r.ok ? '' : ' <span class="dn">!</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+      <td><b${r.conf < 35 ? ' class="dm"' : ''}>${qvF(r.v)}</b></td><td>${qvF(r.p10)}</td><td>${qvF(r.p90)}</td><td>${qvS(r.up, 0)}</td><td>${qvS(r.er3)}</td><td>${r.conf} <span class="dm">${esc(r.conf_lbl)}</span></td><td>${r.fy}</td><td>${qvD(r.vdate)}${r.ok ? '' : ' <span class="dn">!</span>'}</td></tr>`).join('')}</tbody></table></div>`;
   const M = IX.mkt || {};
   const kv = `<div class="kv2"><span>Rendement exigé médian des actions de la BRVM depuis 2010</span><b>${qvP(M.ke_lr)}</b><span>Rendement exigé implicite aujourd’hui</span><b>${qvP(M.ke_now)}</b>
     <span>Prime de risque du marché retenue</span><b>${qvP(M.erp, 2)}</b><span>Rendement du dividende agrégé</span><b>${qvP(M.dy, 2)}</b><span>Bêta moyen des actions (a priori)</span><b>${M.beta_prior ? num(M.beta_prior[0], 2) : '—'}</b>

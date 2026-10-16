@@ -1244,7 +1244,7 @@ def multiples(S, V, H, P, F, peers):
     B0 = V["ser"]["eq"].get(V["fy"])
     div1 = max(0.0, P["pay0"] * ni1) if ni1 > 0 else 0.0
     bv1 = (B0 + ni1 - div1) * 1e6 / sh if fin(B0) else None
-    rng = random.Random(hash((S["t"], V["date"], "mult")) & 0xFFFFFFFF)
+    rng = random.Random(int(hashlib.sha256(f"{S['t']}{V['date']}mult".encode()).hexdigest()[:8], 16))  # graine reproductible
 
     def ni_draw():
         return rng.triangular(lo, hi, ni1) if (fin(lo) and fin(hi) and lo <= ni1 <= hi) else ni1
