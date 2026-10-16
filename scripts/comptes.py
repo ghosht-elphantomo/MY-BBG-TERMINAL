@@ -388,12 +388,13 @@ def _cells(line, skip=()):
                   r"(?: ?(?:[-/.] ?)?(?:19|20)?\d\d(?![\d,.]))?(?![a-z])", lambda m_: " " * len(m_.group(0)), line)
     # renvois de notes à plusieurs niveaux (« 6.3.11 ») : ni montant ni libellé
     line = re.sub(r"(?<![\d.,])\d{1,2}(?:\.\d{1,2}){2,}(?![\d.,])", lambda m_: " " * len(m_.group(0)), line)
+    dates = [(m_.start(), m_.end()) for m_ in re.finditer(r"(?<![\d.])\d{1,2}[./]\d{1,2}[./](?:19|20)\d\d(?![\d.])", line)]  # « 07.06.2022 »
     for mm in NUM.finditer(line, pos):
         tok = mm.group(0)
         before = line[max(0, mm.start() - 1):mm.start()]
         after = line[mm.end():mm.end() + 2]
         if (before and (before.isalpha() or before in "/")) or (after[:1] and (after[:1].isalpha() or after[:1] in "%/")) \
-                or after.strip()[:1] == "%" or mm.end() in skip:
+                or after.strip()[:1] == "%" or mm.end() in skip or any(a_ <= mm.start() < b_ for a_, b_ in dates):
             continue
         gap = line[pos:mm.start()]
         if _NOTE_DOT[0] and re.fullmatch(r"\d{1,2}\.\d{1,2}", tok.strip()):
@@ -867,6 +868,8 @@ def parse(txt, fy_hint=None, title="", ocr=False):
             yrs, how = _assign(vals, [] if ocr else heads, i, fy, brut_tbl and s_here == S_ACT)
             if how == "order" and not split and len(vals) > 4:
                 continue  # tableau à plusieurs colonnes (par secteur, variation des capitaux propres…) : colonnes inconnues
+            if how == "hdr" and not split and len([v_ for v_, _ in vals if v_ is not None]) >= 5 and len(yrs) <= 2:
+                continue  # ligne d'une annexe à cinq colonnes ou plus (échéancier, ventilation) dont une colonne tombe sous une année
             if how == "var":
                 order_votes.append(yrs)
             if len([v for v, _ in vals if v is not None]) == 1 and not any(v is None for v, _ in vals):
