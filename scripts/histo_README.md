@@ -54,6 +54,12 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   pour 1 euro × cours euro/dollar publié par la Réserve fédérale), un seul cours par exercice, figé à cette date (cours et date
   indiqués dans FA). Seuls ses états financiers consolidés sont lus (ses rapports annuels et communiqués mêlent comptes de la
   holding, trimestres et semestres) ; les états en FCFA d'une filiale déposés sous son nom ne sont pas repris.
+- Dividendes : chaque versement est repris des documents officiels de la BRVM (branche `dividendes`) : avis de paiement de la
+  BRVM (un avis rectificatif remplace le précédent), sinon la dernière version du « calendrier de paiement des dividendes » (un
+  calendrier publié après un avis reprend une rectification), sinon l'avis du Dépositaire central. Un montant brut n'est converti
+  en net qu'avec le taux d'IRVM écrit dans le document. Les montants restent ceux publiés (par action de l'époque) ; ils sont
+  ramenés sur la base des actions actuelles seulement pour les fractionnements connus. Les archives de l'ancien site (avis depuis
+  2002) complètent les années que la base ne couvre pas.
 - Capitaux propres d'un bilan de synthèse sans ligne de total : somme des composantes publiées (capital, primes, réserves, report à
   nouveau, résultat, autres), retenue seulement si le passif la vérifie (total − dettes financières − passif circulant − trésorerie passif).
 - Flux de trésorerie (flux opérationnels, acquisitions d'immobilisations, flux disponible) : uniquement ceux lus dans les états

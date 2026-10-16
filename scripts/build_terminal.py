@@ -260,6 +260,7 @@ def main():
     ap.add_argument("--quotes", default=None, help="quotes.json du relevé (cours du jour appliqués à toutes les séries)")
     ap.add_argument("--live", action="store_true", help="passage de séance : séries existantes non réécrites, tous les calculs refaits")
     ap.add_argument("--boc", default=None, help="dossier boc_px (branche boc) : tableaux des actions lus dans les bulletins officiels de la cote")
+    ap.add_argument("--dividendes", default=None, help="dividendes.json (branche dividendes) : versements lus dans les avis et calendriers de la BRVM")
     ap.add_argument("--comptes", default=None, help="comptes.json (branche comptes) : états financiers publiés à la BRVM, lus et vérifiés")
     a = ap.parse_args()
     QUOTES = {}
@@ -574,6 +575,62 @@ def main():
             av_chk["div"] += 1
       except Exception as e:  # noqa: BLE001
         log("dividendes brvm.org ignorés :", e)
+    # versements lus dans les documents officiels de la BRVM depuis l'ouverture (avis de paiement, calendriers, avis du Dépositaire
+    # central ; branche dividendes) : montant et dates de l'avis (rectificatif compris) à la place de ceux de la base, versements
+    # absents ajoutés. Un versement de la base est le même s'il tombe à 10 jours près, ou s'il porte sur le même exercice et le même
+    # montant (dates fausses dans la base). Montants tels que publiés (ramenés ensuite sur la base des actions actuelles).
+    off_chk = {"same": 0, "amt": 0, "dates": 0, "added": 0, "ex": []}
+    if a.dividendes and os.path.exists(a.dividendes):
+        try:
+            OFF = json.load(open(a.dividendes, encoding="utf8")).get("rows") or []
+            listed = {a_["ticker"] for a_ in acts}
+            byt = collections.defaultdict(list)
+            for x in divs:
+                if x.get("ticker"):
+                    byt[x["ticker"]].append(x)
+
+            def dd_(d1, d2):
+                try:
+                    return abs((dt.date.fromisoformat(d1[:10]) - dt.date.fromisoformat(d2[:10])).days)
+                except (TypeError, ValueError):
+                    return 9999
+            used = set()
+            for o in sorted(OFF, key=lambda o: (o["t"], o.get("det") or o.get("pay") or "")):
+                if o["t"] not in listed or not o.get("net") or o["net"] <= 0 or not (o.get("det") or o.get("pay")):
+                    continue
+                cands = [x for x in byt[o["t"]] if id(x) not in used and x.get("dividende") and (
+                    (o.get("det") and dd_(x.get("date_detachement"), o["det"]) <= 10) or (o.get("pay") and dd_(x.get("date_paiement"), o["pay"]) <= 10)
+                    or (o.get("ex") and x.get("exercice") == o["ex"] and abs(x["dividende"] / o["net"] - 1) <= .005))]
+                if cands:
+                    x = cands[0]
+                    used.add(id(x))
+                    if abs(x["dividende"] / o["net"] - 1) > .0005:
+                        if len(off_chk["ex"]) < 30:
+                            off_chk["ex"].append(f'{o["t"]} {o.get("pay") or o.get("det")} : {x["dividende"]:g} -> {o["net"]:g}')
+                        x["dividende"] = o["net"]
+                        off_chk["amt"] += 1
+                    else:
+                        off_chk["same"] += 1
+                    if (o.get("det") and x.get("date_detachement") != o["det"]) or (o.get("pay") and x.get("date_paiement") != o["pay"]):
+                        off_chk["dates"] += 1
+                    x["date_detachement"] = o.get("det") or x.get("date_detachement")
+                    if o.get("pub") and (not x.get("date_annonce") or x["date_annonce"] > (o.get("det") or o.get("pay") or "9")):
+                        x["date_annonce"] = o["pub"]  # (annonce de la base postérieure au détachement : date de l'avis)
+                    x["date_paiement"] = o.get("pay") or x.get("date_paiement")
+                    if o.get("ex") and not x.get("exercice"):
+                        x["exercice"] = o["ex"]
+                    x["source"], x["avis"] = "BRVM", 1
+                else:
+                    nx = {"ticker": o["t"], "dividende": o["net"], "exercice": o.get("ex"), "date_annonce": o.get("pub"),
+                          "date_detachement": o.get("det"), "date_paiement": o.get("pay"), "source": "BRVM", "avis": 1}
+                    divs.append(nx)
+                    byt[o["t"]].append(nx)
+                    used.add(id(nx))
+                    off_chk["added"] += 1
+            log("dividendes des documents officiels BRVM :", {k: v for k, v in off_chk.items() if k != "ex"},
+                ("; montants corrigés : " + "; ".join(off_chk["ex"])) if off_chk["ex"] else "")
+        except Exception as e:  # noqa: BLE001
+            log("dividendes officiels illisibles :", e)
     # bulletins officiels de la cote (BRVM) : contrôle et secours des cours et des dividendes
     BOC = {}
     if a.boc and os.path.isdir(a.boc):

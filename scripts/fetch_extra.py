@@ -2076,7 +2076,7 @@ def run_watch(raw, site_data):
     brvm = [x for x in summ.get("secs", []) if x.get("mkt") == "BRVM" and x.get("cls") == "Equity"]
     if not st["issuers"] or time.time() - st.get("its", 0) > 86400:
         iss = {}
-        for pg in range(0, 4):
+        for pg in range(0, 10):  # (30 sociétés par page ; arrêt à la première page vide)
             try:
                 html = get("https://www.brvm.org/fr/rapports-societes-cotees" + (f"?page={pg}" if pg else ""), tries=2, timeout=30).decode("utf8", "replace")
             except Exception as e:  # noqa: BLE001
