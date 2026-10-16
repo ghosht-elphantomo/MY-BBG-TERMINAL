@@ -76,3 +76,8 @@ Une alerte signale un point à vérifier, pas une erreur certaine.
   Le total du passif circulant illisible est la somme de ses postes (DH à DN) si le passif se vérifie alors. Dans un
   communiqué ou un rapport numérisé, deux lectures identiques d'un chiffre ne suffisent pas : seuls les montants vérifiés par
   une identité sont gardés. Un poste du bilan plus grand que le total du bilan est écarté.
+- Colonnes sans en-tête lisible (scan) : leur ordre est supposé (N puis N-1) et doit être confirmé par une autre source ; si les
+  autres sources donnent ces montants pour l'exercice voisin, les colonnes étaient permutées et les deux exercices sont réattribués
+  (BOA Niger 2018-2020). L'ordre de grandeur d'une société se mesure sur les documents encore crus (deux rapports en milliers
+  ne font plus passer les bons documents pour des erreurs) ; une lecture numérisée vérifiée par une seule identité, dix fois
+  plus petite que l'exercice voisin, est écartée (chiffre de tête perdu : Ecobank CI 2016).

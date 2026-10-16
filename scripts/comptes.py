@@ -1704,10 +1704,13 @@ def consolidate(cj, mirror=None):
         by_t_.setdefault(x["t"], []).append(x)
     for t_, xs in by_t_.items():
         for k_ in ("total_actif", "chiffre_affaires", "b_pnb"):
-            lv = sorted(math.log10(abs(x["m"][k_])) for x in xs if x["m"].get(k_))
+            # (la médiane se calcule sur les documents encore crus : ceux déjà écartés sur le total du bilan ne pèsent plus sur le
+            # chiffre d'affaires — deux rapports en milliers pouvaient sinon faire passer les bons documents pour des erreurs)
+            xs_ok = [x for x in xs if (x["doc"], x["per"]) not in bad]
+            lv = sorted(math.log10(abs(x["m"][k_])) for x in xs_ok if x["m"].get(k_))
             if len(lv) >= 3:
                 med = lv[len(lv) // 2]
-                bad |= {(x["doc"], x["per"]) for x in xs if x["m"].get(k_) and abs(math.log10(abs(x["m"][k_])) - med) > 2.5}
+                bad |= {(x["doc"], x["per"]) for x in xs_ok if x["m"].get(k_) and abs(math.log10(abs(x["m"][k_])) - med) > 2.5}
     recs = drop_docs(recs, bad)
     pool = {}  # (sources encore crues seulement)
     for x in recs:
@@ -1754,13 +1757,25 @@ def consolidate(cj, mirror=None):
                 n_ += 1
         return n_
     keep = []
+    swapped = {}  # (document, périmètre) -> sens de la permutation des colonnes établi sur un de ses exercices
+    pending = []  # exercices au sens supposé, non confirmés : réattribués si l'autre exercice du même document l'a été
     for x in recs:
         s0 = support(x, x["y"])
         sh = max(support(x, x["y"] - 1, True), support(x, x["y"] + 1, True))
-        if sh >= 2 and s0 == 0:
-            bad.add((x["doc"], x["per"]))  # montants d'une autre année
+        if sh >= 2 and s0 == 0 and not x["guess"]:
+            bad.add((x["doc"], x["per"]))  # montants d'une autre année (en-tête lu, donc colonnes inversées : document discrédité)
             continue
         if x["guess"] and s0 == 0:
+            # sens des colonnes supposé (aucun en-tête lisible) : si les autres sources donnent ces montants pour l'exercice voisin
+            # (au moins deux postes) et rien pour celui-ci, les colonnes étaient dans l'autre ordre — l'exercice est réattribué
+            dy_ = [dy for dy in (-1, 1) if support(x, x["y"] + dy, True) >= 2]
+            if len(dy_) == 1:
+                x["y"] += dy_[0]
+                x["shifted"] = True
+                swapped[(x["doc"], x["per"])] = dy_[0]
+                keep.append(x)
+            else:
+                pending.append(x)
             continue  # sens des colonnes non confirmé
         # poste isolé pris dans la colonne voisine : sa valeur est celle d'une autre année dans une autre source, qui donne pour
         # cette année-ci une valeur différente (communiqué de résultats lu par reconnaissance de caractères, colonnes décalées)
@@ -1776,6 +1791,12 @@ def consolidate(cj, mirror=None):
                     del x["m"][k]
                     break
         if x["m"]:
+            keep.append(x)
+    for x in pending:  # l'autre colonne du document dont les colonnes étaient permutées : décalée en sens inverse
+        dy = swapped.get((x["doc"], x["per"]))
+        if dy and x["y"] - dy not in {o["y"] for o in keep if o["doc"] == x["doc"] and o["per"] == x["per"]}:
+            x["y"] -= dy
+            x["shifted"] = True
             keep.append(x)
     recs = drop_docs(keep, bad)
     # reconnaissance de caractères vérifiée par une seule identité : un total du bilan qui change de plus de 3 fois d'une colonne à
@@ -1817,7 +1838,9 @@ def consolidate(cj, mirror=None):
                 continue
             same_ = ref_vals(x, k, x["y"])
             nb = nb_o + ([statistics.median(math.log10(w) for w in same_)] if same_ else [])
-            if len(nb) >= 2 and abs(math.log10(v) - statistics.median(nb)) > math.log10(4):
+            # (une lecture par reconnaissance de caractères vérifiée par une seule identité : un seul exercice voisin suffit — un chiffre
+            # de tête perdu laisse actif et passif égaux, mais dix fois trop petits)
+            if (len(nb) >= 2 or (nb and x["ocr"] and x["strong"] < 2)) and abs(math.log10(v) - statistics.median(nb)) > math.log10(4):
                 bad.add((x["doc"], x["per"]))
     recs = drop_docs(recs, bad)
     consolidate.bad = bad  # (documents écartés, pour contrôle)
