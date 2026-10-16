@@ -1719,9 +1719,8 @@ def scenarios(S, V, P, main, ops_paths, hv, Q, price, mods):
     sh = V["shares"]
     out = {"conv": ("Valeurs par action en francs CFA, base du nombre d'actions actuel ; date de référence : date d'évaluation. "
                     "Dividendes : somme des dividendes ordinaires projetés sur la période, non réinvestis. "
-                    "Rendement total annualisé : (cours à l'horizon + dividendes reçus) / cours actuel, à la puissance 1/horizon, moins 1. "
-                    "Deux conventions de cours à l'horizon : (A) le cours rejoint la valeur estimée ; (B) l'écart actuel entre cours et valeur persiste "
-                    "(le cours évolue comme la valeur). Le marché peut rester durablement éloigné de la valeur estimée. Frais de transaction non déduits."),
+                    "Les scénarios portent sur la valeur estimée, les résultats et les dividendes : aucune projection du cours n'est faite, "
+                    "le marché pouvant rester durablement éloigné de la valeur estimée."),
            "rows": {}}
     for sc, (Pq, v0syn) in sets.items():
         ke, glt = Pq["ke"], min(Pq["glt"], Pq["ke"] - 0.03)
@@ -1743,14 +1742,9 @@ def scenarios(S, V, P, main, ops_paths, hv, Q, price, mods):
                    "nm": rnd(r_h["ni"] / r_h["rev"], 4) if (fin(r_h.get("rev")) and r_h["rev"]) else None,
                    "roe": rnd(r_h["ni"] / r_h["B"], 4) if (fin(r_h.get("B")) and r_h["B"] > 0) else None,
                    "fcff": sig(r_h["fcff"] * 1e6 / sh, nd) if fin(r_h.get("fcff")) else None, "om": rnd(r_h.get("om"), 4)}
+            # (aucune projection du cours : seuls les dividendes projetés sont rapportés au dernier cours)
             if fin(price) and price > 0:
-                pa = vh
-                pb = price * vh / v0syn if v0syn else None
-                row["ret_px_a"] = rnd((pa / price) ** (1 / h) - 1, 4) if pa > 0 else None
-                row["ret_px_b"] = rnd((pb / price) ** (1 / h) - 1, 4) if (pb and pb > 0) else None
                 row["dy"] = rnd(divs / price / h, 4)
-                row["tr_a"] = rnd(((pa + divs) / price) ** (1 / h) - 1, 4) if pa + divs > 0 else None
-                row["tr_b"] = rnd(((pb + divs) / price) ** (1 / h) - 1, 4) if (pb and pb + divs > 0) else None
             # fourchette de la simulation à cet horizon (modèle principal ramené au niveau de la synthèse), qui s'élargit avec l'horizon
             hs = [x for x in hv[main][h] if fin(x)]
             if sc == "base" and len(hs) > 100:

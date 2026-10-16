@@ -29,7 +29,6 @@ manquent ou sont plus anciennes.
 import datetime as dt
 import hashlib
 import json
-import math
 import os
 import shutil
 import time
@@ -397,37 +396,7 @@ def company_status(I, t, rec, cyc_start, today):
     return st
 
 
-def expected_returns(a, k, p, gap):
-    """rendement annuel implicite pour un titre acquis au cours du jour (conditionnel aux hypothèses ; ni prévision de cours, ni promesse) : valeur estimée à chaque horizon et dividendes projetés de chaque
-    scénario, l'écart actuel entre cours et valeur se résorbant au rythme mesuré sur la BRVM (part b de l'écart qui subsiste chaque
-    année). Cours à l'horizon = valeur à l'horizon × (cours / valeur aujourd'hui) ^ (b ^ horizon)."""
-    sc = a.get("scen")
-    if not sc or not (C.fin(p) and p > 0):
-        return None
-    b = gap.get("b") if (gap and gap.get("n", 0) >= 30 and C.fin(gap.get("b")) and 0 < gap["b"] < 1) else 0.7
-    out = {"b": round(b, 3), "hl": round(math.log(0.5) / math.log(b), 1), "n": (gap or {}).get("n"), "rows": {}}
-    for s_, row in sc["rows"].items():
-        v0 = row["v0"] * k
-        if not (C.fin(v0) and v0 > 0):
-            continue
-        lst = []
-        for r in row["h"]:
-            h, vh, dv = r["h"], r["v"] * k, (r.get("divs") or 0) * k
-            if not (C.fin(vh) and vh > 0):
-                continue
-            g = (p / v0) ** (b ** h)
-            ph = vh * g
-            e = {"h": h, "tr": C.rnd(((ph + dv) / p) ** (1 / h) - 1, 4), "px": C.rnd((ph / p) ** (1 / h) - 1, 4), "dy": C.rnd(dv / p / h, 4),
-                 "p": C.sig(ph, 3)}
-            if s_ == "base" and C.fin(r.get("p10")) and C.fin(r.get("p90")):
-                e["lo"] = C.rnd(((r["p10"] * k * g + dv) / p) ** (1 / h) - 1, 4)
-                e["hi"] = C.rnd(((r["p90"] * k * g + dv) / p) ** (1 / h) - 1, 4)
-            lst.append(e)
-        out["rows"][s_] = lst
-    return out
-
-
-def market_block(I, t, rec, gap=None):
+def market_block(I, t, rec):
     """cours du jour face à la valeur estimée de la version en vigueur (valeurs par action ajustées d'un éventuel fractionnement)"""
     S = I["S"][t]
     V = C.asof_view(S, I["today_i"], I["today_i"], full=False)
@@ -438,7 +407,7 @@ def market_block(I, t, rec, gap=None):
     p = V["price"]
     return {"price": p, "pdate": V["pdate"], "v": C.sig(v, 3), "p10": C.sig(lo, 3), "p90": C.sig(hi, 3), "k": C.rnd(k, 6),
             "up": C.rnd(v / p - 1, 4) if (C.fin(p) and p > 0) else None, "pos": C.rnd((p - lo) / (hi - lo), 3) if (C.fin(p) and hi > lo) else None,
-            "pr": pr, "er": expected_returns(a, k, p, gap)}
+            "pr": pr}
 
 
 def run(out, extra=None, log=print, today=None, now=None, budget=TIME_BUDGET, do_backtest=True):
@@ -595,7 +564,7 @@ def _run(out, extra, Q, st, sp, today, now, t0, budget, note, do_backtest):
         comp["name"] = I["S"][t]["name"]
         comp["fail"] = (comp.get("fail") or [])[-20:]
         if comp.get("cur"):
-            comp["mkt"] = market_block(I, t, comp["cur"], (bt or {}).get("gap"))
+            comp["mkt"] = market_block(I, t, comp["cur"])
             comp["status"] = company_status(I, t, comp["cur"], cyc_start, today)
             comp["events"] = (comp.get("events") or [])[-60:]
             files[t] = comp
@@ -624,8 +593,7 @@ def _run(out, extra, Q, st, sp, today, now, t0, budget, note, do_backtest):
         rows.append({"t": t, "n": c["name"], "arch": a["profile"]["arch_n"], "v": c["mkt"]["v"], "p10": c["mkt"]["p10"], "p90": c["mkt"]["p90"],
                      "price": c["mkt"]["price"], "pdate": c["mkt"]["pdate"], "up": c["mkt"]["up"], "pos": c["mkt"]["pos"], "pr": c["mkt"]["pr"].get("lvl"),
                      "conf": a["syn"]["conf"], "conf_lbl": a["syn"]["conf_lbl"], "ver": c["cur"]["id"], "vtype": c["cur"]["type"], "vdate": a["date"],
-                     "fy": a["fy"], "main": a.get("main"), "ok": c["status"]["ok"], "warn": len(c["status"]["warn"]), "nev": len(c.get("events") or []),
-                     **{f"er{h}": next((e["tr"] for e in ((c["mkt"].get("er") or {}).get("rows") or {}).get("base", []) if e["h"] == h), None) for h in (1, 3, 5)}})
+                     "fy": a["fy"], "main": a.get("main"), "ok": c["status"]["ok"], "warn": len(c["status"]["warn"]), "nev": len(c.get("events") or [])})
     idx = {"engine": ENGINE, "ts": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "date": C.dint(today), "cycle": cyc_id, "cycle_start": cyc_start.isoformat(),
            "next_cycle": next_cycle(today).isoformat(), "rows": rows,
            "mkt": {"erp": C.rnd(M["erp"], 4), "ke_lr": C.rnd(M.get("ke_lr"), 4), "ke_now": C.rnd(M.get("ke_mkt"), 4), "dy": C.rnd(M.get("dy_mkt"), 4),

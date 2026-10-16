@@ -31,7 +31,7 @@ Ce fichier conserve l'intégralité du cahier des charges de QLAB 3. Aucune fonc
 
 ## Séparation des modules
 
-- QLAB 2 « Valorisation » : méthodes d'évaluation reconnues, hypothèses explicites, calculs transparents ; ni recommandation automatique d'achat ou de vente, ni promesse de performance (le rendement implicite au cours actuel y est présenté comme un calcul conditionnel aux hypothèses).
+- QLAB 2 « Valorisation » : méthodes d'évaluation reconnues, hypothèses explicites, calculs transparents ; ni recommandation automatique d'achat ou de vente, ni promesse de performance ; aucune projection ni prévision du cours (la valeur estimée est comparée au dernier cours, sans hypothèse sur l'évolution du cours).
 - QLAB 3 « Prévisions » : prévisions des résultats financiers et leurs révisions ; aucune prévision du cours, aucun objectif de cours, aucune promesse de rendement.
 
 ## Consigne impérative (16/10/2026)
