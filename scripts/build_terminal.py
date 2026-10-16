@@ -1575,6 +1575,11 @@ def main():
             qlab.run(out, a.extra, log)
         except Exception as e:  # noqa: BLE001
             log("QLAB : valorisation non refaite (dernière estimation valide conservée) :", e)
+        try:  # QLAB 3 « Prévisions » : résultats annuels et intermédiaires (protégé : une erreur ne touche rien d'autre)
+            import qlab_prev
+            qlab_prev.run(out, a.extra, log, comptes=a.comptes)
+        except Exception as e:  # noqa: BLE001
+            log("QLAB Prévisions : prévisions non refaites (dernière version conservée) :", e)
     tot = sum(os.path.getsize(os.path.join(dp, f)) for dp, _, fs in os.walk(out) for f in fs)
     log(f"{len(secs)} securities, {sum(len(b['d']) for b in files.values())} rows, {tot / 1e6:.1f} MB -> {out}")
 

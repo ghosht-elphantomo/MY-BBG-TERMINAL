@@ -2610,6 +2610,14 @@ def run_dir(d):
         r.update({"t": m.get("t"), "d": m.get("d"), "ti": m.get("ti"), "cat": m.get("cat")})
         docs[u] = r
     out = {"v": READER_V, "docs": docs}
+    # QLAB 3 « Prévisions » : publications intermédiaires (1er trimestre, 1er semestre, 9 mois) lues dans les mêmes textes, chaque
+    # ligne contrôlée par la variation publiée ; l'unité est fixée au passage du soir du terminal (scripts/periodiques.py)
+    try:
+        import periodiques
+        out["periodic"] = periodiques.extract_all(d)["docs"]
+        print(f"[comptes] publications périodiques lues : {len(out['periodic'])}", flush=True)
+    except Exception as e:  # noqa: BLE001
+        print(f"[comptes] publications périodiques non lues : {e}", flush=True)
     with open(os.path.join(d, "comptes.json"), "w", encoding="utf8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
     n_ok = sum(1 for r in docs.values() if r.get("st") == "ok")

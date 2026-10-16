@@ -8,7 +8,9 @@ sauvegarde sur la branche raw. Interface : web/pages18.js (onglet « Valorisatio
 
 - QLAB ne prédit pas le cours : il présente la valeur selon les modèles d'évaluation les plus connus, comparée au dernier cours.
   Le « rendement implicite au cours actuel » et les rendements du cours des scénarios ont été retirés (16/10/2026).
-- Trois sous-onglets seulement : Valorisation (sept modèles et leur synthèse), Risques et alertes, Qualité et facteurs.
+- Trois sous-onglets seulement : Valorisation (valeur et fourchette de chacun des sept modèles, sans synthèse affichée ni
+  poids), Risques et alertes, Qualité et facteurs (16/10/2026, 21 h 40). La synthèse reste calculée en interne pour les contrôles
+  (versions, seuils de réévaluation, validation historique) mais n'est plus affichée.
 - Pas de recommandation d'achat ou de vente, ni de promesse de performance.
 - Fonctionnement entièrement automatique : aucune étape ne demande de contrôle manuel.
 

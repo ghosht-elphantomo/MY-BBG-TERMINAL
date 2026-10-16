@@ -123,8 +123,8 @@ Tapez un ticker ou une fonction puis Entrée : `SNTS GP`, `SNTS QLAB`, `QQQ BTST
 | Onglet | Contenu | État |
 |---|---|---|
 | Statistiques | distribution des rendements, VaR/CVaR, cône de volatilité, autocorrélation, exposant de Hurst, momentum, analogues k-NN + DTW, probabilité bayésienne | en ligne |
-| Valorisation (actions BRVM) | **Valorisation** : sept modèles (DCF probabiliste, simulation Monte-Carlo, actualisation des dividendes, multiples historiques, multiples des comparables, résultat résiduel, DCF inversé) et leur synthèse pondérée ; **Risques et alertes** : alarmes, sensibilités, régimes économiques, liquidité, révisions et événements ; **Qualité et facteurs** : facteurs de qualité et de risque, qualité des données, comptes et ratios utilisés. Aucune projection du cours. | en ligne (moteur QLAB-V, recalcul chaque soir) |
-| Prévisions | prévision des résultats trimestriels, semestriels et annuels, révisée automatiquement par les publications et les événements (seuil de 5 % du résultat net) | en développement — cahier des charges complet dans [docs/QLAB3_PREVISIONS.md](docs/QLAB3_PREVISIONS.md) |
+| Valorisation (actions BRVM) | **Valorisation** : valeur et fourchette de chacun des sept modèles (DCF probabiliste, simulation Monte-Carlo, actualisation des dividendes, multiples historiques, multiples des comparables, résultat résiduel, DCF inversé), sans synthèse ; **Risques et alertes** : alarmes, sensibilités, régimes économiques, liquidité, révisions et événements ; **Qualité et facteurs** : facteurs de qualité et de risque, qualité des données, comptes et ratios utilisés. Aucune projection du cours. | en ligne (moteur QLAB-V, recalcul chaque soir) |
+| Prévisions (actions BRVM) | prévision des résultats annuels (exercice en cours et quatre suivants) et des cumuls intermédiaires (1er trimestre, 1er semestre, 9 mois) : chiffre d'affaires ou PNB, résultat d'exploitation, résultat net, BPA, marges ; méthodes choisies par validation point-in-time, fourchettes mesurées sur les erreurs passées ; révisions à chaque publication, mise à jour trimestrielle, révisions exceptionnelles déclenchées par les documents publiés (seuil de 5 % du résultat net) ; historique des versions et écarts mesurés. Aucune prévision du cours. | en ligne (moteur QLAB-P, recalcul chaque soir) ; fonctions restant à développer listées dans [docs/QLAB3_PREVISIONS.md](docs/QLAB3_PREVISIONS.md) |
 
 Méthode de la valorisation : [docs/QLAB2_VALORISATION.md](docs/QLAB2_VALORISATION.md).
 
@@ -159,6 +159,7 @@ scripts/build_search.py    index de la recherche MOTS CLES
 scripts/comptes.py         lecture et contrôle des états financiers publiés
 scripts/dividendes.py      avis et calendriers de dividendes
 scripts/qlab.py, qlab_core.py, qlab_backtest.py   moteur de valorisation QLAB (versions, événements, validation)
+scripts/qlab_prev.py, periodiques.py               moteur de prévisions QLAB 3 et lecture des publications intermédiaires
 docs/                      cahiers des charges et méthodes de QLAB
 SAUVEGARDES.md             points de restauration (retour arrière possible à chaque étape)
 ```

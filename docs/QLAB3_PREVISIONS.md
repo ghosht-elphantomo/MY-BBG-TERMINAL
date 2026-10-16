@@ -7,26 +7,33 @@ Ce fichier conserve l'intégralité du cahier des charges de QLAB 3. Aucune fonc
 
 | Fonctionnalité | État |
 |---|---|
-| Sous-module « Prévisions » (3e onglet de QLAB), sans toucher Statistiques ni Valorisation | à développer |
-| Prévisions par exercice : chiffre d'affaires, résultat opérationnel, résultat net, BPA, marges, flux de trésorerie et indicateurs sectoriels | à développer |
-| Prévisions trimestrielles lorsque des comptes trimestriels existent (3 trimestriels vérifiés aujourd'hui) | à développer |
-| Horizons : prochains trimestres, deux prochains exercices, 3 à 5 ans exploratoires avec incertitude croissante | à développer |
-| Modèles sectoriels et propres à chaque société (agro-industrie, télécoms, banques, distribution, énergie, services publics, autres) | à développer |
-| Facteurs : historique, conjoncture, matières premières, inflation, change, taux, coûts, concurrence, réglementation, fiscalité, climat, macroéconomie, géopolitique | à développer |
-| Collecte automatisée : rapports annuels, semestriels, trimestriels, communiqués, publications officielles, données sectorielles, macroéconomie, matières premières, change | à développer (déjà disponible dans le terminal : comptes annuels et semestriels lus, index des documents de la BRVM, pétrole, or, gaz, change, taux UEMOA, indicateurs Banque mondiale ; à ajouter : prix du caoutchouc, de l'huile de palme, du sucre, du cacao) |
-| Source, date de publication, période de référence, date d'intégration, unité, statut de vérification et fiabilité de chaque donnée | à développer |
-| Détection automatique des événements exceptionnels (catastrophes, incendies, accidents, conflits, sanctions, décisions publiques, réglementation, fiscalité, grèves, ruptures d'approvisionnement, production, acquisitions, cessions, dirigeants, avertissements, publications inattendues) | à développer |
-| Analyse d'impact : sociétés concernées, indicateurs touchés, sens, ampleur, durée, effets ponctuels ou durables, sans double comptage | à développer |
-| Seuil de matérialité de 5 % du résultat net prévisionnel (configurable) : déclencheur d'analyse, pas variation automatique ; cumul des événements inférieurs au seuil | à développer |
-| Incertitude : hypothèses conditionnelles, fourchettes, scénarios plutôt qu'estimations précises inventées | à développer |
-| Scénarios central, favorable, défavorable fondés sur des facteurs économiques ; simulation de Monte-Carlo justifiée | à développer |
-| Révision trimestrielle obligatoire et révisions exceptionnelles, indépendantes de l'ouverture de la page | à développer |
-| Historique intégral des prévisions (jamais écrasées), données disponibles à la date, hypothèses, version du modèle, raisons des révisions | à développer |
-| Comparaison automatique aux résultats publiés ; erreurs, biais, par société, secteur, horizon, modèle, périodes normales et de choc ; métriques robustes près de zéro | à développer |
-| Amélioration des modèles uniquement par validation hors échantillon, sans information postérieure à la date de prévision | à développer |
-| Mémoire historique des événements et recherche d'épisodes comparables | à développer |
-| Journalisation, gestion des erreurs, relances, alertes de données trop anciennes, idempotence | à développer |
-| Interface : historique publié et prévisions distingués, facteurs expliqués, journal des événements et des révisions, performances | à développer |
+| Sous-module « Prévisions » (3e onglet de QLAB), sans toucher Statistiques ni Valorisation | fait (QLAB-P 1.0, 16/10/2026 : scripts/qlab_prev.py, scripts/periodiques.py, web/pages19.js) |
+| Prévisions par exercice : chiffre d'affaires (PNB des banques), résultat d'exploitation, résultat net, BPA, marges | fait |
+| Prévisions par exercice : flux de trésorerie et indicateurs sectoriels (dépôts, crédits, coût du risque, volumes) | à développer |
+| Cumuls intermédiaires (1er trimestre, 1er semestre, 9 mois) publiés et prévus, chaque chiffre lu contrôlé par la variation publiée sur la même ligne | fait (couverture croissante : les rapports d'activité restant à lire sont lus automatiquement) |
+| Trimestre isolé (3e trimestre seul, 4e trimestre) | à développer |
+| Horizons : exercice en cours, quatre exercices suivants avec incertitude croissante mesurée | fait |
+| Choix de méthode propre à chaque société (historique propre, exigence renforcée) et par type d'entreprise (banques / autres) | fait |
+| Modèles sectoriels fins (agro-industrie, télécoms, distribution, énergie, services publics) | à développer |
+| Facteurs : matières premières, inflation, change, taux, coûts, concurrence, réglementation, fiscalité, climat, macroéconomie, géopolitique | à développer (ne seront intégrés que s'ils réduisent l'erreur hors échantillon) |
+| Collecte automatisée : rapports annuels, semestriels, trimestriels, communiqués, avis de la BRVM | fait (lecture automatique de tous les documents déposés à la BRVM) |
+| Collecte : données sectorielles, matières premières (caoutchouc, huile de palme, sucre, cacao) | à développer |
+| Source (document), date de publication, période, statut de vérification et recoupement de chaque donnée | fait (affichés sans nom de site ni lien) |
+| Détection des événements : chaque document publié par la société ou la concernant est examiné (résultats, communiqués, dirigeants, opérations sur le capital, notations, assemblées), intitulés signalant un événement exceptionnel (perte, incendie, grève, cession, sanction…) | fait |
+| Détection d'événements extérieurs aux documents de la BRVM (catastrophes, conflits, décisions publiques, ruptures d'approvisionnement) | à développer |
+| Analyse d'impact : portée mesurée de chaque nature de document sur le résultat net des exercices passés ; sens défavorable quand l'intitulé l'indique ; pas de double comptage (une publication de résultats remplace les effets estimés) | fait |
+| Analyse d'impact par indicateur et par durée (effets ponctuels / durables) au-delà du résultat net | à développer |
+| Seuil de matérialité de 5 % du résultat net prévisionnel (configurable, MAT_NI) : déclencheur d'analyse ; cumul des documents de faible portée depuis la dernière version | fait |
+| Incertitude : fourchettes à 80 % mesurées sur les erreurs passées, scénarios défavorable / central / favorable | fait |
+| Simulation de Monte-Carlo des prévisions de résultats | à développer |
+| Révision à chaque publication, mise à jour trimestrielle obligatoire, révisions exceptionnelles, chaque soir sans intervention | fait |
+| Historique intégral des prévisions (versions horodatées et chaînées par empreinte, jamais réécrites) | fait |
+| Comparaison automatique aux résultats publiés : écarts, biais, couverture, par société, horizon et type d'entreprise | fait (suivi des versions publiées) ; par secteur et périodes de choc : à développer |
+| Validation point-in-time à origine glissante, sans information postérieure à la date de prévision | fait |
+| Mémoire historique des événements et recherche d'épisodes comparables | partiel (portée par nature de document) ; recherche d'épisodes comparables : à développer |
+| Journalisation, erreurs isolées, idempotence, sauvegarde et restauration, alerte de publication en retard | fait |
+| Interface : publié (blanc) et prévu (bleu, italique) distingués, facteurs expliqués, révisions, documents examinés, écarts, validation | fait |
+| Recalage complet sur tout l'historique et toutes les actualités dès que tous les documents sont lus | programmé (tâche planifiée quotidienne, se désactive après le recalage) |
 | Pas de prévision du cours, d'objectif de cours ni de promesse de rendement dans QLAB 3 | règle de conception |
 
 ## Séparation des modules

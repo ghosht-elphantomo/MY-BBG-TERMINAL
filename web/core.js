@@ -71,7 +71,7 @@ const FN = {
   ANOM: ['Anomalies', 'sec', 'Quant', 'Alertes statistiques : cours, volume, tendance, résultats, dividendes, données suspectes', 'Anomaly Monitor'],
   PEER: ['Comparateur de sociétés', 'sec', 'Quant', '2 à 10 sociétés côte à côte, nuage de points sur deux critères', 'Peer Comparison'],
   BETA: ['Bêta historique', 'sec', 'Risque', 'Bêta sur plusieurs fenêtres, volatilité, corrélation, drawdown, pairs', 'Historical Beta'],
-  QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Statistiques du cours (distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne) ; valorisation des actions BRVM par sept modèles, risques et alertes, qualité et facteurs', 'Quant Lab'],
+  QLAB: ['Laboratoire quant', 'sec', 'Risque', 'Statistiques du cours (distribution, VaR, Hurst, momentum, analogues, probabilité bayésienne) ; valorisation des actions BRVM par sept modèles, risques et alertes, qualité et facteurs ; prévisions des résultats (annuels et intermédiaires)', 'Quant Lab'],
   BTST: ['Backtest', 'sec', 'Risque', '8 stratégies, levier, Monte Carlo, durée des drawdowns', 'Backtesting'],
 };
 /* touches de marché : BRIEF, puis les fonctions de la BRVM et de l'UEMOA, puis les autres marchés */
@@ -410,7 +410,7 @@ const FN_TABS = {
   'CORP RESULT': [['u', 'À venir'], ['p', 'Publiés (60 jours)'], ['t', 'Objectifs des analystes']],
   FX: [['x', 'Franc CFA'], ['m', 'Changes croisés'], ['w', 'Classement des devises']],
   RATES: [['m', 'Marché monétaire US'], ['f', 'Anticipations de la Fed'], ['w', 'BONDS · taux souverains mondiaux']],
-  QLAB: [['s', 'Statistiques'], ['v', 'Valorisation (actions BRVM)']] };
+  QLAB: [['s', 'Statistiques'], ['v', 'Valorisation (actions BRVM)'], ['p', 'Prévisions des résultats (actions BRVM)']] };
 const tabLabel = (f, t) => ((FN_TABS[f] || []).find(x => x[0] === t) || [])[1];
 const FN_ALIAS = { CF: ['EVTS', 'b'], WCRS: ['FX', 'w'], FXC: ['FX', 'm'], EQS: ['SCREENER'], SCREN: ['SCREENER'], RELS: ['STOCK BONDS'], TOP: ['NEWS'], MON: ['MONITOR'], GLCO: ['COMMO'], WIRP: ['RATES', 'f'], WB: ['RATES', 'w'], BTMM: ['RATES', 'm'],
   PORT: ['PORTF'], WEI: ['INDX', 'i'], WEIF: ['INDX', 'f'], IMAP: ['MAP'], US: ['MAP', 'US'], ECO: ['NEWS ECO'], UEMOA: ['UEMOA/DATA'], ECST: ['UEMOA/DATA', 'ecst'], SRCH: ['UEMOA BONDS'], PER: ['BRVM', 'p'], EA: ['CORP RESULT'], 'MOTS CLÉ': ['MOTS CLES'] };

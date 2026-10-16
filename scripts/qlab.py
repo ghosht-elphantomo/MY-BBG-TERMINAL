@@ -184,7 +184,7 @@ def validate(A, S=None):
             if y_ok and (A.get("pr") or {}).get("lvl") == "fiable":
                 r_ = s["v"] / A["price"]
                 A["far"] = {"r": C.rnd(r_, 4), "fy": y_ok,
-                            "txt": f"valeur centrale {C.fr(format(1 / r_ if r_ < 1 else r_, ',.0f'))} fois {'inférieure' if r_ < 1 else 'supérieure'} au cours : "
+                            "txt": f"valeurs des modèles environ {C.fr(format(1 / r_ if r_ < 1 else r_, ',.0f'))} fois {'inférieures' if r_ < 1 else 'supérieures'} au cours : "
                                    f"nombre d'actions et unités vérifiés automatiquement (bénéfice par action publié de l'exercice {y_ok} = résultat net ÷ actions) "
                                    "et cours fiable ; l'écart tient au niveau du cours par rapport aux comptes publiés, non à une erreur de données"}
             else:
