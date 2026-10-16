@@ -55,7 +55,7 @@ def kind_of(ti, u, k0=None):
     # (emprunt obligataire : « TPCI 5,45 % 2026-2031 », « (EOS.O30) », sukuk… quelle que soit la catégorie de la liste)
     if re.search(r"\d+(?:,\d+)? ?% ?(?:19|20)\d\d ?- ?(?:19|20)\d\d|\.o\d+\b|emprunt obligataire|obligataire|sukuk|diaspora bonds", n):
         return "obl"
-    if k0 == "rann" and re.search(r"rapport (?:d.activites? )?(?:semestriel|trimestriel)|rapport d.activite", nrm(ti)):
+    if k0 == "rann" and re.search(r"trimestr|semestr|rapport d.activite", nrm(ti)) and not re.search(r"rapport annuel|examen limite|commissaire|attestation|\bcac\b", nrm(ti)):
         return "ra"  # (ancien site : « Rapport semestriel » rangé avec les rapports annuels)
     if k0 and k0 not in ("avis", "com"):
         return k0
