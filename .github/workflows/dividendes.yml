@@ -1,0 +1,70 @@
+name: Dividendes BRVM
+
+# Dividendes versés depuis l'ouverture de la BRVM : liste officielle « Paiement de dividendes » de brvm.org et chaque avis de
+# paiement, avis du marché sur les dividendes, archives de l'ancien site (avis, bulletins officiels de la cote, revues).
+# Chaque document est lu une seule fois (couche texte, sinon reconnaissance de caractères) et gardé en cache sur la branche
+# `dividendes` ; les montants sont relus à chaque passage par dividendes.py.
+# Tant qu'il reste des documents, le passage suivant est lancé aussitôt (40 au plus d'affilée) ; ensuite un passage par jour.
+# N'écrit que la branche `dividendes` (aucun déploiement) : ni le site ni son actualisation ne sont touchés.
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/dividendes.yml", "scripts/dividendes.py"]
+  schedule:
+    - cron: "29 5 * * *"
+  workflow_dispatch:
+    inputs:
+      chain:
+        description: "rang dans une suite de passages (interne)"
+        default: "0"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: dividendes
+  cancel-in-progress: false
+
+jobs:
+  dividendes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - name: Outils PDF et reconnaissance de caractères
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-fra >/dev/null
+          python3 -c "import PIL" 2>/dev/null || pip install -q --break-system-packages pillow || true
+      - name: Restaurer la branche dividendes
+        run: |
+          mkdir -p /tmp/div
+          if git fetch -q --depth 1 origin dividendes; then git archive FETCH_HEAD | tar -x -C /tmp/div; fi
+      - name: Lire les documents pas encore lus
+        continue-on-error: true
+        env:
+          DIV_BUDGET: "3000"
+        run: timeout 3500 python3 scripts/fetch_extra.py --out /tmp/div --only divhist
+      - name: Relire tout le cache (montants, dates, exercices)
+        continue-on-error: true
+        run: |
+          if [ -f scripts/dividendes.py ]; then python3 scripts/dividendes.py --dir /tmp/div; fi
+      - name: Publier (branche dividendes)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          printf '{"git":{"deploymentEnabled":false}}\n' > /tmp/div/vercel.json
+          URL="https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          export GIT_DIR=/tmp/div.git GIT_WORK_TREE=/tmp/div
+          rm -rf "$GIT_DIR"; git init -q -b dividendes
+          git config user.name "fqt-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A && git commit -qm "Dividendes $(date -u +'%d/%m/%Y %H:%M') UTC" && git push -q -f "$URL" HEAD:dividendes
+      - name: Passage suivant si des documents restent à lire
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          read left new <<< "$(python3 -c "import json;d=json.load(open('/tmp/div/index.json'));print(d.get('left',0),d.get('last_new',0))" 2>/dev/null || echo '0 0')"
+          chain="${{ inputs.chain || '0' }}"
+          echo "Documents lus : $new ; restant à lire : $left (passage $chain)"
+          if [ "${left:-0}" -gt 0 ] && [ "${new:-0}" -gt 0 ] && [ "$chain" -lt 40 ]; then gh workflow run dividendes.yml --ref main -f chain=$((chain + 1)); fi

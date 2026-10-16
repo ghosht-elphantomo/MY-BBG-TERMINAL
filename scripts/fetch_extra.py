@@ -1286,6 +1286,168 @@ def run_comptes(out):
     log(f"états financiers : {n_new} documents lus ({n_ocr} par reconnaissance de caractères), {n_re} relus, {left} restent, {len(docs)} en cache")
 
 
+def run_divhist(out):
+    """Dividendes versés depuis l'ouverture de la BRVM (1998) : documents officiels lus une seule fois et gardés en cache (txt/).
+      1. liste « Paiement de dividendes » de brvm.org (toutes les pages) et chaque avis de paiement (PDF) qu'elle cite ;
+      2. avis du marché (toutes les pages) dont l'intitulé parle de dividende (modification, rectificatif, report) ;
+      3. archives de l'ancien site brvm.org (web.archive.org, avant 2014) : avis, bulletins officiels de la cote (colonne du
+         dernier dividende payé), publications et revues — avis de dividende d'abord, puis bulletins, puis le reste.
+    La lecture des montants (brut, net, impôt, dates, exercice) est faite à chaque passage sur tout le cache par dividendes.py.
+    Dans la limite de DIV_BUDGET secondes ; état dans index.json (reprise au passage suivant)."""
+    import hashlib, subprocess, tempfile
+    budget = float(os.environ.get("DIV_BUDGET", "1500"))
+    t0 = time.time()
+    ip = os.path.join(out, "index.json")
+    idx = json.load(open(ip, encoding="utf8")) if os.path.exists(ip) else {}
+    docs = idx.setdefault("docs", {})
+    os.makedirs(os.path.join(out, "txt"), exist_ok=True)
+    if not pdf_tools():
+        note("divhist", False, "outils PDF absents")
+        return
+
+    # 1-2. listes de brvm.org (relues entièrement une fois par jour)
+    def crawl(path_, key, keep=None, max_pages=150):
+        rows_all, pg, empty = [], 0, 0
+        while pg < max_pages and time.time() - t0 < budget / 4:
+            try:
+                html = get("https://www.brvm.org" + path_ + (f"?page={pg}" if pg else ""), tries=2, timeout=40).decode("utf8", "replace")
+            except Exception as e:  # noqa: BLE001
+                note("divhist", False, f"{key} page {pg} : {str(e)[:80]}")
+                break
+            rows = views_rows(html)
+            if not rows:
+                empty += 1
+                if empty >= 2:
+                    break
+            else:
+                empty = 0
+            for r in rows:
+                if keep is None or keep(r):
+                    rows_all.append({k: v for k, v in r.items() if v.get("t") or v.get("d") or v.get("u")})
+            pg += 1
+        return rows_all, pg
+    if idx.get("lists_day") != TODAY.isoformat():
+        esv, n_pg = crawl("/fr/esv/paiement-de-dividendes", "esv")
+        if esv:
+            idx["esv"], idx["esv_pages"] = esv, n_pg
+        av, n_pg2 = crawl("/fr/marche/avis-et-publications/avis", "avis",
+                          keep=lambda r: "dividende" in _nrm(" ".join(v.get("t") or "" for v in r.values()) + " " + " ".join(" ".join(v.get("u") or []) for v in r.values())),
+                          max_pages=400)
+        if av:
+            idx["avis"], idx["avis_pages"] = av, n_pg2
+        if esv or av:
+            idx["lists_day"] = TODAY.isoformat()
+        save(ip, idx)
+        log(f"dividendes : liste brvm.org {len(idx.get('esv') or [])} lignes ({idx.get('esv_pages')} pages), avis {len(idx.get('avis') or [])}")
+
+    # 3. archives de l'ancien site (liste une fois, puis documents par ordre de priorité)
+    if not idx.get("cdx"):
+        cdx = {}
+        flt = "&filter=" + urllib.parse.quote("mimetype:application/(pdf|x-pdf|octet-stream).*", safe=":/") + "&to=2014"
+        for pat, extra in (("brvm.org", flt),):  # (domaine entier : bfin.brvm.org compris)
+            key_ = None
+            for _ in range(20):
+                url = ("http://web.archive.org/cdx/search/cdx?url=" + pat + "&matchType=domain&output=json&collapse=urlkey&filter=statuscode:200"
+                       + extra + "&limit=5000&showResumeKey=true" + (f"&resumeKey={urllib.parse.quote(key_)}" if key_ else ""))
+                try:
+                    rows = json.loads(get_wb(url) or b"[]")
+                except Exception as e:  # noqa: BLE001
+                    note("divhist", False, f"cdx {pat} : {str(e)[:80]}")
+                    break
+                key_ = None
+                if rows and rows[-1] and len(rows[-1]) == 1:  # dernière ligne : clé de reprise
+                    key_ = rows[-1][0]
+                    rows = rows[:-2] if len(rows) >= 2 and not rows[-2] else rows[:-1]
+                for r in rows[1:]:
+                    if len(r) >= 3 and r[2] not in cdx:
+                        cdx[r[2]] = r[1]
+                if not key_:
+                    break
+        if cdx:
+            idx["cdx"] = [[u, ts] for u, ts in sorted(cdx.items())]
+            save(ip, idx)
+        log(f"dividendes : archives de brvm.org, {len(cdx)} documents PDF")
+
+    def prio(u):
+        lu = urllib.parse.unquote(u).lower()
+        if "divid" in lu:
+            return 0
+        if "/boc" in lu or "boc_" in lu or "boc2" in lu:
+            return 1
+        if "/avis/" in lu:
+            return 2
+        if "revue" in lu or "annee" in lu or "année" in lu or "bilan" in lu or "/documentation/" in lu:
+            return 3
+        if "linkclick" in lu:
+            return 4
+        return 5
+    jobs = []
+    for r in idx.get("esv") or []:
+        for u in (r.get("field-avis-dividende-esv") or {}).get("u") or []:
+            jobs.append((0, u, None, {"src": "esv", "soc": (r.get("field-emetteur-esv") or {}).get("t"), "ex": (r.get("field-exercice-comptable-esv") or {}).get("t")}))
+    for r in idx.get("avis") or []:
+        for v in r.values():
+            for u in v.get("u") or []:
+                if u.lower().endswith(".pdf"):
+                    jobs.append((0, u, None, {"src": "avis", "ti": (r.get("title") or {}).get("t")}))
+    for u, ts in idx.get("cdx") or []:
+        jobs.append((1 + prio(u), u, ts, {"src": "wb"}))
+    jobs.sort(key=lambda j: j[0])
+    jobs = [j for j in jobs if j[1] not in docs or (str(docs[j[1]].get("st", "")).startswith("erreur") and docs[j[1]].get("n_err", 0) < 3)]
+    n_new = n_ocr = 0
+    for pr, u, ts, meta in jobs:
+        if time.time() - t0 > budget:
+            break
+        h = hashlib.sha1(u.encode()).hexdigest()[:16]
+        rec = {"h": h, **{k: v for k, v in meta.items() if v}, "ts": int(time.time())}
+        if ts:
+            rec["wb"] = ts
+        try:
+            b = get_wb(f"http://web.archive.org/web/{ts}id_/{u}") if ts else get(u, tries=2, timeout=90)
+        except Exception as ex:  # noqa: BLE001
+            rec.update(st=f"erreur {str(ex)[:80]}", n_err=(docs.get(u) or {}).get("n_err", 0) + 1)
+            docs[u] = rec
+            continue
+        if b[:4] != b"%PDF":
+            rec["st"] = "pas un PDF"
+            docs[u] = rec
+            continue
+        with tempfile.TemporaryDirectory() as td:
+            p_ = os.path.join(td, "a.pdf")
+            open(p_, "wb").write(b)
+            try:
+                txt = subprocess.run(["pdftotext", "-layout", p_, "-"], capture_output=True, timeout=120).stdout.decode("utf8", "replace")
+            except Exception:  # noqa: BLE001
+                txt = ""
+            pages = txt.split("\f")
+            if pages and not pages[-1].strip():
+                pages = pages[:-1]
+            rec["pages"] = len(pages)
+            with gzip.open(os.path.join(out, "txt", h + ".txt.gz"), "wt", encoding="utf8") as f:
+                f.write(txt)
+            # document numérisé (couche texte vide) : reconnaissance de caractères des premières pages
+            if len(re.sub(r"\s", "", txt)) < 150 * max(1, len(pages)) and 0 < len(pages) <= 12 and time.time() - t0 < budget - 120:
+                try:
+                    o = cpt_ocr(p_, list(range(1, min(len(pages), 6) + 1)), td)
+                    for lang, t_ in o.items():
+                        with gzip.open(os.path.join(out, "txt", f"{h}.{lang}.gz"), "wt", encoding="utf8") as f:
+                            f.write(t_)
+                    rec["ocr"] = min(len(pages), 6)
+                    n_ocr += 1
+                except Exception as ex:  # noqa: BLE001
+                    rec["ocr_err"] = str(ex)[:80]
+        rec["st"] = "lu"
+        docs[u] = rec
+        n_new += 1
+        if n_new % 20 == 0:
+            save(ip, idx)
+    left = sum(1 for j in jobs if j[1] not in docs)
+    idx.update(v=1, left=left, last_new=n_new, ts=int(time.time()))
+    save(ip, idx)
+    note("divhist")
+    log(f"dividendes : {n_new} documents lus ({n_ocr} par reconnaissance de caractères), {left} restent, {len(docs)} en cache")
+
+
 def brvm_reports(out, evs, budget=420):
     """Pages « rapports des sociétés cotées » de brvm.org relues directement (une page de 20 documents à la fois, jusqu'à ce qu'une
     page n'apporte plus rien de nouveau) : les documents absents de la liste tierce sont ajoutés, rattachés au titre par la page
@@ -3740,7 +3902,7 @@ def main():
              ("cnn", lambda: run_cnn(a.out)), ("crypto", lambda: run_crypto(a.out, a.out)), ("wb", lambda: run_wb(a.out)),
              ("sec", lambda: run_sec(a.out, a.out, a.sec_max_age_days)), ("analyst", lambda: run_analyst(a.out)),
              ("probe", lambda: run_probe(a.out)), ("boc", lambda: run_boc(a.out)), ("sikah", lambda: run_sikah(a.out)), ("pdffin", lambda: run_pdffin(a.out)), ("comptes", lambda: run_comptes(a.out)), ("watch", lambda: run_watch(a.out, a.site)), ("prof", lambda: run_prof(a.out)), ("profus", lambda: run_profus(a.out)),
-             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("ussplit", lambda: run_ussplit(a.out)), ("avisocr", lambda: run_avisocr(a.site)), ("flottant", lambda: run_flottant(a.out, a.site)), ("ratings", lambda: run_ratings(a.out, a.site)), ("sgi", lambda: run_sgi(a.out)), ("usdiv", lambda: run_usdiv(a.out)), ("ei", lambda: run_ei(a.out))]
+             ("bceao", lambda: run_bceao(a.out)), ("umoa", lambda: run_umoa(a.out)), ("obl", lambda: run_obl(a.out, a.site)), ("cmc", lambda: run_cmc(a.out, a.site)), ("eia", lambda: run_eia(a.out)), ("fut", lambda: run_fut(a.out)), ("bochist", lambda: run_bochist(a.out)), ("divhist", lambda: run_divhist(a.out)), ("ussplit", lambda: run_ussplit(a.out)), ("avisocr", lambda: run_avisocr(a.site)), ("flottant", lambda: run_flottant(a.out, a.site)), ("ratings", lambda: run_ratings(a.out, a.site)), ("sgi", lambda: run_sgi(a.out)), ("usdiv", lambda: run_usdiv(a.out)), ("ei", lambda: run_ei(a.out))]
     if a.news:
         steps.insert(0, ("news", lambda: run_news(a.news)))
         only.add("news")
