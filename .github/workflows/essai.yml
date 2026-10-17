@@ -111,14 +111,14 @@ jobs:
           prod = json.load(open(f"{C}/comptes.json", encoding="utf8"))["docs"]
           ok = lambda u: (prod.get(u) or {}).get("st") == "ok"
           s_txt = pick([(m["h"], u) for u, m in idx.items() if m.get("st") == "lu" and not m.get("ocr") and ok(u)
-                        and os.path.exists(f"{C}/txt/{m['h']}.txt.gz")], 25)
+                        and os.path.exists(f"{C}/txt/{m['h']}.txt.gz")], 100)
           s_ocr = pick([(m["h"], u) for u, m in idx.items() if m.get("st") == "lu" and m.get("ocr") and not m.get("ocr4")
-                        and 0 < (m.get("pages") or 0) <= 4 and ok(u) and os.path.exists(f"{C}/txt/{m['h']}.fra.gz")], 6)
+                        and 0 < (m.get("pages") or 0) <= 4 and ok(u) and os.path.exists(f"{C}/txt/{m['h']}.fra.gz")], 25)
           s_ocr4 = pick([(m["h"], u) for u, m in idx.items() if m.get("st") == "lu" and m.get("ocr4") and 0 < (m.get("pages") or 0) <= 3
-                         and ok(u) and os.path.exists(f"{C}/txt/{m['h']}.fra4.gz")], 2)
+                         and ok(u) and os.path.exists(f"{C}/txt/{m['h']}.fra4.gz")], 5)
           M = "/tmp/mini"
           os.makedirs(f"{M}/txt", exist_ok=True)
-          mini, cmp_t, err = {}, {"texte": [0, 0], "ocr": [0, 0], "ocr_nombres": [0, 0]}, []
+          mini, cmp_t, err, tdiff = {}, {"texte": [0, 0], "ocr": [0, 0], "ocr_nombres": [0, 0]}, [], []
           for u in s_txt + s_ocr + s_ocr4:
               m = dict(idx[u])
               h = m["h"]
@@ -138,7 +138,10 @@ jobs:
                   body = "\f".join(pages[i] for i in keep)
                   wr(f"{M}/txt/{h}.txt.gz", body)
                   cmp_t["texte"][1] += 1
-                  cmp_t["texte"][0] += body == rd(f"{C}/txt/{h}.txt.gz")
+                  if body == rd(f"{C}/txt/{h}.txt.gz"):
+                      cmp_t["texte"][0] += 1
+                  else:
+                      tdiff.append(u.rsplit("/", 1)[-1][:60])
                   if u in s_ocr or u in s_ocr4:
                       ocr_pages = fx.cpt_ocr_pages(p_, pages, keep, m, td)
                       runs = [("", {})] + ([("4", {"psm": 4, "dpi": 400})] if u in s_ocr4 else [])
@@ -161,17 +164,31 @@ jobs:
               if json.dumps(a, sort_keys=True, ensure_ascii=False) == json.dumps(b_, sort_keys=True, ensure_ascii=False):
                   same += 1
               else:
-                  diff.append({"doc": u.rsplit("/", 1)[-1][:70], "ocr": bool(idx[u].get("ocr")), "st": [(b_ or {}).get("st"), (a or {}).get("st")],
-                               "exercices": [sorted((b_ or {}).get("y", {})), sorted((a or {}).get("y", {}))]})
-          rep["comptes"] = {"documents": len(mini), "postes_identiques": same, "textes_identiques": cmp_t, "ecarts": diff}
+                  ya, yb = (a or {}).get("y", {}), (b_ or {}).get("y", {})
+                  dy = []
+                  for yr in sorted(set(ya) | set(yb)):
+                      va, vb = ya.get(yr), yb.get(yr)
+                      if va == vb:
+                          continue
+                      if isinstance(va, dict) and isinstance(vb, dict):
+                          vva, vvb = va.get("v", va), vb.get("v", vb)
+                          ks = [k for k in sorted(set(vva) | set(vvb)) if vva.get(k) != vvb.get(k)] if isinstance(vva, dict) and isinstance(vvb, dict) else ["?"]
+                          dy.append(f"{yr}: " + ", ".join(f"{k} {vvb.get(k) if isinstance(vvb, dict) else '?'} -> {vva.get(k) if isinstance(vva, dict) else '?'}" for k in ks[:6]) + (f" (+{len(ks) - 6})" if len(ks) > 6 else ""))
+                      else:
+                          dy.append(f"{yr}: {'absent' if vb is None else 'present'} -> {'absent' if va is None else 'present'}")
+                  autres = [k for k in sorted(set(a or {}) | set(b_ or {})) if k != "y" and (a or {}).get(k) != (b_ or {}).get(k)]
+                  diff.append({"doc": u.rsplit("/", 1)[-1][:70], "t": idx[u].get("t"), "ocr": bool(idx[u].get("ocr")),
+                               "st": [(b_ or {}).get("st"), (a or {}).get("st")], "n": [(b_ or {}).get("n"), (a or {}).get("n")],
+                               "exercices": dy, "autres_champs": autres[:8]})
+          rep["comptes"] = {"documents": len(mini), "postes_identiques": same, "textes_identiques": cmp_t, "ecarts": diff, "textes_differents": tdiff}
 
           # ---------------------------------------------------------------- dividendes
           D = "/tmp/div"
           didx = json.load(open(f"{D}/index.json", encoding="utf8"))["docs"]
           d_txt = pick([(m["h"], u) for u, m in didx.items() if m.get("st") == "lu" and not m.get("ocr") and not m.get("wb")
-                        and (m.get("pages") or 0) > 0 and os.path.exists(f"{D}/txt/{m['h']}.txt.gz")], 12)
+                        and (m.get("pages") or 0) > 0 and os.path.exists(f"{D}/txt/{m['h']}.txt.gz")], 30)
           d_ocr = pick([(m["h"], u) for u, m in didx.items() if m.get("st") == "lu" and m.get("ocr") and not m.get("wb")
-                        and 0 < (m.get("pages") or 0) <= 2 and os.path.exists(f"{D}/txt/{m['h']}.fra.gz")], 5)
+                        and 0 < (m.get("pages") or 0) <= 2 and os.path.exists(f"{D}/txt/{m['h']}.fra.gz")], 12)
           dv = {"texte": [0, 0], "texte_nombres": [0, 0], "ocr": [0, 0], "ocr_nombres": [0, 0], "montants": [0, 0]}
           for u in d_txt + d_ocr:
               m = didx[u]
@@ -207,7 +224,7 @@ jobs:
           # ---------------------------------------------------------------- bulletins officiels de la cote
           B = "/tmp/boc/boc_px"
           days = []
-          for y, n in (("2026", 3), ("2023", 1), ("2020", 1), ("2016", 1)):
+          for y, n in (("2026", 3), ("2025", 1), ("2023", 1), ("2020", 1), ("2018", 1), ("2016", 1), ("2014", 1)):
               p_ = f"{B}/{y}.json"
               if os.path.exists(p_):
                   ks = sorted(json.load(open(p_, encoding="utf8")))
@@ -235,7 +252,9 @@ jobs:
               if json.loads(json.dumps(got)) == stored:
                   bo[0] += 1
               else:
-                  err.append(f"bulletin {k} : {sum(1 for s in set(got) | set(stored) if got.get(s) != stored.get(s))} lignes différentes")
+                  ds = [s for s in sorted(set(got) | set(stored)) if json.loads(json.dumps(got.get(s))) != stored.get(s)]
+                  ex_ = "; ".join(f"{s} {stored.get(s)} -> {got.get(s)}" for s in ds[:2])
+                  err.append(f"bulletin {k} ({url.rsplit('/', 1)[-1]}) : {len(ds)} lignes différentes sur {len(set(got) | set(stored))} (en cache {len(stored)}, relues {len(got)}) ; ex. {ex_}"[:900])
           rep["bulletins"] = bo
           rep["erreurs"] = err
           rep["duree_min"] = round((time.time() - t0) / 60, 1)
@@ -244,6 +263,12 @@ jobs:
           line = (f"comptes : postes identiques {c['postes_identiques']}/{c['documents']} ; textes {c['textes_identiques']} | "
                   f"dividendes {rep['dividendes']} | bulletins identiques {bo[0]}/{bo[1]} | erreurs {len(err)} | {rep['duree_min']} min")
           print(f"::notice title=Relecture {OS}::{line}")
+          for i, e_ in enumerate(c["ecarts"][:6]):
+              print(f"::warning title=Ecart comptes {OS} {i + 1}::" + json.dumps(e_, ensure_ascii=False)[:1500])
+          if c["textes_differents"]:
+              print(f"::warning title=Textes differents {OS}::" + " | ".join(c["textes_differents"])[:1500])
+          if err:
+              print(f"::warning title=Erreurs {OS}::" + " || ".join(err)[:3500])
           with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf8") as f:
               f.write(f"### {OS}\n\n```\n{json.dumps(rep, ensure_ascii=False, indent=1)}\n```\n")
           PY
