@@ -284,6 +284,94 @@ def brvm_avis(items, ev_src, acts, out):
     return res, nomap
 
 
+BASE_ITEMS = {"tresorerie": ("tresorerie_actif", "tresorerie_passif"), "dette_nette": ("dettes_financieres", "tresorerie_actif", "tresorerie_passif")}
+
+
+def base_fix(fund):
+    """Trésorerie nette, dette nette, dépôts et crédits de la base tierce (chiffres clés des sociétés) contrôlés exercice par exercice.
+
+    Avec les comptes publiés et vérifiés de la société (cpt, référentiel SYSCOHADA) : trésorerie nette = trésorerie actif - trésorerie
+    passif ; dette nette = dettes financières + trésorerie passif - trésorerie actif. Le montant de la base est remplacé par celui des
+    comptes publiés quand :
+      1. la base suit cette définition au moins trois autres exercices (à 1 % près, postes vérifiés) et s'en écarte cet exercice ;
+      2. ou le montant de la base est celui des comptes au signe près (signe inversé), la définition étant suivie au moins une autre année ;
+      3. ou le montant de la base est isolé (loin de ses deux voisins) alors que celui des comptes, lu dans au moins deux documents, est
+         dans la continuité des années voisines.
+    Ensuite, une trésorerie, une dette nette, des dépôts ou des crédits plus grands en valeur absolue que le total du bilan de la même
+    année (total lui-même cohérent avec les années voisines) ne peuvent pas exister : retirés plutôt qu'affichés faux.
+    Le ratio d'endettement de la base d'un exercice dont la dette nette change est retiré. Rend la liste des changements."""
+    import statistics
+
+    def ent(cc, y):
+        yy = (cc or {}).get("y") or {}
+        return yy.get(y) or yy.get(str(y)) or (yy.get(int(y)) if str(y).isdigit() else None) or {}
+
+    def derived(k, e, strict):
+        v, w = e.get("v") or {}, set(e.get("w") or [])
+        need = BASE_ITEMS[k] if strict else BASE_ITEMS[k][:-1]
+        if any(v.get(i) is None for i in need) or (strict and any(i in w for i in BASE_ITEMS[k])):
+            return None
+        if k == "tresorerie":
+            return v["tresorerie_actif"] - (v.get("tresorerie_passif") or 0)
+        return v["dettes_financieres"] + (v.get("tresorerie_passif") or 0) - v["tresorerie_actif"]
+
+    def close(a, b):
+        return abs(a - b) <= max(1.0, abs(b) * .01)
+    out = []
+    for t, f in fund.items():
+        if t == "_meta" or not isinstance(f, dict):
+            continue
+        ser = f.get("series") or {}
+        tb = {str(k): v for k, v in (ser.get("total_bilan") or {}).items() if isinstance(v, (int, float)) and v > 0}
+        cc = f.get("cpt")
+        if cc and cc.get("std") == "syscohada":
+            for k in BASE_ITEMS:
+                o = ser.get(k)
+                if not isinstance(o, dict):
+                    continue
+                S_ = {y: derived(k, ent(cc, y), True) for y in o}
+                L_ = {y: derived(k, ent(cc, y), False) for y in o}
+                orig = dict(o)
+                for y, x in orig.items():
+                    if not isinstance(x, (int, float)):
+                        continue
+                    others = [(y2, x2) for y2, x2 in orig.items() if y2 != y and isinstance(x2, (int, float))]
+                    conf_s = sum(1 for y2, x2 in others if S_[y2] is not None and close(S_[y2], x2))
+                    conf_l = sum(1 for y2, x2 in others if L_[y2] is not None and close(L_[y2], x2))
+                    cs, cl, new, why = S_[y], L_[y], None, None
+                    if cs is not None and not close(cs, x) and conf_s >= 3:
+                        new, why = cs, "définition de la base confirmée par les comptes"
+                    elif cl is not None and not close(cl, x) and abs(x + cl) <= max(1.0, abs(cl) * .005) and conf_l >= 1:
+                        new, why = cl, "signe inversé"
+                    elif cs is not None and (ent(cc, y).get("n") or 0) >= 2 and str(y).isdigit():
+                        nb = [orig[y2] for y2 in (str(int(y) - 1), str(int(y) + 1)) if isinstance(orig.get(y2), (int, float))]
+                        if nb:
+                            m, fl = statistics.median(nb), .01 * tb.get(str(y), 0)
+                            if abs(x - cs) > .5 * max(abs(cs), fl, 1.0) and abs(x - m) > 2.5 * max(abs(cs - m), fl, 1.0):
+                                new, why = cs, "montant isolé contredit par les comptes"
+                    if new is not None:
+                        o[y] = round(new, 1)
+                        if k == "dette_nette":
+                            (ser.get("ratio_endettement_net") or {}).pop(y, None)
+                        out.append(f"{t} {y} {k} {x:g} -> {o[y]:g} ({why})")
+        for k in ("tresorerie", "dette_nette", "depots_clientele", "credits_clientele"):
+            o = ser.get(k)
+            if not isinstance(o, dict):
+                continue
+            for y in list(o):
+                x, b = o.get(y), tb.get(str(y))
+                if not isinstance(x, (int, float)) or not b or abs(x) <= 1.02 * b:
+                    continue
+                nb = [tb[str(int(y) + d)] for d in (-1, 1) if str(y).isdigit() and str(int(y) + d) in tb]
+                if nb and not all(b / 3 <= z <= b * 3 for z in nb):
+                    continue  # total du bilan lui-même douteux : rien n'est touché
+                o.pop(y)
+                if k == "dette_nette":
+                    (ser.get("ratio_endettement_net") or {}).pop(y, None)
+                out.append(f"{t} {y} {k} {x:g} -> retiré (plus grand que le total du bilan {b:g})")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--brvm-src", required=True)
@@ -551,64 +639,11 @@ def main():
                     o.pop(y)
         for y in [y for y in (f.get("src_years") or {}) if str(y).isdigit() and int(y) < y0]:
             f["src_years"].pop(y)
-    # montants impossibles de la base tierce (chiffre en trop, erreur d'unité) : une trésorerie nette, une dette nette, des dépôts ou
-    # des crédits plus grands, en valeur absolue, que le total du bilan de la même année ne peuvent pas exister (quand ce total est
-    # lui-même cohérent avec les années voisines). Le montant est alors repris des comptes publiés et vérifiés si la base suit la même
-    # définition les autres années (au moins deux exercices concordants à 1 % près), sinon retiré plutôt qu'affiché faux.
-    # Liste dans boc_check.json (« base_rejets »).
-    base_rej = []
-
-    def cpt_v(cc_, y_):
-        yy = (cc_ or {}).get("y") or {}
-        r_ = yy.get(y_) or yy.get(str(y_)) or (yy.get(int(y_)) if str(y_).isdigit() else None)
-        return (r_ or {}).get("v") or {}
-
-    def tn_(v):  # trésorerie nette : trésorerie actif - trésorerie passif
-        return v["tresorerie_actif"] - (v.get("tresorerie_passif") or 0) if v.get("tresorerie_actif") is not None else None
-
-    def nd1_(v):  # dette nette : dettes financières + trésorerie passif - trésorerie actif
-        return (v["dettes_financieres"] + (v.get("tresorerie_passif") or 0) - v["tresorerie_actif"]
-                if v.get("dettes_financieres") is not None and v.get("tresorerie_actif") is not None else None)
-
-    def nd2_(v):  # dette nette : dettes financières - trésorerie actif
-        return v["dettes_financieres"] - v["tresorerie_actif"] if v.get("dettes_financieres") is not None and v.get("tresorerie_actif") is not None else None
-    BASE_DEF = {"tresorerie": (tn_,), "dette_nette": (nd1_, nd2_)}
-    for t, f in fund.items():
-        if t == "_meta" or not isinstance(f, dict):
-            continue
-        ser = f.get("series") or {}
-        tb = {str(k): v for k, v in (ser.get("total_bilan") or {}).items() if isinstance(v, (int, float)) and v > 0}
-        for k in ("tresorerie", "dette_nette", "depots_clientele", "credits_clientele"):
-            o = ser.get(k)
-            if not isinstance(o, dict):
-                continue
-            for y in list(o):
-                x, b = o.get(y), tb.get(str(y))
-                if not isinstance(x, (int, float)) or not b or abs(x) <= 1.02 * b:
-                    continue
-                nb = [tb[str(int(y) + d)] for d in (-1, 1) if str(y).isdigit() and str(int(y) + d) in tb]
-                if nb and not all(b / 3 <= z <= b * 3 for z in nb):
-                    continue  # total du bilan lui-même douteux : rien n'est touché
-                new = None
-                for fn in BASE_DEF.get(k, ()):
-                    same = 0
-                    for y2, x2 in o.items():
-                        d2 = fn(cpt_v(f.get("cpt"), y2)) if y2 != y and isinstance(x2, (int, float)) else None
-                        if d2 is not None and abs(d2 - x2) <= max(1.0, abs(x2) * .01):
-                            same += 1
-                    d_ = fn(cpt_v(f.get("cpt"), y))
-                    if same >= 2 and d_ is not None and abs(d_) <= 1.02 * b:
-                        new = round(d_, 1)
-                        break
-                if new is None:
-                    o.pop(y)
-                else:
-                    o[y] = new
-                if k == "dette_nette":
-                    (ser.get("ratio_endettement_net") or {}).pop(y, None)
-                base_rej.append(f"{t} {y} {k} {x:g} -> " + ("retiré" if new is None else f"{new:g} (comptes publiés)") + f" (total du bilan {b:g})")
+    # trésorerie nette et dette nette de la base tierce contrôlées par les comptes publiés et vérifiés, montants impossibles retirés
+    # (voir base_fix) ; liste dans boc_check.json (« base_rejets »)
+    base_rej = base_fix(fund)
     if base_rej:
-        log("montants impossibles de la base tierce :", "; ".join(base_rej))
+        log("base tierce corrigée d'après les comptes publiés ou retirée :", "; ".join(base_rej))
     # flux de trésorerie : ceux des états financiers publiés à la BRVM et vérifiés (flux des activités opérationnelles et
     # acquisitions d'immobilisations du même document) ; l'ancienne lecture sans contrôle (pdf_fin.json) n'est plus utilisée
     pdf_cf = {}
@@ -901,6 +936,37 @@ def main():
                 x["dividende"] = round(x["dividende"] / f_, 4)
                 x["ajust"] = round((x.get("ajust") or 1.0) * f_, 6)
 
+    # versements en double (même titre, même exercice, même montant à 1 % près, dates à 75 jours près ou absentes) : un bulletin de
+    # l'ancien site lu avec une date décalée d'un mois, ou un avis et un bulletin pour le même versement — le mieux renseigné est gardé
+    # (date de détachement, date d'annonce, source officielle). Les paiements fractionnés (montants différents) ne sont pas concernés.
+    def dq_(x):
+        return (bool(x.get("date_detachement")), bool(x.get("date_annonce")), x.get("source") not in ("BOC", None), bool(x.get("date_paiement")))
+    by_ = collections.defaultdict(list)
+    for x in divs:
+        if x.get("ticker") and x.get("exercice") and x.get("dividende") and not x.get("exc"):
+            by_[(x["ticker"], int(x["exercice"]))].append(x)
+    drop_, dd_rm = set(), []
+    for (t, ex_), xs in by_.items():
+        if len(xs) < 2:
+            continue
+        xs = sorted(xs, key=dq_, reverse=True)
+        for i_, a_ in enumerate(xs):
+            if id(a_) in drop_:
+                continue
+            for b_ in xs[i_ + 1:]:
+                if id(b_) in drop_ or abs(a_["dividende"] - b_["dividende"]) > .01 * max(a_["dividende"], b_["dividende"]):
+                    continue
+                da_, db_ = (a_.get("date_paiement") or a_.get("date_detachement")), (b_.get("date_paiement") or b_.get("date_detachement"))
+                try:
+                    if da_ and db_ and abs((dt.date.fromisoformat(da_[:10]) - dt.date.fromisoformat(db_[:10])).days) > 75:
+                        continue
+                except ValueError:
+                    continue
+                drop_.add(id(b_))
+                dd_rm.append(f"{t} {ex_} {b_['dividende']:g} ({b_.get('date_paiement') or b_.get('date_detachement') or 'sans date'})")
+    if drop_:
+        divs[:] = [x for x in divs if id(x) not in drop_]
+        log("versements en double retirés :", "; ".join(dd_rm))
     status = json.load(open(os.path.join(src, "trading_status.json"), encoding="utf8"))
     session = json.load(open(a.session, encoding="utf8")) if a.session and os.path.exists(a.session) else None
     sess_rows = {r["t"]: r for r in (session or {}).get("rows", [])}
@@ -935,6 +1001,57 @@ def main():
             boc_chk["diff"] += nd_
             if ck:
                 boc_chk["by"][t] = [len(ck), nd_]
+            # séances échangées absentes de la base au milieu de l'historique (jour entier manquant, ex. 27/02/2025) : reprises du
+            # bulletin officiel, ramenées sur la base de la série (facteur local = rapport médian série / bulletin des séances voisines,
+            # seulement s'il est stable) ; volume ramené du même facteur, montant échangé tel quel
+            have_ = {r[0] for r in rows}
+            gaps_ = [k for k in B_ if rows[0][0] < k < rows[-1][0] and k not in have_ and (B_[k].get("vol") or 0) > 0 and B_[k].get("c")
+                     and not is_weekend(k)]
+            if gaps_:
+                import bisect
+                qd_ = sorted((r[0], r[4] / B_[r[0]]["c"]) for r in rows if r[4] and (B_.get(r[0]) or {}).get("c"))
+                ks_ = [x[0] for x in qd_]
+                ins_ = []
+                days_ = [r[0] for r in rows]
+                by_day_ = {r[0]: r for r in rows}
+                for k in sorted(gaps_):
+                    i0 = bisect.bisect_left(ks_, k)
+                    win = sorted(q for _, q in qd_[max(0, i0 - 10):i0 + 10])
+                    if len(win) < 5:
+                        continue
+                    m_ = win[len(win) // 2]
+                    if sum(1 for q in win if abs(q / m_ - 1) <= .005) < .7 * len(win):
+                        continue  # (opération sur titres toute proche : facteur incertain, séance laissée manquante)
+                    from fractions import Fraction
+                    fr_ = Fraction(m_).limit_denominator(40)
+                    if abs(float(fr_) / m_ - 1) < .003:
+                        m_ = float(fr_)  # (rapport d'une opération sur titres : 1, 1/2, 2/3… exactement, sans bruit d'arrondi)
+                    rb_ = B_[k]
+                    c_, o_ = round(rb_["c"] * m_, 2), round((rb_.get("o") or rb_["c"]) * m_, 2)
+                    # (séance cohérente avec ses voisines : cours précédent du bulletin = clôture de la veille dans la série, et cours
+                    # précédent du bulletin suivant = cette clôture ; un bulletin daté d'un jour férié qui reprend la séance de la veille,
+                    # ou une ligne identique à la veille, est écarté)
+                    i_s = bisect.bisect_left(days_, k)
+                    pv_ = by_day_[days_[i_s - 1]] if i_s > 0 else None
+                    nx_k = next((k2 for k2 in sorted(B_) if k2 > k), None)
+                    if pv_ and rb_.get("prev") and abs(rb_["prev"] * m_ / pv_[4] - 1) > .01:
+                        continue
+                    if nx_k and (B_[nx_k].get("prev")) and abs(B_[nx_k]["prev"] * m_ / c_ - 1) > .01:
+                        continue
+                    if pv_ and abs(pv_[4] - c_) < 1e-9 and pv_[5] == int(round((rb_.get("vol") or 0) / m_)):
+                        continue
+                    pk_ = next((k2 for k2 in sorted(B_, reverse=True) if k2 < k), None)
+                    if pk_ and all(B_[pk_].get(c2) == rb_.get(c2) for c2 in ("prev", "o", "c", "vol", "val")):
+                        continue  # (bulletin d'un jour férié qui recopie celui de la veille)
+                    nr_ = (k, o_, max(o_, c_), min(o_, c_), c_, int(round((rb_.get("vol") or 0) / m_)), int(rb_.get("val") or 0))
+                    ins_.append(nr_)
+                    bisect.insort(days_, k)  # (plusieurs séances manquantes de suite : la suivante se raccorde à celle-ci)
+                    by_day_[k] = nr_
+                if ins_:
+                    rows = sorted(rows + ins_, key=lambda r: r[0])
+                    boc_chk["gap_fill"] = boc_chk.get("gap_fill", 0) + len(ins_)
+                    gfb_ = boc_chk.setdefault("gap_fill_by", {})
+                    gfb_[t] = gfb_.get(t, 0) + len(ins_)
             last_d = rows[-1][0]
             for k in sorted(B_):
                 if k <= last_d:
@@ -1033,6 +1150,35 @@ def main():
                     j += 10
                     continue
                 j += 1
+        # augmentation de capital avec droits préférentiels (ou autre opération sur le capital) que la base de cours n'a pas ajustée :
+        # la veille de la cotation ex-droit, la BRVM abaisse le cours de référence nettement sous la clôture (de 10 % à 45 %) sans
+        # dividende qui l'explique, et la séance suivante part de ce cours de référence. Les cours antérieurs sont ramenés sur la
+        # nouvelle base par le rapport clôture ÷ cours de référence (ex. SAFC 24/04/2026, droits préférentiels de souscription)
+        if BOC.get(t) and rows:
+            B_ = BOC[t]
+            bd_ = sorted(B_)
+            for i_, d_ in enumerate(bd_[:-1]):
+                rb_, nx_ = B_[d_], B_[bd_[i_ + 1]]
+                c_, ref_ = rb_.get("c"), rb_.get("ref")
+                if not c_ or not ref_ or not (1.1 < c_ / ref_ < 1.8):
+                    continue
+                e_ = bd_[i_ + 1]
+                if not nx_.get("prev") or abs(nx_["prev"] / ref_ - 1) > .005 or not nx_.get("c") or abs(nx_["c"] / ref_ - 1) > .1:
+                    continue  # (séance suivante qui ne part pas du cours de référence : lecture douteuse)
+                try:
+                    dd_ = nx_.get("div_d")
+                    if dd_ and abs((dt.date.fromisoformat(str(dd_)[:10]) - i2d(e_)).days) <= 7:
+                        continue  # dividende détaché ce jour-là (bulletin)
+                except ValueError:
+                    pass
+                dv_ = sum((x.get("dividende_publie") or x["dividende"]) for x in divs if x.get("ticker") == t and x.get("dividende")
+                          and any(x.get(kk) and abs((i2d(di(x[kk][:10])) - i2d(e_)).days) <= 7 for kk in ("date_detachement", "date_paiement")))
+                if dv_ and abs(dv_ / (c_ - ref_) - 1) < .25:
+                    continue  # baisse expliquée par le dividende détaché
+                if any(abs((i2d(e0) - i2d(e_)).days) < 45 for e0, _ in SPL.get(t, [])):
+                    continue  # opération déjà connue (avis, palier des cours)
+                SPL[t].append((e_, round(c_ / ref_, 6)))
+                split_log.append(f"{t} {e_} x{c_ / ref_:.4f} : opération sur le capital (cours de référence abaissé par la BRVM la veille, sans dividende)")
         if t in SPL:
             adj_divs(t)
         for e_, k_ in sorted(SPL.get(t, [])):
@@ -1179,7 +1325,9 @@ def main():
                 # (série non ajustée à cette date — facteur exactement 1 — : toute différence avec la clôture officielle est corrigée ;
                 # série ajustée d'une opération sur titres : écart de plus de 0,5 % au facteur local)
                 tol_ = 1e-6 if abs(m_ - 1) < 1e-9 else .005
-                if abs(q / m_ - 1) <= tol_ or sum(1 for x in win if abs(x / m_ - 1) <= .005) < .7 * len(win):
+                # (facteur local stable : 70 % des séances voisines au même rapport ; série non ajustée — rapport exactement 1 —
+                # 50 % suffisent, plusieurs clôtures fausses de la base pouvant se suivre)
+                if abs(q / m_ - 1) <= tol_ or sum(1 for x in win if abs(x / m_ - 1) <= .005) < (.5 if abs(m_ - 1) < 1e-9 else .7) * len(win):
                     continue
                 b_ = B_[rows[j][0]]
                 if b_.get("prev") and b_.get("var") is not None and abs(b_["prev"] * (1 + b_["var"] / 100) / b_["c"] - 1) > .006:
@@ -1537,9 +1685,16 @@ def main():
     if AV:
         log("avis brvm.org ajoutés :", av_chk)
     emeta.sort(key=lambda x: (x["d"] or "", x.get("u") or ""), reverse=True)
-    # même événement repris deux fois (avis publié une seconde fois sous un autre fichier, ou déjà présent dans la base) : gardé une fois
-    seen_ev = set()
-    emeta = [x for x in emeta if not ((x["t"], x["d"], x["c"], _nm(x["ti"])) in seen_ev or seen_ev.add((x["t"], x["d"], x["c"], _nm(x["ti"]))))]
+    # même événement repris deux fois (avis publié une seconde fois sous un autre fichier — « …_1.pdf », nom légèrement différent —,
+    # ou déjà présent dans la base sous une autre rubrique) : même titre, même société, mêmes dates ; gardé une fois, avec la rubrique
+    # la plus précise (« Avis de la BRVM » est la rubrique générale)
+    best_ev = {}
+    for x in emeta:
+        k_ = (x["t"], x["d"], x.get("e"), _nm(x["ti"]))
+        if k_ not in best_ev or (best_ev[k_].get("c") in ("Avis de la BRVM", None) and x.get("c") not in ("Avis de la BRVM", None)):
+            best_ev[k_] = x
+    keep_ = {id(x) for x in best_ev.values()}
+    emeta = [x for x in emeta if id(x) in keep_]
 
     # Calculs dérivés (macro, sentiment, liquidité, comptes, consensus, valorisation BRVM, UEMOA) ----
     # flux de trésorerie : uniquement ceux lus et vérifiés dans les états financiers publiés (pdf_cf). L'ancien fichier de départ

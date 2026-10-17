@@ -10,7 +10,7 @@ Aucun montant n'est calculé pour combler un manque ; un montant net n'est dédu
 
 Usage : dividendes.py --dir DOSSIER   (index.json et txt/ écrits par fetch_extra.py --only divhist) -> DOSSIER/dividendes.json
 """
-import argparse, datetime as dt, gzip, json, os, re, unicodedata, urllib.parse
+import argparse, collections, datetime as dt, gzip, json, os, re, unicodedata, urllib.parse
 
 FR_MOIS = {"janvier": 1, "janv": 1, "fevrier": 2, "fevr": 2, "fev": 2, "mars": 3, "avril": 4, "avr": 4, "mai": 5, "juin": 6, "juillet": 7, "juil": 7,
            "aout": 8, "septembre": 9, "sept": 9, "octobre": 10, "oct": 10, "novembre": 11, "nov": 11, "decembre": 12, "dec": 12}
@@ -130,6 +130,27 @@ def parse_avis(txt):
     r["rec"] = _d(m) if m else None  # (date d'arrêté des registres : jour du paiement dans les avis récents)
     m = re.search(r"fait a abidjan,? le " + DATE_RX, f)
     r["pub"] = _d(m) if m else None
+    # date dont l'année est mal lue ou mal imprimée (« mardi 26 mai 2005 » dans un avis n° 46-2009 aux registres fermés le 28 mai 2009 ;
+    # « paiement le 30 mai 2024 » ou « fait à Abidjan le 15 mai 2024 » dans un avis n° 107-2025) : année de référence = celle du
+    # numéro de l'avis, sinon celle que partagent la majorité des dates de l'avis ; une date d'une autre année, à plus de 200 jours
+    # d'une date de l'année de référence, prend cette année si elle tombe alors à moins de 60 jours d'elle (un avis de décembre pour
+    # un détachement en janvier n'est pas touché : ses dates sont proches)
+    ds_ = {k: dt.date.fromisoformat(r[k]) for k in ("det", "pay", "rec", "pub") if r.get(k)}
+    y_ref = r.get("yr")
+    if not y_ref and ds_:
+        cy_ = collections.Counter(v.year for v in ds_.values()).most_common()
+        y_ref = cy_[0][0] if len(cy_) == 1 or cy_[0][1] > cy_[1][1] else None
+    if y_ref:
+        ref_ds = [v for v in ds_.values() if v.year == y_ref]
+        for k, v in ds_.items():
+            if v.year == y_ref or not ref_ds:
+                continue
+            try:
+                v2 = v.replace(year=y_ref)
+            except ValueError:
+                continue
+            if any(abs((v2 - w).days) <= 60 and abs((v - w).days) > 200 for w in ref_ds):
+                r[k] = v2.isoformat()
     # exercice : celui que l'avis annonce (« au titre de l'exercice 2002 », titre « Exercice 2002 ») ; une coquille (« exercice 2008 »
     # dans un avis de juillet 2004) est écartée : l'exercice précède l'année du détachement d'un ou deux ans
     ref_y = int((r.get("det") or r.get("rec") or r.get("pay") or r.get("pub") or "0")[:4])
@@ -291,7 +312,9 @@ _BOILER = re.compile(r"bourse regionale des valeurs|siege social|\btel\b|t[eé]l
                      r"^(?:societe anonyme|s\.? ?a\.? avec)|societe anonyme.{0,40}capital|\bau capital de\b.*\d{3}|capital social|"
                      r"zone industrielle|\bimmeuble\b|\bpage \d+\b|\d\d?:\d\d|afrique de (?:l.? ?)?p?ouest\s*$|"
                      r"^\W*r.publique\b[^,;:]{0,30}$|\brc n|\bs\.?\s?a\.? au capital|^\W*prendre contact|"
-                     r"^(?!.*(?:ordre|seance|cotation|transaction)).*\b[bge]?o?urse\b.*(?:mob|nob|valeu|valeh|regon|regional|\brer\b)", re.I)
+                     r"^(?!.*(?:ordre|seance|cotation|transaction)).*\b[bge]?o?urse\b.*(?:mob|nob|valeu|valeh|regon|regional|\brer\b)|"
+                     r"regional stock exchange|national offices|union mon.taire ouest africaine|conseil r.gional de l.?.pargne|"
+                     r"^\W*(?:et )?des march.s financiers\W*$|^\W*le pr.sident\W*$|\brue\b|\bimmeuble\b|\b\d+(?:er|e|eme)? etage\b|\bzone \d+\b", re.I)
 
 
 def _head_title(t):
@@ -310,9 +333,26 @@ def _head_title(t):
         L.append(l)
     if not L:
         return None
-    i = next((i for i, l in enumerate(L[:15]) if re.match(r"(avis|communiqu|note|decision|instruction|resultat)", nrm(l))), None)
+    i = next((i for i, l in enumerate(L[:15]) if re.match(r"(avis|communiqu|note|decision|instruction|resultat|cotation hebdo)", nrm(l))), None)
     parts = L[i:i + 3] if i is not None else L[:2]
     return " — ".join(p[:90] for p in parts)
+
+
+def _fallback_title(t):
+    """Intitulé de secours d'un document dont le texte tient sur une seule ligne (en-tête de l'émetteur collé au corps) : nom de
+    l'émetteur avant « Société anonyme… » et nature du document (convocation, projet de résolutions, résultats, communiqué, bilan),
+    sinon la première phrase."""
+    n = re.sub(r"\s+", " ", t[:1500]).strip()
+    m = re.match(r"(.{4,90}?)\s+(?:soci[eé]t[eé] anonyme|s\.?a\.? avec|au capital|capital social|si[eè]ge social)", n, re.I)
+    head = m.group(1).strip(" -—|") if m else ""
+    kinds = (("convocation", "Convocation à l'assemblée générale"), ("projet de r[eé]solution", "Projet de résolutions"),
+             (r"publication des r[eé]sultats|r[eé]sultats (?:annuels|trimestriels|semestriels|au \d)", "Résultats"),
+             ("communiqu", "Communiqué"), (r"\bbilan\b", "États financiers"))
+    kind = next((lab for rx, lab in kinds if re.search(rx, n[:1200], re.I)), None)
+    if head:
+        return head + (f" — {kind}" if kind else "")
+    first = re.split(r"\s*[:.]\s", n, maxsplit=1)[0][:90].strip()
+    return first if len(re.findall(r"[a-zA-Z]", first)) >= 8 else kind
 
 
 FR_MOIS_LONG = ("janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre")
@@ -607,7 +647,8 @@ def run(d):
             continue
         c_ = {"u": u, **({"wb": m["wb"]} if m.get("wb") else {})}
         cat.append(c_)
-        if re.search(r"bulletin officiel de la cote", nrm(t[:3000])):
+        # (bulletin de la cote : titre en tête du document ; une décision ou un avis qui cite le bulletin plus loin n'en est pas un)
+        if re.search(r"bulletin officiel de la cote", nrm(t[:1200])) and not re.search(r"\bdecision n", nrm(t[:800])):
             n_boc += 1
             bd_ = _boc_date(t)
             c_.update(k="boc", d=bd_, ti="Bulletin officiel de la cote" + (f" du {_fr_long(bd_)}" if bd_ else ""))
@@ -652,7 +693,13 @@ def run(d):
             avis.append({**r, "t": tk, "u": u, "ocr": ocr})
             # (un bulletin de la cote, un manuel, un règlement ou une instruction cite des paiements de dividendes sans être un avis :
             # son intitulé est tiré plus loin de la liste, du nom du fichier ou de l'en-tête du document)
-            if "k" not in c_ and not NOT_AVIS.search(fn_):
+            # (avis de paiement seulement : numéro d'avis, formule de la BRVM ou du Dépositaire central, ou mise en paiement annoncée en
+            # tête ; une convocation d'assemblée, des états financiers ou une décision qui citent un dividende gardent leur propre intitulé)
+            is_avis_ = bool(r.get("num")) or bool(re.search(r"porte a la connaissance|paiement (?:de|du|des) dividende|mise en paiement|mettra en paiement",
+                                                             nrm(t[:1500])))
+            if "k" not in c_ and tk and not is_avis_:
+                c_.setdefault("t", tk)  # (société reconnue : gardée pour la recherche, l'intitulé vient du document)
+            if "k" not in c_ and not NOT_AVIS.search(fn_) and is_avis_:
                 org_ = "DC/BR" if r.get("org") == "DC/BR" else "BRVM"
                 num_ = f" n° {r['num']}" + (f"-{r['yr']}" if r.get("yr") else "") if r.get("num") else ""
                 soc_ = (r.get("soc") or m.get("soc") or "").strip().upper()
@@ -675,7 +722,7 @@ def run(d):
             if not ti_ and not re.search(r"linkclick|fileticket", fn_, re.I):
                 ti_ = re.sub(r"\s+", " ", re.sub(r"\.pdf$|[_]+", " ", fn_, flags=re.I)).strip()
             t, _ = read_text(d, m["h"])
-            ti_ = ti_ or _head_title(t or "")
+            ti_ = ti_ or _head_title(t or "") or _fallback_title(t or "")
             if not ti_:
                 continue
             c_.update(k="avis", ti=ti_[:160], d=c_.get("d") or _pubdate(c_["u"]) or (fr_date(nrm((t or "")[:2500])) if t else None))
