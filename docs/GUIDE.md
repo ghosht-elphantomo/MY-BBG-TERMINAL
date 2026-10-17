@@ -145,10 +145,19 @@ Tout est automatique (GitHub Actions) ; aucune intervention manuelle n'est néce
 | Dividendes BRVM (`dividendes.yml`) | chaque jour, passages enchaînés si besoin | avis et calendriers de paiement des dividendes | `dividendes` |
 | Base historique (`histo.yml`) | chaque soir | archive cumulative contrôlée (cours, indices, dividendes, événements, états financiers) | `histo` |
 | Export complet (`export.yml`) | chaque nuit | copie autonome du site et de ses données, ouvrable sans connexion | `export` |
+| Copie de secours (`copie.yml`) | chaque nuit (03:38 UTC) | copie complète de toutes les branches (code et données) vers un dépôt privé hors GitHub ; ne supprime jamais rien côté secours ; alerte un mois avant l'expiration de sa clé (17/10/2027) | dépôt de secours |
 | Lien temporaire (`lien.yml`) | à la demande | lien d'accès au terminal qui expire tout seul | — |
 | Sonde, Références (`probe.yml`, `refs.yml`) | à la demande (développement) | tests de sources, documents de référence | `probe`, `refs` |
 
 Le site publié lit ses données en direct sur la branche `data` (`api/data.js`) ; la branche `site` ne contient que la page et n'est redéployée que si le code change. Les branches de données ne sont jamais déployées (`vercel.json`).
+
+### Secours si GitHub ne répond plus
+
+- **Copie** : `copie.yml` envoie chaque nuit tout le dépôt vers un dépôt privé hors GitHub (secret GitHub `GITLAB_TOKEN`, droits lecture et écriture du dépôt uniquement).
+- **Lecture par le site** : si GitHub ne répond plus (ou ne connaît plus le dépôt), `api/data.js` lit les données dans la copie (variable Vercel partagée `GITLAB_READ_TOKEN`, lecture seule, reliée au projet). Le site reste alors utilisable avec des données d'au plus un jour. Essai du secours seul : `/api/data?p=qlabp/index.json&via=2`.
+- **Clés** : les deux clés expirent le 17/10/2027 ; en créer de nouvelles (ou « Rotate ») et remplacer le secret GitHub et la variable Vercel avant cette date.
+- **Page du dépôt** : le champ « site web » du dépôt doit rester rempli avec l'adresse du dépôt lui-même — s'il est vide, Vercel y remet automatiquement l'adresse du site à chaque mise en ligne.
+- **Plan B complet** (à préparer) : kit d'installation d'un serveur qui reprendrait les automatisations et écrirait dans la copie.
 
 ## Fichiers
 
