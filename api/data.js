@@ -1,7 +1,6 @@
 // Relais des données du terminal : le site lit /data/<fichier>.json ; ce relais les prend sur la branche « data »
 // du dépôt (réécrite toutes les 15 minutes par GitHub Actions) sans redéployer le site. Cache CDN : 60 s.
-// Transition de nom du dépôt : l'ancien nom puis le nouveau (le nom unique sera remis une fois le changement fait).
-const REPOS = ['ghosht-elphantomo/MY-BBG-TERMINAL', 'ghosht-elphantomo/noodleloop'];
+const REPOS = ['ghosht-elphantomo/noodleloop'];
 const ORIGINS = [
   ...REPOS.map(r => p => `https://raw.githubusercontent.com/${r}/data/data/${p}?v=${Math.floor(Date.now() / 60000)}`),
   ...REPOS.map(r => p => `https://cdn.jsdelivr.net/gh/${r}@data/data/${p}`),
