@@ -12,7 +12,8 @@ permissions:
 
 jobs:
   probe:
-    runs-on: ubuntu-latest
+    # machines Ubuntu 24.04 gardées : lecture des PDF identique à celle de tout le cache (voir essai.yml et docs/GUIDE.md)
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7

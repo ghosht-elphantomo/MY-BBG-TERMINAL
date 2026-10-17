@@ -39,7 +39,7 @@ jobs:
   # Le métronome (metronome.yml) lance un relevé pile à chaque quart d'heure ; la programmation */15 reste en secours
   # et s'efface si le métronome a lancé un relevé il y a moins de 12 minutes (pas de doublon).
   gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 3
     outputs:
       go: ${{ steps.g.outputs.go }}
@@ -59,7 +59,8 @@ jobs:
   refresh:
     needs: gate
     if: needs.gate.outputs.go == '1'
-    runs-on: ubuntu-latest
+    # machines Ubuntu 24.04 gardées : lecture des PDF identique à celle de tout le cache (voir essai.yml et docs/GUIDE.md)
+    runs-on: ubuntu-24.04
     timeout-minutes: 95
     steps:
       - uses: actions/checkout@v7

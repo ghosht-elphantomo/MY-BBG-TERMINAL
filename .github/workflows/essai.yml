@@ -1,7 +1,7 @@
 name: Essai des machines (Ubuntu 26)
 
-# Essai lancé à la main avant de passer les automatisations sur les nouvelles machines de GitHub (Ubuntu 26.04).
-# Les mêmes contrôles tournent sur Ubuntu 24.04 (machines actuelles) et sur Ubuntu 26.04 :
+# Essai lancé à la main avant tout changement de machine (nouvelle version d'Ubuntu chez GitHub, serveur de secours) et après un
+# changement du calcul de la base. Les mêmes contrôles tournent sur Ubuntu 24.04 et sur Ubuntu 26.04 :
 #   1. versions des outils (Python, lecture des PDF, reconnaissance de caractères) et compilation de tous les scripts ;
 #   2. relecture d'un échantillon de documents déjà lus (comptes : couche texte et scans ; dividendes ; bulletins de la cote)
 #      et comparaison exacte avec ce qui est en cache (textes, postes vérifiés, cours) ;
@@ -317,6 +317,9 @@ jobs:
           import json, os
           d = "/tmp/site/data"
           json.dump({f: os.path.getsize(os.path.join(d, f)) for f in os.listdir(d)}, open("/tmp/avant.json", "w"))
+          import shutil
+          if os.path.exists(os.path.join(d, "fundamentals.json")):
+              shutil.copyfile(os.path.join(d, "fundamentals.json"), "/tmp/fund_avant.json")
           PY
 
       - name: Cache des sources (lecture seule)
@@ -384,4 +387,18 @@ jobs:
                   f"nettement plus petits qu'avant {petits or 0} ; manquants {manquants or 0}")
           print(line)
           print(f"::notice title=Terminal {os.environ['ESSAI_OS']}::{line}")
+          # chiffres clés des sociétés avant / après ce passage (base tierce et comptes publiés)
+          if os.path.exists("/tmp/fund_avant.json"):
+              A, B = json.load(open("/tmp/fund_avant.json")), json.load(open(os.path.join(d, "fundamentals.json")))
+              ch = []
+              for t in sorted(set(A) | set(B)):
+                  sa, sb = (A.get(t) or {}).get("series") or {}, (B.get(t) or {}).get("series") or {}
+                  for k in sorted(set(sa) | set(sb)):
+                      for y in sorted(set(sa.get(k) or {}) | set(sb.get(k) or {})):
+                          va, vb = (sa.get(k) or {}).get(y), (sb.get(k) or {}).get(y)
+                          if va != vb:
+                              ch.append(f"{t} {k} {y} : {va} -> {vb}")
+              rej = (json.load(open(os.path.join(d, "boc_check.json"))) or {}).get("base_rejets")
+              print(f"::notice title=Chiffres cles {os.environ['ESSAI_OS']}::{len(ch)} montants changés ; " + " | ".join(ch[:20])[:1800]
+                    + f" || base_rejets : {rej}"[:900])
           PY

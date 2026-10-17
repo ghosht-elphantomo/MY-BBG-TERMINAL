@@ -20,7 +20,7 @@ permissions:
 
 jobs:
   tick:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 355
     steps:
       - name: Un métronome tourne-t-il déjà ?

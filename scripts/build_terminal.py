@@ -551,6 +551,64 @@ def main():
                     o.pop(y)
         for y in [y for y in (f.get("src_years") or {}) if str(y).isdigit() and int(y) < y0]:
             f["src_years"].pop(y)
+    # montants impossibles de la base tierce (chiffre en trop, erreur d'unité) : une trésorerie nette, une dette nette, des dépôts ou
+    # des crédits plus grands, en valeur absolue, que le total du bilan de la même année ne peuvent pas exister (quand ce total est
+    # lui-même cohérent avec les années voisines). Le montant est alors repris des comptes publiés et vérifiés si la base suit la même
+    # définition les autres années (au moins deux exercices concordants à 1 % près), sinon retiré plutôt qu'affiché faux.
+    # Liste dans boc_check.json (« base_rejets »).
+    base_rej = []
+
+    def cpt_v(cc_, y_):
+        yy = (cc_ or {}).get("y") or {}
+        r_ = yy.get(y_) or yy.get(str(y_)) or (yy.get(int(y_)) if str(y_).isdigit() else None)
+        return (r_ or {}).get("v") or {}
+
+    def tn_(v):  # trésorerie nette : trésorerie actif - trésorerie passif
+        return v["tresorerie_actif"] - (v.get("tresorerie_passif") or 0) if v.get("tresorerie_actif") is not None else None
+
+    def nd1_(v):  # dette nette : dettes financières + trésorerie passif - trésorerie actif
+        return (v["dettes_financieres"] + (v.get("tresorerie_passif") or 0) - v["tresorerie_actif"]
+                if v.get("dettes_financieres") is not None and v.get("tresorerie_actif") is not None else None)
+
+    def nd2_(v):  # dette nette : dettes financières - trésorerie actif
+        return v["dettes_financieres"] - v["tresorerie_actif"] if v.get("dettes_financieres") is not None and v.get("tresorerie_actif") is not None else None
+    BASE_DEF = {"tresorerie": (tn_,), "dette_nette": (nd1_, nd2_)}
+    for t, f in fund.items():
+        if t == "_meta" or not isinstance(f, dict):
+            continue
+        ser = f.get("series") or {}
+        tb = {str(k): v for k, v in (ser.get("total_bilan") or {}).items() if isinstance(v, (int, float)) and v > 0}
+        for k in ("tresorerie", "dette_nette", "depots_clientele", "credits_clientele"):
+            o = ser.get(k)
+            if not isinstance(o, dict):
+                continue
+            for y in list(o):
+                x, b = o.get(y), tb.get(str(y))
+                if not isinstance(x, (int, float)) or not b or abs(x) <= 1.02 * b:
+                    continue
+                nb = [tb[str(int(y) + d)] for d in (-1, 1) if str(y).isdigit() and str(int(y) + d) in tb]
+                if nb and not all(b / 3 <= z <= b * 3 for z in nb):
+                    continue  # total du bilan lui-même douteux : rien n'est touché
+                new = None
+                for fn in BASE_DEF.get(k, ()):
+                    same = 0
+                    for y2, x2 in o.items():
+                        d2 = fn(cpt_v(f.get("cpt"), y2)) if y2 != y and isinstance(x2, (int, float)) else None
+                        if d2 is not None and abs(d2 - x2) <= max(1.0, abs(x2) * .01):
+                            same += 1
+                    d_ = fn(cpt_v(f.get("cpt"), y))
+                    if same >= 2 and d_ is not None and abs(d_) <= 1.02 * b:
+                        new = round(d_, 1)
+                        break
+                if new is None:
+                    o.pop(y)
+                else:
+                    o[y] = new
+                if k == "dette_nette":
+                    (ser.get("ratio_endettement_net") or {}).pop(y, None)
+                base_rej.append(f"{t} {y} {k} {x:g} -> " + ("retiré" if new is None else f"{new:g} (comptes publiés)") + f" (total du bilan {b:g})")
+    if base_rej:
+        log("montants impossibles de la base tierce :", "; ".join(base_rej))
     # flux de trésorerie : ceux des états financiers publiés à la BRVM et vérifiés (flux des activités opérationnelles et
     # acquisitions d'immobilisations du même document) ; l'ancienne lecture sans contrôle (pdf_fin.json) n'est plus utilisée
     pdf_cf = {}
@@ -1559,7 +1617,7 @@ def main():
     except Exception as e:  # noqa: BLE001
         log("flottant officiel illisible :", e)
     for name, obj in (("summary", summ), ("weekly", wm), ("breadth", breadth), ("fundamentals", fmeta), ("dividends", dmeta), ("events", emeta),
-                      ("events_recent", emeta[:80]), ("boc_check", {**boc_chk, "avis": av_chk, "d": dt.date.today().isoformat()} if BOC else {"n": 0, "avis": av_chk})):
+                      ("events_recent", emeta[:80]), ("boc_check", {**boc_chk, "avis": av_chk, "base_rejets": base_rej, "d": dt.date.today().isoformat()} if BOC else {"n": 0, "avis": av_chk, "base_rejets": base_rej})):
         with open(os.path.join(out, name + ".json"), "w", encoding="utf8") as fh:
             json.dump(obj, fh, separators=(",", ":"), ensure_ascii=False)
     # recherche MOTS CLES : index de tous les documents de la BRVM connus du terminal (après les avis, rapports et notations du jour)
