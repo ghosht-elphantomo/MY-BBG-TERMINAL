@@ -6,6 +6,14 @@ demander « reviens au point de restauration du … » ; le code de ce point est
 (rien n'est effacé, on peut donc aussi annuler le retour). Le site publié peut aussi être remis instantanément
 à une version précédente depuis le tableau de bord Vercel (Deployments → Promote / Instant Rollback).
 
+## Règles de travail (obligatoires — demandées par le propriétaire, à respecter par toute personne ou session qui modifie le projet)
+
+1. **Rien n'est modifié sans sauvegarde** : un point de restauration est noté dans le tableau ci-dessous AVANT toute modification (code main et site publié).
+2. **Toujours tester après chaque modification** : tout le site (toutes les fonctions et tous leurs onglets, QLAB pour les 48 actions), aucune erreur JavaScript, aucun texte NaN / undefined / null.
+3. **Vérifier que rien ne se casse nulle part** : aucune donnée manquante (fichier absent, vide ou nettement plus court qu'avant), aucun doublon (événements, avis, documents, calendrier, recherche), aucune automatisation en échec, et les mêmes chiffres qu'avant quand la modification ne doit pas les changer.
+4. **Ne publier que si tout est bon** ; sinon, revenir au point de restauration.
+5. « Tant que ça ne casse rien, on peut le faire. »
+
 | Date (Paris) | Point | Code (main) | Site publié (branche site) |
 |---|---|---|---|
 | 13/10/2026 matin | Avant les modifications de la journée | `1fa9307b3358e3554d6164e1adc4cf6af01c866c` | — |
@@ -50,3 +58,4 @@ demander « reviens au point de restauration du … » ; le code de ce point est
 | 17/10/2026 14 h 45 | Avant le retrait des sources visibles sur le site (textes, liens, adresses des documents dans les données) et le lecteur de documents à l'adresse du site ; retour arrière = revenir à ce point | `8048cb2a2630910423ff979a233877218a86f780` | `83ad57865502ea1f304006f5280528e3bf1197ea` |
 | 17/10/2026 15 h 25 | Avant le lecteur des documents anciens (archive) par une fonction du site au lieu d'une redirection directe ; retour arrière = revenir à ce point | `f9981bbfa8fde367db8ae72d85ea84ef1d74ab89` | `83ad57865502ea1f304006f5280528e3bf1197ea` |
 | 17/10/2026 16 h 50 | Avant le retrait du pseudonyme du propriétaire dans la documentation (docs/QLAB2_VALORISATION.md, texte seulement) ; retour arrière = revenir à ce point | `50099030dbfd17d1a0c22a0d8416369f646b5c53` | `bfdef374186f45265fd3f61d626d251594fa74fc` |
+| 17/10/2026 19 h 15 | Avant l'ajout des règles de travail obligatoires (SAUVEGARDES.md et docs/GUIDE.md, texte seulement) ; retour arrière = revenir à ce point | `338ed7a2a7bfe1e49d1000b3b44015ed6f68236b` | `bfdef374186f45265fd3f61d626d251594fa74fc` |

@@ -8,6 +8,10 @@ Terminal façon Bloomberg : ligne de commande, touches de fonction, tableaux den
 
 Tapez un ticker ou une fonction puis Entrée : `SNTS GP`, `SNTS QLAB`, `QQQ BTST`, `MACRO`, `EVTS`. Cliquer sur n'importe quel titre ouvre ses écrans. La fonction **HELP** liste toutes les fonctions, leurs onglets et les raccourcis.
 
+## Règles de travail (obligatoires)
+
+Avant toute modification : point de restauration dans `SAUVEGARDES.md`. Après toute modification : test complet du site et des données (erreurs, données manquantes, doublons, chiffres inchangés quand ils doivent l'être). On ne publie que si tout est bon, sinon retour au point de restauration. Détail : voir le haut de `SAUVEGARDES.md`.
+
 ## Fonctions (65)
 
 ### Fonctions de marché
