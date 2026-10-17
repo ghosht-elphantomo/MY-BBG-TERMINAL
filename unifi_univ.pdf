@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html class="layout-a-1" lang="it">
+<head>
+<meta charset="utf-8">
+
+<link rel="preconnect" crossorigin href="https://assets.unifi.it">
+
+<link rel="dns-prefetch" crossorigin href="https://assets.unifi.it">
+
+<title>SBA - Sistema Bibliotecario di Ateneo | UniFI</title>
+<meta name="description" content="Sistema Bibliotecario dell'Universit&agrave; degli Studi di Firenze">
+
+<meta property="dc:title" content="SBA - Sistema Bibliotecario di Ateneo | UniFI">
+<meta property="dc:subject" content="Sistema Bibliotecario dell'Universit&agrave; degli Studi di Firenze">
+<meta property="dc:type" content="Text">
+<meta property="dc:format" content="text/html">
+<meta property="dc:creator" content="SBA - Sistema Bibliotecario di Ateneo">
+<meta property="dc:creator.address" content="websba-group@unifi.it">
+<meta property="dc:publisher" content="SBA - Sistema Bibliotecario di Ateneo">
+<meta property="dc:language" content="it">
+<meta property="dc:identifier" content="https://www.sba.unifi.it/upload/scienzesociali/Bloomberg_University.pdf">
+<meta property="dc:relation" content="https://www.sba.unifi.it/upload/scienzesociali/backend.php">
+<meta name="robots" content="index, nofollow">
+
+<meta property="og:type" content="website">
+
+<meta property="og:image" content="https://www.unifi.it/salomoneFB.png">
+
+<meta property="og:url" content="https://www.sba.unifi.it/upload/scienzesociali/Bloomberg_University.pdf">
+
+<meta property="og:title" content="SBA - Sistema Bibliotecario di Ateneo | UniFI">
+
+<meta property="og:description" content="Sistema Bibliotecario dell'Universit&agrave; degli Studi di Firenze">
+
+<meta property="og:site_name" content="www.sba.unifi.it">
+
+<link rel="image_src" href="https://www.unifi.it/salomoneFB.png">
+
+<meta name="twitter:card" content="summary">
+
+<meta name="twitter:site" content="@UNI_FIRENZE">
+
+<meta name="twitter:title" content="SBA - Sistema Bibliotecario di Ateneo | UniFI">
+
+<meta name="twitter:description" content="Sistema Bibliotecario dell'Universit&agrave; degli Studi di Firenze">
+
+<meta name="twitter:image" content="https://www.unifi.it/salomoneFB.png">
+
+<meta name="twitter:image:alt" content="UniFI Logo">
+
+<link rel="alternate" href="https://www.sba.unifi.it/upload/scienzesociali/backend.php" type="application/rss+xml" title="SBA - Sistema Bibliotecario di Ateneo">
+
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon.png">
+<link rel="apple-touch-icon" type="image/png" sizes="57x57"   href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon-57x57.png">
+<link rel="apple-touch-icon" type="image/png" sizes="60x60"   href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon-60x60.png">
+<link rel="apple-touch-icon" type="image/png" sizes="72x72"   href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon-72x72.png">
+<link rel="apple-touch-icon" type="image/png" sizes="76x76"   href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon-76x76.png">
+<link rel="apple-touch-icon" type="image/png" sizes="114x114" href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon-114x114.png">
+<link rel="apple-touch-icon" type="image/png" sizes="120x120" href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon-120x120.png">
+<link rel="apple-touch-icon" type="image/png" sizes="144x144" href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon-144x144.png">
+<link rel="apple-touch-icon" type="image/png" sizes="152x152" href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon-152x152.png">
+<link rel="apple-touch-icon" type="image/png" sizes="180x180" href="https://mdthemes.unifi.it/azimuth/favicons/apple-touch-icon-180x180.png">
+<link rel="icon" type="image/png" sizes="16x16"   href="https://mdthemes.unifi.it/azimuth/favicons/favicon-16x16.png">
+<link rel="icon" type="image/png" sizes="32x32"   href="https://mdthemes.unifi.it/azimuth/favicons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="96x96"   href="https://mdthemes.unifi.it/azimuth/favicons/favicon-96x96.png">
+<link rel="icon" type="image/png" sizes="192x192" href="https://mdthemes.unifi.it/azimuth/favicons/android-chrome-192x192.png">
+<link rel="manifest" href="https://mdthemes.unifi.it/azimuth/favicons/manifest.json">
+<link rel="mask-icon" href="https://mdthemes.unifi.it/azimuth/favicons/safari-pinned-tab.svg" color="#5bbad5">
+<meta name="msapplication-config" content="https://mdthemes.unifi.it/azimuth/favicons/browserconfig.xml">
+<meta name="theme-color" content="#ffffff">
+<meta name="viewport" content="initial-scale=1.0,minimum-scale=1.0,maximum-scale=2.0,user-scalable=1">
+  <link media="screen" rel="stylesheet" href="https://assets.unifi.it/prod/global/css/app-small.min.css">
+  <link rel="stylesheet" media="print"  href="https://assets.unifi.it/prod/global/css/stampa.min.css">
+  <link media="screen" rel="stylesheet" href="https://sba.unifi.it/assets/sba.unifi.it/css/sba.min.css?ver=28">
+ </head>
+ <body id="app" class="app">
+
+  <!-- mod-Errore -->
+
+  <div class="side">
+   <div class="header-side"></div>
+   <div class="side__left"></div>
+   <div class="side__right">
+    <div class="top-cap"></div>
+    <div class="h2 bold">
+     
+<ul class="main-menu">
+<li><a  href="index.html" >Home</a> </li>
+<li ><a  href="#">Trova le risorse</a>
+<ul>
+<li><a  href="p1.html">Risorse</a></li>
+<li><a  href="p1454.html">OneSearch: libri, riviste, articoli, ebook...</a></li>
+<li><a  href="p13.html">Riviste online</a></li>
+<li><a  href="p14.html">Banche dati</a></li>
+<li><a  href="p136.html">E-book</a></li>
+<li><a  href="p219.html">Emeroteca</a></li>
+<li><a  href="p1308.html">Collezioni digitalizzate</a></li>
+<li><a  href="p1309.html">Fondi e collezioni speciali</a></li>
+<li><a  href="p791.html">Fondi archivistici</a></li>
+<li><a  href="p1310.html">Tesi di laurea e dottorato</a></li>
+<li><a  href="p782.html">FloRe - Florence Research Repository</a></li>
+<li><a  href="p294.html">RisorseWeb</a></li>
+<li><a  href="p4.html">Cataloghi di altre biblioteche</a></li>
+
+</ul>
+</li>
+<li ><a  href="#">Scopri i servizi</a>
+<ul>
+<li><a  href="p1400.html">Servizi</a></li>
+<li><a  href="p171.html">A chi si rivolgono?</a></li>
+<li><a  href="p69.html">Carta dei servizi</a></li>
+<li><a  href="p60.html">Prestito, consultazione, rinnovo, prenotazione</a></li>
+<li><a  href="p1927.html">Prestito IntrAteneo con le biblioteche fuori Firenze</a></li>
+<li><a  href="p61.html">Prestito interbibliotecario e fornitura copie (ILL-DD)</a></li>
+<li><a  href="p1276.html">Scansioni self-service</a></li>
+<li><a  href="p1710.html">Richieste di digitalizzazione articoli</a></li>
+<li><a  href="p138.html">Assistenza alla ricerca bibliografica</a></li>
+<li><a  href="p149.html">&quot;Chiedi in biblioteca&quot;: informazioni online</a></li>
+<li><a  href="p63.html">Corsi  per gli utenti</a></li>
+<li><a  href="p64.html">Servizi per utenti con disabilità e DSA</a></li>
+<li><a  href="p1282.html">Servizi per utenti detenuti</a></li>
+<li><a  href="p1275.html">Consultazione fondi storici e materiali antichi</a></li>
+<li><a  href="p1104.html">Consultazione tesi di laurea</a></li>
+<li><a href="p125.html">Guide e Tutorial</a></li>
+<li><a  href="p1848.html">Pubblicare in Accesso aperto </a></li>
+<li><a  href="p2012.html">Assistenza alla valutazione della ricerca scientifica</a></li>
+<li><a  href="p66.html">Accesso alle risorse online dall'esterno dell'Ateneo</a></li>
+<li><a  href="p1292.html">Internet in biblioteca</a></li>
+<li><a  href="p110.html">Modulistica</a></li>
+<li><a  href="p1294.html">Proposte di acquisto</a></li>
+
+</ul>
+</li>
+<li ><a  href="#">Cerca aiuto</a>
+<ul>
+<li><a  href="p1414.html">Supporto agli utenti</a></li>
+<li><a href="https://unifi.libanswers.com/">&quot;Chiedi in biblioteca&quot;: informazioni online</a></li>
+<li><a href="p138.html">Assistenza alla ricerca bibliografica</a></li>
+<li><a href="p63.html">Corsi per gli utenti</a></li>
+<li><a  href="p125.html">Guide e tutorial</a></li>
+<li><a  href="p917.html">Gli stili citazionali e i software per la gestione di bibliografie</a></li>
+<li><a href="FAQ.html">Domande frequenti (FAQ)</a></li>
+<li><a href="p104.html">Contatti</a></li>
+
+</ul>
+</li>
+<li ><a  href="#">Chi siamo</a>
+<ul>
+<li><a  href="p1281.html">Presentazione</a></li>
+<li><a  href="p104.html">Contatti</a></li>
+<li><a href="https://cercachi.unifi.it/cercachi-str-040000.html">Persone</a></li>
+<li><a  href="p59.html">Biblioteche: orari e sedi</a></li>
+<li><a  href="p1899.html">Centri di documentazione</a></li>
+<li><a  href="p24.html">Organizzazione</a></li>
+<li><a  href="p68.html">Regolamenti, Decreti, Accordi</a></li>
+<li><a  href="p98.html">Progetti</a></li>
+<li><a  href="p99.html">Attività e documentazione</a></li>
+<li><a  href="p168.html">Storia delle biblioteche</a></li>
+<li><a  href="p1674.html">Sponsor e finanziatori</a></li>
+<li><a  href="p1283.html">Riservato al personale</a></li>
+
+</ul>
+</li>
+<li ><a  href="#">Eventi e mostre</a>
+<ul>
+<li><a  href="p1397.html">Eventi e mostre</a></li>
+<li><a  href="p520.html">Mostre virtuali</a></li>
+<li><a  href="p1352.html">Archivio di eventi e mostre</a></li>
+<li><a  href="p1753.html">Convegni</a></li>
+
+</ul>
+</li>
+<li ><a href="p59.html">Biblioteche</a></li>
+<li ><a href="p1899.html">Centri di documentazione</a></li>
+<li><a href="news.html">News</a></li></ul>
+    </div>
+   </div>
+  </div>
+
+  <div class="layout">
+   <div class="btn-box pointer" onclick="openSide('right')">
+    <div id="btn-menu" class="btn-menu">
+     <div></div>
+     <div></div>
+     <div></div>
+     <span class="btn-label">MENU</span>
+    </div>
+   </div>
+
+   <header class="header">
+    <div class="container menu-ateneo">
+     <div class="container container--wrap">
+      <div class="line">
+       <div class="unit lower">
+        <a class="bold" href="https://www.unifi.it/it" title="unifi.it"><span class="unifi">unifi.it</span></a>
+       </div>
+       <div class="right right--100">
+        <div class="unit lower"><a href="https://cercachi.unifi.it/" title="CercaChi">CercaChi</a></div>
+        <div class="unit lower unit--rev"><a href="https://www.unifi.it/it/home/accesso-ai-servizi-online-di-ateneo" title="Servizi online">Servizi online</a></div>
+       </div>
+      </div>
+     </div>
+    </div>
+    <div class="container">
+     <div class="container container--wrap">
+      <div class="line">
+       <div class="logo unit g1of4 m-g1of3">
+        <a class="nav" href="/">
+         <img class="logo-positivo" src="https://sba.unifi.it/assets/sba.unifi.it/banner_bianco.svg" alt="Logo">
+        </a>
+       </div>
+       <div class="menu-lang right right--100">
+        <div class="unit lower">
+         <a href="cerca" class="bold underline" title="Cerca nel sito">Cerca nel sito</a>
+        </div>
+        <div class="unit unit--rev">
+         <div>ITA | <a href="changelang-eng.html" class="active switch-eng">ENG</a></div>        </div>
+       </div>
+      </div>
+     </div>
+    </div>
+       </header>
+
+   <div class="page">
+      <section class="top relative" style="background-image: url('upload/sub/copertine/homepage/copertina.jpg')"> </section>
+
+    <section class="content container overflow-visible relative">
+     <div class="wrapper container container--wrap overflow-visible relative">
+      <div class="line line--o-visible">
+       <div class="content-right unit unit--rev g3of4 s-g1of1 m-g2of3 relative">
+        
+<h1>Pagina non trovata</h1>
+<h2>Errore di tipo 404</h2>
+<p><strong>La pagina ricercata non esiste.<br></strong></p>
+<p>Ti consigliamo di verificare la correttezza dell'indirizzo:</p>
+<p><a href="/">Torna alla home page</a></p>       </div>
+      </div>
+     </div>
+    </section>
+
+   </div>
+
+   <footer class="footer">
+    <div class="container container--wrap">
+     <div class="line">
+      <div class="unit g1of2 s-g1of1 small">
+       <ul class="footer-menu">
+<li><a href="sitemap.html" title="Mappa del sito">Mappa del sito</a></li>
+<li><a href="backend.php" title="RSS feed">RSS feed</a></li>
+<li> </li>
+<li><a href="https://www.unifi.it/it/privacy-policy" title="Privacy" rel="noopener">Privacy</a></li>
+<li><a href="https://www.unifi.it/it/ateneo/statuto-e-normativa/note-legali-del-sito-web" title="Note legali" rel="noopener">Note Legali</a></li>
+<li><a href="https://www.unifi.it/it/accessibilita" title="Accessibilità e usabilità" rel="noopener">Accessibilità e usabilità</a></li>
+<li><a href="stat/awstats.pl?config=sba" title="Monitoraggio">Monitoraggio</a></li>
+<li> </li>
+<li><a href="https://cercachi.unifi.it/areariservatapersonale.html" class="bold" title="Area personale" rel="noopener">Area personale</a></li>
+</ul>      </div>
+      <div class="unit g1of2 s-g1of1 right-text">
+       <div class="social">
+        
+    <a href="https://www.facebook.com/biblioteche.unifi" class="icon icon-block icon-hover icon-circle icon-s icon-facebook" title="Facebook SBA"></a>
+    <a href="https://www.instagram.com/bibliotecheunifi/" class="icon icon-block icon-hover icon-circle icon-s icon-instagram" title="Instagram SBA"></a>
+    <a href="https://www.youtube.com/@UniFiBiblioteche" class="icon icon-block icon-hover icon-circle icon-s icon-youtube" title="Youtube SBA"></a>
+    <a href="https://twitter.com/UNI_FIRENZE" class="icon icon-block icon-hover icon-circle icon-s icon-twitter" title="Twitter"></a>
+    <a href="https://www.linkedin.com/company/university-of-florence" class="icon icon-block icon-hover icon-circle icon-s icon-liinkedin" title="LinkedIn"></a>
+    <a href="https://t.me/unifirenze" class="icon icon-block icon-hover icon-circle icon-s icon-telegram" title="Telegram"></a>
+    <a href="https://www.flickr.com/photos/universitafirenze/albums" class="icon icon-block icon-hover icon-circle icon-s icon-flickr" title="Flickr"></a>
+       </div>
+       <div id="f-coordinate-unifi" itemscope="" itemtype="http://schema.org/Organization">
+        <p class="small bold" itemprop="name">SBA - Sistema Bibliotecario di Ateneo</p>
+        <p class="small">© Copyright 2012-2026 Università degli Studi di Firenze UNIFI<br>P.IVA/Cod.Fis 01279680480 </p><br>
+        <div id="anagrafica">
+         <p class="small">
+          <span itemprop="address">Via G. Capponi, 7 - 50121 Firenze (FI)</span><br>         </p>
+         <p class="small"><a href="p104.html">Contatti</a></p><p class="small"><a href="p41.html">Redazione Web</a></p>        </div>
+       </div>
+      </div>
+     </div>
+    </div>
+   </footer> 
+   <a href="#!" class="vanillatop" title="Inizio pagina"></a>
+   
+<div id="cookiewarning" class="cookiewarning hide">
+  <div class="container container--wrap">
+    <div class="line">
+      <div class="unit g3of4 s-g1of1">
+        <h4>Cookie</h4>
+        <p>I cookie di questo sito servono al suo corretto funzionamento e non raccolgono alcuna tua informazione personale. Se navighi su di esso accetti la loro presenza.  &nbsp;<a href="https://www.unifi.it/p11363.html">Maggiori informazioni</a>
+        </p>
+      </div>
+      <div class="unit g1of4 s-g1of1">
+        <p>
+          <a href="#" class="btn btn-small" onCLick="JavaScript:doAccept()">Ho capito</a>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>  </div>
+  <script src="https://assets.unifi.it/prod/global/js/vendor/classie.min.js"></script>
+  <script src="https://assets.unifi.it/prod/global/js/vendor/vanillatop.min.js"></script>
+  <script src="https://assets.unifi.it/prod/global/js/app.min.js"></script>
+  <script src="https://assets.unifi.it/prod/global/js/app-cookiewarning.min.js"></script>
+  <!-- aggiunti da SBA -->
+  <script src="https://mdthemes.unifi.it/global/js/jquery-3.6.0.min.js" crossorigin="anonymous"></script>
+  <script src="https://sba.unifi.it/assets/sba.unifi.it/js/sba.min.js?ver=2"></script>
+</body>
+</html>
