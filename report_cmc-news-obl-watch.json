@@ -1,0 +1,1 @@
+{"news":{"ok":15,"err":3,"errors":["yahoo: HTTP Error 404: Not Found","ecofin: HTTP Error 404: Not Found","lesechos: HTTP Error 403: Forbidden"]},"_steps":{"news":3,"watch":33,"obl":19,"cmc":1},"_":{"ts":1791868169,"secs":56},"watch-brvm":{"ok":75,"err":0,"errors":[]},"watch-sec":{"ok":5,"err":0,"errors":[]},"obl":{"ok":4,"err":0,"errors":[]},"cmc":{"ok":1,"err":0,"errors":[]}}
