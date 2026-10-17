@@ -28,12 +28,12 @@
       "destination": "https://www.richbourse.com/:path*"
     },
     {
-      "source": "/doc/a/:ts/:path*",
-      "destination": "https://web.archive.org/web/:ts/http://www.brvm.org/:path*"
+      "source": "/doc/a/:ts/:t",
+      "destination": "/api/doc?k=a&ts=:ts&t=:t"
     },
     {
-      "source": "/doc/c/:ts/:path*",
-      "destination": "https://web.archive.org/web/:ts/http://bfin.brvm.org/:path*"
+      "source": "/doc/c/:ts/:t",
+      "destination": "/api/doc?k=c&ts=:ts&t=:t"
     }
   ],
   "headers": [

@@ -27,9 +27,11 @@ async function githubDown() {
 
 // Adresses des documents : remplacées par des adresses du site (/doc/…, servies par vercel.json), pour que le navigateur
 // n'affiche ni n'appelle jamais les sites d'origine ; les autres pages d'origine ne sont plus liées.
+// documents anciens : chemin d'origine transmis sous forme de jeton (base64url) à api/doc.js, qui va le chercher dans l'archive
+const tok = p => { let x = p; try { x = JSON.parse('"' + p + '"'); } catch (e) { /* chemin déjà brut */ } return Buffer.from(x, 'utf8').toString('base64url'); };
 const DOC_RW = [
-  [/"W(\d{8,14}):https?:\/\/www\.brvm\.org\//g, '"/doc/a/$1id_/'],
-  [/"W(\d{8,14}):https?:\/\/bfin\.brvm\.org\//g, '"/doc/c/$1id_/'],
+  [/"W(\d{8,14}):https?:\/\/www\.brvm\.org(?::80)?\/([^"]*)"/g, (m, ts, p) => `"/doc/a/${ts}/${tok(p)}"`],
+  [/"W(\d{8,14}):https?:\/\/bfin\.brvm\.org(?::80)?\/([^"]*)"/g, (m, ts, p) => `"/doc/c/${ts}/${tok(p)}"`],
   [/https?:\/\/www\.brvm\.org\/sites\/default\/files\//g, '/doc/b/'],
   [/https?:\/\/bfin\.brvm\.org\/boc\/BOC_JOUR\//g, '/doc/f/'],
   [/https?:\/\/(?:www\.)?richbourse\.com\//g, '/doc/r/'],

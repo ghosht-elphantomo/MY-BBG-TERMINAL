@@ -157,8 +157,8 @@ Le site publié lit ses données en direct sur la branche `data` (`api/data.js`)
 |---|---|
 | `/doc/b/<fichier>` | documents publiés (états financiers, rapports, avis) |
 | `/doc/f/<fichier>` | bulletins de la cote du jour |
-| `/doc/a/<horodatage>/<chemin>` | anciens documents (archive web, copie à la date indiquée) |
-| `/doc/c/<horodatage>/<chemin>` | anciens bulletins (même archive) |
+| `/doc/a/<horodatage>/<jeton>` | anciens documents (archive web, copie à la date indiquée ; jeton = chemin d'origine en base64url) : servis par `api/doc.js`, qui suit les redirections de l'archive, ne renvoie que des documents (jamais une page de l'archive) et affiche « Document indisponible » sinon ; limite 4,4 Mo |
+| `/doc/c/<horodatage>/<jeton>` | anciens bulletins (même archive, même fonction) |
 | `/doc/r/<chemin>` | quelques documents d'un site d'information boursière |
 
 La recherche MOTS CLES contrôle chaque ligne contre le nom de son fichier (`fix_by_file` dans `scripts/build_search.py`) : un fichier d'une autre société ou d'un autre type que l'intitulé est rattaché à la bonne société, avec un intitulé refait d'après le fichier.
