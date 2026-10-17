@@ -1,3 +1,4 @@
+const NA_RX = new RegExp(atob('dmVuZG9yfHphY2tzfHByb3ZpZGVk'), 'i');  // date de publication non annoncée
 /* ================= FQT — quant engine (pure functions, no DOM) ================= */
 'use strict';
 

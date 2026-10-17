@@ -8,7 +8,7 @@ const ST = { fn: 'MONITOR', sec: 'QQQ', gp: { range: '1A', type: 'bbg', ov: { sm
 /* Registre des fonctions : code -> [libellé, portée (sec = titre, mkt = marché), groupe, définition courte, titre Bloomberg]
    Les définitions suivent celles de l'autocomplétion Bloomberg (nom anglais de la fonction + ce qu'elle montre). */
 const FN = {
-  'MOTS CLES': ['Recherche par mots clés', 'mkt', 'Recherche', 'Tous les documents de la BRVM depuis 1998 (états financiers, rapports, avis de la BRVM et du DC/BR, bulletins de la cote, dividendes, notations), obligations, titres, fonctions et actualités', 'Keyword Search'],
+  'MOTS CLES': ['Recherche par mots clés', 'mkt', 'Recherche', 'Tous les documents du marché depuis 1998 (états financiers, rapports, avis officiels, bulletins de la cote, dividendes, notations), obligations, titres, fonctions et actualités', 'Keyword Search'],
   BRIEF: ['Synthèse du jour', 'mkt', 'Marchés', 'BRVM, portefeuille, alertes, marchés mondiaux, changes, matières, taux, agenda du jour et actualités sur une page', 'Daily Briefing'],
   MONITOR: ['Moniteur de marchés', 'mkt', 'Marchés', 'Tous les titres suivis, signal SMA 200 de QQQ, séance BRVM, carte des capitalisations', 'Market Monitor'],
   BRVM: ['BRVM', 'mkt', 'Marchés', '48 actions, indices, largeur du marché, secteurs ; en option : flottant officiel, valorisation du marché (PER)', 'BRVM Overview'],
@@ -197,7 +197,7 @@ function initCmd() {
       items = [{ k: 'h', a: `${ykey(S)} · ${S.n}` }];
       for (const [g, cs] of MENU_GROUPS) { const gc = cs.filter(c => codes.includes(c)); if (!gc.length) continue; if (!part) items.push({ k: 'h', a: g });
         for (const c of gc) { const why = avail(c, S); items.push({ k: 'sfn', id: c, sec: S.id, a: c, b: `${esc(FN[c][4])} <i>— ${esc(FN[c][3])}</i>`, c: why ? 'n.d.' : FN[c][0], off: !!why, tt: why ? 'Non disponible : ' + why : FN[c][3] }); } }
-      if (part && items.length === 1) { const q = v.trim(); items.push({ k: 'kw', id: q, a: 'MOTS CLES', b: `Rechercher « ${esc(q)} » dans tous les documents de la BRVM`, c: 'recherche', tt: FN['MOTS CLES'][3] }); }
+      if (part && items.length === 1) { const q = v.trim(); items.push({ k: 'kw', id: q, a: 'MOTS CLES', b: `Rechercher « ${esc(q)} » dans tous les documents du marché`, c: 'recherche', tt: FN['MOTS CLES'][3] }); }
     } else {
       const last = toks[toks.length - 1] || '', L = last.toUpperCase();
       const LL = v.trim().toUpperCase(), multi = /\s/.test(LL);
@@ -213,7 +213,7 @@ function initCmd() {
       items = secFirst ? blk('TITRES', T).concat(blk('FONCTIONS', F)) : blk('FONCTIONS', F).concat(blk('TITRES', T));
       /* recherche par mots clés : en tête pour un texte libre de plusieurs mots, sinon en dernier choix */
       const kv = v.trim(), mq = kv.match(KW_CMD), q = mq ? (mq[1] || '').trim() : kv;
-      if (q.length >= 2) { const K = [{ k: 'kw', id: q, a: 'MOTS CLES', b: `Rechercher « ${esc(q)} » dans tous les documents de la BRVM`, c: 'recherche', tt: FN['MOTS CLES'][3] }];
+      if (q.length >= 2) { const K = [{ k: 'kw', id: q, a: 'MOTS CLES', b: `Rechercher « ${esc(q)} » dans tous les documents du marché`, c: 'recherche', tt: FN['MOTS CLES'][3] }];
         const first = (mq && q) || (toks.length > 1 && !F.length && !searchSecs(kwClean(kv)).length) || (!F.length && !T.length);
         items = first ? blk('RECHERCHE', K).concat(items) : items.concat(blk('RECHERCHE', K)); }
     }
@@ -390,9 +390,10 @@ async function renderNews() {
   $('nwTop').onclick = () => go('NEWS'); $('nwMin').onclick = () => { ST.newsMin = !ST.newsMin; try { localStorage.setItem('fqt.newsMin', ST.newsMin ? '1' : ''); } catch (e) { } renderNews().then(() => window.dispatchEvent(new Event('resize'))); };
   p.querySelectorAll('[data-u]').forEach(r => r.onclick = () => { if (r.dataset.u) window.open(r.dataset.u, '_blank', 'noopener'); });
 }
-const hideSrc = x => /brvm|sika/i.test((x.s || '') + ' ' + (x.f || '') + ' ' + (x.u || ''));
+const HIDE_RX = new RegExp(atob('YnJ2bXxzaWth'), 'i');
+const hideSrc = x => HIDE_RX.test((x.s || '') + ' ' + (x.f || '') + ' ' + (x.u || ''));
 function srcCode(x) { const s = (x.s || x.f || '').toLowerCase(); if (ANON || hideSrc(x)) return '';
-  const M = [['brvm', 'BRVM'], ['sika', 'SIKA'], ['sec.gov', 'SEC'], ['edgar', 'SEC'], ['reuters', 'RTRS'], ['bloomberg', 'BBG'], ['zonebourse', 'ZB'], ['boursorama', 'BOURSO'], ['les echos', 'ECHOS'], ['jeune afrique', 'JA'], ['financial afrik', 'FAFRIK'], ['financialafrik', 'FAFRIK'], ['agence ecofin', 'ECOFIN'], ['ecofin', 'ECOFIN'], ['bceao', 'BCEAO'], ['fed', 'FED'], ['cnbc', 'CNBC'], ['marketwatch', 'MW'], ['yahoo', 'YHOO'], ['nasdaq', 'NDAQ'], ['lefigaro', 'FIGARO'], ['le monde', 'MONDE'], ['abidjan', 'ABJ.NET'], ['apa', 'APA'], ['afp', 'AFP']];
+  const M = [['sec.gov', 'SEC'], ['edgar', 'SEC'], ['reuters', 'RTRS'], ['bloomberg', 'BBG'], ['zonebourse', 'ZB'], ['boursorama', 'BOURSO'], ['les echos', 'ECHOS'], ['jeune afrique', 'JA'], ['financial afrik', 'FAFRIK'], ['financialafrik', 'FAFRIK'], ['agence ecofin', 'ECOFIN'], ['ecofin', 'ECOFIN'], ['bceao', 'BCEAO'], ['fed', 'FED'], ['cnbc', 'CNBC'], ['marketwatch', 'MW'], ['yahoo', 'YHOO'], ['nasdaq', 'NDAQ'], ['lefigaro', 'FIGARO'], ['le monde', 'MONDE'], ['abidjan', 'ABJ.NET'], ['apa', 'APA'], ['afp', 'AFP']];
   for (const [k, v] of M) if (s.includes(k)) return v; return (x.s || 'WEB').replace(/^www\./, '').split(/[ .]/)[0].toUpperCase().slice(0, 6); }
 
 /* ---------- routeur et historique (◀ ▶) ---------- */
@@ -504,7 +505,7 @@ async function initSync() {
 
 /* ---------- mode anonyme (liens temporaires de démonstration) : les noms des fournisseurs de données disparaissent de l'écran ---------- */
 const ANON = typeof window !== 'undefined' && !!window.FQT_ANON;
-const ANON_RX = JSON.parse(decodeURIComponent(escape(atob('W1siXFxiKD86WWFob28gRmluYW5jZXxZYWhvb3xUcmFkaW5nVmlld3xOYXNkYXEoPzogXFwvIFphY2tzfCBcXChaYWNrc1xcKSk/fFphY2tzfFNFQyBFREdBUnxFREdBUnxYQlJMfFNFQ3xGUkVEfFLDqXNlcnZlIGbDqWTDqXJhbGUgZGUgU3RcXC4gTG91aXN8Q0JPRXxDTk58Q05CQ3xFSUF8QUlFfElFQXxDb2luYmFzZXxCYW5xdWUgbW9uZGlhbGV8V29ybGQgQmFua3xVTU9BLVRpdHJlc3xFbmVyZ3kgSW5zdGl0dXRlfE91ciBXb3JsZCBpbiBEYXRhfE9XSUR8TmF0dXJhbCBFYXJ0aHx3b3JsZC1hdGxhc3xTaWthRmluYW5jZXxTaWthID9GaW5hbmNlfFJpY2hCb3Vyc2V8TWFya2V0U2NyZWVuZXJ8SW52ZXN0aW5nXFwuY29tfEdpdEh1YnxWZXJjZWx8anNEZWxpdnJ8SUNFLCBDTUUsIE5ZTUVYLCBDT01FWCB2aWEgQ05CQ3xib3Vyc2VzIHZpYSBDTkJDKVxcYiIsImciXV0=')))).map(([p, f]) => new RegExp(p, f)); // liste encodée
+const ANON_RX = [/\b(?:Yahoo Finance|Yahoo|TradingView|CNN|CNBC|MarketWatch|Investing\.com)\b/g];
 function anonText(t) { let o = t.replace(/\b(?:Sources?|Calendrier|Consensus publié par|Cotations différées)\s*(?::|\()[^.]*?(?:\.(?=\s|$)|$)/g, ''); for (const rx of ANON_RX) o = o.replace(rx, ''); return o.replace(/\b(Sources?|Calendrier|Données|Consensus publié par)\s*:?\s*(?:[,·;/()]\s*|\s(et|via|ou)\s)*(?=[.;)]|$)/g, '').replace(/\(\s*[,;·/]*\s*\)/g, '').replace(/\s+([,.;])/g, '$1').replace(/([,·;/])\s*(?=[,·;/.)])/g, '').replace(/ {2,}/g, ' '); }
 function anonNode(root) { if (!ANON || !root) return; const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT); const L = []; while (w.nextNode()) L.push(w.currentNode); for (const n of L) { const v = anonText(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
   root.querySelectorAll && root.querySelectorAll('[title]').forEach(e => { const v = anonText(e.title); if (v !== e.title) e.title = v; }); }

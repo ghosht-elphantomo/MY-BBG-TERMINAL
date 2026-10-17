@@ -2,13 +2,13 @@
   python3 build.py               -> index.html (static hosting: loads data/*.json next to it)
   python3 build.py --artifact F  -> F (claude.ai artifact body, same app, TRIGGER_ID from env)
 """
-import os, sys
+import os, sys, re
 HERE = os.path.dirname(os.path.abspath(__file__))
 W = lambda p: open(os.path.join(HERE, "web", p), encoding="utf8").read()
 import base64
 def css():
     # police embarquée (Noto Sans variable, sous-ensemble latin, droit + italique ; licence SIL OFL) : aucune dépendance externe
-    c = W("style.css")
+    c = re.sub(r"/\*.*?\*/", "", W("style.css"), flags=re.S)  # sans commentaires
     for f in ("ns-n", "ns-i"):
         b = base64.b64encode(open(os.path.join(HERE, "web", "fonts", f"{f}.woff2"), "rb").read()).decode()
         c = c.replace(f"url(fonts/{f}.woff2)", f"url(data:font/woff2;base64,{b})")
@@ -22,7 +22,17 @@ HEAD = ('<title>FQT Terminal</title>\n'
 import glob
 import re
 PAGES = sorted((os.path.basename(f) for f in glob.glob(os.path.join(HERE, "web", "pages*.js"))), key=lambda n: int(re.sub(r"\D", "", n) or 0))
-JS = "".join("<script>\n" + W(f) + "\n</script>\n" for f in ["engine.js", "chart.js"] + PAGES + ["core.js"])
+import shutil as _sh, subprocess as _sp
+def mini(code, name):
+    """code publié sans commentaires et variables locales raccourcies (terser) : le navigateur ne reçoit aucune note interne"""
+    t = _sh.which("terser")
+    if not t:
+        raise SystemExit("terser manquant : npm install -g terser@5.36.0 (le site n'est pas publié sans lui)")
+    r = _sp.run([t, "--comments", "false", "--mangle", "--ecma", "2020"], input=code, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"terser a échoué sur {name} : {r.stderr[:500]}")
+    return r.stdout
+JS = "".join("<script>\n" + mini(W(f), f) + "\n</script>\n" for f in ["engine.js", "chart.js"] + PAGES + ["core.js"])
 BODY = W("body.html")
 if "--artifact" in sys.argv:
     out = sys.argv[sys.argv.index("--artifact") + 1]

@@ -269,7 +269,7 @@ PAGES.HS = async (m, alive) => {
 PAGES.WEIF = async (m, alive) => {
   setTitle('World Equity Index Futures'); const W = await WMKT(); if (!alive()) return;
   const F = Object.fromEntries(((W && W.cmd) || []).filter(r => r.g === 'IXF').map(r => [r.s, r])), I = Object.fromEntries(((W && W.idx) || []).map(r => [r.s, r]));
-  const D = [['@SP.1', 'S&P 500 (CME)', '.SPX'], ['@ND.1', 'Nasdaq-100 (CME)', 'NDX'], ['@DJ.1', 'Dow Jones (CBOT)', '.DJI'], ['@TFS.1', 'Russell 2000 (CME)', '.RUT'], ['@VX.1', 'VIX (CBOE)', '.VIX'], ['@FFI.1', 'FTSE 100 (ICE)', '.FTSE'], ['@NK.1', 'Nikkei 225 (CME, en $)', '.N225']].filter(d => F[d[0]]);
+  const D = [['@SP.1', 'S&P 500 (CME)', '.SPX'], ['@ND.1', 'Nasdaq-100 (CME)', 'NDX'], ['@DJ.1', 'Dow Jones (CBOT)', '.DJI'], ['@TFS.1', 'Russell 2000 (CME)', '.RUT'], ['@VX.1', 'VIX', '.VIX'], ['@FFI.1', 'FTSE 100 (ICE)', '.FTSE'], ['@NK.1', 'Nikkei 225 (CME, en $)', '.N225']].filter(d => F[d[0]]);
   if (!D.length) { m.innerHTML = pn('Contrats à terme sur indices', 'INDX', '<div class="empty">Contrats en attente du prochain relevé (toutes les 15 minutes).</div>'); return; }
   const spot = k => k === 'NDX' ? (Q.by.NDX ? { last: Q.by.NDX.last, t: null } : null) : I[k];
   const mx = Math.max(1e-6, ...D.map(d => Math.abs(F[d[0]].pct || 0)));
@@ -385,7 +385,7 @@ async function cfView(m, alive, tab, code = 'EVTS') {
   const today = new Date().toISOString().slice(0, 10), st = ST.cf = ST.cf || { q: '', sort: 'pub' }, q = st.q.toLowerCase();
   const ev = Array.isArray(EV) ? EV : [], dv = Array.isArray(DV) ? DV : [];
   const usD = t => { const x = String(t || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); return x ? `${x[3]}-${x[1].padStart(2, '0')}-${x[2].padStart(2, '0')}` : null; };
-  const tools = `<div class="tools ttb"><span class="tnar"><input id="cfQ" class="ofld" value="${esc(st.q)}" placeholder="&lt;Filtrer&gt;"></span><span class="gsp"></span><span class="dm">${tab === 'u' ? 'Dates et consensus publiés pour les actions US suivies' : 'D’après les avis officiels de la BRVM'}</span></div>`;
+  const tools = `<div class="tools ttb"><span class="tnar"><input id="cfQ" class="ofld" value="${esc(st.q)}" placeholder="&lt;Filtrer&gt;"></span><span class="gsp"></span><span class="dm">${tab === 'u' ? 'Dates et consensus publiés pour les actions US suivies' : 'D’après les avis officiels'}</span></div>`;
   const bindQ = () => { const x = $('cfQ'); if (x) x.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); st.q = x.value.trim(); render(); } }; m.querySelectorAll('tr[data-u]').forEach(r => r.onclick = e => { if (e.target.closest('[data-sec]') && !e.target.closest('a')) return; }); };
   if (tab === 'b') {
     const S_ = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity' && (!q || (s.id + ' ' + s.n + ' ' + (s.short || '')).toLowerCase().includes(q)));

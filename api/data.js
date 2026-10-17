@@ -25,8 +25,34 @@ async function githubDown() {
   return down;
 }
 
-async function send(res, r, cdn) {
-  const buf = Buffer.from(await r.arrayBuffer());
+// Adresses des documents : remplacées par des adresses du site (/doc/…, servies par vercel.json), pour que le navigateur
+// n'affiche ni n'appelle jamais les sites d'origine ; les autres pages d'origine ne sont plus liées.
+const DOC_RW = [
+  [/"W(\d{8,14}):https?:\/\/www\.brvm\.org\//g, '"/doc/a/$1id_/'],
+  [/"W(\d{8,14}):https?:\/\/bfin\.brvm\.org\//g, '"/doc/c/$1id_/'],
+  [/https?:\/\/www\.brvm\.org\/sites\/default\/files\//g, '/doc/b/'],
+  [/https?:\/\/bfin\.brvm\.org\/boc\/BOC_JOUR\//g, '/doc/f/'],
+  [/https?:\/\/(?:www\.)?richbourse\.com\//g, '/doc/r/'],
+  [/https?:\/\/(?:www\.)?sikafinance\.com\/[^"]*/g, ''],
+  [/https?:\/\/(?:[a-z]+\.)?brvm\.org\/[^"]*/g, ''],
+  // libellés de provenance dans les données (jamais affichés, mais lisibles dans les fichiers)
+  [/"src":"(?:bulletin officiel de la cote[^"]*|nasdaq\.com · sec\.gov|[^"]*\bbrvm\.org\b[^"]*)"/g, '"src":""'],
+  [/archive SikaFinance/g, 'archive'],
+  [/https?:\/\/(?:www\.)?(?:eia\.gov|iea\.org)\/[^"\s)]*/g, ''],
+  [/"src":"(?:EIA|AIE|IEA)\b[^"]*"/g, '"src":""'],
+  [/ \(EIA, /g, ' ('],
+  [/dernière édition EIA/g, 'dernière édition disponible'],
+  [/ publiés par l['’](?:AIE|EIA)\b/g, ' publiés'],
+  [/Bulletin officiel de la cote/g, 'Bulletin de la cote'],
+  [/"c":"Avis de la BRVM"/g, '"c":"Avis officiel"'],
+];
+const NEWS_RW = [[/"s":"brvm\.org"/g, '"s":"Publication officielle"'], [/"s":"Sika ?Finance"/gi, '"s":""']];
+const docRw = (t, p) => (p === 'news.json' ? DOC_RW.concat(NEWS_RW) : DOC_RW).reduce((s, [rx, to]) => s.replace(rx, to), t);
+// noms publics de certains fichiers (le site demande l'alias, le relais lit le vrai fichier)
+const ALIAS = { 'oil_w.json': 'eia_wpsr.json' };
+
+async function send(res, r, cdn, p) {
+  const buf = Buffer.from(docRw(Buffer.from(await r.arrayBuffer()).toString('utf8'), p), 'utf8');
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
   res.setHeader('Vercel-CDN-Cache-Control', cdn);
@@ -38,13 +64,13 @@ async function fromGitLab(res, p) {
   try {
     const r = await fetch(glUrl(p), { headers: { 'PRIVATE-TOKEN': GL_TOKEN, 'User-Agent': 'fqt-terminal' }, signal: AbortSignal.timeout(15000) });
     if (!r.ok) return false;
-    await send(res, r, 'max-age=300, stale-while-revalidate=3600');
+    await send(res, r, 'max-age=300, stale-while-revalidate=3600', p);
     return true;
   } catch (e) { return false; }
 }
 
 module.exports = async (req, res) => {
-  const p = String((req.query && req.query.p) || '').replace(/^\/+/, '');
+  const q = String((req.query && req.query.p) || '').replace(/^\/+/, ''), p = ALIAS[q] || q;
   if (!p || p.includes('..') || !/^[A-Za-z0-9_\-./]+\.json$/.test(p)) { res.statusCode = 400; res.end('bad path'); return; }
   if (String((req.query && req.query.via) || '') === '2') {  // essai du secours seul
     if (await fromGitLab(res, p)) return;
@@ -56,7 +82,7 @@ module.exports = async (req, res) => {
       const r = await fetch(url, { headers: { 'User-Agent': 'fqt-terminal' }, signal: AbortSignal.timeout(15000) });
       if (r.status === 404) { last = 404; continue; }
       if (!r.ok) { last = r.status; continue; }
-      await send(res, r, i < REPOS.length ? 'max-age=60, stale-while-revalidate=600' : 'max-age=30');
+      await send(res, r, i < REPOS.length ? 'max-age=60, stale-while-revalidate=600' : 'max-age=30', p);
       return;
     } catch (e) { last = 504; }
   }

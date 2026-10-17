@@ -8,7 +8,7 @@ const yLab = d => String(Math.floor(d / 10000));
 const isBRVM = s => s && s.mkt === 'BRVM';
 /* indice de référence d'un titre : jamais le titre lui-même (BRVMC → BRVM 30, SPY → QQQ) */
 const benchFor = s => [s.bench, isBRVM(s) ? 'BRVMC' : 'SPY', isBRVM(s) ? 'BRVM30' : 'QQQ', 'QQQ', 'SPY'].find(id => id && id !== s.id && Q.by[id]) || 'QQQ';
-/* montant échangé du jour : officiel (bulletin de la cote BRVM) ou estimation volume × cours, signalée « ≈ » */
+/* montant échangé du jour : officiel (bulletin de la cote) ou estimation volume × cours, signalée « ≈ » */
 const valEst = s => !!s && (s.mkt !== 'BRVM' || !!s.vde);
 const valTxt = (s, v) => v ? `${valEst(s) ? '<span class="dm" title="Estimation en séance : volume × cours ; montant définitif le soir.">≈</span> ' : ''}${big(v)}` : '—';
 /* Unités des comptes : US en millions de dollars, BRVM en milliards de FCFA (sources en millions). */

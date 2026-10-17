@@ -14,6 +14,26 @@
     {
       "source": "/data/:path*",
       "destination": "/api/data?p=:path*"
+    },
+    {
+      "source": "/doc/b/:path*",
+      "destination": "https://www.brvm.org/sites/default/files/:path*"
+    },
+    {
+      "source": "/doc/f/:path*",
+      "destination": "https://bfin.brvm.org/boc/BOC_JOUR/:path*"
+    },
+    {
+      "source": "/doc/r/:path*",
+      "destination": "https://www.richbourse.com/:path*"
+    },
+    {
+      "source": "/doc/a/:ts/:path*",
+      "destination": "https://web.archive.org/web/:ts/http://www.brvm.org/:path*"
+    },
+    {
+      "source": "/doc/c/:ts/:path*",
+      "destination": "https://web.archive.org/web/:ts/http://bfin.brvm.org/:path*"
     }
   ],
   "headers": [
@@ -52,6 +72,15 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=0, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/doc/(.*)",
+      "headers": [
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "max-age=86400, stale-while-revalidate=604800"
         }
       ]
     }

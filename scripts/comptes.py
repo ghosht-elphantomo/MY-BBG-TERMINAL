@@ -1886,7 +1886,7 @@ OTHER_ENTITY = {"PALC": r"\bph ?ci\b|\bphci\b", "SDSC": r"\bsda\b", "CFAC": r"\b
 NAME_TOKENS = {"ABJC": r"servair", "BNBC": r"bernabe", "BICC": r"\bbici", "CABC": r"sicable", "CFAC": r"cfao", "CIEC": r"\bcie\b|\bcie ci\b",
                "FTSC": r"filtisac", "NEIC": r"\bnei\b|nei.ceda", "NSBC": r"nsia", "NTLC": r"nestle", "ONTBF": r"onatel", "ORAC": r"orange",
                "ORGT": r"oragroup", "PALC": r"palm.?ci|\bpalm\b", "PRSC": r"tractafric|peyrissac", "SAFC": r"alios|safca", "SCRC": r"sucrivoire",
-               "SDCC": r"sode.?ci|sodeci", "SDSC": r"bollore|africa global|\bagl\b", "SEMC": r"siem", "SGBC": r"\bsgb|societe generale|\bsgci\b",
+               "SDCC": r"sode.?ci|sodeci", "SDSC": r"bollore|africa global|\bagl\b", "SEMC": r"\bsiem\b|crown.?siem", "SGBC": r"\bsgb|societe generale|\bsgci\b",
                "SHEC": r"vivo", "SIBC": r"\bsib\b|\bsib ci\b", "SICC": r"sicor", "SIVC": r"air liquide", "SLBC": r"solibra", "SMBC": r"\bsmb\b",
                "SNTS": r"sonatel", "SOGC": r"\bsogb\b", "SPHC": r"\bsaph\b", "STAC": r"setao", "STBC": r"sitab", "UNLC": r"unilever",
                "UNXC": r"uniwax", "ECOC": r"ecobank ci|ecobank cote", "ETIT": r"ecobank tg|ecobank trans|ecobank togo|\beti\b|\beti tg\b", "CBIBF": r"coris", "LNBB": r"\blnb\b|loterie",

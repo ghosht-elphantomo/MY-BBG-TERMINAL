@@ -229,7 +229,7 @@ function oilFacts(CP, OIL, WP, EI) {
   return F;
 }
 PAGES.BMAP = async (m, alive) => {
-  setTitle('Oil Flow Map'); const [G, CP, WP, N, OIL, EI] = await Promise.all([getJSON('geo_world.json').catch(() => null), getJSON('chokepoints.json').catch(() => null), getJSON('eia_wpsr.json').catch(() => null), getJSON('news.json').catch(() => ({ items: [] })), getJSON('oil.json').catch(() => null), getJSON('ei_oil.json').catch(() => null)]); if (!alive()) return;
+  setTitle('Oil Flow Map'); const [G, CP, WP, N, OIL, EI] = await Promise.all([getJSON('geo_world.json').catch(() => null), getJSON('chokepoints.json').catch(() => null), getJSON('oil_w.json').catch(() => null), getJSON('news.json').catch(() => ({ items: [] })), getJSON('oil.json').catch(() => null), getJSON('ei_oil.json').catch(() => null)]); if (!alive()) return;
   if (!G || !CP) { m.innerHTML = pn('Carte du pétrole', 'BMAP', '<div class="empty">Fond de carte en attente du prochain relevé.</div>'); return; }
   const st = ST.bmap = ST.bmap || { y: CP.years.length - 1, lay: { ch: 1, rt: 1, pp: 1, tm: 1, pr: 1 } }; const yi = Math.min(st.y, CP.years.length - 1), yr = CP.years[yi];
   const tab = tabState('BMAP', 'map'); setTabs([['map', 'Carte des flux'], ['mkt', 'Marché et courbes'], ['us', 'Flux des États-Unis'], ['prod', 'Producteurs et consommateurs'], ['chk', 'Détroits : historique']], tab, k => { ST.tab.BMAP = k; render(); });
@@ -250,7 +250,7 @@ PAGES.BMAP = async (m, alive) => {
       <div class="lect">Cercles rouges = volumes ${yr} par détroit (édition du ${fds(CP.upd || '')}). Traits ambre = routes principales, <b>schématiques</b>. Pointillés bleus = oléoducs de contournement. Carrés = grands terminaux (ambre : exportation, bleu : importation ; positions approximatives). Bulles vertes = production de pétrole par pays${EI && EI.prod ? ` (${EI.prod.years[EI.prod.years.length - 1]})` : ' (en attente de la collecte du soir)'}. Survol = détails.</div></div>
       <div class="grid" style="align-content:start">${pn('Points clés', 'BMAP', `<div class="lectb">${facts.map(f => `<p>${f}</p>`).join('') || '<p class="dm">En attente des données.</p>'}</div>`)}
       ${mktPanel()}
-      ${CP.y2026 ? pn(esc(CP.y2026.title), 'BMAP', `<table class="t"><tbody>${CP.y2026.pts.map(x => `<tr><td class="l am" style="vertical-align:top;white-space:nowrap">${esc(x.d.length === 7 ? mLab(x.d) : x.d)}</td><td class="l" style="white-space:normal">${esc(x.t)} <a href="${esc(x.u)}" target="_blank" rel="noopener" class="dm">${esc(x.src)}</a></td></tr>`).join('')}</tbody></table>`, { np: true, lect: esc(CP.y2026.note || '') }) : ''}
+      ${CP.y2026 ? pn(esc(CP.y2026.title), 'BMAP', `<table class="t"><tbody>${CP.y2026.pts.map(x => `<tr><td class="l am" style="vertical-align:top;white-space:nowrap">${esc(x.d.length === 7 ? mLab(x.d) : x.d)}</td><td class="l" style="white-space:normal">${esc(x.t)}</td></tr>`).join('')}</tbody></table>`, { np: true, lect: esc(CP.y2026.note || '') }) : ''}
       ${pn(`Actualités du pétrole (${onews.length})`, 'NEWS', `<div style="max-height:360px;overflow:auto">${onews.map(x => newsRow2(x, { short: true })).join('') || '<div class="dm">Aucune dépêche récente.</div>'}</div>`)}</div></div>`;
     m.querySelectorAll('[data-yi]').forEach(b => b.onclick = () => { st.y = +b.dataset.yi; render(); }); m.querySelectorAll('[data-ly]').forEach(b => b.onclick = () => { st.lay[b.dataset.ly] = st.lay[b.dataset.ly] ? 0 : 1; render(); });
     bmapDraw($('bmC'), G, CP, yi, st.lay, EI);
@@ -338,7 +338,7 @@ function bmapDraw(host, G, CP, yi, lay, EI) {
     return b; };
   cv.onmousemove = e => { const r = cv.getBoundingClientRect(); hover = near(e.clientX - r.left, e.clientY - r.top); const o = hover; if (!o) { untip(); return; }
     if (o.v && Array.isArray(o.v)) tip(e, `<b>${esc(o.n)}</b><br>${CP.years.map((y, i) => `${y} : ${num(o.v[i], 1)}`).join(' · ')} Mb/j<br>part du commerce maritime ${CP.years[yi]} : ${num(o.v[yi] / CP.world.maritime[yi] * 100, 0)} %`);
-    else if (o.cap) tip(e, `<b>${esc(o.n)}</b> (${esc(o.c)})<br>${esc(o.cap)}<br><span class="dm">${esc(o.src)}</span>`);
+    else if (o.cap) tip(e, `<b>${esc(o.n)}</b> (${esc(o.c)})<br>${esc(o.cap)}`);
     else if (o.k) tip(e, `<b>${esc(o.n)}</b> · ${esc(o.c)}<br>terminal ${o.k === 'exp' ? 'd’exportation' : 'd’importation'} · ${esc(o.z)}`);
     else tip(e, `<b>${esc(o.n)}</b><br>production de pétrole ${o.y} : ${num(o.v, 0)} ${o.u}`); };
   cv.onmouseleave = () => { hover = null; untip(); };

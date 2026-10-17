@@ -2,10 +2,10 @@
 'use strict';
 const codeAttr = code => { const c0 = String(code || '').trim(); if (FN[c0]) return c0 === ST.fn ? '' : ` data-fn="${c0}"`; const w = c0.split(/\s+/); const f = w[w.length - 1]; if (!FN[f] || f === ST.fn && (w.length < 2 || w[0] === ST.sec)) return ''; return ` data-fn="${f}"${w.length > 1 && Q.by[w[0]] ? ` data-s="${w[0]}"` : ''}`; };
 /* dividende par action : marqué « a » quand il a été ajusté d'un fractionnement ou d'actions gratuites (montant publié en infobulle),
-   « $ » quand il a été publié en cents de dollar (montant en FCFA du bulletin officiel, sinon converti au cours du jour de publication) */
+   « $ » quand il a été publié en cents de dollar (montant officiel en FCFA, sinon converti au cours du jour de publication) */
 const adjMark = x => (x && x.adj ? `<i class="qd" title="montant publié : ${num(x.dps0, x.dps0 < 10 ? 4 : 2)} par action ancienne ; ajusté des opérations sur le capital (1 action ancienne = ${num(x.adj, Number.isInteger(+x.adj) ? 0 : 2)} actions actuelles)">a</i>` : '')
-  + (x && x.usd ? `<i class="qd" title="publié en dollars : ${num(x.usd, 2)} cent de dollar par action ; ${x.fx ? `converti au cours du jour de sa publication (${num(x.fx, 2)} FCFA pour 1 dollar)` : 'montant en FCFA du bulletin officiel de la cote'}">$</i>` : '')
-  + (x && x.cal ? '<i class="qd" title="montant du calendrier des dividendes de la BRVM (net ou brut selon la société) : l’avis officiel détaille le net">c</i>' : '');
+  + (x && x.usd ? `<i class="qd" title="publié en dollars : ${num(x.usd, 2)} cent de dollar par action ; ${x.fx ? `converti au cours du jour de sa publication (${num(x.fx, 2)} FCFA pour 1 dollar)` : 'montant officiel en FCFA'}">$</i>` : '')
+  + (x && x.cal ? '<i class="qd" title="montant du calendrier officiel des dividendes (net ou brut selon la société) : l’avis officiel détaille le net">c</i>' : '');
 const pn = (title, code, body, o = {}) => `<div class="pn" ${o.id ? `id="${o.id}"` : ''} ${o.style ? `style="${o.style}"` : ''}><div class="pt">${title}${o.sel ? `<span class="sel">${o.sel}</span>` : ''}<span class="code"${codeAttr(code)}>${code || ''}</span></div>${o.tools ? `<div class="tools">${o.tools}</div>` : ''}<div class="pb ${o.np ? 'np' : ''}">${body}</div>${o.lect ? `<div class="lect">${o.lect}</div>` : ''}</div>`;
 const cvb = (id, h) => `<div class="cv" id="${id}" style="height:${h}px"></div>`;
 const rangeBar = s => { if (!(s.hi52 > s.lo52)) return ''; const f = U.clamp((s.last - s.lo52) / (s.hi52 - s.lo52), 0, 1); return `<span class="rng" title="${px(s, s.lo52)} – ${px(s, s.hi52)}"><i style="left:${(f * 68).toFixed(0)}px"></i></span>`; };
@@ -32,7 +32,7 @@ PAGES.MONITOR = async (m, alive) => {
       ${pn('QQQ · règle SMA 200 → TQQQ', 'QQQ GP', `<div class="grid c2b" style="gap:8px"><div class="kv2" id="sigKv"></div>${cvb('sigCv', 150)}</div>`, { lect: '<span id="sigLect">…</span>' })}
       ${pn('BRVM · séance', 'BRVM', `<div class="grid c3" style="gap:6px"><div><div class="am" style="font-size:11px;margin-bottom:2px">Plus fortes hausses</div>${mini(up, s => pc(s.pct))}</div><div><div class="am" style="font-size:11px;margin-bottom:2px">Plus fortes baisses</div>${mini(dn, s => pc(s.pct))}</div><div><div class="am" style="font-size:11px;margin-bottom:2px">Plus gros échanges</div>${mini(vo, s => valTxt(s, s.vday))}</div></div>`,
         { sel: Q.sum.session ? Q.sum.session.label : fd(Q.sum.asof), lect: `<b>Largeur</b> : <strong>${nUp}</strong> hausses, <strong>${nDn}</strong> baisses, ${br.length - nUp - nDn} stables sur ${br.length} titres. Montants échangés en XOF.` })}
-      ${pn('Avis officiels BRVM · derniers publiés', 'EVTS', '<div id="monEv" style="max-height:260px;overflow:auto">…</div>')}
+      ${pn('Avis officiels · derniers publiés', 'EVTS', '<div id="monEv" style="max-height:260px;overflow:auto">…</div>')}
     </div></div>
     ${pn('BRVM · carte des capitalisations', 'BRVM', '<div class="tmap" id="tmap"></div>', { sel: 'taille = capitalisation boursière · couleur = variation du jour', lect: 'Chaque rectangle est une société cotée, proportionnel à sa capitalisation (cours × nombre de titres). <b>Vert</b> = hausse du jour, <b>rouge</b> = baisse ; l’intensité suit l’ampleur (saturée à ±4 %). Cliquer ouvre le graphique.' })}`;
   const tm = br.filter(s => s.mcap).map(s => ({ id: s.id, v: s.mcap, label: s.id, sub: (s.pct > 0 ? '+' : '') + num(s.pct * 100, 2) + '%', color: s.pct === 0 || !isFinite(s.pct) ? '#1f1f1f' : heatBg(s.pct, .04).replace(/,(0\.\d+|0)\)$/, (m0, a) => ',' + Math.max(.22, +a).toFixed(2) + ')'), title: `${s.n} · capi ${big(s.mcap)} XOF` }));
@@ -93,7 +93,7 @@ PAGES.BRVM = async (m, alive) => {
 async function brvmFloat(m, alive) {
   setTitle('BRVM Overview · Free Float');
   const F = await getJSON('flottant.json').catch(() => null); if (!alive()) return;
-  if (!F || !F.rows) { m.innerHTML = pn('Flottant officiel', 'BRVM', '<div class="empty">Aucun avis de flottant lu pour l’instant (lecture chaque soir des avis de la BRVM).</div>'); return; }
+  if (!F || !F.rows) { m.innerHTML = pn('Flottant officiel', 'BRVM', '<div class="empty">Aucun avis de flottant lu pour l’instant (lecture chaque soir des avis officiels).</div>'); return; }
   const all = secsWhere(s => s.mkt === 'BRVM' && s.cls === 'Equity'), st = ST.flo = ST.flo || { sort: { k: 'pct', dir: -1 } };
   const R = all.map(s => { const r = F.rows[s.id]; const mc = r && s.last ? r.flt * s.last : null;
     return { id: s.id, short: s.short || s.n, grp: s.grp, sh: r ? r.sh : null, flt: r ? r.flt : null, pct: r ? r.pct : null, ok15: r ? r.ok15 : null, shnow: s.shares, fnow: s.float, capf: mc, last: s.last, nd: !r }; });

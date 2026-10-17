@@ -50,7 +50,7 @@ const ECO_REG = [['MAJ', 'Principales économies', ['US', 'EU', 'GB', 'JP', 'CN'
   ['EUR', 'Europe', ['EU', 'DE', 'FR', 'IT', 'ES', 'GB', 'CH']], ['AM', 'Amériques', ['US', 'CA', 'BR']], ['AS', 'Asie-Pacifique', ['JP', 'CN', 'IN', 'AU']], ['AF', 'Afrique', ['ZA', 'NG', 'GH', 'CI', 'SN', 'KE', 'MA', 'EG']], ['UEMOA', 'UEMOA (Côte d’Ivoire, Sénégal)', ['CI', 'SN']]];
 const ECO_CAT = { mny: 'Politique monétaire', prce: 'Prix', bsnss: 'Activité / enquêtes', gov: 'État / banque centrale', bnd: 'Adjudications', hse: 'Logement', enrg: 'Énergie', cnsm: 'Consommation', trd: 'Commerce extérieur', lbr: 'Emploi', mrkt: 'Marchés', gdp: 'PIB' };
 /* publications US reliées à une série FRED de ECWB / ECST (historique long dans le panneau de détail) */
-const ECO_FRED = [[/^Non Farm Payrolls$/i, 'PAYEMS'], [/^Unemployment Rate$/i, 'UNRATE'], [/^Initial Jobless Claims$/i, 'ICSA'], [/^(Core )?Inflation Rate (YoY|MoM)$|^CPI$/i, 'CPIAUCSL'], [/^Core Inflation Rate/i, 'CPILFESL'],
+const ECO_SER = [[/^Non Farm Payrolls$/i, 'PAYEMS'], [/^Unemployment Rate$/i, 'UNRATE'], [/^Initial Jobless Claims$/i, 'ICSA'], [/^(Core )?Inflation Rate (YoY|MoM)$|^CPI$/i, 'CPIAUCSL'], [/^Core Inflation Rate/i, 'CPILFESL'],
   [/^Core PCE Price Index/i, 'PCEPILFE'], [/^PPI (MoM|YoY)$/i, 'PPIACO'], [/^Retail Sales (MoM|YoY)$/i, 'RSAFS'], [/^Industrial Production (MoM|YoY)$/i, 'INDPRO'], [/^Housing Starts$/i, 'HOUST'], [/Michigan Consumer Sentiment/i, 'UMCSENT'],
   [/^JOLTs Job Openings$/i, 'JTSJOL'], [/^GDP Growth Rate/i, 'GDPC1'], [/^Fed Interest Rate Decision$/i, 'DFF'], [/^MBA 30-Year Mortgage Rate$|^30-Year Mortgage Rate/i, 'MORTGAGE30US'], [/^S&P\/Case-Shiller/i, 'CSUSHPINSA']];
 function ecoVal(r, v) { if (v == null || v === '') return '<span class="dm">—</span>'; if (typeof v !== 'number') return esc(String(v));
@@ -110,7 +110,7 @@ PAGES['NEWS ECO'] = async (m, alive) => {
   else if (sel && tw) { const h = tw.querySelector('tr.hl'); if (h) goRow(h); }
   if (!sel) return;
   /* panneau de détail : la publication, ses occurrences dans la fenêtre et, pour les États-Unis, la série FRED liée */
-  const T = ecoDT(sel.d), same = C.rows.filter(r => r.c === sel.c && r.t === sel.t).sort((a, b) => b.d.localeCompare(a.d)), fred = sel.c === 'US' ? (ECO_FRED.find(([rx]) => rx.test(sel.t)) || [])[1] : null;
+  const T = ecoDT(sel.d), same = C.rows.filter(r => r.c === sel.c && r.t === sel.t).sort((a, b) => b.d.localeCompare(a.d)), fred = sel.c === 'US' ? (ECO_SER.find(([rx]) => rx.test(sel.t)) || [])[1] : null;
   const surpr = typeof sel.a === 'number' && typeof sel.f === 'number' ? sel.a - sel.f : null;
   $('ecDet').innerHTML = pn(`${flagSVG(sel.c)} ${esc(sel.t)}`, 'NEWS ECO', `<div class="kv2"><span>Pays / zone</span><b>${esc(FLAG_N[sel.c] || sel.c)}</b><span>Publication</span><b>${T.wd}, ${T.hm} GMT</b><span>Période</span><b>${esc(sel.p || '—')}</b><span>Catégorie</span><b>${esc(ECO_CAT[sel.cat] || sel.cat || '—')}</b>
       <span>Importance</span><b>${['Faible', 'Moyenne', 'Haute'][sel.i + 1]} ${relBars(sel.i)}</b><span>Prévision (consensus)</span><b>${ecoVal(sel, sel.f)}</b><span>Réel</span><b class="wh">${ecoVal(sel, sel.a)}</b><span>Précédent</span><b>${ecoVal(sel, sel.pr)}</b>
@@ -143,7 +143,7 @@ async function ecstTree(geo) {
     const fq = { D: 'Quotidien', W: 'Hebdomadaire', M: 'Mensuel', Q: 'Trimestriel' };
     for (const [g, ids] of ECST_US) { const rows = ids.filter(id => M[id] && E.s[id]).map(id => { const [d, v] = E.s[id], n = d.length, mt = M[id]; const pts = []; for (let i = n - 1; i >= 0 && pts.length < 6; i--) if (v[i] != null) pts.push([d[i], v[i]]);
         const ya = (() => { const t = d[n - 1] - 10000; let k = -1; for (let i = n - 1; i >= 0; i--) if (d[i] <= t) { k = i; break; } return k >= 0 ? v[k] : null; })();
-        return { k: 'F:' + id, n: mt.n, code: id, u: mt.u, f: fq[mt.f] || mt.f, mode: 'L', pts, ya, x: d, y: v, src: 'FRED' }; }); if (rows.length) out.push([g, rows]); }
+        return { k: 'F:' + id, n: mt.n, code: id, u: mt.u, f: fq[mt.f] || mt.f, mode: 'L', pts, ya, x: d, y: v, src: 'US' }; }); if (rows.length) out.push([g, rows]); }
     return out; }
   if (geo === 'UEMOA' || G[3]) { const B = await getJSON('bceao.json').catch(() => null);
     if (B) { const nm = geo === 'UEMOA' ? 'UEMOA' : G[3], per = o => Object.entries(o || {}).filter(([k]) => /^\d{4}(-\d{2})?$/.test(k)).sort((a, b) => b[0].localeCompare(a[0]));

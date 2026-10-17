@@ -161,6 +161,71 @@ def official(u):
     return h.endswith("brvm.org")
 
 
+ACC = {"etats": "états", "assemblee": "assemblée", "generale": "générale", "activites": "activités", "activite": "activité",
+       "societes": "sociétés", "cotees": "cotées", "resultats": "résultats", "approuves": "approuvés", "certifies": "certifiés",
+       "theorique": "théorique", "a la": "à la", "mise a": "mise à", "brvmdg": "BRVM/DG", "brvm": "BRVM", "dactivites": "d’activités",
+       "dactivite": "d’activité", "troisieme": "troisième", "deuxieme": "deuxième", "3eme": "3ème", "2eme": "2ème", "dactions": "d’actions",
+       "opcvm": "OPCVM", "ra": "Rapport annuel", "rs": "Rapport semestriel", "efa": "États financiers approuvés",
+       "efp": "États financiers provisoires", "efc": "États financiers consolidés", "ef": "États financiers", "cm": "Communiqué"}
+
+
+def file_title(fn, t, co, name_rx=None):
+    """Intitulé refait à partir du nom du fichier (quand la liste de la Bourse rattache le fichier à un autre document)."""
+    s = re.sub(r"\.pdf$", "", fn, flags=re.I)
+    s = re.sub(r"^\d{6,8}[_-]*", "", s)
+    s = re.sub(r"_+\d$", "", s).replace("_-_", " - ").replace("_", " ")
+    s = re.sub(r"\s+", " ", s).strip(" -")
+    if name_rx:  # (nom de la société retiré du texte : il est mis en tête)
+        seg = [x for x in s.split(" - ") if not re.search(name_rx, x, flags=re.I)] or [s]
+        s = " - ".join(seg)
+        s = re.sub(r"\b(?:" + name_rx + r")(?:\s+\w+)?(?:\s+(?:ci|sn|bf|bn|ml|ne|ng|tg))?\b", "", s, flags=re.I)
+        s = re.sub(r"(?:\s+(?:de|du|des|la|le|les|d))+\s*$", "", s.strip(" -"), flags=re.I)
+    s = re.sub(r"\bndeg ?(\d)", r"n° \1", s, flags=re.I)
+    s = re.sub(r"\b(" + "|".join(sorted(map(re.escape, ACC), key=len, reverse=True)) + r")\b", lambda m: ACC[m.group(1).lower()], s, flags=re.I)
+    s = re.sub(r"\s+", " ", s).strip(" -")
+    s = s[:1].upper() + s[1:]
+    if t:
+        names = sorted((n for n in co.get(t, ()) if n and n == n.upper() and len(n) >= 3), key=len)
+        if names:
+            return f"{names[0]} : {s}"
+    return s
+
+
+def fix_by_file(rows, co, log=print):
+    """Le nom du fichier fait foi : un fichier d'une autre société cotée que celle de la liste (« SUCRIVOIRE : États financiers 2024 »
+    pointant vers un erratum de SOLIBRA), ou d'un autre type de document (« comptes 2016 » pointant vers un avis sur le flottant),
+    est rattaché à la bonne société avec un intitulé refait à partir du fichier ; « Exercice 1998 » sur un fichier « exercice_2001 »
+    prend l'année du fichier. Ainsi chaque ligne de la recherche ouvre le document qu'elle annonce."""
+    try:
+        from comptes import other_company, NAME_TOKENS
+    except Exception:  # noqa: BLE001
+        other_company, NAME_TOKENS = None, {}
+    n = 0
+    for r in rows:
+        if not (isinstance(r[5], str) and r[5].startswith("B:")):
+            continue
+        fn = r[5][2:].rsplit("/", 1)[-1]
+        nf = nrm(fn).replace("_", " ").replace("-", " ")
+        oc = other_company(r[1], fn) if (other_company and r[1]) else None
+        oc = oc if oc and oc != "?" else None
+        kind_rx = r"valeurs? liquidatives?|flottant des societes"
+        wrong_kind = re.search(kind_rx, nf) and not re.search(kind_rx, nrm(r[4]))
+        if oc or wrong_kind:
+            r[1] = oc or ""
+            r[4] = file_title(fn, r[1], co, NAME_TOKENS.get(r[1]))[:180]
+            r[0] = kind_of(r[4], B_ + r[5][2:])
+            r[2] = year_of(r[4], B_ + r[5][2:])
+            n += 1
+            continue
+        m_f, m_t = re.search(r"exercice ((?:19|20)\d\d)\b", nf), re.search(r"\b[Ee]xercice ((?:19|20)\d\d)\b", r[4])
+        if m_f and m_t and r[0] in ("ef", "rann", "cac") and m_f.group(1) != m_t.group(1):
+            r[4] = r[4][:m_t.start(1)] + m_f.group(1) + r[4][m_t.end(1):]
+            r[2] = int(m_f.group(1))
+            n += 1
+    log(f"recherche MOTS CLES : {n} intitulés corrigés d'après le nom du fichier")
+    return n
+
+
 def jload(p, default=None):
     try:
         return json.load(open(p, encoding="utf8"))
@@ -301,6 +366,7 @@ def build(out, brvm_src, search_src=None, boc_dir=None, log=print, comptes=None)
     for r in R.values():  # (« dividende de l’exercice — » : exercice absent de la liste, connu par un autre document)
         r[4] = re.sub(r" de l’exercice — ", f" de l’exercice {r[2]} " if r[2] else " ", r[4])
     rows = sorted(R.values(), key=lambda r: (-r[3], r[4]))
+    fix_by_file(rows, co, log)
     # société manquante : reconnue dans l'intitulé (noms des sociétés)
     for r in rows:  # société rattachée par la liste démentie par le nom écrit dans l'intitulé (« … ONATEL-SA » rattaché à Sonatel)
         if r[1]:

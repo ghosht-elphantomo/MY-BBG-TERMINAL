@@ -1,4 +1,4 @@
-/* ================= FQT — MOTS CLES : recherche dans tous les documents de la BRVM, les titres, les fonctions, les obligations et les actualités ================= */
+/* ================= FQT — MOTS CLES : recherche dans tous les documents du marché, les titres, les fonctions, les obligations et les actualités ================= */
 'use strict';
 /* Natures de documents : libellé, couleur de la pastille */
 const KW_KIND = {
@@ -68,8 +68,7 @@ function kwLev(a, b, max) {
   for (let i = 1; i <= a.length; i++) { const c = [i]; let lo = i; for (let j = 1; j <= b.length; j++) { const v = Math.min(p[j] + 1, c[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); c.push(v); if (v < lo) lo = v; } if (lo > max) return max + 1; p = c; }
   return p[b.length];
 }
-const kwUrl = u => !u ? '' : u.startsWith('B:') ? 'https://www.brvm.org/sites/default/files/' + u.slice(2) : u.startsWith('F:') ? 'https://bfin.brvm.org/boc/BOC_JOUR/' + u.slice(2)
-  : /^W\d{8,14}:/.test(u) ? 'https://web.archive.org/web/' + u.slice(1, u.indexOf(':')) + 'id_/' + u.slice(u.indexOf(':') + 1) : u;
+const kwUrl = u => !u ? '' : u.startsWith('/doc/') ? u : u.startsWith('B:') ? '/doc/b/' + u.slice(2) : u.startsWith('F:') ? '/doc/f/' + u.slice(2) : /^W\d{8,14}:/.test(u) ? '' : u;
 /* les mots tapés se suivent-ils dans l'intitulé (mots vides ignorés, début de mot accepté) ? */
 const kwSeq = (ti, ws) => { const T = kwToks(ti).filter(x => !KW_STOP.has(x)); for (let i = 0; i + ws.length <= T.length; i++) if (ws.every((w, j) => T[i + j] === w || (w.length >= 3 && T[i + j].startsWith(w)))) return true; return false; };
 /* « 2004–2011, 2014, 2023–2025 » */
@@ -243,7 +242,7 @@ PAGES['MOTS CLES'] = async (m, alive) => {
   const st = ST.kw = ST.kw || { q: '', k: '', n: 60 };
   m.innerHTML = pn('Recherche par mots clés', 'MOTS CLES', `<div class="kw"><div class="kwbar"><input id="kwQ" type="search" autocomplete="off" spellcheck="false" placeholder="ex. : états financiers sonatel 2017 · rapport d'activité servair 2008 · obligation tpci · avis dcbr dividende · bulletin 15 octobre 2026" value="${esc(st.q)}"><span class="kwn" id="kwN"></span></div>
     <div id="kwI" class="kwi"></div><div id="kwA" class="kwa"></div><div id="kwF" class="chips kwf"></div><div id="kwR" class="kwr"><div class="empty">Chargement de l’index…</div></div></div>`,
-    { np: true, lect: 'Tous les documents de la BRVM connus du terminal, depuis 1998 : états financiers, rapports d’activité et annuels, rapports des commissaires aux comptes, résultats, communiqués, assemblées, notations, avis de la BRVM et du Dépositaire central (DC/BR), dividendes, obligations, opérations sur titres, bulletins officiels de la cote, revues trimestrielles, archives de l’ancien site ; plus les titres, les fonctions, les obligations cotées et les actualités. Tapez une société (nom, ancien nom ou symbole), une nature de document, une année ou n’importe quel mot ; les fautes de frappe sont tolérées. Résultats du plus pertinent au moins pertinent, et dans chaque groupe du plus récent au plus ancien. Un document s’ouvre en cliquant sur son intitulé (nouvel onglet).' });
+    { np: true, lect: 'Tous les documents du marché connus du terminal, depuis 1998 : états financiers, rapports d’activité et annuels, rapports des commissaires aux comptes, résultats, communiqués, assemblées, notations, avis officiels, dividendes, obligations, opérations sur titres, bulletins de la cote, revues trimestrielles, documents anciens ; plus les titres, les fonctions, les obligations cotées et les actualités. Tapez une société (nom, ancien nom ou symbole), une nature de document, une année ou n’importe quel mot ; les fautes de frappe sont tolérées. Résultats du plus pertinent au moins pertinent, et dans chaque groupe du plus récent au plus ancien. Un document s’ouvre en cliquant sur son intitulé (nouvel onglet).' });
   const inp = $('kwQ'); inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length);
   const db = await kwLoad(); if (!alive()) return;
   $('kwN').textContent = num(db.n, 0) + ' documents';
@@ -274,7 +273,7 @@ PAGES['MOTS CLES'] = async (m, alive) => {
     const R = res.R;
     if (!st.q.trim()) {
       const recent = E.map((e, i) => i).filter(i => E[i].k !== 'boc' && E[i].k !== 'news' && E[i].d).sort((a, b) => E[b].d - E[a].d).slice(0, 25);
-      $('kwR').innerHTML = `<div class="kwh">Exemples : ${['états financiers sonatel 2017', 'rapport d’activité servair 2008', 'obligation tpci', 'avis dcbr dividende 2016', 'bulletin officiel 2 août 2017', 'notation boa', 'fractionnement', 'assemblée générale orange 2024'].map(x => `<button class="tb alt" data-kwq="${esc(x)}">${esc(x)}</button>`).join(' ')}</div>
+      $('kwR').innerHTML = `<div class="kwh">Exemples : ${['états financiers sonatel 2017', 'rapport d’activité servair 2008', 'obligation tpci', 'avis dcbr dividende 2016', 'bulletin de la cote 2 août 2017', 'notation boa', 'fractionnement', 'assemblée générale orange 2024'].map(x => `<button class="tb alt" data-kwq="${esc(x)}">${esc(x)}</button>`).join(' ')}</div>
         <table class="t kwt"><thead><tr><th class="l">Date</th><th class="l">Nature</th><th class="l">Société</th><th class="l">Derniers documents publiés</th><th>Exercice</th></tr></thead><tbody>${recent.map(i => kwRow(E[i], i, null)).join('')}</tbody></table>`;
       res.R = recent; return;
     }
@@ -296,7 +295,7 @@ PAGES['MOTS CLES'] = async (m, alive) => {
       : `<div class="empty">Aucun document ne correspond. Essayez moins de mots, un autre nom de la société ou une autre année.</div>`);
     const mb = $('kwMore'); if (mb) mb.onclick = () => { st.n += 60; draw(); };
   };
-  const kwRow = (e, i, P) => `<tr data-kwi="${i}"><td class="l">${kwDate(e.d)}</td><td class="l"><span class="kwk" style="--c:${(KW_KIND[e.k] || ['', 'var(--dim)'])[1]}">${esc((KW_KIND[e.k] || [e.k])[0])}</span>${e.f.includes('D') ? ' <span class="dm" title="Dépositaire central / Banque de règlement">DC/BR</span>' : ''}${e.f.includes('A') ? ' <span class="dm" title="Archive de l’ancien site de la BRVM (web.archive.org)">archive</span>' : ''}</td>
+  const kwRow = (e, i, P) => `<tr data-kwi="${i}"><td class="l">${kwDate(e.d)}</td><td class="l"><span class="kwk" style="--c:${(KW_KIND[e.k] || ['', 'var(--dim)'])[1]}">${esc((KW_KIND[e.k] || [e.k])[0])}</span>${e.f.includes('D') ? ' <span class="dm" title="Dépositaire central / Banque de règlement">DC/BR</span>' : ''}${e.f.includes('A') ? ' <span class="dm" title="Document ancien">archive</span>' : ''}</td>
     <td class="l tk"${e.t && Q.by[e.t] ? ` data-sec="${e.t}" data-to="DES"` : ''}>${e.t || '—'}</td><td class="l kwti"><a href="${esc(e.u && e.u.startsWith('bond:') ? '#UEMOA BONDS' : kwUrl(e.u))}" target="_blank" rel="noopener" data-kwo="${i}">${P ? kwHighlight(e.ti, P) : esc(e.ti)}</a></td><td>${e.y || '—'}</td></tr>`;
   inp.oninput = () => { st.n = 60; clearTimeout(timer); timer = setTimeout(draw, 90); };
   /* Entrée lance la recherche (aucun document ne s'ouvre seul : on clique sur l'intitulé) */

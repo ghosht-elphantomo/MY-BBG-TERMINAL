@@ -151,6 +151,18 @@ Tout est automatique (GitHub Actions) ; aucune intervention manuelle n'est néce
 
 Le site publié lit ses données en direct sur la branche `data` (`api/data.js`) ; la branche `site` ne contient que la page et n'est redéployée que si le code change. Les branches de données ne sont jamais déployées (`vercel.json`).
 
+**Documents** : le site n'affiche jamais l'adresse d'origine d'un document. Le relais remplace les adresses dans les données par des adresses du site, et `vercel.json` les sert à la volée (rien n'est stocké) :
+
+| Adresse du site | Document servi |
+|---|---|
+| `/doc/b/<fichier>` | documents publiés (états financiers, rapports, avis) |
+| `/doc/f/<fichier>` | bulletins de la cote du jour |
+| `/doc/a/<horodatage>/<chemin>` | anciens documents (archive web, copie à la date indiquée) |
+| `/doc/c/<horodatage>/<chemin>` | anciens bulletins (même archive) |
+| `/doc/r/<chemin>` | quelques documents d'un site d'information boursière |
+
+La recherche MOTS CLES contrôle chaque ligne contre le nom de son fichier (`fix_by_file` dans `scripts/build_search.py`) : un fichier d'une autre société ou d'un autre type que l'intitulé est rattaché à la bonne société, avec un intitulé refait d'après le fichier.
+
 ### Secours si GitHub ne répond plus
 
 - **Copie** : `copie.yml` envoie chaque nuit tout le dépôt vers un dépôt privé hors GitHub (secret GitHub `GITLAB_TOKEN`, droits lecture et écriture du dépôt uniquement).
@@ -162,9 +174,10 @@ Le site publié lit ses données en direct sur la branche `data` (`api/data.js`)
 ## Fichiers
 
 ```
-index.html                 page générée : python3 build.py (assemble web/)
+index.html                 page générée : python3 build.py (assemble web/ ; code compacté sans commentaires par terser, obligatoire)
 web/                       style.css, body.html, core.js (fonctions, navigation), engine.js (moteur quant), chart.js, pages*.js
-api/data.js                lecture des données publiées (branche data)
+api/data.js                lecture des données publiées (branche data) ; adresses des documents remplacées par /doc/… et
+                           libellés de provenance retirés au passage ; alias de certains fichiers (ALIAS)
 scripts/scrape.py          relevé de séance
 scripts/fetch_extra.py     sources complémentaires, avis, comptes et documents de la BRVM
 scripts/build_terminal.py  construction de toute la base data/ (puis QLAB le soir)
@@ -180,9 +193,11 @@ SAUVEGARDES.md             points de restauration (retour arrière possible à c
 ## En local
 
 ```bash
+npm install -g terser@5.36.0                        # une fois : build.py s'arrête sans lui
 python3 build.py                                    # assemble index.html
 git fetch origin data && git archive origin/data | tar -x -C /tmp/qsite
 cp index.html /tmp/qsite/ && python3 -m http.server -d /tmp/qsite 8000   # http://localhost:8000
+# (en local, les données ne passent pas par le relais : adresses d'origine et noms de fichiers réels)
 ```
 
 Outil d'analyse personnel, pas un conseil en investissement. Les données de marché restent la propriété de leurs émetteurs.
