@@ -3159,12 +3159,35 @@ BOAS,2012,social,syscohada,resultat_net,Résultat net,602.411,1
 BOAS,2012,social,syscohada,subventions,Subventions d'investissement,0,1
 BOAS,2012,social,syscohada,total_actif,Total actif,131598.056,1
 BOAS,2012,social,syscohada,total_passif,Total passif,131598.056,1
+BOAS,2013,social,syscohada,b_caisse,"Caisse, banque centrale",3616,1
+BOAS,2013,social,syscohada,b_creances_clientele,Créances sur la clientèle,124472,1
+BOAS,2013,social,syscohada,b_interets_produits,Intérêts et produits assimilés,10916,1
+BOAS,2013,social,syscohada,capital,Capital,10000,1
+BOAS,2013,social,syscohada,immo_corp,Immobilisations corporelles,11035,1
+BOAS,2013,social,syscohada,immo_incorp,Immobilisations incorporelles,382,1
+BOAS,2013,social,syscohada,resultat_bilan,Résultat de l'exercice (bilan),3376,1
+BOAS,2013,social,syscohada,resultat_net,Résultat net,3376,1
+BOAS,2013,social,syscohada,total_actif,Total actif,192358,1
+BOAS,2013,social,syscohada,total_passif,Total passif,192358,1
+BOAS,2014,social,syscohada,b_caisse,"Caisse, banque centrale",3465,1
+BOAS,2014,social,syscohada,b_creances_clientele,Créances sur la clientèle,167855,1
+BOAS,2014,social,syscohada,b_dettes_interbancaires,Dettes interbancaires,101285,1
+BOAS,2014,social,syscohada,b_interets_produits,Intérêts et produits assimilés,14508,1
+BOAS,2014,social,syscohada,b_titres_placement,Titres de placement,3.6,1
+BOAS,2014,social,syscohada,capital,Capital,12000,1
+BOAS,2014,social,syscohada,immo_corp,Immobilisations corporelles,11979,1
+BOAS,2014,social,syscohada,immo_incorp,Immobilisations incorporelles,320,1
+BOAS,2014,social,syscohada,resultat_bilan,Résultat de l'exercice (bilan),3.17,1
+BOAS,2014,social,syscohada,resultat_net,Résultat net,3.17,1
+BOAS,2014,social,syscohada,total_actif,Total actif,285085,1
+BOAS,2014,social,syscohada,total_passif,Total passif,285085,1
 BOAS,2015,social,syscohada,b_caisse,"Caisse, banque centrale",6501,1
 BOAS,2015,social,syscohada,b_capital,Capital,12000,1
 BOAS,2015,social,syscohada,b_creances_clientele,Créances sur la clientèle,193153,1
 BOAS,2015,social,syscohada,b_dettes_clientele,Dettes envers la clientèle,206125,1
 BOAS,2015,social,syscohada,b_dettes_interbancaires,Dettes interbancaires,116843,1
 BOAS,2015,social,syscohada,b_interets_charges,Intérêts et charges assimilées,9137,1
+BOAS,2015,social,syscohada,b_interets_produits,Intérêts et produits assimilés,15438,1
 BOAS,2015,social,syscohada,b_titres_placement,Titres de placement,94259,1
 BOAS,2015,social,syscohada,ecart_reevaluation,Écarts de réévaluation,0,1
 BOAS,2015,social,syscohada,immo_corp,Immobilisations corporelles,22668,1
@@ -3177,12 +3200,14 @@ BOAS,2015,social,syscohada,resultat_bilan,Résultat de l'exercice (bilan),2079,1
 BOAS,2015,social,syscohada,subventions,Subventions d'investissement,0,1
 BOAS,2015,social,syscohada,total_actif,Total actif,361878,1
 BOAS,2015,social,syscohada,total_passif,Total passif,361878,1
+BOAS,2015,social,syscohada,ventes_marchandises,Ventes de marchandises,0,1
 BOAS,2016,social,syscohada,b_caisse,"Caisse, banque centrale",5858,1
 BOAS,2016,social,syscohada,b_capital,Capital,12000,1
 BOAS,2016,social,syscohada,b_creances_clientele,Créances sur la clientèle,235388,1
 BOAS,2016,social,syscohada,b_dettes_clientele,Dettes envers la clientèle,318797,1
 BOAS,2016,social,syscohada,b_dettes_interbancaires,Dettes interbancaires,154394,1
 BOAS,2016,social,syscohada,b_interets_charges,Intérêts et charges assimilées,11905,1
+BOAS,2016,social,syscohada,b_interets_produits,Intérêts et produits assimilés,18044,1
 BOAS,2016,social,syscohada,b_titres_placement,Titres de placement,153770,1
 BOAS,2016,social,syscohada,ecart_reevaluation,Écarts de réévaluation,0,1
 BOAS,2016,social,syscohada,immo_corp,Immobilisations corporelles,24531,1
@@ -3195,6 +3220,7 @@ BOAS,2016,social,syscohada,resultat_bilan,Résultat de l'exercice (bilan),4051,1
 BOAS,2016,social,syscohada,subventions,Subventions d'investissement,0,1
 BOAS,2016,social,syscohada,total_actif,Total actif,521726,1
 BOAS,2016,social,syscohada,total_passif,Total passif,521726,1
+BOAS,2016,social,syscohada,ventes_marchandises,Ventes de marchandises,0,1
 BOAS,2017,social,syscohada,b_caisse,"Caisse, banque centrale",16710.84,1
 BOAS,2017,social,syscohada,b_charges_generales,Charges générales d'exploitation,12610.691,1
 BOAS,2017,social,syscohada,b_commissions_charges,Commissions (charges),263.032,1
@@ -8460,6 +8486,7 @@ ONTBF,2014,social,syscohada,capital,Capital,34000,2
 ONTBF,2014,social,syscohada,capitaux_propres,Capitaux propres,60592,2
 ONTBF,2014,social,syscohada,charges_immobilisees,Charges immobilisées,3,2
 ONTBF,2014,social,syscohada,charges_personnel,Charges de personnel,16983.4,2
+ONTBF,2014,social,syscohada,chiffre_affaires,Chiffre d'affaires,130926,2
 ONTBF,2014,social,syscohada,clients,Clients,16830,2
 ONTBF,2014,social,syscohada,clients_avances,clients_avances,109,2
 ONTBF,2014,social,syscohada,creances,Créances et emplois assimilés,60939,2
@@ -8471,16 +8498,18 @@ ONTBF,2014,social,syscohada,fournisseurs,Fournisseurs,24420,2
 ONTBF,2014,social,syscohada,frais_financiers,Frais financiers,2405.2,2
 ONTBF,2014,social,syscohada,immo_corp,Immobilisations corporelles,108134,2
 ONTBF,2014,social,syscohada,immo_incorp,Immobilisations incorporelles,12288,2
-ONTBF,2014,social,syscohada,impots_resultat,Impôts sur le résultat,5033.4,2
+ONTBF,2014,social,syscohada,impots_resultat,Impôts sur le résultat,5033,2
 ONTBF,2014,social,syscohada,passif_circulant,Passif circulant,76314.8,2
 ONTBF,2014,social,syscohada,primes_capital,Primes liées au capital,121,2
 ONTBF,2014,social,syscohada,primes_reserves,Primes et réserves,6921,2
 ONTBF,2014,social,syscohada,provisions_risques_ct,provisions_risques_ct,39,2
-ONTBF,2014,social,syscohada,rao,Résultat des activités ordinaires,24696.1,2
+ONTBF,2014,social,syscohada,rao,Résultat des activités ordinaires,24696,2
 ONTBF,2014,social,syscohada,reserves_indisponibles,Réserves indisponibles,6800,2
 ONTBF,2014,social,syscohada,ressources_stables,Ressources stables,93853.3,2
 ONTBF,2014,social,syscohada,resultat_bilan,Résultat de l'exercice (bilan),19664.829,2
-ONTBF,2014,social,syscohada,resultat_net,Résultat net,19664.8,2
+ONTBF,2014,social,syscohada,resultat_exploitation,Résultat d'exploitation,26726,2
+ONTBF,2014,social,syscohada,resultat_financier,Résultat financier,-2030,2
+ONTBF,2014,social,syscohada,resultat_net,Résultat net,19665,2
 ONTBF,2014,social,syscohada,revenus_financiers,Revenus financiers,375.7,2
 ONTBF,2014,social,syscohada,stocks,Stocks,4408,2
 ONTBF,2014,social,syscohada,subventions,Subventions d'investissement,6,2
@@ -8496,6 +8525,7 @@ ONTBF,2015,social,syscohada,b_titres_placement,Titres de placement,20,1
 ONTBF,2015,social,syscohada,capital,Capital,34000,1
 ONTBF,2015,social,syscohada,capitaux_propres,Capitaux propres,66113,1
 ONTBF,2015,social,syscohada,charges_personnel,Charges de personnel,16068.63,1
+ONTBF,2015,social,syscohada,chiffre_affaires,Chiffre d'affaires,144774,1
 ONTBF,2015,social,syscohada,clients,Clients,14823,1
 ONTBF,2015,social,syscohada,clients_avances,clients_avances,132,1
 ONTBF,2015,social,syscohada,creances,Créances et emplois assimilés,65530,1
@@ -8506,12 +8536,16 @@ ONTBF,2015,social,syscohada,ebe,Excédent brut d'exploitation,66669.519,1
 ONTBF,2015,social,syscohada,fournisseurs,Fournisseurs,23443,1
 ONTBF,2015,social,syscohada,immo_corp,Immobilisations corporelles,108289,1
 ONTBF,2015,social,syscohada,immo_incorp,Immobilisations incorporelles,11159,1
+ONTBF,2015,social,syscohada,impots_resultat,Impôts sur le résultat,11031,1
 ONTBF,2015,social,syscohada,passif_circulant,Passif circulant,90142,1
 ONTBF,2015,social,syscohada,primes_capital,Primes liées au capital,32,1
 ONTBF,2015,social,syscohada,primes_reserves,Primes et réserves,6832,1
+ONTBF,2015,social,syscohada,rao,Résultat des activités ordinaires,36307,1
 ONTBF,2015,social,syscohada,reserves_indisponibles,Réserves indisponibles,6800,1
 ONTBF,2015,social,syscohada,ressources_stables,Ressources stables,102063,1
 ONTBF,2015,social,syscohada,resultat_bilan,Résultat de l'exercice (bilan),25277.775,1
+ONTBF,2015,social,syscohada,resultat_exploitation,Résultat d'exploitation,38433,1
+ONTBF,2015,social,syscohada,resultat_financier,Résultat financier,-2126,1
 ONTBF,2015,social,syscohada,resultat_net,Résultat net,25277.775,1
 ONTBF,2015,social,syscohada,stocks,Stocks,2564,1
 ONTBF,2015,social,syscohada,subventions,Subventions d'investissement,4,1
@@ -21005,6 +21039,7 @@ TTLC,2024,social,syscohada,immo_incorp,Immobilisations incorporelles,2425,2
 TTLC,2024,social,syscohada,impots_resultat,Impôts sur le résultat,2934,2
 TTLC,2024,social,syscohada,passif_circulant,Passif circulant,125527,2
 TTLC,2024,social,syscohada,rao,Résultat des activités ordinaires,13178,2
+TTLC,2024,social,syscohada,reserves,Réserves,27707,2
 TTLC,2024,social,syscohada,resultat_bilan,Résultat de l'exercice (bilan),9374,2
 TTLC,2024,social,syscohada,resultat_exploitation,Résultat d'exploitation,10491,2
 TTLC,2024,social,syscohada,resultat_financier,Résultat financier,2687,2
@@ -21034,6 +21069,7 @@ TTLC,2025,social,syscohada,immo_incorp,Immobilisations incorporelles,2168,1
 TTLC,2025,social,syscohada,impots_resultat,Impôts sur le résultat,3510,1
 TTLC,2025,social,syscohada,passif_circulant,Passif circulant,118044,1
 TTLC,2025,social,syscohada,rao,Résultat des activités ordinaires,12597,1
+TTLC,2025,social,syscohada,reserves,Réserves,23082,1
 TTLC,2025,social,syscohada,resultat_bilan,Résultat de l'exercice (bilan),9087,1
 TTLC,2025,social,syscohada,resultat_exploitation,Résultat d'exploitation,12329,1
 TTLC,2025,social,syscohada,resultat_financier,Résultat financier,268,1

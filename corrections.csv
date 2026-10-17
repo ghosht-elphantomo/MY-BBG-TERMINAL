@@ -3293,7 +3293,10 @@ constate_le,fichier,cle,champ,ancienne_valeur,nouvelle_valeur
 2026-10-17,etats_financiers.csv,ONTBF | 2012 | tresorerie_actif,documents_concordants,1,2
 2026-10-17,etats_financiers.csv,ONTBF | 2012 | tresorerie_passif,documents_concordants,1,2
 2026-10-17,etats_financiers.csv,ONTBF | 2012 | valeur_ajoutee,documents_concordants,1,2
+2026-10-17,etats_financiers.csv,ONTBF | 2014 | impots_resultat,valeur,5033.4,5033
+2026-10-17,etats_financiers.csv,ONTBF | 2014 | rao,valeur,24696.1,24696
 2026-10-17,etats_financiers.csv,ONTBF | 2014 | resultat_bilan,valeur,19665,19664.829
+2026-10-17,etats_financiers.csv,ONTBF | 2014 | resultat_net,valeur,19664.8,19665
 2026-10-17,etats_financiers.csv,ONTBF | 2015 | resultat_bilan,valeur,25278,25277.775
 2026-10-17,etats_financiers.csv,ONTBF | 2017 | capital,documents_concordants,3,2
 2026-10-17,etats_financiers.csv,ONTBF | 2017 | capitaux_propres,documents_concordants,3,2
@@ -8881,6 +8884,7 @@ constate_le,fichier,cle,champ,ancienne_valeur,nouvelle_valeur
 2026-10-17,resultats.csv,ONTBF | 2009,capitaux_propres,42218.6,42200
 2026-10-17,resultats.csv,ONTBF | 2009,resultat_net,2514.7,10760
 2026-10-17,resultats.csv,ONTBF | 2009,total_bilan,199529.7,199500
+2026-10-17,resultats.csv,ONTBF | 2014,resultat_net,19664.8,19665
 2026-10-17,resultats.csv,ONTBF | 2015,resultat_net,25278,25277.8
 2026-10-17,resultats.csv,ONTBF | 2021,ebit,8605,48604.9
 2026-10-17,resultats.csv,ONTBF | 2021,ebitda,80595,79949.3
