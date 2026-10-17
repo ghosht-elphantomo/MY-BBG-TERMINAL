@@ -8,7 +8,14 @@ name: Essai des machines (Ubuntu 26)
 #   3. passage complet du Terminal (relevé de 15 min) jusqu'au calcul de la base, SANS rien publier.
 # N'écrit dans aucune branche et ne déploie rien.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      docs:
+        description: "documents de comptes à relire seuls (morceaux de noms de fichiers, séparés par des virgules ; vide = échantillon)"
+        default: ""
+      terminal:
+        description: "passage du Terminal sans publication (oui / non)"
+        default: "oui"
 
 permissions:
   contents: read
@@ -68,9 +75,10 @@ jobs:
       - name: Relire un échantillon de documents et comparer au cache
         env:
           ESSAI_OS: ${{ matrix.os }}
+          ESSAI_DOCS: ${{ inputs.docs }}
         run: |
           python3 - <<'PY'
-          import gzip, json, os, re, subprocess, sys, tempfile, time
+          import difflib, gzip, json, os, re, subprocess, sys, tempfile, time
           sys.path.insert(0, "scripts")
           import fetch_extra as fx
           import comptes
@@ -104,6 +112,25 @@ jobs:
           def pdftotext(p_):
               return subprocess.run(["pdftotext", "-layout", p_, "-"], capture_output=True, timeout=180).stdout.decode("utf8", "replace")
 
+          DOCS = [x.strip() for x in os.environ.get("ESSAI_DOCS", "").split(",") if x.strip()]
+
+          def rdiff(a, b, path="", out=None):  # chemins qui diffèrent : avant (cache) -> après (relu ici)
+              out = [] if out is None else out
+              if isinstance(a, dict) and isinstance(b, dict):
+                  for k in sorted(set(a) | set(b), key=str):
+                      rdiff(a.get(k, "(absent)"), b.get(k, "(absent)"), f"{path}/{k}", out)
+              elif isinstance(a, list) and isinstance(b, list) and len(a) == len(b):
+                  for i, (x, y) in enumerate(zip(a, b)):
+                      rdiff(x, y, f"{path}[{i}]", out)
+              elif a != b:
+                  out.append(f"{path}: {json.dumps(b, ensure_ascii=False)[:150]} -> {json.dumps(a, ensure_ascii=False)[:150]}")
+              return out
+
+          def ldiff(old, new, n=25):  # lignes de texte qui diffèrent
+              d = [l for l in difflib.unified_diff((old or "").splitlines(), (new or "").splitlines(), lineterm="", n=0)
+                   if l[:1] in "+-" and not l.startswith(("+++", "---"))]
+              return [re.sub(r"\s{2,}", "  ", l)[:160] for l in d[:n]] + ([f"(+{len(d) - n} lignes)"] if len(d) > n else [])
+
           rep = {"os": OS}
           # ---------------------------------------------------------------- comptes des sociétés cotées
           C = "/tmp/cpt"
@@ -116,6 +143,11 @@ jobs:
                         and 0 < (m.get("pages") or 0) <= 4 and ok(u) and os.path.exists(f"{C}/txt/{m['h']}.fra.gz")], 25)
           s_ocr4 = pick([(m["h"], u) for u, m in idx.items() if m.get("st") == "lu" and m.get("ocr4") and 0 < (m.get("pages") or 0) <= 3
                          and ok(u) and os.path.exists(f"{C}/txt/{m['h']}.fra4.gz")], 5)
+          if DOCS:
+              sel = [u for u in idx if any(d in u for d in DOCS)]
+              s_txt = [u for u in sel if not idx[u].get("ocr")]
+              s_ocr = [u for u in sel if idx[u].get("ocr") and not idx[u].get("ocr4")]
+              s_ocr4 = [u for u in sel if idx[u].get("ocr4")]
           M = "/tmp/mini"
           os.makedirs(f"{M}/txt", exist_ok=True)
           mini, cmp_t, err, tdiff = {}, {"texte": [0, 0], "ocr": [0, 0], "ocr_nombres": [0, 0]}, [], []
@@ -142,6 +174,8 @@ jobs:
                       cmp_t["texte"][0] += 1
                   else:
                       tdiff.append(u.rsplit("/", 1)[-1][:60])
+                      if DOCS:
+                          print(f"::warning title=Texte {OS} {u.rsplit('/', 1)[-1][:40]}::" + " | ".join(ldiff(rd(f"{C}/txt/{h}.txt.gz"), body)))
                   if u in s_ocr or u in s_ocr4:
                       ocr_pages = fx.cpt_ocr_pages(p_, pages, keep, m, td)
                       runs = [("", {})] + ([("4", {"psm": 4, "dpi": 400})] if u in s_ocr4 else [])
@@ -164,30 +198,16 @@ jobs:
               if json.dumps(a, sort_keys=True, ensure_ascii=False) == json.dumps(b_, sort_keys=True, ensure_ascii=False):
                   same += 1
               else:
-                  ya, yb = (a or {}).get("y", {}), (b_ or {}).get("y", {})
-                  dy = []
-                  for yr in sorted(set(ya) | set(yb)):
-                      va, vb = ya.get(yr), yb.get(yr)
-                      if va == vb:
-                          continue
-                      if isinstance(va, dict) and isinstance(vb, dict):
-                          vva, vvb = va.get("v", va), vb.get("v", vb)
-                          ks = [k for k in sorted(set(vva) | set(vvb)) if vva.get(k) != vvb.get(k)] if isinstance(vva, dict) and isinstance(vvb, dict) else ["?"]
-                          dy.append(f"{yr}: " + ", ".join(f"{k} {vvb.get(k) if isinstance(vvb, dict) else '?'} -> {vva.get(k) if isinstance(vva, dict) else '?'}" for k in ks[:6]) + (f" (+{len(ks) - 6})" if len(ks) > 6 else ""))
-                      else:
-                          dy.append(f"{yr}: {'absent' if vb is None else 'present'} -> {'absent' if va is None else 'present'}")
-                  autres = [k for k in sorted(set(a or {}) | set(b_ or {})) if k != "y" and (a or {}).get(k) != (b_ or {}).get(k)]
                   diff.append({"doc": u.rsplit("/", 1)[-1][:70], "t": idx[u].get("t"), "ocr": bool(idx[u].get("ocr")),
-                               "st": [(b_ or {}).get("st"), (a or {}).get("st")], "n": [(b_ or {}).get("n"), (a or {}).get("n")],
-                               "exercices": dy, "autres_champs": autres[:8]})
+                               "st": [(b_ or {}).get("st"), (a or {}).get("st")], "chemins": rdiff(a or {}, b_ or {})[:30]})
           rep["comptes"] = {"documents": len(mini), "postes_identiques": same, "textes_identiques": cmp_t, "ecarts": diff, "textes_differents": tdiff}
 
           # ---------------------------------------------------------------- dividendes
           D = "/tmp/div"
           didx = json.load(open(f"{D}/index.json", encoding="utf8"))["docs"]
-          d_txt = pick([(m["h"], u) for u, m in didx.items() if m.get("st") == "lu" and not m.get("ocr") and not m.get("wb")
+          d_txt = [] if DOCS else pick([(m["h"], u) for u, m in didx.items() if m.get("st") == "lu" and not m.get("ocr") and not m.get("wb")
                         and (m.get("pages") or 0) > 0 and os.path.exists(f"{D}/txt/{m['h']}.txt.gz")], 30)
-          d_ocr = pick([(m["h"], u) for u, m in didx.items() if m.get("st") == "lu" and m.get("ocr") and not m.get("wb")
+          d_ocr = [] if DOCS else pick([(m["h"], u) for u, m in didx.items() if m.get("st") == "lu" and m.get("ocr") and not m.get("wb")
                         and 0 < (m.get("pages") or 0) <= 2 and os.path.exists(f"{D}/txt/{m['h']}.fra.gz")], 12)
           dv = {"texte": [0, 0], "texte_nombres": [0, 0], "ocr": [0, 0], "ocr_nombres": [0, 0], "montants": [0, 0]}
           for u in d_txt + d_ocr:
@@ -224,7 +244,7 @@ jobs:
           # ---------------------------------------------------------------- bulletins officiels de la cote
           B = "/tmp/boc/boc_px"
           days = []
-          for y, n in (("2026", 3), ("2025", 1), ("2023", 1), ("2020", 1), ("2018", 1), ("2016", 1), ("2014", 1)):
+          for y, n in (() if DOCS else (("2026", 3), ("2025", 1), ("2023", 1), ("2020", 1), ("2018", 1), ("2016", 1), ("2014", 1))):
               p_ = f"{B}/{y}.json"
               if os.path.exists(p_):
                   ks = sorted(json.load(open(p_, encoding="utf8")))
@@ -249,10 +269,17 @@ jobs:
                   err.append(f"bulletin {k} : non téléchargé ou non lu")
                   continue
               bo[1] += 1
-              if json.loads(json.dumps(got)) == stored:
+              def nz(v):  # colonne ajoutée en fin de ligne par le lecteur (cours moyen, vide depuis 2018) : sans effet sur les cours
+                  v = list(v or [])
+                  while v and v[-1] is None:
+                      v.pop()
+                  return v
+              got = {s_: nz(v) for s_, v in json.loads(json.dumps(got)).items()}
+              stored = {s_: nz(v) for s_, v in stored.items()}
+              if got == stored:
                   bo[0] += 1
               else:
-                  ds = [s for s in sorted(set(got) | set(stored)) if json.loads(json.dumps(got.get(s))) != stored.get(s)]
+                  ds = [s for s in sorted(set(got) | set(stored)) if got.get(s) != stored.get(s)]
                   ex_ = "; ".join(f"{s} {stored.get(s)} -> {got.get(s)}" for s in ds[:2])
                   err.append(f"bulletin {k} ({url.rsplit('/', 1)[-1]}) : {len(ds)} lignes différentes sur {len(set(got) | set(stored))} (en cache {len(stored)}, relues {len(got)}) ; ex. {ex_}"[:900])
           rep["bulletins"] = bo
@@ -264,7 +291,7 @@ jobs:
                   f"dividendes {rep['dividendes']} | bulletins identiques {bo[0]}/{bo[1]} | erreurs {len(err)} | {rep['duree_min']} min")
           print(f"::notice title=Relecture {OS}::{line}")
           for i, e_ in enumerate(c["ecarts"][:6]):
-              print(f"::warning title=Ecart comptes {OS} {i + 1}::" + json.dumps(e_, ensure_ascii=False)[:1500])
+              print(f"::warning title=Ecart comptes {OS} {i + 1}::" + json.dumps(e_, ensure_ascii=False)[:4000])
           if c["textes_differents"]:
               print(f"::warning title=Textes differents {OS}::" + " | ".join(c["textes_differents"])[:1500])
           if err:
@@ -274,6 +301,7 @@ jobs:
           PY
 
       - name: Restaurer les données du site
+        if: inputs.terminal != 'non'
         run: |
           mkdir -p /tmp/site /tmp/state /tmp/raw
           cp seed/brvm.json /tmp/state/brvm.json
@@ -292,6 +320,7 @@ jobs:
           PY
 
       - name: Cache des sources (lecture seule)
+        if: inputs.terminal != 'non'
         uses: actions/cache/restore@v6
         with:
           path: /tmp/bcache
@@ -299,6 +328,7 @@ jobs:
           restore-keys: bcache-
 
       - name: Passage du Terminal sans publication (relevé)
+        if: inputs.terminal != 'non'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -324,6 +354,7 @@ jobs:
             --search-src /tmp/srch
 
       - name: Contrôle des données produites
+        if: inputs.terminal != 'non'
         env:
           ESSAI_OS: ${{ matrix.os }}
         run: |
