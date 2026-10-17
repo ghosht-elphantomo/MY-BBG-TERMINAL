@@ -4,7 +4,7 @@ Moteur QLAB-V (scripts/qlab.py, qlab_core.py, qlab_backtest.py), recalculé chaq
 « base complète » du terminal. Résultats dans data/qlab/ (une fiche par société, un index, la validation historique) ; copie de
 sauvegarde sur la branche raw. Interface : web/pages18.js (onglet « Valorisation » de la fonction QLAB).
 
-## Décisions de RYSO (prioritaires sur le cahier des charges d'origine)
+## Décisions du propriétaire (prioritaires sur le cahier des charges d'origine)
 
 - QLAB ne prédit pas le cours : il présente la valeur selon les modèles d'évaluation les plus connus, comparée au dernier cours.
   Le « rendement implicite au cours actuel » et les rendements du cours des scénarios ont été retirés (16/10/2026).
