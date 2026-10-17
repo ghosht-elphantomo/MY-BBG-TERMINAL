@@ -10,7 +10,7 @@ Tapez un ticker ou une fonction puis Entrée : `SNTS GP`, `SNTS QLAB`, `QQQ BTST
 
 ## Règles de travail (obligatoires)
 
-Avant toute modification : point de restauration dans `SAUVEGARDES.md`. Après toute modification : test complet du site et des données (erreurs, données manquantes, doublons, chiffres inchangés quand ils doivent l'être). On ne publie que si tout est bon, sinon retour au point de restauration. Détail : voir le haut de `SAUVEGARDES.md`.
+Avant toute modification : point de restauration dans `SAUVEGARDES.md`. Après toute modification : test complet de TOUT le site et des données (erreurs, données manquantes, doublons, chiffres inchangés quand ils doivent l'être), en signalant tout problème trouvé, même sans lien avec la modification. On ne publie que si tout est bon, sinon retour au point de restauration. Détail : voir le haut de `SAUVEGARDES.md`.
 
 ## Fonctions (65)
 
