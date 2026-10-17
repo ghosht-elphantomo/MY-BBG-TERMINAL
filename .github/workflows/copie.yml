@@ -1,0 +1,43 @@
+name: Copie de secours
+
+# Copie complète du dépôt (toutes les branches : code et données) vers un dépôt privé de secours, chaque nuit.
+# Clé : secret GITLAB_TOKEN (droits read_repository et write_repository uniquement ; expire le 17/10/2027 — à renouveler
+# avant : nouvelle clé, puis remplacer le secret). Ne supprime jamais rien côté secours (pas de --prune).
+on:
+  schedule:
+    - cron: "38 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: copie
+  cancel-in-progress: false
+
+jobs:
+  copie:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Copier
+        env:
+          GL: ${{ secrets.GITLAB_TOKEN }}
+          GH: ${{ github.token }}
+        run: |
+          set -e
+          [ -n "$GL" ] || { echo "::error::Clé de copie absente (secret GITLAB_TOKEN)"; exit 1; }
+          DEST="https://oauth2:${GL}@gitlab.com/loopvault/archive-vault.git"
+          git clone -q --bare "https://x-access-token:${GH}@github.com/${GITHUB_REPOSITORY}.git" src.git
+          cd src.git
+          n=$(git for-each-ref refs/heads | wc -l)
+          # main d'abord (branche par défaut du secours, jamais réécrite), puis toutes les autres (réécrites à chaque passage)
+          git push -q "$DEST" "+refs/heads/main:refs/heads/main"
+          git push -q "$DEST" "+refs/heads/*:refs/heads/*" "+refs/tags/*:refs/tags/*"
+          [ "$(git ls-remote "$DEST" refs/heads/main | cut -f1)" = "$(git rev-parse refs/heads/main)" ] || { echo "::error::Copie incomplète"; exit 1; }
+          echo "Copie faite : $n branches"
+      - name: Échéance de la clé
+        run: |
+          if [ "$(date -u +%Y%m%d)" -ge 20270917 ]; then
+            echo "::error::La clé de copie expire le 17/10/2027 : en créer une nouvelle et remplacer le secret GITLAB_TOKEN"; exit 1
+          fi
