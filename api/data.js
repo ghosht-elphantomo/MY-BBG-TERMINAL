@@ -1,8 +1,10 @@
 // Relais des données du terminal : le site lit /data/<fichier>.json ; ce relais les prend sur la branche « data »
 // du dépôt (réécrite toutes les 15 minutes par GitHub Actions) sans redéployer le site. Cache CDN : 60 s.
+// Transition de nom du dépôt : l'ancien nom puis le nouveau (le nom unique sera remis une fois le changement fait).
+const REPOS = ['ghosht-elphantomo/MY-BBG-TERMINAL', 'ghosht-elphantomo/noodleloop'];
 const ORIGINS = [
-  p => `https://raw.githubusercontent.com/ghosht-elphantomo/MY-BBG-TERMINAL/data/data/${p}?v=${Math.floor(Date.now() / 60000)}`,
-  p => `https://cdn.jsdelivr.net/gh/ghosht-elphantomo/MY-BBG-TERMINAL@data/data/${p}`,
+  ...REPOS.map(r => p => `https://raw.githubusercontent.com/${r}/data/data/${p}?v=${Math.floor(Date.now() / 60000)}`),
+  ...REPOS.map(r => p => `https://cdn.jsdelivr.net/gh/${r}@data/data/${p}`),
 ];
 module.exports = async (req, res) => {
   const p = String((req.query && req.query.p) || '').replace(/^\/+/, '');
@@ -16,7 +18,7 @@ module.exports = async (req, res) => {
       const buf = Buffer.from(await r.arrayBuffer());
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
-      res.setHeader('Vercel-CDN-Cache-Control', i === 0 ? 'max-age=60, stale-while-revalidate=600' : 'max-age=30');
+      res.setHeader('Vercel-CDN-Cache-Control', i < REPOS.length ? 'max-age=60, stale-while-revalidate=600' : 'max-age=30');
       res.statusCode = 200; res.end(buf); return;
     } catch (e) { last = 504; }
   }
