@@ -167,7 +167,13 @@ La recherche MOTS CLES contrôle chaque ligne contre le nom de son fichier (`fix
 
 - **Copie** : `copie.yml` envoie chaque nuit tout le dépôt vers un dépôt privé hors GitHub (secret GitHub `GITLAB_TOKEN`, droits lecture et écriture du dépôt uniquement).
 - **Lecture par le site** : si GitHub ne répond plus (ou ne connaît plus le dépôt), `api/data.js` lit les données dans la copie (variable Vercel partagée `GITLAB_READ_TOKEN`, lecture seule, reliée au projet). Le site reste alors utilisable avec des données d'au plus un jour. Essai du secours seul : `/api/data?p=qlabp/index.json&via=2`.
-- **Clés** : les deux clés expirent le 17/10/2027 ; en créer de nouvelles (ou « Rotate ») et remplacer le secret GitHub et la variable Vercel avant cette date.
+- **Clés** : les deux clés expirent le 17/10/2027. Alertes sans intervention : e-mail de GitLab quelques jours avant l'expiration, et la copie de secours échoue exprès à partir du 17/09/2027 (e-mail d'échec de GitHub).
+- **Renouveler les clés (une fois par an, avant l'expiration, environ 10 minutes)** :
+  1. GitLab (compte de la copie) → la page des jetons d'accès où les clés ont été créées (Settings → Access tokens du projet de la copie, ou Preferences → Access tokens du compte) → bouton **Rotate** sur chacune des deux clés (mêmes droits, nouvelle date d'expiration) ; copier chaque nouvelle valeur au moment où elle s'affiche (elle n'est montrée qu'une fois). Ne jamais coller une clé dans une conversation ni dans un fichier du dépôt.
+  2. Clé d'écriture → GitHub : dépôt qui lance les automatisations → Settings → Secrets and variables → Actions → `GITLAB_TOKEN` → Update.
+  3. Clé de lecture → Vercel : projet du site → Settings → Environment Variables → `GITLAB_READ_TOKEN` → Edit → Save, puis **Redeploy** du dernier déploiement de production (une variable modifiée ne sert qu'après un redéploiement).
+  4. Vérifier : Actions → « Copie de secours » → Run workflow (doit réussir) ; puis ouvrir `/api/data?p=qlabp/index.json&via=2` sur le site (doit afficher des données).
+  5. Reporter la nouvelle date d'expiration ici et dans le contrôle d'échéance de `copie.yml` (date du 17/09 de l'année suivante).
 - **Page du dépôt** : le champ « site web » du dépôt doit rester rempli avec l'adresse du dépôt lui-même — s'il est vide, Vercel y remet automatiquement l'adresse du site à chaque mise en ligne.
 - **Plan B complet** (à préparer) : kit d'installation d'un serveur qui reprendrait les automatisations et écrirait dans la copie.
 
