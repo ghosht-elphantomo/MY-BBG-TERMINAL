@@ -1,0 +1,331 @@
+name: Essai des machines (Ubuntu 26)
+
+# Essai lancé à la main avant de passer les automatisations sur les nouvelles machines de GitHub (Ubuntu 26.04).
+# Les mêmes contrôles tournent sur Ubuntu 24.04 (machines actuelles) et sur Ubuntu 26.04 :
+#   1. versions des outils (Python, lecture des PDF, reconnaissance de caractères) et compilation de tous les scripts ;
+#   2. relecture d'un échantillon de documents déjà lus (comptes : couche texte et scans ; dividendes ; bulletins de la cote)
+#      et comparaison exacte avec ce qui est en cache (textes, postes vérifiés, cours) ;
+#   3. passage complet du Terminal (relevé de 15 min) jusqu'au calcul de la base, SANS rien publier.
+# N'écrit dans aucune branche et ne déploie rien.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  essai:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Outils PDF et reconnaissance de caractères
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils tesseract-ocr tesseract-ocr-fra >/dev/null
+          python3 -c "import PIL" 2>/dev/null || pip install -q --break-system-packages pillow || true
+
+      - name: Versions
+        run: |
+          . /etc/os-release
+          V="$PRETTY_NAME | $(python3 --version 2>&1) | $(pdftotext -v 2>&1 | head -1) | $(tesseract --version 2>&1 | head -1) | langues $(tesseract --list-langs 2>&1 | tail -n +2 | tr '\n' ' ')| Pillow $(python3 -c 'import PIL;print(PIL.__version__)' 2>&1) | $(git --version) | $(curl --version | head -1 | cut -d' ' -f1-2)"
+          echo "$V"
+          echo "::notice title=Versions ${{ matrix.os }}::$V"
+
+      - name: Compilation et chargement de tous les scripts
+        run: |
+          rc=0; python3 -W always -m compileall -q -f scripts build.py > /tmp/compile.txt 2>&1 || rc=$?
+          cat /tmp/compile.txt
+          python3 -W always - <<'PY' > /tmp/import.txt 2>&1 || rc=1
+          import sys, importlib
+          sys.path.insert(0, "scripts")
+          bad = []
+          for m in ["build_search", "build_terminal", "comptes", "dividendes", "fetch_extra", "histo", "periodiques", "qlab",
+                    "qlab_backtest", "qlab_core", "qlab_prev", "scrape"]:
+              try:
+                  importlib.import_module(m)
+              except Exception as e:  # noqa: BLE001
+                  bad.append(f"{m}: {e}")
+          print("CHARGEMENT", "ok" if not bad else bad)
+          sys.exit(1 if bad else 0)
+          PY
+          cat /tmp/import.txt
+          w=$(cat /tmp/compile.txt /tmp/import.txt | grep -c "Warning" || true)
+          echo "::notice title=Scripts ${{ matrix.os }}::compilation et chargement : code $rc ; avertissements Python : $w ; $(tail -1 /tmp/import.txt)"
+          exit $rc
+
+      - name: Restaurer les caches de lecture (comptes, dividendes, bulletins)
+        run: |
+          for b in comptes:cpt dividendes:div boc:boc; do
+            IFS=: read -r br dir <<< "$b"
+            mkdir -p /tmp/$dir && git fetch -q --depth 1 origin $br && git archive FETCH_HEAD | tar -x -C /tmp/$dir
+          done
+
+      - name: Relire un échantillon de documents et comparer au cache
+        env:
+          ESSAI_OS: ${{ matrix.os }}
+        run: |
+          python3 - <<'PY'
+          import gzip, json, os, re, subprocess, sys, tempfile, time
+          sys.path.insert(0, "scripts")
+          import fetch_extra as fx
+          import comptes
+
+          OS = os.environ["ESSAI_OS"]
+          t0 = time.time()
+          NUM = re.compile(r"\d[\d .,\xa0]*\d|\d")
+
+          def rd(p):
+              return gzip.open(p, "rt", encoding="utf8").read() if os.path.exists(p) else None
+
+          def wr(p, t):
+              with gzip.open(p, "wt", encoding="utf8") as f:
+                  f.write(t)
+
+          def nums(t):
+              return [re.sub(r"[\s\xa0]", "", x) for x in NUM.findall(t or "")]
+
+          def pick(items, n):  # échantillon réparti (ordre des empreintes, donc toutes les années et sociétés)
+              items = sorted(items)
+              if len(items) <= n:
+                  return [u for _, u in items]
+              return [items[int(i * len(items) / n)][1] for i in range(n)]
+
+          def pages_of(txt):
+              pages = txt.split("\f")
+              if pages and not pages[-1].strip():
+                  pages = pages[:-1]
+              return pages
+
+          def pdftotext(p_):
+              return subprocess.run(["pdftotext", "-layout", p_, "-"], capture_output=True, timeout=180).stdout.decode("utf8", "replace")
+
+          rep = {"os": OS}
+          # ---------------------------------------------------------------- comptes des sociétés cotées
+          C = "/tmp/cpt"
+          idx = json.load(open(f"{C}/index.json", encoding="utf8"))["docs"]
+          prod = json.load(open(f"{C}/comptes.json", encoding="utf8"))["docs"]
+          ok = lambda u: (prod.get(u) or {}).get("st") == "ok"
+          s_txt = pick([(m["h"], u) for u, m in idx.items() if m.get("st") == "lu" and not m.get("ocr") and ok(u)
+                        and os.path.exists(f"{C}/txt/{m['h']}.txt.gz")], 25)
+          s_ocr = pick([(m["h"], u) for u, m in idx.items() if m.get("st") == "lu" and m.get("ocr") and not m.get("ocr4")
+                        and 0 < (m.get("pages") or 0) <= 4 and ok(u) and os.path.exists(f"{C}/txt/{m['h']}.fra.gz")], 6)
+          s_ocr4 = pick([(m["h"], u) for u, m in idx.items() if m.get("st") == "lu" and m.get("ocr4") and 0 < (m.get("pages") or 0) <= 3
+                         and ok(u) and os.path.exists(f"{C}/txt/{m['h']}.fra4.gz")], 2)
+          M = "/tmp/mini"
+          os.makedirs(f"{M}/txt", exist_ok=True)
+          mini, cmp_t, err = {}, {"texte": [0, 0], "ocr": [0, 0], "ocr_nombres": [0, 0]}, []
+          for u in s_txt + s_ocr + s_ocr4:
+              m = dict(idx[u])
+              h = m["h"]
+              try:
+                  b = fx.get(u, tries=2, timeout=120)
+              except Exception as e:  # noqa: BLE001
+                  err.append(f"comptes {u.rsplit('/', 1)[-1][:50]} : {e}")
+                  continue
+              with tempfile.TemporaryDirectory() as td:
+                  p_ = os.path.join(td, "a.pdf")
+                  open(p_, "wb").write(b)
+                  pages = pages_of(pdftotext(p_))
+                  keep = list(range(len(pages)))
+                  if len(pages) > 30:
+                      hit = [i for i, pg in enumerate(pages) if len(fx.CPT_KW.findall(pg)) >= 2 and len(fx.CPT_AMT.findall(pg)) >= 15]
+                      keep = sorted({j for i in hit for j in (i - 1, i, i + 1) if 0 <= j < len(pages)})[:40]
+                  body = "\f".join(pages[i] for i in keep)
+                  wr(f"{M}/txt/{h}.txt.gz", body)
+                  cmp_t["texte"][1] += 1
+                  cmp_t["texte"][0] += body == rd(f"{C}/txt/{h}.txt.gz")
+                  if u in s_ocr or u in s_ocr4:
+                      ocr_pages = fx.cpt_ocr_pages(p_, pages, keep, m, td)
+                      runs = [("", {})] + ([("4", {"psm": 4, "dpi": 400})] if u in s_ocr4 else [])
+                      for suf, kw in runs:
+                          o = fx.cpt_ocr(p_, ocr_pages, td, **kw)
+                          for lang, t_ in o.items():
+                              wr(f"{M}/txt/{h}.{lang}{suf}.gz", t_)
+                              old = rd(f"{C}/txt/{h}.{lang}{suf}.gz")
+                              cmp_t["ocr"][1] += 1
+                              cmp_t["ocr"][0] += t_ == old
+                              cmp_t["ocr_nombres"][1] += 1
+                              cmp_t["ocr_nombres"][0] += nums(t_) == nums(old)
+              mini[u] = idx[u]
+          json.dump({"docs": mini}, open(f"{M}/index.json", "w", encoding="utf8"), ensure_ascii=False)
+          comptes.run_dir(M)
+          new = json.load(open(f"{M}/comptes.json", encoding="utf8"))["docs"]
+          same, diff = 0, []
+          for u in mini:
+              a, b_ = new.get(u), prod.get(u)
+              if json.dumps(a, sort_keys=True, ensure_ascii=False) == json.dumps(b_, sort_keys=True, ensure_ascii=False):
+                  same += 1
+              else:
+                  diff.append({"doc": u.rsplit("/", 1)[-1][:70], "ocr": bool(idx[u].get("ocr")), "st": [(b_ or {}).get("st"), (a or {}).get("st")],
+                               "exercices": [sorted((b_ or {}).get("y", {})), sorted((a or {}).get("y", {}))]})
+          rep["comptes"] = {"documents": len(mini), "postes_identiques": same, "textes_identiques": cmp_t, "ecarts": diff}
+
+          # ---------------------------------------------------------------- dividendes
+          D = "/tmp/div"
+          didx = json.load(open(f"{D}/index.json", encoding="utf8"))["docs"]
+          d_txt = pick([(m["h"], u) for u, m in didx.items() if m.get("st") == "lu" and not m.get("ocr") and not m.get("wb")
+                        and (m.get("pages") or 0) > 0 and os.path.exists(f"{D}/txt/{m['h']}.txt.gz")], 12)
+          d_ocr = pick([(m["h"], u) for u, m in didx.items() if m.get("st") == "lu" and m.get("ocr") and not m.get("wb")
+                        and 0 < (m.get("pages") or 0) <= 2 and os.path.exists(f"{D}/txt/{m['h']}.fra.gz")], 5)
+          dv = {"texte": [0, 0], "texte_nombres": [0, 0], "ocr": [0, 0], "ocr_nombres": [0, 0], "montants": [0, 0]}
+          for u in d_txt + d_ocr:
+              m = didx[u]
+              try:
+                  b = fx.get(u, tries=2, timeout=90)
+              except Exception as e:  # noqa: BLE001
+                  err.append(f"dividendes {u.rsplit('/', 1)[-1][:50]} : {e}")
+                  continue
+              with tempfile.TemporaryDirectory() as td:
+                  p_ = os.path.join(td, "a.pdf")
+                  open(p_, "wb").write(b)
+                  txt = pdftotext(p_)
+                  old = rd(f"{D}/txt/{m['h']}.txt.gz")
+                  dv["texte"][1] += 1
+                  dv["texte"][0] += txt == old
+                  dv["texte_nombres"][1] += 1
+                  dv["texte_nombres"][0] += nums(txt) == nums(old)
+                  new_t, old_t = txt, old
+                  if u in d_ocr:
+                      o = fx.cpt_ocr(p_, list(range(1, min(len(pages_of(txt)), 6) + 1)), td)
+                      for lang, t_ in o.items():
+                          old_o = rd(f"{D}/txt/{m['h']}.{lang}.gz")
+                          dv["ocr"][1] += 1
+                          dv["ocr"][0] += t_ == old_o
+                          dv["ocr_nombres"][1] += 1
+                          dv["ocr_nombres"][0] += nums(t_) == nums(old_o)
+                      new_t, old_t = o.get("fra", ""), rd(f"{D}/txt/{m['h']}.fra.gz")
+                  a1, a2 = fx.div_parse(new_t or ""), fx.div_parse(old_t or "")
+                  dv["montants"][1] += 1
+                  dv["montants"][0] += a1 == a2
+          rep["dividendes"] = dv
+
+          # ---------------------------------------------------------------- bulletins officiels de la cote
+          B = "/tmp/boc/boc_px"
+          days = []
+          for y, n in (("2026", 3), ("2023", 1), ("2020", 1), ("2016", 1)):
+              p_ = f"{B}/{y}.json"
+              if os.path.exists(p_):
+                  ks = sorted(json.load(open(p_, encoding="utf8")))
+                  days += [(y, k) for k in (ks[-n:] if y == "2026" else [ks[len(ks) // 2]])]
+          bo = [0, 0]
+          for y, k in days:
+              stored = json.load(open(f"{B}/{y}.json", encoding="utf8"))[k]
+              got = None
+              for url in (f"https://bfin.brvm.org/boc/BOC_JOUR/BOC_{k}.pdf", f"https://www.brvm.org/sites/default/files/boc_{k}_2.pdf",
+                          f"https://www.brvm.org/sites/default/files/boc_{k}.pdf"):
+                  try:
+                      b = fx.get(url, tries=1, timeout=25)
+                  except Exception:  # noqa: BLE001
+                      continue
+                  if b[:4] != b"%PDF":
+                      continue
+                  rows = fx.boc_stocks(fx.pdftext(b))
+                  if len(rows) >= 15:
+                      got = {s: [r.get(c) for c in fx.BOC_COLS] for s, r in rows.items()}
+                      break
+              if got is None:
+                  err.append(f"bulletin {k} : non téléchargé ou non lu")
+                  continue
+              bo[1] += 1
+              if json.loads(json.dumps(got)) == stored:
+                  bo[0] += 1
+              else:
+                  err.append(f"bulletin {k} : {sum(1 for s in set(got) | set(stored) if got.get(s) != stored.get(s))} lignes différentes")
+          rep["bulletins"] = bo
+          rep["erreurs"] = err
+          rep["duree_min"] = round((time.time() - t0) / 60, 1)
+          print(json.dumps(rep, ensure_ascii=False, indent=1))
+          c = rep["comptes"]
+          line = (f"comptes : postes identiques {c['postes_identiques']}/{c['documents']} ; textes {c['textes_identiques']} | "
+                  f"dividendes {rep['dividendes']} | bulletins identiques {bo[0]}/{bo[1]} | erreurs {len(err)} | {rep['duree_min']} min")
+          print(f"::notice title=Relecture {OS}::{line}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf8") as f:
+              f.write(f"### {OS}\n\n```\n{json.dumps(rep, ensure_ascii=False, indent=1)}\n```\n")
+          PY
+
+      - name: Restaurer les données du site
+        run: |
+          mkdir -p /tmp/site /tmp/state /tmp/raw
+          cp seed/brvm.json /tmp/state/brvm.json
+          if git fetch -q --depth 1 origin data; then
+            git archive FETCH_HEAD data | tar -x -C /tmp/site || true
+            if [ -f /tmp/site/data/session.json ]; then cp /tmp/site/data/session.json /tmp/state/brvm.json; fi
+          fi
+          mkdir -p /tmp/site/data
+          if git fetch -q --depth 1 origin raw; then git archive FETCH_HEAD | tar -x -C /tmp/raw || true; fi
+          rm -f /tmp/raw/.dirty
+          mkdir -p /tmp/boc2 && if git fetch -q --depth 1 origin boc; then git archive FETCH_HEAD | tar -x -C /tmp/boc2 || true; fi
+          python3 - <<'PY'
+          import json, os
+          d = "/tmp/site/data"
+          json.dump({f: os.path.getsize(os.path.join(d, f)) for f in os.listdir(d)}, open("/tmp/avant.json", "w"))
+          PY
+
+      - name: Cache des sources (lecture seule)
+        uses: actions/cache/restore@v6
+        with:
+          path: /tmp/bcache
+          key: bcache-essai-${{ github.run_id }}
+          restore-keys: bcache-
+
+      - name: Passage du Terminal sans publication (relevé)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/scrape.py --mode live --state /tmp/state --out /tmp/site
+          timeout 360 python3 scripts/fetch_extra.py --out /tmp/raw --only avis,watch,obl,cmc,cal,fomc --site /tmp/site/data --news /tmp/site/data/news.json || echo "::warning::sources complémentaires incomplètes"
+          for f in "comptes:comptes.json:/tmp/comptes.json" "dividendes:dividendes.json:/tmp/dividendes.json"; do
+            IFS=: read -r br src dst <<< "$f"
+            curl -sfL -m 40 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/$src?ref=$br" -o "$dst" || rm -f "$dst"
+          done
+          mkdir -p /tmp/srch
+          for f in "comptes:index.json:comptes_index.json" "comptes:brvm_rapports.json:brvm_rapports.json" "dividendes:catalog.json:div_catalog.json"; do
+            IFS=: read -r br src dst <<< "$f"
+            curl -sfL -m 60 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github.raw" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/$src?ref=$br" -o "/tmp/srch/$dst" || rm -f "/tmp/srch/$dst"
+          done
+          if ! (timeout 180 git clone -q --depth 1 https://github.com/harzat/brvm-data-public.git /tmp/brvmsrc && [ -f /tmp/brvmsrc/actions.json ]); then
+            rm -rf /tmp/brvmsrc && cp -r /tmp/raw/brvm_src /tmp/brvmsrc
+          fi
+          python3 scripts/build_terminal.py --brvm-src /tmp/brvmsrc --out /tmp/site/data --session /tmp/state/brvm.json \
+            --extra /tmp/raw --fcf seed/fcf_brvm.json --quotes /tmp/site/data/quotes.json --cache /tmp/bcache --boc /tmp/boc2/boc_px --live \
+            $([ -f /tmp/comptes.json ] && echo --comptes /tmp/comptes.json) $([ -f /tmp/dividendes.json ] && echo --dividendes /tmp/dividendes.json) \
+            --search-src /tmp/srch
+
+      - name: Contrôle des données produites
+        env:
+          ESSAI_OS: ${{ matrix.os }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          d = "/tmp/site/data"
+          avant = json.load(open("/tmp/avant.json"))
+          bad, nan, n, tot, petits = [], [], 0, 0, []
+          for f in sorted(os.listdir(d)):
+              p = os.path.join(d, f)
+              if not f.endswith(".json") or not os.path.isfile(p):
+                  continue
+              n += 1
+              tot += os.path.getsize(p)
+              s = open(p, encoding="utf8").read()
+              try:
+                  json.loads(s)
+              except Exception:  # noqa: BLE001
+                  bad.append(f)
+              if re.search(r"(?<![\w\"])(NaN|-?Infinity)(?![\w\"])", s):
+                  nan.append(f)
+              a = avant.get(f) or 0
+              if a > 2000 and os.path.getsize(p) < a * 0.7:
+                  petits.append(f"{f} {a}->{os.path.getsize(p)}")
+          manquants = sorted(f for f in avant if f.endswith(".json") and not os.path.exists(os.path.join(d, f)))
+          line = (f"{n} fichiers ({tot // 1024} Ko) ; illisibles {bad or 0} ; NaN/Infinity {nan or 0} ; "
+                  f"nettement plus petits qu'avant {petits or 0} ; manquants {manquants or 0}")
+          print(line)
+          print(f"::notice title=Terminal {os.environ['ESSAI_OS']}::{line}")
+          PY
