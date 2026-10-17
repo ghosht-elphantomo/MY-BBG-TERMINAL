@@ -298,7 +298,7 @@ jobs:
             python3 scripts/archive_merge.py /tmp/arch
             git add seed/brvm.json seed/brvm_daily.csv
             if git diff --cached --quiet; then echo "Rien à archiver"; break; fi
-            git commit -qm "séance BRVM $(date -u +%F)"
+            git commit -qm "mise à jour $(date -u +%F)"
             if git push -q origin HEAD:main; then echo "Archivé"; break; fi
             echo "main a bougé, nouvel essai ($i)"; sleep $((i * 5))
           done
