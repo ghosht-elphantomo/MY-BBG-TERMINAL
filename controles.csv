@@ -1,6 +1,5 @@
 fichier,titre,date,regle,detail
 cours/2014.csv,NTLC,2014-12-02,precedent_different,cours précédent 56000 ≠ clôture du 2013-12-10 (55275)
-cours/2014.csv,SLBC,2014-12-30,precedent_different,cours précédent 200000 ≠ clôture du 2014-12-29 (400000)
 cours/2014.csv,SMBC,2014-12-02,precedent_different,cours précédent 14000 ≠ clôture du 2013-12-10 (19200)
 cours/2015.csv,ABJC,2015-04-09,precedent_different,cours précédent 51000 ≠ clôture du 2015-04-07 (52420)
 cours/2015.csv,ABJC,2015-04-13,precedent_different,cours précédent 51500 ≠ clôture du 2015-04-09 (54825)
@@ -106,34 +105,23 @@ cours/2015.csv,SVOC,2015-04-23,precedent_different,cours précédent 4800 ≠ cl
 cours/2015.csv,SVOC,2015-08-31,precedent_different,cours précédent 5375 ≠ clôture du 2015-08-13 (5000)
 cours/2015.csv,TTLC,2015-04-14,precedent_different,cours précédent 183000 ≠ clôture du 2015-04-07 (185000)
 cours/2015.csv,TTLC,2015-06-25,precedent_different,cours précédent 432000 ≠ clôture du 2015-06-23 (404400)
-cours/2015.csv,TTLC,2015-07-27,precedent_different,cours précédent 21000 ≠ clôture du 2015-07-24 (419995)
 cours/2015.csv,TTLC,2015-08-25,precedent_different,cours précédent 23900 ≠ clôture du 2015-08-14 (23000)
 cours/2015.csv,TTLS,2015-03-16,precedent_different,cours précédent 38105 ≠ clôture du 2015-03-12 (35450)
 cours/2015.csv,UNLC,2015-04-17,precedent_different,cours précédent 37000 ≠ clôture du 2015-04-15 (36500)
 cours/2015.csv,UNLC,2015-08-27,precedent_different,cours précédent 26105 ≠ clôture du 2015-08-13 (27500)
 cours/2015.csv,UNXC,2015-03-16,precedent_different,cours précédent 70000 ≠ clôture du 2015-03-12 (65205)
 cours/2015.csv,UNXC,2015-04-17,precedent_different,cours précédent 60000 ≠ clôture du 2015-04-13 (64145)
-cours/2015.csv,UNXC,2015-04-23,precedent_different,cours précédent 70000 ≠ clôture du 2015-04-21 (68900)
-cours/2015.csv,UNXC,2015-04-30,precedent_different,cours précédent 15400 ≠ clôture du 2015-04-29 (76990)
 cours/2016.csv,BOABF,2016-01-13,precedent_different,cours précédent 118700 ≠ clôture du 2016-01-11 (118005)
 cours/2016.csv,BOAC,2016-06-08,variation_hors_seuil,"variation de -12.1 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
 cours/2016.csv,BOAN,2016-06-03,variation_hors_seuil,"variation de -7.89 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
 cours/2016.csv,SEMC,2016-09-30,precedent_different,cours précédent 48000 ≠ clôture du 2016-09-27 (49000)
-cours/2016.csv,SHEC,2016-11-04,precedent_different,cours précédent 2600 ≠ clôture du 2016-11-03 (130000)
 cours/2017.csv,ABJC,2017-07-03,precedent_different,cours précédent 2600 ≠ clôture du 2017-06-29 (2640)
-cours/2017.csv,BOAB,2017-06-20,variation_hors_seuil,"variation de -50 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
 cours/2017.csv,BOAB,2017-07-03,precedent_different,cours précédent 95990 ≠ clôture du 2017-06-29 (95000)
 cours/2017.csv,BOAB,2017-07-27,precedent_different,cours précédent 83000 ≠ clôture du 2017-07-25 (85000)
-cours/2017.csv,BOABF,2017-06-27,variation_hors_seuil,"variation de -46.86 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
-cours/2017.csv,BOAC,2017-06-21,variation_hors_seuil,"variation de -50.35 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
 cours/2017.csv,BOAC,2017-07-27,precedent_different,cours précédent 57500 ≠ clôture du 2017-07-25 (59000)
 cours/2017.csv,BOAM,2017-07-03,precedent_different,cours précédent 43995 ≠ clôture du 2017-06-29 (45000)
 cours/2017.csv,BOAM,2017-07-27,precedent_different,cours précédent 40000 ≠ clôture du 2017-07-25 (41000)
-cours/2017.csv,BOAM,2017-09-20,variation_hors_seuil,"variation de -28.36 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
-cours/2017.csv,BOAN,2017-06-21,variation_hors_seuil,"variation de -17.31 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
 cours/2017.csv,BOAN,2017-07-27,precedent_different,cours précédent 51600 ≠ clôture du 2017-07-25 (53000)
-cours/2017.csv,BOAS,2017-06-27,variation_hors_seuil,"variation de -50 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
-cours/2017.csv,BOAS,2017-07-03,precedent_different,cours précédent 32385 ≠ clôture du 2017-06-29 (35010)
 cours/2017.csv,BOAS,2017-07-27,precedent_different,cours précédent 31000 ≠ clôture du 2017-07-25 (30100)
 cours/2017.csv,CABC,2017-07-27,precedent_different,cours précédent 43475 ≠ clôture du 2017-07-25 (47000)
 cours/2017.csv,CBIBF,2017-07-03,precedent_different,cours précédent 50000 ≠ clôture du 2017-06-29 (49000)
@@ -150,7 +138,6 @@ cours/2017.csv,ONTBF,2017-07-27,precedent_different,cours précédent 8190 ≠ c
 cours/2017.csv,PALC,2017-07-03,precedent_different,cours précédent 11000 ≠ clôture du 2017-06-29 (11500)
 cours/2017.csv,PALC,2017-07-27,precedent_different,cours précédent 11500 ≠ clôture du 2017-07-25 (11285)
 cours/2017.csv,PALC,2017-09-27,variation_hors_seuil,"variation de -9.85 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
-cours/2017.csv,SAFC,2017-10-17,variation_hors_seuil,"variation de -57 % (seuil quotidien ±7,5 %) : à rapprocher d'un avis"
 cours/2017.csv,SCRC,2017-07-03,precedent_different,cours précédent 7995 ≠ clôture du 2017-06-29 (8495)
 cours/2017.csv,SCRC,2017-07-27,precedent_different,cours précédent 6500 ≠ clôture du 2017-07-25 (6895)
 cours/2017.csv,SDCC,2017-07-03,precedent_different,cours précédent 63000 ≠ clôture du 2017-06-29 (59200)
@@ -255,24 +242,16 @@ cours/2023.csv,ORAC,2023-06-13,variation_incoherente,variation publiée 4.7 % ; 
 cours/2023.csv,SHEC,2023-12-26,precedent_different,cours précédent 750 ≠ clôture du 2023-12-22 (800)
 cours/2023.csv,TTLC,2023-07-11,precedent_different,cours précédent 2455 ≠ clôture du 2023-07-10 (2260)
 cours/2023.csv,TTLC,2023-07-11,variation_incoherente,variation publiée 6.52 % ; calculée -7.94 % (base 2455)
-cours/2024.csv,BOAB,2024-09-03,precedent_different,cours précédent 3885 ≠ clôture du 2024-09-02 (7775)
 cours/2024.csv,BOAB,2024-12-26,variation_incoherente,variation publiée 0.54 % ; calculée -0.54 % (base 3680)
-cours/2024.csv,BOABF,2024-08-28,precedent_different,cours précédent 3400 ≠ clôture du 2024-08-27 (6800)
-cours/2024.csv,BOAC,2024-10-25,precedent_different,cours précédent 5150 ≠ clôture du 2024-10-24 (10300)
-cours/2024.csv,BOAM,2024-08-28,precedent_different,cours précédent 1345 ≠ clôture du 2024-08-27 (2020)
-cours/2024.csv,BOAN,2024-09-04,precedent_different,cours précédent 3260 ≠ clôture du 2024-09-03 (5220)
-cours/2024.csv,BOAS,2024-08-29,precedent_different,cours précédent 3125 ≠ clôture du 2024-08-28 (4690)
 cours/2024.csv,BOAS,2024-12-27,precedent_different,cours précédent 3300 ≠ clôture du 2024-12-26 (3200)
 cours/2024.csv,BOAS,2024-12-27,variation_incoherente,variation publiée -0.94 % ; calculée -3.94 % (base 3300)
 cours/2024.csv,BOAS,2024-12-31,variation_incoherente,variation publiée -0.63 % ; calculée 0.00 % (base 3150)
 cours/2024.csv,CABC,2024-05-29,precedent_different,cours précédent 925 ≠ clôture du 2024-05-28 (1000)
 cours/2024.csv,ONTBF,2024-07-29,precedent_different,cours précédent 2730 ≠ clôture du 2024-07-26 (2995)
 cours/2024.csv,SHEC,2024-09-25,precedent_different,cours précédent 835 ≠ clôture du 2024-09-24 (890)
-cours/2024.csv,SIBC,2024-11-14,precedent_different,cours précédent 3550 ≠ clôture du 2024-11-13 (7100)
 cours/2024.csv,SIBC,2024-12-24,variation_incoherente,variation publiée 0.56 % ; calculée 0.42 % (base 3565)
 cours/2024.csv,SIBC,2024-12-27,variation_incoherente,variation publiée -0.42 % ; calculée -0.56 % (base 3580)
 cours/2024.csv,SLBC,2024-09-12,precedent_different,cours précédent 80550 ≠ clôture du 2024-03-28 (83250)
-cours/2024.csv,SLBC,2024-09-30,precedent_different,cours précédent 10215 ≠ clôture du 2024-09-27 (102125)
 cours/2024.csv,SNTS,2024-05-15,precedent_different,cours précédent 18995 ≠ clôture du 2024-05-14 (19500)
 cours/2024.csv,SNTS,2024-05-15,variation_incoherente,variation publiée 5.97 % ; calculée 0.00 % (base 18995)
 cours/2024.csv,SPHC,2024-08-08,precedent_different,cours précédent 2950 ≠ clôture du 2024-08-06 (3010)
@@ -280,16 +259,18 @@ cours/2025.csv,CFAC,2025-08-14,precedent_different,cours précédent 655 ≠ cl�
 cours/2026.csv,ETIT,2026-09-17,prix_moyen_hors_fourchette,valeur/volume = 66678.76 pour une clôture à 70
 cours/2026.csv,SAFC,2026-04-24,precedent_different,cours précédent 3890 ≠ clôture du 2026-04-23 (5505)
 cours/2026.csv,TTLC,2026-08-28,precedent_different,cours précédent 3415 ≠ clôture du 2026-08-27 (3550)
-dividendes.csv,ABJC,2018,avis_different_bulletin,avis 41.239003 FCFA ; bulletin 123.72 FCFA
-dividendes.csv,BOAM,2024,dates_incoherentes,annonce 2025-06-17 après détachement 2025-05-30
+dividendes.csv,ABJC,2018,avis_different_bulletin,avis 164.956003 FCFA ; bulletin 123.72 FCFA
+dividendes.csv,BOAB,2012,avis_different_bulletin,avis 116.25 FCFA ; bulletin 465 FCFA
+dividendes.csv,BOABF,2012,avis_different_bulletin,avis 151.55 FCFA ; bulletin 606.2 FCFA
+dividendes.csv,BOAC,2012,avis_different_bulletin,avis 67.5 FCFA ; bulletin 270 FCFA
+dividendes.csv,BOAN,2012,avis_different_bulletin,avis 122.9808 FCFA ; bulletin 255.8 FCFA
 dividendes.csv,ECOC,2021,avis_different_bulletin,avis 420.3 FCFA ; bulletin 549 FCFA
-dividendes.csv,ECOC,2024,dates_incoherentes,détachement 2025-05-31 après paiement 2025-05-30
 dividendes.csv,FTSC,2015,avis_different_bulletin,avis 261.25 FCFA ; bulletin 375 FCFA
-dividendes.csv,FTSC,2016,avis_different_bulletin,avis 300 FCFA ; bulletin 261.25 FCFA
-dividendes.csv,FTSC,2019,dates_incoherentes,annonce 2020-07-21 après détachement 2020-07-04
-dividendes.csv,NSBC,2022,dates_incoherentes,annonce 2023-06-22 après détachement 2023-06-05
-dividendes.csv,ONTBF,2023,dates_incoherentes,détachement 2024-08-01 après paiement 2024-07-31
-dividendes.csv,ORAC,2022,dates_incoherentes,détachement 2023-06-16 après paiement 2023-06-13
+dividendes.csv,FTSC,2016,avis_different_bulletin,avis 561.25 FCFA ; bulletin 261.25 FCFA
+dividendes.csv,SAFC,2010,avis_different_bulletin,avis 23.04 FCFA ; bulletin 288 FCFA
+dividendes.csv,SHEC,2012,avis_different_bulletin,avis 10.71 FCFA ; bulletin 535.5 FCFA
+dividendes.csv,SLBC,2012,avis_different_bulletin,avis 549 FCFA ; bulletin 10980 FCFA
 dividendes.csv,SLBC,2023,dates_incoherentes,détachement 2024-09-12 après paiement 2024-08-14
-dividendes.csv,SOGC,2025,dates_incoherentes,annonce 2026-07-22 après détachement 2026-07-05
+dividendes.csv,TTLC,2012,avis_different_bulletin,avis 72 FCFA ; bulletin 1440 FCFA
+dividendes.csv,UNXC,2012,avis_different_bulletin,avis 33.84 FCFA ; bulletin 169.2 FCFA
 resultats.csv,SCRC,2019,bnpa_signe_oppose,résultat net -5339 ; BNPA 272.43
