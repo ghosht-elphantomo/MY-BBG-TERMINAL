@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 95
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Mode
         id: mode
@@ -96,7 +96,7 @@ jobs:
           mkdir -p /tmp/boc && if git fetch -q --depth 1 origin boc; then git archive FETCH_HEAD | tar -x -C /tmp/boc || true; fi
 
       - name: Cache des sources (miroirs CSV)
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/bcache
           key: bcache-${{ github.run_id }}
